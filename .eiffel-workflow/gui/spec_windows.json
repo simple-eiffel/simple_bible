@@ -1,0 +1,3937 @@
+{
+  "name": "simple_bible GUI",
+  "version": "0.1.0",
+  "spec_note": "Widget vocabulary is simple_widgets 0.8.1 (SW_* classes), a deliberate deviation from the eiffel-gui-ux skill's windows platform (simple_vision). D-006: native simple_widgets, no WebView2; gaps are library work items (gap_work_items), never workarounds. Root keys name/version/states/transitions/screens/traceability are read by simple_spec_viz; app/windows/state_machines follow the reference examples in D:/prod/reference_docs/gui/examples. Hebrew and Greek appear in transliteration only in this file.",
+  "source_spec": "00-GUI-SPEC.md",
+  "app": {
+    "name": "simple_bible",
+    "title": "simple_bible",
+    "version": "0.1.0",
+    "description": "Free Bible-study workbench: e-Sword simplicity (synchronized panes, one-click lookups) with Logos depth (guides, interlinear, morphology search), engine-owned facts with provenance, CPU-only.",
+    "platform": "windows",
+    "toolkit": {
+      "library": "simple_widgets",
+      "version": "0.8.1",
+      "companions": ["simple_shaping 0.1.0", "simple_cairo", "simple_shell"]
+    },
+    "decisions": [
+      "D-003 CPU only 8-16 GB",
+      "D-004 engine owns every fact",
+      "D-006 native simple_widgets, fill gaps",
+      "D-011 Swete LXX default",
+      "D-016 Release 1 core-only with precomputed AI-made related passages",
+      "D-019 rix.db ships as the author library",
+      "D-020 no Python"
+    ]
+  },
+  "theme": {
+    "base": ["SW_THEME.make_light", "SW_THEME.make_dark"],
+    "high_contrast": "built with SW_THEME.set_surfaces and set_semantics under the contrast invariant; following the Windows setting is GW-16",
+    "default": "light",
+    "tokens": {
+      "color_accent": "@theme.accent",
+      "color_success": "@theme.success",
+      "color_warning": "@theme.warning",
+      "color_danger": "@theme.danger",
+      "surface": "@theme.surface",
+      "surface_variant": "@theme.surface_variant",
+      "ink": "@theme.ink",
+      "ink_muted": "@theme.ink_muted",
+      "border_width": "@theme.border_width",
+      "padding": "@theme.padding",
+      "control_inset": "@theme.control_inset"
+    },
+    "type_roles": {
+      "ui": "family_ui (chrome)",
+      "body": "family_body (Bible and library text)",
+      "mono": "family_mono (codes, counts, provenance chips)"
+    },
+    "scales": {
+      "interface_scale": {"widget": "SW_THEME.set_text_scale", "min": 1.0, "max": 3.0, "default": 1.0},
+      "reading_size_px": {"min": 14, "max": 40, "default": 20}
+    },
+    "highlight_palette": "SW_MARK_PALETTE: 12 hues, wash under ink >= 4.5:1 and ink on surface >= 3:1 in both themes (contract)",
+    "never_color_alone": [
+      "census buckets",
+      "rix.db statuses",
+      "quotation agreement classes",
+      "timeline certainty classes",
+      "AI-made label"
+    ],
+    "validations": [
+      {"check": "color_contrast", "pair": "ink on surface", "minimum_ratio": 4.5},
+      {"check": "color_contrast", "pair": "highlight wash under ink", "minimum_ratio": 4.5},
+      {"check": "color_contrast", "pair": "large text (18pt+)", "minimum_ratio": 3.0}
+    ]
+  },
+  "windows": [
+    {
+      "id": "main_window",
+      "type": "SW_WINDOW",
+      "title": "simple_bible",
+      "size": {"width": 1440, "height": 900},
+      "min_size": {"width": 960, "height": 640},
+      "resizable": true,
+      "shaped_text": "SW_WINDOW.enable_shaped_text at creation (Hebrew and Greek through simple_shaping)",
+      "state_machine": "app_activity",
+      "on_close": "close_window",
+      "layout": {
+        "type": "SW_COLUMN",
+        "id": "root",
+        "children": [
+          {
+            "type": "SW_MENU_BAR",
+            "id": "menu_bar",
+            "registered_with": "SW_WINDOW.set_menu_bar",
+            "menus": [
+              {
+                "id": "file",
+                "label": "&File",
+                "items": [
+                  {"id": "new_tab", "label": "New Bible &Tab", "accelerator": "Ctrl+T", "on_click": "open_bible_tab"},
+                  {"id": "export", "label": "&Export...", "accelerator": "Ctrl+E", "on_click": "export"},
+                  {"id": "print", "label": "&Print...", "release": "v2", "on_click": "print"},
+                  {"id": "exit", "label": "E&xit", "on_click": "close_window"}
+                ]
+              },
+              {
+                "id": "edit",
+                "label": "&Edit",
+                "items": [
+                  {"id": "copy_verse", "label": "&Copy Verse", "accelerator": "Ctrl+C", "on_click": "copy_verse"},
+                  {
+                    "id": "copy_format",
+                    "label": "Copy &With Format...",
+                    "accelerator": "Ctrl+Shift+C",
+                    "on_click": "export"
+                  },
+                  {"id": "find", "label": "&Find in Pane", "accelerator": "Ctrl+F", "on_click": "open_find_bar"},
+                  {
+                    "id": "highlight",
+                    "label": "&Highlight",
+                    "accelerator": "Ctrl+Shift+H",
+                    "on_click": "highlight_last_color"
+                  },
+                  {"id": "note", "label": "New &Note", "accelerator": "Ctrl+N", "on_click": "new_note"},
+                  {"id": "bookmark", "label": "&Bookmark", "accelerator": "Ctrl+B", "on_click": "bookmark"}
+                ]
+              },
+              {
+                "id": "view",
+                "label": "&View",
+                "items": [
+                  {"id": "mode", "label": "Simple / Study &Mode", "accelerator": "Ctrl+M", "on_click": "switch_mode"},
+                  {"id": "parallel", "label": "&Parallel and Compare", "on_click": "open_panel:P02"},
+                  {"id": "interlinear", "label": "&Interlinear", "accelerator": "Ctrl+I", "on_click": "open_panel:P03"},
+                  {
+                    "id": "divine_names",
+                    "label": "&Divine-Name View",
+                    "accelerator": "Ctrl+Shift+D",
+                    "on_click": "toggle_divine_names"
+                  },
+                  {
+                    "id": "pointing",
+                    "label": "Hebrew Poin&ting",
+                    "accelerator": "Ctrl+Shift+P",
+                    "on_click": "cycle_pointing"
+                  },
+                  {"id": "strongs_inline", "label": "&Strong's Numbers Inline", "on_click": "toggle_strongs_inline"},
+                  {"id": "bigger", "label": "Text &Larger", "accelerator": "Ctrl+=", "on_click": "text_larger"},
+                  {"id": "smaller", "label": "Text S&maller", "accelerator": "Ctrl+-", "on_click": "text_smaller"},
+                  {"id": "theme", "label": "Dar&k Theme", "on_click": "toggle_theme"}
+                ]
+              },
+              {
+                "id": "go",
+                "label": "&Go",
+                "items": [
+                  {
+                    "id": "goto",
+                    "label": "&Go to Reference...",
+                    "accelerator": "Ctrl+G",
+                    "on_click": "focus_reference_box"
+                  },
+                  {"id": "back", "label": "&Back", "accelerator": "Alt+Left", "on_click": "history_back"},
+                  {"id": "forward", "label": "&Forward", "accelerator": "Alt+Right", "on_click": "history_forward"},
+                  {
+                    "id": "prev_ch",
+                    "label": "&Previous Chapter",
+                    "accelerator": "Ctrl+PageUp",
+                    "on_click": "previous_chapter"
+                  },
+                  {
+                    "id": "next_ch",
+                    "label": "&Next Chapter",
+                    "accelerator": "Ctrl+PageDown",
+                    "on_click": "next_chapter"
+                  }
+                ]
+              },
+              {
+                "id": "search",
+                "label": "&Search",
+                "items": [
+                  {
+                    "id": "builder",
+                    "label": "Search &Builder...",
+                    "accelerator": "Ctrl+Shift+F",
+                    "on_click": "open_dialog:D02"
+                  },
+                  {"id": "search_word", "label": "Search This &Word", "on_click": "search_selected_lemma"},
+                  {"id": "results", "label": "Search &Results Panel", "on_click": "open_panel:P07"}
+                ]
+              },
+              {
+                "id": "study",
+                "label": "S&tudy",
+                "items": [
+                  {
+                    "id": "passage_guide",
+                    "label": "&Passage Guide",
+                    "accelerator": "Ctrl+Shift+G",
+                    "on_click": "open_guide:passage"
+                  },
+                  {
+                    "id": "word_study",
+                    "label": "&Word Study",
+                    "accelerator": "Ctrl+Shift+W",
+                    "on_click": "open_guide:word"
+                  },
+                  {
+                    "id": "they_chose",
+                    "label": "They &Chose (Quotation)",
+                    "accelerator": "Ctrl+Shift+Q",
+                    "on_click": "open_guide:quotation"
+                  },
+                  {
+                    "id": "journey",
+                    "label": "Word's &Journey",
+                    "accelerator": "Ctrl+Shift+J",
+                    "on_click": "open_guide:journey"
+                  },
+                  {
+                    "id": "census",
+                    "label": "New &Census...",
+                    "accelerator": "Ctrl+Shift+K",
+                    "on_click": "open_dialog:D03"
+                  },
+                  {"id": "shapes", "label": "S&hapes", "on_click": "open_panel:P09"},
+                  {"id": "author_library", "label": "&Author Library", "on_click": "open_panel:P10"},
+                  {"id": "timeline", "label": "World &Timeline", "release": "v2", "on_click": "open_panel:P13"}
+                ]
+              },
+              {
+                "id": "tools",
+                "label": "T&ools",
+                "items": [
+                  {"id": "claim_check", "label": "&Claim Check...", "release": "v1.5", "on_click": "open_dialog:D04"},
+                  {"id": "ledger", "label": "Study &Ledger", "release": "v1.5", "on_click": "open_panel:P12"},
+                  {
+                    "id": "settings",
+                    "label": "&Settings...",
+                    "accelerator": "Ctrl+Shift+O",
+                    "on_click": "open_dialog:D05"
+                  }
+                ]
+              },
+              {
+                "id": "window",
+                "label": "&Window",
+                "items": [
+                  {"id": "layouts", "label": "&Layouts...", "on_click": "open_dialog:D07"},
+                  {
+                    "id": "link_cycle",
+                    "label": "Cycle &Link Set",
+                    "accelerator": "Ctrl+L",
+                    "on_click": "cycle_link_set"
+                  },
+                  {"id": "move_panel", "label": "&Move Panel To", "on_click": "move_panel_menu"},
+                  {"id": "reset", "label": "&Reset Layout", "on_click": "reset_layout"}
+                ]
+              },
+              {
+                "id": "help",
+                "label": "&Help",
+                "items": [
+                  {"id": "help_topics", "label": "&Help Topics", "accelerator": "F1 (GW-24)", "on_click": "open_help"},
+                  {"id": "keys", "label": "&Keyboard Shortcuts", "on_click": "open_settings_tab:keyboard"},
+                  {"id": "about", "label": "&About and Credits", "on_click": "open_settings_tab:about"}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "SW_ROW",
+            "id": "toolbar_row",
+            "children": [
+              {
+                "type": "SW_BUTTON",
+                "id": "back_btn",
+                "label": "<",
+                "tooltip": "Back (Alt+Left)",
+                "on_click": "history_back",
+                "enabled_when": "history_can_go_back"
+              },
+              {
+                "type": "SW_BUTTON",
+                "id": "forward_btn",
+                "label": ">",
+                "tooltip": "Forward (Alt+Right)",
+                "on_click": "history_forward",
+                "enabled_when": "history_can_go_forward"
+              },
+              {
+                "type": "SW_COMBO",
+                "id": "reference_box",
+                "placeholder": "John 3:16",
+                "width": 220,
+                "options_from": "recent_references",
+                "on_submit": "go_to",
+                "validation": "VR-01"
+              },
+              {
+                "type": "SW_SELECT",
+                "id": "version_picker",
+                "width": 180,
+                "options_from": "shipped_versions_grouped",
+                "separators": "between language groups",
+                "on_change": "set_version",
+                "rule": "LXX entries always show their edition, e.g. LXX (Swete)"
+              },
+              {
+                "type": "SW_TEXT_BOX",
+                "id": "quick_search",
+                "single_line": true,
+                "clear_button": true,
+                "placeholder": "Search the Bible...",
+                "grow": true,
+                "on_submit": "run_search",
+                "validation": "VR-03"
+              },
+              {
+                "type": "SW_SEGMENTED",
+                "id": "mode_switch",
+                "segments": ["Simple", "Study"],
+                "on_change": "switch_mode"
+              },
+              {"type": "SW_BUTTON", "id": "text_smaller_btn", "label": "A-", "on_click": "text_smaller"},
+              {"type": "SW_BUTTON", "id": "text_larger_btn", "label": "A+", "on_click": "text_larger"},
+              {"type": "SW_SWITCH", "id": "theme_switch", "label": "Dark", "on_change": "toggle_theme"},
+              {
+                "type": "SW_TOOLBAR",
+                "id": "study_tools",
+                "visible_when": "mode = study",
+                "tools": [
+                  {"kind": "toggle", "label": "Parallel", "hint": "Parallel and Compare", "on_click": "open_panel:P02"},
+                  {
+                    "kind": "toggle",
+                    "label": "Interlinear",
+                    "hint": "Interlinear (Ctrl+I)",
+                    "on_click": "open_panel:P03"
+                  },
+                  {"kind": "gap"},
+                  {
+                    "kind": "tool",
+                    "label": "Guide",
+                    "hint": "Passage Guide (Ctrl+Shift+G)",
+                    "on_click": "open_guide:passage"
+                  },
+                  {"kind": "tool", "label": "Word", "hint": "Word Study (Ctrl+Shift+W)", "on_click": "open_guide:word"},
+                  {
+                    "kind": "tool",
+                    "label": "Count",
+                    "hint": "New census (Ctrl+Shift+K)",
+                    "on_click": "open_dialog:D03"
+                  },
+                  {
+                    "kind": "tool",
+                    "label": "Ledger",
+                    "hint": "Study ledger",
+                    "release": "v1.5",
+                    "on_click": "open_panel:P12"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "SW_DOCK_HOST",
+            "id": "dock",
+            "grow": true,
+            "zones": ["west", "east", "south"],
+            "center": {
+              "type": "SW_TABS",
+              "id": "center_tabs",
+              "pages": ["P01", "P02", "P03", "P13", "P14"],
+              "lazy_pages": true
+            },
+            "presets": {
+              "simple": {"center": ["P01"], "east": ["P04"], "south": ["P05"], "west": [], "link_chips_visible": false},
+              "study": {
+                "center": ["P01", "P02", "P03"],
+                "west": ["P11", "P06"],
+                "east": ["P05", "P04"],
+                "south": ["P07", "P08", "P09", "P10"],
+                "south_mode": "tabbed (GW-05)",
+                "link_chips_visible": true
+              }
+            },
+            "on_layout_change": "snapshot_layout_debounced",
+            "gap_items": ["GW-05"]
+          },
+          {
+            "type": "SW_STATUS_BAR",
+            "id": "status_bar",
+            "sections": [
+              {"id": "reference", "text": "John 3:16 (BSB)"},
+              {"id": "link_set", "text": "link A"},
+              {"id": "versification", "text": "KJV numbering"},
+              {"id": "job", "text": "", "widgets": ["SW_PROGRESS", "SW_BUTTON Cancel"]},
+              {"id": "database", "text": "core.db 2026.10"}
+            ],
+            "gap_items": ["GW-11"]
+          }
+        ]
+      }
+    }
+  ],
+  "panels": [
+    {
+      "id": "P01",
+      "title": "Bible Text",
+      "release": "v1",
+      "features": ["A01", "A06", "A08", "A10", "E01", "B08", "I-P08"],
+      "zone": {"simple": "center", "study": "center_tab"},
+      "link_set": "A (per tab)",
+      "layout": {
+        "type": "SW_TABS",
+        "id": "bible_tabs",
+        "lazy_pages": true,
+        "page_template": {
+          "type": "SW_COLUMN",
+          "children": [
+            {
+              "type": "SW_ROW",
+              "id": "bible_header",
+              "children": [
+                {"type": "SW_SELECT", "id": "tab_version", "on_change": "set_tab_version"},
+                {
+                  "type": "SW_LABEL",
+                  "id": "edition_label",
+                  "role": "ui",
+                  "example": "LXX (Swete)",
+                  "tooltip": "Codex Vaticanus as printed by H. B. Swete (Cambridge, 1887-1912). Digital text from OCR; it may contain errors. Report one: [link]."
+                },
+                {"type": "SW_CHIP", "id": "caveat_chip", "visible_when": "version_has_caveat", "kind": "warning"},
+                {
+                  "type": "SW_CHIP",
+                  "id": "link_chip",
+                  "visible_when": "mode = study",
+                  "label": "A",
+                  "on_click": "choose_link_set"
+                },
+                {"type": "SW_SEGMENTED", "id": "layout_toggle", "segments": ["Verses", "Paragraphs"]},
+                {
+                  "type": "SW_SELECT",
+                  "id": "pointing_level",
+                  "visible_when": "language = hebrew",
+                  "options": ["Full", "Vowels", "Consonants"]
+                },
+                {"type": "SW_BUTTON", "id": "panel_menu", "label": "...", "opens": "SW_MENU"}
+              ]
+            },
+            {
+              "type": "SW_ROW",
+              "id": "find_bar",
+              "visible_when": "find_open",
+              "children": [
+                {"type": "SW_TEXT_BOX", "id": "find_box", "single_line": true, "placeholder": "Find in this text"},
+                {"type": "SW_LABEL", "id": "find_count", "role": "mono"},
+                {"type": "SW_BUTTON", "id": "find_next", "label": "Next"}
+              ]
+            },
+            {
+              "type": "SW_PARAGRAPH_LIST",
+              "id": "verse_list",
+              "grow": true,
+              "item": "one verse (verse mode) or one paragraph (paragraph mode)",
+              "gutter_renderer": "verse number, note marker, bookmark marker, highlight stripe, cross-reference dot",
+              "marks": {
+                "type": "SW_MARKED_TEXT",
+                "legend": "SW_MARK_LEGEND",
+                "reasons": ["hl:<color>", "find:hit", "divine:<name>", "diff:changed", "supplied:italic"]
+              },
+              "direction": "per item; Hebrew right-to-left and right-aligned (GW-02)",
+              "hit_test": "point to (verse, character offset) for word click and hover (GW-08)",
+              "on_select": "select_verse",
+              "on_activate": "open_word_study"
+            }
+          ]
+        }
+      },
+      "interactions": [
+        {
+          "gesture": "click verse",
+          "action": "select_verse",
+          "effect": "sets active reference of the tab's link set"
+        },
+        {
+          "gesture": "click word",
+          "action": "select_word",
+          "effect": "sets word_token in the link set",
+          "gap_items": ["GW-08"]
+        },
+        {"gesture": "hover word 400 ms", "action": "show_hover_card", "gap_items": ["GW-08", "GW-09"]},
+        {"gesture": "double-click word", "action": "pin_word_card (simple) / open_guide:word (study)"},
+        {
+          "gesture": "right-click",
+          "action": "context_menu",
+          "items": [
+            "Copy Verse",
+            "Copy With Format...",
+            "Highlight",
+            "Add Note",
+            "Bookmark",
+            "Tag...",
+            "Search This Word",
+            "Word Study",
+            "Word's Journey",
+            "Passage Guide",
+            "Compare This Verse",
+            "They Chose (when quoted)",
+            "Show Method"
+          ]
+        },
+        {
+          "gesture": "scroll stillness 120 ms",
+          "action": "follow_along",
+          "effect": "first fully visible verse becomes the active reference"
+        }
+      ],
+      "states": {
+        "empty": {
+          "widget": "SW_EMPTY_STATE",
+          "title": "Nothing open yet",
+          "message": "Type a reference above, or pick a book in the Navigator.",
+          "action": "Open Navigator"
+        },
+        "loading": {"widget": "SW_SKELETON", "delay_ms": 150},
+        "error": {
+          "widget": "SW_CARD",
+          "stripe": "danger",
+          "message": "This version could not be read.",
+          "actions": ["Retry", "Details"]
+        },
+        "not_in_canon": {
+          "widget": "SW_EMPTY_STATE",
+          "message": "This book is not in this version. Versions that have it: ...",
+          "action": "Switch version"
+        },
+        "omitted_verse": {
+          "widget": "placeholder paragraph (muted)",
+          "message": "omitted in this edition (WH) / absent from Swete's edition / missing from this digital text (OCR loss)"
+        }
+      }
+    },
+    {
+      "id": "P02",
+      "title": "Parallel and Compare",
+      "release": "v1",
+      "features": ["A02", "A03", "A04", "A05 (v2)", "I-P08"],
+      "zone": {"simple": "menu", "study": "center_tab"},
+      "link_set": "A",
+      "layout": {
+        "type": "SW_COLUMN",
+        "children": [
+          {
+            "type": "SW_ROW",
+            "id": "parallel_header",
+            "children": [
+              {
+                "type": "SW_SEGMENTED",
+                "id": "parallel_mode",
+                "segments": ["Parallel", "Compare all", "Harmony (v2)"]
+              },
+              {
+                "type": "SW_BUTTON",
+                "id": "columns_btn",
+                "label": "Columns...",
+                "opens": "SW_MENU of versions with checks (max 6)"
+              },
+              {"type": "SW_SWITCH", "id": "diff_switch", "label": "Show differences"},
+              {"type": "SW_SELECT", "id": "diff_base", "visible_when": "diff_on"},
+              {"type": "SW_CHIP", "id": "link_chip", "label": "A"}
+            ]
+          },
+          {
+            "type": "SW_PARALLEL_TEXT",
+            "id": "parallel_grid",
+            "gap_items": ["GW-06"],
+            "visible_when": "mode = parallel",
+            "rows": "canonical verses after the versification map",
+            "columns": "versions, each with its own direction and font",
+            "note_rows": "versification pairing notes, e.g. LXX 9 = MT 9-10",
+            "marks": "diff:changed per cell"
+          },
+          {
+            "type": "SW_PARAGRAPH_LIST",
+            "id": "compare_all",
+            "visible_when": "mode = compare_all",
+            "gutter_renderer": "version label + caveat chip"
+          }
+        ]
+      },
+      "states": {
+        "empty": {"widget": "SW_EMPTY_STATE", "message": "Choose two or more versions.", "action": "Columns..."},
+        "loading": {"widget": "SW_SKELETON"},
+        "error": {"scope": "per column", "message": "This column could not be read; the others are unaffected."}
+      }
+    },
+    {
+      "id": "P03",
+      "title": "Original Language",
+      "release": "v1",
+      "features": ["C04", "C12", "C13", "C05 (v2)", "C09 (v2)", "C11 (v2)", "C10 (v3)"],
+      "zone": {"simple": "menu", "study": "center_tab"},
+      "link_set": "A (follows word_token)",
+      "layout": {
+        "type": "SW_COLUMN",
+        "children": [
+          {
+            "type": "SW_ROW",
+            "id": "ol_header",
+            "children": [
+              {
+                "type": "SW_SELECT",
+                "id": "ol_source",
+                "options": ["Hebrew OT (WLC)", "Hebrew OT (MapM)", "Greek NT (SBLGNT)", "Greek NT (WH)", "LXX (Swete)"]
+              },
+              {"type": "SW_CHECK_BOX", "id": "line_translit", "label": "Transliteration"},
+              {"type": "SW_CHECK_BOX", "id": "line_pron", "label": "Pronunciation"},
+              {"type": "SW_CHECK_BOX", "id": "line_gloss", "label": "Gloss"},
+              {"type": "SW_CHECK_BOX", "id": "line_lemma", "label": "Lemma"},
+              {"type": "SW_CHECK_BOX", "id": "line_strongs", "label": "Strong's"},
+              {"type": "SW_CHECK_BOX", "id": "line_morph", "label": "Morphology"}
+            ]
+          },
+          {
+            "type": "SW_SPLITTER",
+            "id": "ol_split",
+            "orientation": "vertical",
+            "ratio": 0.55,
+            "children": [
+              {
+                "type": "SW_INTERLINEAR",
+                "id": "interlinear",
+                "gap_items": ["GW-07"],
+                "flow": "right-to-left for Hebrew, left-to-right for Greek",
+                "cell_lines": ["surface", "transliteration", "pronunciation", "gloss", "lemma", "strongs", "morphology_english"],
+                "example_cell": "bereshit / be-re-SHEET / in the beginning / H7225 / preposition + noun, feminine singular",
+                "swete_rule": "morphology lines read NO_DATA: no openly licensed morphology exists for Swete"
+              },
+              {
+                "type": "SW_DATA_GRID",
+                "id": "verse_analysis",
+                "gap_items": ["GW-04"],
+                "columns": [
+                  {"id": "n", "label": "#", "width": 40},
+                  {"id": "word", "label": "Word", "width": 120},
+                  {"id": "translit", "label": "Transliteration", "width": 120},
+                  {"id": "lemma", "label": "Lemma", "width": 110},
+                  {"id": "strongs", "label": "Strong's", "width": 80},
+                  {"id": "morph", "label": "Morphology", "width": 220},
+                  {"id": "gloss", "label": "Gloss", "width": 160},
+                  {"id": "uses", "label": "Uses in Bible", "width": 100},
+                  {"id": "source", "label": "Source", "width": 80}
+                ],
+                "sortable": true,
+                "on_activate": "open_guide:word"
+              }
+            ]
+          }
+        ]
+      },
+      "states": {
+        "empty": {"widget": "SW_EMPTY_STATE", "message": "Pick a verse to see its words."},
+        "loading": {"widget": "SW_SKELETON"},
+        "no_data": {"message": "This text has no openly licensed morphology (NO_DATA). Surface words are shown."},
+        "error": {"widget": "SW_CARD", "stripe": "danger", "actions": ["Retry", "Details"]}
+      }
+    },
+    {
+      "id": "P04",
+      "title": "Commentary and Library",
+      "release": "v1",
+      "features": ["D01", "D02", "D05", "A07", "G07 (precomputed, D-016)", "D04 (v2)", "D10 (v2)"],
+      "zone": {"simple": "east", "study": "east"},
+      "link_set": "A",
+      "layout": {
+        "type": "SW_TABS",
+        "id": "library_tabs",
+        "pages": [
+          {
+            "label": "Commentaries",
+            "content": {
+              "type": "SW_COLUMN",
+              "children": [
+                {
+                  "type": "SW_ROW",
+                  "children": [
+                    {
+                      "type": "SW_SELECT",
+                      "id": "commentary_source",
+                      "options": ["Matthew Henry", "Gill", "Barnes", "JFB", "Clarke", "Wesley"]
+                    },
+                    {"type": "SW_SWITCH", "id": "expand_refs", "label": "Expand references"}
+                  ]
+                },
+                {
+                  "type": "SW_RICH_TEXT_VIEW",
+                  "id": "commentary_body",
+                  "gap_items": ["GW-13"],
+                  "references": "engine-detected, underlined, hover card, click navigates"
+                }
+              ]
+            }
+          },
+          {
+            "label": "Cross-references",
+            "content": {
+              "type": "SW_DATA_GRID",
+              "id": "xref_grid",
+              "columns": [
+                {"id": "ref", "label": "Reference", "width": 120},
+                {"id": "text", "label": "Text", "width": 360},
+                {"id": "source", "label": "Source", "width": 90},
+                {"id": "votes", "label": "Votes", "width": 70}
+              ],
+              "sortable": true,
+              "on_activate": "go_to"
+            }
+          },
+          {
+            "label": "Devotional",
+            "content": {
+              "type": "SW_COLUMN",
+              "children": [
+                {
+                  "type": "SW_SELECT",
+                  "id": "devotional_source",
+                  "options": ["Morning and Evening (Spurgeon)", "Daily Light"]
+                },
+                {"type": "SW_DATE_PICKER", "id": "devotional_date"},
+                {"type": "SW_RICH_TEXT_VIEW", "id": "devotional_body", "gap_items": ["GW-13"]}
+              ]
+            }
+          },
+          {
+            "label": "Related",
+            "content": {
+              "type": "SW_COLUMN",
+              "children": [
+                {
+                  "type": "SW_CARD",
+                  "id": "ai_banner",
+                  "stripe": "accent",
+                  "text": "Some of these passages were found by an AI model (bge-m3) when this edition was built, not on your computer. Each one shows why it is listed."
+                },
+                {
+                  "type": "SW_LIST",
+                  "id": "related_list",
+                  "row_renderer": "reference, preview, reason chips: cross-reference (votes) / shares a rare word / AI-made: meaning neighbor"
+                }
+              ]
+            }
+          },
+          {"label": "Books (v2)", "release": "v2"},
+          {"label": "Topics (v2)", "release": "v2"}
+        ]
+      },
+      "states": {
+        "empty": {
+          "widget": "SW_EMPTY_STATE",
+          "message": "No comment on this verse in this commentary.",
+          "action": "Try another commentary"
+        },
+        "loading": {"widget": "SW_SKELETON"},
+        "error": {"widget": "SW_CARD", "stripe": "danger", "actions": ["Retry", "Details"]}
+      }
+    },
+    {
+      "id": "P05",
+      "title": "Dictionary and Lexicon",
+      "release": "v1",
+      "features": ["C01", "C02", "C03", "D03", "I-P09", "C08 (v2)"],
+      "zone": {"simple": "south", "study": "east"},
+      "link_set": "A (follows word_token)",
+      "layout": {
+        "type": "SW_TABS",
+        "id": "lexicon_tabs",
+        "pages": [
+          {
+            "label": "Word",
+            "content": {
+              "type": "SW_COLUMN",
+              "children": [
+                {
+                  "type": "SW_ROW",
+                  "id": "word_header",
+                  "children": [
+                    {"type": "SW_LABEL", "id": "word_script", "role": "body", "example": "ekklesia in Greek script"},
+                    {"type": "SW_LABEL", "id": "word_translit", "role": "ui", "example": "ekklesia (ek-klay-SEE-ah)"},
+                    {"type": "SW_LABEL", "id": "word_gloss", "role": "ui", "example": "assembly"},
+                    {"type": "SW_CHIP", "id": "strongs_chip", "example": "G1577"},
+                    {"type": "SW_CHIP", "id": "source_chip", "example": "MACULA"}
+                  ]
+                },
+                {
+                  "type": "SW_GROUP",
+                  "title": "Range before ruling",
+                  "children": [
+                    {
+                      "type": "SW_DATA_GRID",
+                      "id": "range_grid",
+                      "gap_items": ["GW-04"],
+                      "columns": [
+                        {"id": "rendering", "label": "Rendering", "width": 160},
+                        {"id": "version", "label": "Version", "width": 90},
+                        {"id": "count", "label": "Count", "width": 70},
+                        {"id": "example", "label": "Example", "width": 260}
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "SW_TABS",
+                  "id": "lexicon_sources",
+                  "pages": ["Strong's", "BDB", "Thayer", "Abbott-Smith", "LSJ"],
+                  "page_content": "SW_RICH_TEXT_VIEW (GW-13)"
+                },
+                {
+                  "type": "SW_ROW",
+                  "children": [
+                    {
+                      "type": "SW_BUTTON",
+                      "id": "search_word_btn",
+                      "label": "Search this word",
+                      "on_click": "search_selected_lemma"
+                    },
+                    {"type": "SW_BUTTON", "id": "word_study_btn", "label": "Word Study", "on_click": "open_guide:word"},
+                    {
+                      "type": "SW_BUTTON",
+                      "id": "journey_btn",
+                      "label": "Word's Journey",
+                      "on_click": "open_guide:journey"
+                    },
+                    {"type": "SW_BUTTON", "id": "graph_btn", "label": "Graph by book", "on_click": "graph_lemma"}
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "label": "Compare",
+            "content": {"type": "SW_SPLITTER", "id": "lexicon_compare", "children": ["SW_RICH_TEXT_VIEW", "SW_RICH_TEXT_VIEW"]}
+          },
+          {
+            "label": "Bible Dictionaries",
+            "content": {
+              "type": "SW_SPLITTER",
+              "children": [
+                {
+                  "type": "SW_LIST",
+                  "id": "article_list",
+                  "row_renderer": "article title + dictionary (Easton, Smith, ISBE 1915, Hitchcock)"
+                },
+                {"type": "SW_RICH_TEXT_VIEW", "id": "article_body", "gap_items": ["GW-13"]}
+              ]
+            }
+          }
+        ]
+      },
+      "states": {
+        "empty": {"widget": "SW_EMPTY_STATE", "message": "Click a word in the Bible text to see it here."},
+        "loading": {"widget": "SW_SKELETON"},
+        "no_entry": {"message": "This lexicon has no entry for this lemma.", "action": "Compare lexicons"},
+        "error": {"widget": "SW_CARD", "stripe": "danger", "actions": ["Retry", "Details"]}
+      }
+    },
+    {
+      "id": "P06",
+      "title": "Notes",
+      "release": "v1",
+      "features": ["E01", "E03", "E04", "E05", "E06", "E07", "E09 (spell check)"],
+      "zone": {"simple": "menu", "study": "west"},
+      "link_set": "A",
+      "layout": {
+        "type": "SW_TABS",
+        "id": "notes_tabs",
+        "pages": [
+          {
+            "label": "Verse notes",
+            "content": {
+              "type": "SW_PARAGRAPH_LIST",
+              "id": "verse_notes",
+              "edit_in_place": true,
+              "gutter_renderer": "verse reference",
+              "editor": "SW_TEXT_BOX with spellcheck; headings, lists, verse links, images need GW-13"
+            }
+          },
+          {
+            "label": "Journal",
+            "content": {
+              "type": "SW_SPLITTER",
+              "children": [
+                {"type": "SW_TREE", "id": "notebooks"},
+                {"type": "SW_RICH_TEXT_EDITOR", "id": "journal_editor", "gap_items": ["GW-13"]}
+              ]
+            }
+          },
+          {
+            "label": "Tags",
+            "content": {"type": "SW_LIST", "id": "tag_list", "row_renderer": "tag + SW_BADGE count"}
+          },
+          {
+            "label": "Highlights",
+            "content": {"type": "SW_MARK_LEGEND_VIEW", "id": "highlight_legend", "on_pick": "list_verses_with_highlight"}
+          },
+          {
+            "label": "Prayer",
+            "content": {"type": "SW_LIST", "id": "prayer_list", "row_renderer": "check box, request, date"}
+          },
+          {
+            "label": "Memory",
+            "content": {
+              "type": "SW_COLUMN",
+              "children": [
+                {"type": "SW_CARD", "id": "memory_card"},
+                {
+                  "type": "SW_ROW",
+                  "children": [
+                    {"type": "SW_BUTTON", "label": "Reveal"},
+                    {"type": "SW_BUTTON", "label": "Got it"},
+                    {"type": "SW_BUTTON", "label": "Again"}
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "states": {
+        "empty": {"widget": "SW_EMPTY_STATE", "message": "No notes on this chapter yet.", "action": "New note (Ctrl+N)"},
+        "saving": {"indicator": "status bar section; optimistic UI"},
+        "error": {
+          "widget": "SW_DIALOG",
+          "kind": "danger",
+          "message": "Your note could not be saved. Nothing was lost; it is still in the editor.",
+          "actions": ["Retry", "Copy text"]
+        }
+      }
+    },
+    {
+      "id": "P07",
+      "title": "Search Results",
+      "release": "v1",
+      "features": ["B01", "B02", "B03", "B04", "B05", "B10", "E11", "B09 (v2)", "D17 (v2)"],
+      "zone": {"simple": "south (while open)", "study": "south_tab"},
+      "link_set": "none (targets set A by default)",
+      "layout": {
+        "type": "SW_COLUMN",
+        "children": [
+          {
+            "type": "SW_ROW",
+            "id": "query_bar",
+            "children": [
+              {"type": "SW_TEXT_BOX", "id": "query_box", "single_line": true, "grow": true, "validation": "VR-03"},
+              {
+                "type": "SW_SELECT",
+                "id": "scope",
+                "options": ["This version", "All Bibles", "Whole library", "Current book", "Collection..."]
+              },
+              {"type": "SW_BUTTON", "id": "builder_btn", "label": "Builder...", "on_click": "open_dialog:D02"},
+              {"type": "SW_BUTTON", "id": "run_btn", "label": "Search", "style": "primary", "on_click": "run_search"},
+              {"type": "SW_CHIP", "id": "target_set_chip", "label": "opens in A"}
+            ]
+          },
+          {
+            "type": "SW_ROW",
+            "id": "summary_strip",
+            "children": [
+              {"type": "SW_STATISTIC", "id": "hits", "label": "Hits"},
+              {"type": "SW_STATISTIC", "id": "verses", "label": "Verses"},
+              {"type": "SW_STATISTIC", "id": "books", "label": "Books"},
+              {"type": "SW_BUTTON", "id": "method_btn", "label": "Show method", "on_click": "open_dialog:D09"}
+            ]
+          },
+          {
+            "type": "SW_TABS",
+            "id": "result_views",
+            "pages": [
+              {
+                "label": "List",
+                "content": {
+                  "type": "SW_DATA_GRID",
+                  "id": "results_grid",
+                  "gap_items": ["GW-04"],
+                  "columns": [
+                    {"id": "ref", "label": "Reference", "width": 120},
+                    {"id": "text", "label": "Text (hit marked)", "width": 520},
+                    {"id": "version", "label": "Version", "width": 90},
+                    {"id": "source", "label": "Source", "width": 80}
+                  ],
+                  "sortable": true,
+                  "paged": "rows stream in pages of 500",
+                  "on_activate": "go_to"
+                }
+              },
+              {
+                "label": "Graph",
+                "content": {
+                  "type": "SW_COLUMN",
+                  "children": [
+                    {"type": "SW_BAR_CHART", "id": "per_book_chart", "y": "hits per 1,000 words"},
+                    {"type": "SW_HEATMAP", "id": "book_chapter_heat"}
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "states": {
+        "empty": {
+          "widget": "SW_EMPTY_STATE",
+          "message": "Type a word, a phrase, lemma:..., strongs:... or morph:... and press Enter."
+        },
+        "loading": {"widget": "SW_SKELETON", "rule": "first page shown as soon as it arrives"},
+        "zero_results": {
+          "widget": "SW_EMPTY_STATE",
+          "message": "No verses match [query] in [scope].",
+          "actions": ["Search all Bibles", "Search by lemma instead"]
+        },
+        "invalid_query": {"widget": "SW_TEXT_BOX.set_invalid", "message": "names the problem at the character where it occurs"},
+        "error": {"widget": "SW_CARD", "stripe": "danger", "actions": ["Retry", "Details"]}
+      }
+    },
+    {
+      "id": "P08",
+      "title": "Guides",
+      "release": "v1 core, v2 full",
+      "features": ["D09", "C06", "C07 (v2)", "I-P06", "I-P07", "I-P09", "D15 (v2 full)", "D10 (v2)"],
+      "zone": {"simple": "menu (docks south)", "study": "south_tab"},
+      "link_set": "A",
+      "layout": {
+        "type": "SW_COLUMN",
+        "children": [
+          {
+            "type": "SW_ROW",
+            "id": "guide_header",
+            "children": [
+              {
+                "type": "SW_SELECT",
+                "id": "guide_kind",
+                "options": [
+                  "Passage Guide",
+                  "Word Study",
+                  "They Chose",
+                  "Word's Journey",
+                  "Exegetical Guide (v2)",
+                  "Topic Guide (v2)"
+                ]
+              },
+              {"type": "SW_LABEL", "id": "guide_subject", "role": "ui", "example": "Heb 8:8-12"},
+              {"type": "SW_CHIP", "id": "link_chip", "label": "A"}
+            ]
+          },
+          {
+            "type": "SW_SCROLL_AREA",
+            "id": "guide_scroll",
+            "grow": true,
+            "child": {
+              "type": "SW_ACCORDION",
+              "id": "guide_sections",
+              "exclusive": false,
+              "section_template": {
+                "title": "section name",
+                "body": "engine result widget; SW_SKELETON until ready",
+                "footer": "sources line + Show method"
+              },
+              "passage_sections_v1": [
+                "Text in your versions",
+                "Cross-references",
+                "Commentary snippets",
+                "Related passages (AI-made, labeled)",
+                "Quotations",
+                "Rare words in the passage",
+                "Verse analysis",
+                "Your notes and highlights",
+                "Author library (status-labeled)"
+              ],
+              "word_sections_v1": [
+                "Range before ruling",
+                "Counts and graph by book",
+                "Lexicon entries",
+                "Renderings in tagged versions",
+                "Word's Journey summary",
+                "Divine-name note"
+              ],
+              "rule": "sections without data are not listed; no teasers"
+            }
+          },
+          {
+            "type": "SW_PARALLEL_TEXT",
+            "id": "they_chose_columns",
+            "visible_when": "guide_kind = They Chose",
+            "gap_items": ["GW-06"],
+            "columns": ["NT", "LXX (Swete)", "MT (WLC)"],
+            "marks_legend": ["agrees with LXX", "agrees with MT", "agrees with both", "neither"],
+            "verdict_line": "Heb 8:8-12 agrees with the Septuagint (LXX Jer 38:31-34) against the Hebrew (MT Jer 31:31-34)",
+            "edition_note": "Computed against Swete; Rahlfs may differ (D-011)."
+          },
+          {
+            "type": "SW_DATA_GRID",
+            "id": "journey_grid",
+            "visible_when": "guide_kind = Word's Journey",
+            "gap_items": ["GW-04"],
+            "columns": [
+              {"id": "witness", "label": "Witness", "width": 140},
+              {"id": "date", "label": "Date", "width": 90},
+              {"id": "rendering", "label": "Rendering(s)", "width": 220},
+              {"id": "count", "label": "Count", "width": 70},
+              {"id": "method", "label": "Method", "width": 150}
+            ],
+            "order": "chronological: MT, LXX, NT, Vulgate, Wycliffe, Tyndale, KJV, BSB",
+            "method_values": ["tagged", "verse co-occurrence", "NO_DATA"]
+          }
+        ]
+      },
+      "states": {
+        "empty": {"widget": "SW_EMPTY_STATE", "message": "Pick a verse or a word, then choose a guide."},
+        "loading": {"per_section": "SW_SKELETON"},
+        "section_error": {"scope": "one section", "message": "This section could not be built.", "actions": ["Retry section"]},
+        "not_quoted": {
+          "guide": "They Chose",
+          "message": "This verse is not in the quotation index.",
+          "action": "Search the index"
+        }
+      }
+    },
+    {
+      "id": "P09",
+      "title": "Census and Checks",
+      "release": "v1 (Claim Check v1.5)",
+      "features": ["I-P02", "I-P03", "I-P01 (v1.5)", "FR-025", "FR-026", "FR-027", "FR-028"],
+      "zone": {"simple": "menu (docks south)", "study": "south_tab"},
+      "link_set": "none (shows its definition)",
+      "layout": {
+        "type": "SW_COLUMN",
+        "children": [
+          {
+            "type": "SW_CARD",
+            "id": "definition_card",
+            "read_only_after_run": true,
+            "fields": ["Question", "Corpus", "Criteria", "Controls", "Holds if", "Fails if", "Definition version"]
+          },
+          {
+            "type": "SW_ROW",
+            "id": "bucket_strip",
+            "filterable": false,
+            "children": [
+              {"type": "SW_STATISTIC", "id": "fits", "label": "FITS"},
+              {"type": "SW_STATISTIC", "id": "partial", "label": "PARTIAL"},
+              {"type": "SW_STATISTIC", "id": "fails", "label": "FAILS"},
+              {
+                "type": "SW_STATISTIC",
+                "id": "no_data",
+                "label": "NO_DATA",
+                "tooltip": "The tagging is silent here; this is not evidence of absence."
+              }
+            ]
+          },
+          {
+            "type": "SW_BAR_CHART",
+            "id": "controls_chart",
+            "series": ["target", "control words"],
+            "grouped": true,
+            "gap_items": ["GW-10"]
+          },
+          {
+            "type": "SW_LABEL",
+            "id": "controls_verdict",
+            "role": "ui",
+            "example": "beats its controls / within the range of its controls"
+          },
+          {
+            "type": "SW_SEGMENTED",
+            "id": "bucket_filter",
+            "segments": ["All", "FITS", "PARTIAL", "FAILS", "NO_DATA"]
+          },
+          {
+            "type": "SW_DATA_GRID",
+            "id": "census_grid",
+            "gap_items": ["GW-04"],
+            "columns": [
+              {"id": "bucket", "label": "Bucket", "width": 90},
+              {"id": "ref", "label": "Reference", "width": 110},
+              {"id": "text", "label": "Text", "width": 420},
+              {"id": "why", "label": "Why", "width": 220},
+              {"id": "near", "label": "Near miss", "width": 160}
+            ]
+          },
+          {
+            "type": "SW_ROW",
+            "children": [
+              {"type": "SW_BUTTON", "label": "Show method", "on_click": "open_dialog:D09"},
+              {"type": "SW_BUTTON", "label": "Re-run as new version", "on_click": "rerun_census_version"},
+              {"type": "SW_BUTTON", "label": "Export report", "on_click": "export"}
+            ]
+          },
+          {"type": "SW_LIST", "id": "shapes_list", "row_renderer": "shape name, tier T1/T2 chip, last run counts"},
+          {
+            "type": "SW_DATA_GRID",
+            "id": "claims_grid",
+            "release": "v1.5",
+            "columns": [
+              {"id": "claim", "label": "Claim", "width": 360},
+              {"id": "kind", "label": "Kind", "width": 110},
+              {"id": "verdict", "label": "Verdict", "width": 150},
+              {"id": "evidence", "label": "Evidence", "width": 260}
+            ],
+            "verdict_values": ["SUPPORTED", "CONTRADICTED", "PARTLY", "CAN'T BE CHECKED"]
+          }
+        ]
+      },
+      "states": {
+        "empty": {
+          "widget": "SW_EMPTY_STATE",
+          "message": "Write a question down, then count.",
+          "action": "New census (Ctrl+Shift+K)"
+        },
+        "running": {"widget": "SW_PROGRESS", "cancel": true, "rule": "partial results are not shown as findings"},
+        "error": {
+          "widget": "SW_CARD",
+          "stripe": "danger",
+          "message": "The census could not finish. The definition is kept.",
+          "actions": ["Retry", "Details"]
+        }
+      }
+    },
+    {
+      "id": "P10",
+      "title": "Author Library",
+      "release": "v1",
+      "features": ["D-019"],
+      "zone": {"simple": "menu (docks south)", "study": "south_tab"},
+      "link_set": "A (documents citing the passage)",
+      "layout": {
+        "type": "SW_SPLITTER",
+        "id": "author_split",
+        "ratio": 0.35,
+        "children": [
+          {
+            "type": "SW_COLUMN",
+            "children": [
+              {
+                "type": "SW_TEXT_BOX",
+                "id": "author_search",
+                "single_line": true,
+                "placeholder": "Search the author library"
+              },
+              {
+                "type": "SW_ROW",
+                "id": "status_filters",
+                "children": [
+                  {"type": "SW_CHIP", "label": "FRAMEWORK", "kind": "accent"},
+                  {"type": "SW_CHIP", "label": "VERDICT", "kind": "success"},
+                  {"type": "SW_CHIP", "label": "DRAFT", "kind": "neutral"},
+                  {"type": "SW_CHIP", "label": "UNMARKED", "kind": "neutral"},
+                  {"type": "SW_CHIP", "label": "WITHDRAWN", "kind": "danger"},
+                  {"type": "SW_CHIP", "label": "UNGATED", "kind": "warning"}
+                ]
+              },
+              {"type": "SW_CHECK_BOX", "id": "include_withdrawn", "label": "Include withdrawn", "default": false},
+              {
+                "type": "SW_LIST",
+                "id": "citing_list",
+                "row_renderer": "title, date, status chip; documents citing the active passage first"
+              }
+            ]
+          },
+          {
+            "type": "SW_COLUMN",
+            "children": [
+              {
+                "type": "SW_CARD",
+                "id": "status_banner",
+                "stripe": "by status",
+                "visible_when": "status in {draft, withdrawn, ungated}"
+              },
+              {"type": "SW_LABEL", "id": "doc_byline", "role": "ui", "example": "Larry Rix, author library"},
+              {"type": "SW_RICH_TEXT_VIEW", "id": "doc_body", "gap_items": ["GW-13"]}
+            ]
+          }
+        ]
+      },
+      "status_treatment": {
+        "framework": "FRAMEWORK chip; normal",
+        "verdict": "VERDICT chip; confidence shown where the document states one",
+        "draft": "DRAFT chip; banner: Draft: not a settled position",
+        "unmarked": "UNMARKED chip; normal",
+        "withdrawn": "WITHDRAWN chip; banner: Withdrawn by the author. Kept for the record; not authority. Excluded from search unless Include withdrawn is on, then labeled",
+        "ungated": "UNGATED chip; banner: Not reviewed (ungated). Read as a working note."
+      },
+      "states": {
+        "empty": {"widget": "SW_EMPTY_STATE", "message": "No author documents cite this passage."},
+        "absent": {"widget": "SW_EMPTY_STATE", "message": "The author library (rix.db) is not installed."},
+        "error": {"widget": "SW_CARD", "stripe": "danger", "actions": ["Retry", "Details"]}
+      }
+    },
+    {
+      "id": "P11",
+      "title": "Navigator",
+      "release": "v1",
+      "features": ["E02", "E08", "E11", "D16"],
+      "zone": {"simple": "menu", "study": "west"},
+      "link_set": "A",
+      "layout": {
+        "type": "SW_TABS",
+        "id": "nav_tabs",
+        "pages": [
+          {
+            "label": "Books",
+            "content": {
+              "type": "SW_COLUMN",
+              "children": [
+                {"type": "SW_SEGMENTED", "id": "books_view", "segments": ["Tree", "Explorer"]},
+                {
+                  "type": "SW_TREE",
+                  "id": "book_tree",
+                  "roots": "testaments / canon sections of the current version",
+                  "children_provider": "chapters",
+                  "on_activate": "go_to"
+                },
+                {
+                  "type": "SW_DATA_GRID",
+                  "id": "books_explorer",
+                  "visible_when": "books_view = Explorer",
+                  "columns": [
+                    {"id": "book", "label": "Book", "width": 130},
+                    {"id": "genre", "label": "Genre", "width": 110},
+                    {"id": "author", "label": "Author (sourced)", "width": 140},
+                    {"id": "chapters", "label": "Chapters", "width": 80},
+                    {"id": "verses", "label": "Verses", "width": 80},
+                    {"id": "words", "label": "Words", "width": 90}
+                  ]
+                }
+              ]
+            }
+          },
+          {"label": "Bookmarks", "content": {"type": "SW_LIST", "id": "bookmark_list"}},
+          {"label": "History", "content": {"type": "SW_LIST", "id": "history_list"}},
+          {
+            "label": "Plans",
+            "content": {
+              "type": "SW_COLUMN",
+              "children": [
+                {"type": "SW_CALENDAR", "id": "plan_calendar"},
+                {"type": "SW_PROGRESS", "id": "plan_progress"},
+                {"type": "SW_LIST", "id": "todays_reading"}
+              ]
+            }
+          },
+          {"label": "Collections", "content": {"type": "SW_LIST", "id": "collection_list"}}
+        ]
+      },
+      "states": {"empty": {"widget": "SW_EMPTY_STATE", "message": "No bookmarks yet. Press Ctrl+B on a verse."}}
+    },
+    {
+      "id": "P12",
+      "title": "Study Ledger",
+      "release": "v1.5",
+      "features": ["I-P12", "I-P16"],
+      "zone": {"simple": "menu", "study": "south_tab"},
+      "link_set": "none",
+      "layout": {
+        "type": "SW_COLUMN",
+        "children": [
+          {
+            "type": "SW_DATA_GRID",
+            "id": "ledger_grid",
+            "columns": [
+              {"id": "time", "label": "Time", "width": 90},
+              {"id": "action", "label": "Action", "width": 110},
+              {"id": "query", "label": "Query", "width": 300},
+              {"id": "version", "label": "Version", "width": 80},
+              {"id": "result", "label": "Result", "width": 160},
+              {"id": "ruling", "label": "My ruling", "width": 200}
+            ]
+          },
+          {
+            "type": "SW_ROW",
+            "children": [
+              {"type": "SW_BUTTON", "label": "Replay"},
+              {"type": "SW_BUTTON", "label": "Re-run on current data"},
+              {"type": "SW_BUTTON", "label": "Record my ruling"},
+              {"type": "SW_BUTTON", "label": "Export ledger"}
+            ]
+          }
+        ]
+      },
+      "states": {"empty": {"widget": "SW_EMPTY_STATE", "message": "Every search, count and guide you run is listed here."}}
+    },
+    {
+      "id": "P13",
+      "title": "World Timeline",
+      "release": "v2",
+      "features": ["D07", "11-HISTORY-TIMELINE"],
+      "zone": {"simple": "menu", "study": "center_tab"},
+      "link_set": "A (narrated or composition time)",
+      "layout": {
+        "type": "SW_COLUMN",
+        "children": [
+          {
+            "type": "SW_ROW",
+            "children": [
+              {"type": "SW_SEGMENTED", "id": "time_kind", "segments": ["Narrated time", "Composition time"]},
+              {"type": "SW_BUTTON", "id": "lanes_btn", "label": "Lanes..."},
+              {"type": "SW_SELECT", "id": "era_labels", "options": ["BC/AD", "BCE/CE"]},
+              {
+                "type": "SW_SELECT",
+                "id": "chronology_scheme",
+                "options": ["by lane default", "Thiele", "Cogan", "Galil"]
+              }
+            ]
+          },
+          {
+            "type": "SW_LANE_TIMELINE",
+            "id": "lanes",
+            "gap_items": ["GW-17", "GW-18"],
+            "axis": "astronomical years, displayed BC/AD, never year zero",
+            "certainty_classes": [
+              "A solid tick",
+              "B solid bar",
+              "C bar + scheme badge",
+              "D gradient bar",
+              "E soft band",
+              "F dashed bar per the text",
+              "G hatched band labeled tradition"
+            ],
+            "disputes": "all positions stacked inside the envelope; a lean is labeled and never pre-selected",
+            "synchronism": "vertical slice listing every visible lane at a moment"
+          },
+          {
+            "type": "SW_DRAWER",
+            "id": "event_drawer",
+            "content": [
+              "title and summary",
+              "original date expression",
+              "sources by grade P1/P2/P3",
+              "who said what",
+              "verses",
+              "disputes"
+            ]
+          }
+        ]
+      },
+      "states": {"empty": {"widget": "SW_EMPTY_STATE", "message": "No dated events for this passage."}}
+    },
+    {
+      "id": "P14",
+      "title": "Atlas",
+      "release": "v2",
+      "features": ["D06"],
+      "zone": {"simple": "menu", "study": "center_tab"},
+      "link_set": "A",
+      "layout": {
+        "type": "SW_MAP",
+        "id": "atlas_map",
+        "markers": "places in the passage with confidence",
+        "gap_items": ["GW-19"]
+      },
+      "states": {"empty": {"widget": "SW_EMPTY_STATE", "message": "No mapped places in this passage."}}
+    }
+  ],
+  "popovers": [
+    {
+      "id": "word_card",
+      "title": "Word card",
+      "release": "v1",
+      "presentation": "SW_WINDOW.show_popover at the word (click); hover dwell opening is GW-09",
+      "layout": {
+        "type": "SW_COLUMN",
+        "children": [
+          {"type": "SW_LABEL", "id": "wc_script", "role": "body"},
+          {"type": "SW_LABEL", "id": "wc_translit", "role": "ui", "example": "bereshit (be-re-SHEET)"},
+          {"type": "SW_LABEL", "id": "wc_gloss", "role": "ui", "example": "in the beginning"},
+          {"type": "SW_LABEL", "id": "wc_morph", "role": "ui", "example": "preposition + noun, feminine singular"},
+          {
+            "type": "SW_ROW",
+            "children": [
+              {"type": "SW_CHIP", "label": "H7225"},
+              {"type": "SW_CHIP", "label": "WLC"},
+              {"type": "SW_BADGE", "id": "wc_uses"}
+            ]
+          },
+          {
+            "type": "SW_ROW",
+            "children": [
+              {"type": "SW_BUTTON", "label": "Word Study"},
+              {"type": "SW_BUTTON", "label": "Search"},
+              {"type": "SW_BUTTON", "label": "Journey"},
+              {"type": "SW_BUTTON", "label": "Pin"}
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "dialogs": [
+    {
+      "id": "D01",
+      "title": "Go to Reference",
+      "presentation": "popover under the reference box",
+      "release": "v1",
+      "state_machine": "go_to_flow",
+      "layout": {
+        "type": "SW_COLUMN",
+        "children": [
+          {"type": "SW_COMBO", "id": "goto_box", "options_from": "recent_references", "validation": "VR-01"},
+          {
+            "type": "SW_ROW",
+            "children": [
+              {"type": "SW_LIST", "id": "goto_books"},
+              {"type": "SW_LIST", "id": "goto_chapters"},
+              {"type": "SW_LIST", "id": "goto_verses"}
+            ]
+          },
+          {"type": "SW_LABEL", "id": "goto_system", "role": "mono", "example": "KJV numbering"},
+          {
+            "type": "SW_ROW",
+            "children": [
+              {"type": "SW_BUTTON", "label": "Go", "style": "primary", "enabled_when": "reference_valid"},
+              {"type": "SW_BUTTON", "label": "Cancel"}
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "D02",
+      "title": "Search Builder",
+      "presentation": "SW_WINDOW.show_sheet",
+      "release": "v1 (pre-registration v1.5)",
+      "layout": {
+        "type": "SW_COLUMN",
+        "children": [
+          {
+            "type": "SW_SEGMENTED",
+            "id": "sb_mode",
+            "segments": ["Basic", "Boolean", "Lemma / Strong's", "Morphology", "Shape"]
+          },
+          {
+            "type": "SW_QUERY_BUILDER",
+            "id": "sb_builder",
+            "gap_items": ["GW-12"],
+            "needs": [
+              "nested groups",
+              "NOT",
+              "proximity: within n words / same verse / same clause",
+              "lemma and morphology code pickers",
+              "clause tree output for the engine parser (never SQL text)"
+            ]
+          },
+          {"type": "SW_SELECT", "id": "sb_scope"},
+          {
+            "type": "SW_CHECK_BOX",
+            "id": "sb_marks_insensitive",
+            "label": "Ignore vowel points and accents",
+            "default": true
+          },
+          {
+            "type": "SW_GROUP",
+            "title": "Write the question first (v1.5)",
+            "release": "v1.5",
+            "children": [
+              {"type": "SW_TEXT_BOX", "id": "sb_claim", "placeholder": "What do you expect to find?"},
+              {"type": "SW_TEXT_BOX", "id": "sb_holds", "placeholder": "It holds if..."},
+              {"type": "SW_TEXT_BOX", "id": "sb_fails", "placeholder": "It fails if..."}
+            ]
+          },
+          {"type": "SW_LABEL", "id": "sb_preview", "role": "mono", "example": "about 1,240 verses"},
+          {
+            "type": "SW_ROW",
+            "children": [
+              {"type": "SW_BUTTON", "label": "Run", "style": "primary", "enabled_when": "query_valid"},
+              {"type": "SW_BUTTON", "label": "Cancel"}
+            ]
+          }
+        ]
+      },
+      "validation": ["VR-03", "VR-04", "VR-05"]
+    },
+    {
+      "id": "D03",
+      "title": "Census Builder",
+      "presentation": "SW_WINDOW.show_sheet",
+      "release": "v1",
+      "state_machine": "census_flow",
+      "layout": {
+        "type": "SW_COLUMN",
+        "children": [
+          {"type": "SW_TEXT_BOX", "id": "cb_question", "placeholder": "Question"},
+          {"type": "SW_SELECT", "id": "cb_corpus"},
+          {"type": "SW_QUERY_BUILDER", "id": "cb_criteria", "gap_items": ["GW-12"]},
+          {
+            "type": "SW_GROUP",
+            "title": "Controls",
+            "children": [
+              {"type": "SW_NUMBER_BOX", "id": "cb_control_count", "min": 1, "max": 50, "default": 10},
+              {"type": "SW_LIST", "id": "cb_controls", "row_renderer": "frequency-matched control word, editable"}
+            ]
+          },
+          {"type": "SW_TEXT_BOX", "id": "cb_holds", "placeholder": "Holds if..."},
+          {"type": "SW_TEXT_BOX", "id": "cb_fails", "placeholder": "Fails if..."},
+          {
+            "type": "SW_ROW",
+            "children": [
+              {"type": "SW_BUTTON", "label": "Save definition"},
+              {"type": "SW_BUTTON", "label": "Run", "style": "primary", "enabled_when": "definition_complete"},
+              {"type": "SW_BUTTON", "label": "Cancel"}
+            ]
+          }
+        ]
+      },
+      "validation": ["VR-06", "VR-07"]
+    },
+    {
+      "id": "D04",
+      "title": "Claim Check",
+      "presentation": "SW_WINDOW.show_sheet",
+      "release": "v1.5",
+      "layout": {
+        "type": "SW_COLUMN",
+        "children": [
+          {
+            "type": "SW_TEXT_BOX",
+            "id": "cc_paste",
+            "multiline": true,
+            "placeholder": "Paste an AI answer, a sermon note or a post"
+          },
+          {"type": "SW_BUTTON", "label": "Find claims"},
+          {
+            "type": "SW_DATA_GRID",
+            "id": "cc_claims",
+            "columns": [{"id": "claim", "label": "Claim", "width": 380}, {"id": "kind", "label": "Kind", "width": 140}]
+          },
+          {
+            "type": "SW_ROW",
+            "children": [
+              {"type": "SW_BUTTON", "label": "Check", "style": "primary", "enabled_when": "claims_present"},
+              {"type": "SW_BUTTON", "label": "Cancel"}
+            ]
+          }
+        ]
+      },
+      "validation": ["VR-08"]
+    },
+    {
+      "id": "D05",
+      "title": "Settings",
+      "presentation": "SW_WINDOW.show_sheet",
+      "release": "v1",
+      "layout": {
+        "type": "SW_TABS",
+        "id": "settings_tabs",
+        "pages": [
+          {
+            "label": "Appearance",
+            "content": [
+              "theme: light / dark / high contrast",
+              "interface scale 1.0-3.0 (SW_SLIDER)",
+              "reading size 14-40 px (SW_NUMBER_BOX)",
+              "line spacing",
+              "reduce motion (GW-14)"
+            ]
+          },
+          {
+            "label": "Languages",
+            "content": [
+              "Hebrew pointing default: Full / Vowels / Consonants",
+              "transliteration scheme: academic / simple",
+              "show pronunciation",
+              "Strong's numbers inline"
+            ]
+          },
+          {
+            "label": "Texts",
+            "content": [
+              "default version",
+              "parallel column set",
+              "LXX edition: Swete (public build)",
+              "Ecclesiastes in the Swete slot: per Larry's pending call"
+            ]
+          },
+          {
+            "label": "Sync",
+            "content": [
+              "follow along on scroll (SW_SWITCH)",
+              "scroll stillness ms (SW_NUMBER_BOX, default 120)",
+              "default target link set for search results"
+            ]
+          },
+          {
+            "label": "Data",
+            "content": [
+              "database locations (read-only display)",
+              "verify databases (full integrity check)",
+              "user.db backup / restore",
+              "author library: installed, edition date"
+            ]
+          },
+          {"label": "Privacy", "content": ["no network by default (FR-064)", "update check: off"]},
+          {"label": "Keyboard", "content": ["shortcut list (view only in v1)"]},
+          {
+            "label": "About and Credits",
+            "content": ["credits generated from source_provenance (FR-003)", "license notices incl. Swete CC BY-SA 4.0"]
+          }
+        ]
+      },
+      "validation": ["VR-09"]
+    },
+    {
+      "id": "D06",
+      "title": "Export / Copy",
+      "presentation": "SW_WINDOW.show_sheet",
+      "release": "v1 (flags v1.5)",
+      "state_machine": "export_flow",
+      "layout": {
+        "type": "SW_COLUMN",
+        "children": [
+          {
+            "type": "SW_RADIO_GROUP",
+            "id": "ex_what",
+            "options": ["Verses", "Notes", "Search results", "Census report", "Guide"]
+          },
+          {"type": "SW_SELECT", "id": "ex_format", "options": ["Plain text", "Markdown", "CSV"]},
+          {
+            "type": "SW_SELECT",
+            "id": "ex_ref_style",
+            "options": ["John 3:16 (BSB)", "(John 3:16, BSB)", "Footnote"]
+          },
+          {
+            "type": "SW_LABEL",
+            "id": "ex_attribution",
+            "role": "ui",
+            "example": "Attribution is added automatically."
+          },
+          {
+            "type": "SW_CARD",
+            "id": "ex_share_alike",
+            "visible_when": "includes_swete",
+            "text": "Swete Septuagint text: CC BY-SA 4.0. If you share this text or anything made from it, credit the sources above and share it under the same license."
+          },
+          {
+            "type": "SW_GROUP",
+            "title": "Verification flags (v1.5)",
+            "release": "v1.5",
+            "children": [
+              {
+                "type": "SW_CHECK_BOX",
+                "id": "ex_flags",
+                "label": "Show a verification flag with every claim",
+                "default": true
+              },
+              {"type": "SW_CHECK_BOX", "id": "ex_strip", "label": "Leave out unchecked items", "default": false}
+            ]
+          },
+          {"type": "SW_TEXT_BOX", "id": "ex_preview", "read_only": true, "multiline": true},
+          {
+            "type": "SW_ROW",
+            "children": [
+              {"type": "SW_BUTTON", "label": "Copy", "style": "primary"},
+              {"type": "SW_BUTTON", "label": "Save...", "opens": "SW_FILE_DIALOG (save mode)"},
+              {"type": "SW_BUTTON", "label": "Cancel"}
+            ]
+          }
+        ]
+      },
+      "validation": ["VR-10"]
+    },
+    {
+      "id": "D07",
+      "title": "Layouts",
+      "presentation": "SW_WINDOW.show_sheet",
+      "release": "v1 presets, v2 named",
+      "layout": {
+        "type": "SW_COLUMN",
+        "children": [
+          {
+            "type": "SW_LIST",
+            "id": "layout_list",
+            "row_renderer": "Simple (preset), Study (preset), then saved layouts (v2)"
+          },
+          {"type": "SW_TEXT_BOX", "id": "layout_name", "release": "v2", "placeholder": "Name this layout"},
+          {
+            "type": "SW_ROW",
+            "children": [
+              {"type": "SW_BUTTON", "label": "Apply", "style": "primary"},
+              {"type": "SW_BUTTON", "label": "Reset to preset"},
+              {"type": "SW_BUTTON", "label": "Save current as...", "release": "v2"},
+              {"type": "SW_BUTTON", "label": "Delete", "release": "v2"}
+            ]
+          }
+        ]
+      },
+      "validation": ["VR-11"]
+    },
+    {
+      "id": "D08",
+      "title": "Database problem",
+      "presentation": "SW_DIALOG (danger)",
+      "release": "v1",
+      "layout": {
+        "type": "SW_COLUMN",
+        "children": [
+          {
+            "type": "SW_LABEL",
+            "id": "db_problem",
+            "role": "ui",
+            "examples": [
+              "core.db was not found",
+              "core.db is from a different edition (schema 3, expected 4)",
+              "core.db could not be opened (damaged)"
+            ]
+          },
+          {
+            "type": "SW_ROW",
+            "children": [
+              {"type": "SW_BUTTON", "label": "Retry"},
+              {"type": "SW_BUTTON", "label": "Locate...", "opens": "SW_FILE_DIALOG (open, *.db)"},
+              {"type": "SW_BUTTON", "label": "Exit"}
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "D09",
+      "title": "Show method",
+      "presentation": "SW_WINDOW.show_sheet",
+      "release": "v1",
+      "layout": {
+        "type": "SW_COLUMN",
+        "children": [
+          {"type": "SW_LABEL", "id": "m_query", "role": "mono"},
+          {"type": "SW_LABEL", "id": "m_corpus", "role": "ui"},
+          {"type": "SW_LABEL", "id": "m_version", "role": "ui"},
+          {"type": "SW_DATA_GRID", "id": "m_counts"},
+          {
+            "type": "SW_DATA_GRID",
+            "id": "m_provenance",
+            "columns": [
+              {"id": "source", "label": "Source", "width": 160},
+              {"id": "edition", "label": "Edition", "width": 140},
+              {"id": "license", "label": "License", "width": 120},
+              {"id": "retrieved", "label": "Retrieved", "width": 100}
+            ]
+          },
+          {"type": "SW_BUTTON", "label": "Re-run", "on_click": "rerun_method"}
+        ]
+      }
+    },
+    {
+      "id": "D10",
+      "title": "Which reference?",
+      "presentation": "popover under the reference box",
+      "release": "v1",
+      "layout": {
+        "type": "SW_LIST",
+        "id": "candidates",
+        "examples": ["Ju 1: Judges 1 or Jude 1", "Ph 1: Philippians 1 or Philemon 1"]
+      }
+    }
+  ],
+  "sync_model": {
+    "active_reference": {
+      "per": "link set",
+      "fields": [
+        "verse_id (canonical hub id after the versification map)",
+        "origin_system",
+        "range_end (optional)",
+        "word_token (optional)"
+      ]
+    },
+    "link_sets": ["A", "B", "C", "Off"],
+    "simple_mode": "every panel in A, no chips shown (e-Sword follow-along)",
+    "study_mode": "SW_CHIP per panel header; Ctrl+L cycles; Off pins the panel",
+    "follow_along": {
+      "trigger": "scroll stillness",
+      "default_ms": 120,
+      "source": "first fully visible verse of the active Bible pane"
+    },
+    "update_policy": {
+      "visible_linked": "refresh now; active Bible pane first",
+      "hidden_linked": "mark stale; refresh when shown",
+      "unlinked": "unchanged",
+      "superseded": "cancel the older refresh"
+    },
+    "versification_notes": "every pairing shows the mapping rule applied (D-010, FR-022)"
+  },
+  "keyboard": [
+    {"keys": "Ctrl+G", "action": "focus_reference_box"},
+    {"keys": "Alt+Left", "action": "history_back"},
+    {"keys": "Alt+Right", "action": "history_forward"},
+    {"keys": "Ctrl+PageUp", "action": "previous_chapter"},
+    {"keys": "Ctrl+PageDown", "action": "next_chapter"},
+    {"keys": "Ctrl+M", "action": "switch_mode"},
+    {"keys": "Ctrl+L", "action": "cycle_link_set"},
+    {"keys": "Ctrl+F", "action": "open_find_bar"},
+    {"keys": "Ctrl+Shift+F", "action": "open_dialog:D02"},
+    {"keys": "Ctrl+Shift+K", "action": "open_dialog:D03"},
+    {"keys": "Ctrl+Shift+W", "action": "open_guide:word"},
+    {"keys": "Ctrl+Shift+G", "action": "open_guide:passage"},
+    {"keys": "Ctrl+Shift+J", "action": "open_guide:journey"},
+    {"keys": "Ctrl+Shift+Q", "action": "open_guide:quotation"},
+    {"keys": "Ctrl+Shift+D", "action": "toggle_divine_names"},
+    {"keys": "Ctrl+Shift+P", "action": "cycle_pointing"},
+    {"keys": "Ctrl+I", "action": "open_panel:P03"},
+    {"keys": "Ctrl+B", "action": "bookmark"},
+    {"keys": "Ctrl+Shift+H", "action": "highlight_last_color"},
+    {"keys": "Ctrl+N", "action": "new_note"},
+    {"keys": "Ctrl+C", "action": "copy_verse"},
+    {"keys": "Ctrl+Shift+C", "action": "export"},
+    {"keys": "Ctrl+E", "action": "export"},
+    {"keys": "Ctrl+T", "action": "open_bible_tab"},
+    {"keys": "Ctrl+W", "action": "close_bible_tab", "gap_items": ["GW-15"]},
+    {"keys": "Ctrl+=", "action": "text_larger"},
+    {"keys": "Ctrl+-", "action": "text_smaller"},
+    {"keys": "Ctrl+0", "action": "text_reset", "gap_items": ["GW-24"]},
+    {"keys": "Ctrl+Shift+O", "action": "open_dialog:D05"},
+    {"keys": "F1", "action": "open_help", "gap_items": ["GW-24"]},
+    {"keys": "F3", "action": "find_next", "gap_items": ["GW-24"]},
+    {"keys": "F6 / Shift+F6", "action": "focus_next_panel", "gap_items": ["GW-24"]},
+    {"keys": "Ctrl+1..Ctrl+9", "action": "select_bible_tab", "gap_items": ["GW-24"]},
+    {"keys": "Esc", "action": "close_popover_or_sheet"},
+    {"keys": "Alt+letter", "action": "menu mnemonic (SW_WINDOW.set_menu_bar)"}
+  ],
+  "events": [
+    {
+      "id": "go_to",
+      "source": "reference_box, goto dialog, links, history",
+      "payload": "reference text or verse_id",
+      "raises": "app_activity: go_to"
+    },
+    {
+      "id": "reference_changed",
+      "source": "engine after navigation",
+      "payload": "link set, active reference",
+      "raises": "panel_sync: reference_changed (each panel in the set)"
+    },
+    {
+      "id": "word_selected",
+      "source": "P01, P03",
+      "payload": "link set, word_token",
+      "raises": "panel_sync: reference_changed (word follow)"
+    },
+    {
+      "id": "run_search",
+      "source": "quick_search, P07, D02",
+      "payload": "query clause tree, scope",
+      "raises": "app_activity: run_search"
+    },
+    {
+      "id": "page_ready",
+      "source": "search job (separate processor)",
+      "payload": "rows n..m",
+      "raises": "app_activity: page_ready"
+    },
+    {
+      "id": "open_guide",
+      "source": "menus, word card, toolbar",
+      "payload": "guide kind, subject",
+      "raises": "app_activity: open_guide"
+    },
+    {
+      "id": "section_ready",
+      "source": "guide job",
+      "payload": "section id, engine result",
+      "raises": "app_activity: section_ready"
+    },
+    {
+      "id": "run_census",
+      "source": "D03",
+      "payload": "frozen census definition id",
+      "raises": "app_activity: run_census"
+    },
+    {"id": "job_progress", "source": "any job", "payload": "fraction 0..1", "effect": "status bar progress"},
+    {"id": "cancel", "source": "status bar Cancel, Esc, dialog Cancel", "raises": "cancel in the active state"},
+    {"id": "switch_mode", "source": "mode_switch, Ctrl+M, toast action", "raises": "mode_layout: switch_mode"},
+    {
+      "id": "tool_opened",
+      "source": "opening a study panel in Simple mode",
+      "raises": "mode_layout: tool_opened"
+    },
+    {"id": "layout_changed", "source": "SW_DOCK_HOST.on_layout_change", "effect": "debounced session snapshot"},
+    {"id": "panel_shown", "source": "SW_TABS.on_change, dock reflow", "raises": "panel_sync: panel_shown"},
+    {"id": "link_set_changed", "source": "link chip menu, Ctrl+L", "raises": "panel_sync: unlink / relink"},
+    {"id": "close_window", "source": "File > Exit, window close", "raises": "app_activity: close_window"}
+  ],
+  "validation": [
+    {
+      "id": "VR-01",
+      "field": "reference_box, goto_box",
+      "rule": "engine reference parser (FR-020): valid / ambiguous / invalid",
+      "on_invalid": "SW_COMBO.set_invalid + message under the box naming the faulty part",
+      "on_ambiguous": "open D10, never guess"
+    },
+    {
+      "id": "VR-02",
+      "field": "reference in a version",
+      "rule": "book and verse exist in the version after the versification map",
+      "on_fail": "not_in_canon state or omitted-verse placeholder (FR-009)"
+    },
+    {
+      "id": "VR-03",
+      "field": "query_box, quick_search",
+      "rule": "query syntax parses (words, phrases, AND/OR/NOT, /regex/, lemma:, strongs:, morph:)",
+      "on_invalid": "set_invalid + message at the character"
+    },
+    {
+      "id": "VR-04",
+      "field": "lemma:, strongs:, morph: values",
+      "rule": "resolve to engine keys (Strong's incl. split senses 6743/6743a; morphology codes)",
+      "on_invalid": "suggest nearest valid keys"
+    },
+    {
+      "id": "VR-05",
+      "field": "/regex/",
+      "rule": "compiles in the engine",
+      "on_invalid": "show the compiler message"
+    },
+    {
+      "id": "VR-06",
+      "field": "census definition",
+      "rule": "question, corpus, criteria, at least one control, holds-if and fails-if all present",
+      "guard": "definition_complete"
+    },
+    {
+      "id": "VR-07",
+      "field": "census definition after a run",
+      "rule": "read-only; edits create a new version (FR-025)"
+    },
+    {
+      "id": "VR-08",
+      "field": "cc_paste",
+      "rule": "non-empty; at least one claim extracted",
+      "guard": "claims_present"
+    },
+    {
+      "id": "VR-09",
+      "field": "settings",
+      "rule": "values in range; theme colors satisfy SW_THEME contrast invariant"
+    },
+    {"id": "VR-10", "field": "export target", "rule": "something selected; save path writable"},
+    {"id": "VR-11", "field": "layout name (v2)", "rule": "non-empty, unique"}
+  ],
+  "error_handling": [
+    {
+      "id": "ER-01",
+      "scenario": "core.db missing, wrong schema or unreadable at startup",
+      "state": "database_error",
+      "ui": "D08",
+      "recovery": ["Retry", "Locate...", "Exit"]
+    },
+    {
+      "id": "ER-02",
+      "scenario": "optional database absent (ai_data.db, rix.db, history.db)",
+      "state": "none (degrades)",
+      "ui": "the dependent panel shows its absent state; no error dialog"
+    },
+    {
+      "id": "ER-03",
+      "scenario": "user.db cannot be created or written",
+      "state": "error_recoverable",
+      "ui": "SW_DIALOG danger: notes and highlights cannot be saved; reading still works",
+      "recovery": ["Retry", "Choose another folder"]
+    },
+    {
+      "id": "ER-04",
+      "scenario": "engine query fails during navigation",
+      "state": "error_recoverable",
+      "ui": "panel error state; toast with Details",
+      "recovery": ["Retry"]
+    },
+    {
+      "id": "ER-05",
+      "scenario": "search or census job fails",
+      "state": "error_recoverable",
+      "ui": "P07/P09 error card; definition kept",
+      "recovery": ["Retry", "Details"]
+    },
+    {
+      "id": "ER-06",
+      "scenario": "one guide section fails",
+      "state": "building_guide continues",
+      "ui": "that section shows its error; others render"
+    },
+    {
+      "id": "ER-07",
+      "scenario": "layout snapshot invalid (panel unknown, zone fraction out of range)",
+      "state": "layout_applying -> mode_simple",
+      "ui": "toast: layout reset to Simple"
+    },
+    {
+      "id": "ER-08",
+      "scenario": "font or shaping failure (missing glyphs)",
+      "state": "none",
+      "ui": "text still drawn with fallback boxes; Settings > Data names the missing font; logged as a GW-01/GW-03 defect"
+    },
+    {
+      "id": "ER-09",
+      "scenario": "export write fails",
+      "state": "error_recoverable",
+      "ui": "SW_DIALOG with the OS message",
+      "recovery": ["Retry", "Choose another location"]
+    },
+    {
+      "id": "ER-10",
+      "scenario": "job cancelled",
+      "state": "ready",
+      "ui": "status bar cleared; partial results discarded, never shown as findings"
+    }
+  ],
+  "contracts": {
+    "invariants": [
+      "exactly one active reference per link set",
+      "every displayed number has a method record (FR-032)",
+      "every displayed fact row has a provenance key (FR-002)",
+      "census results always carry all four buckets FITS PARTIAL FAILS NO_DATA (FR-026)",
+      "AI-made rows always carry the AI-made label (NFR-014)",
+      "no LXX label without its edition",
+      "rix.db documents always carry their status chip (D-019)",
+      "at most one job of each kind runs; a newer navigation cancels an older one",
+      "the GUI processor never runs a query longer than one frame budget; long work is on separate processors"
+    ],
+    "preconditions": {
+      "go_to": "reference parses to exactly one verse_id",
+      "run_search": "query valid (VR-03..VR-05)",
+      "run_census": "definition_complete and the definition is stored before the run",
+      "apply_settings": "values valid (VR-09)",
+      "switch_mode": "not layout_applying"
+    },
+    "postconditions": {
+      "go_to": "active reference of the link set = parsed verse_id; history extended by one",
+      "switch_mode": "data, selection and jobs unchanged; only layout differs",
+      "census_done": "definition frozen; result has four buckets; method stored",
+      "export_written": "attribution present; share-alike notice present when Swete text is included"
+    }
+  },
+  "state_machines": [
+    {
+      "id": "app_activity",
+      "description": "Region A: lifecycle and activity",
+      "initial_state": "starting",
+      "states": [
+        {
+          "id": "starting",
+          "type": "initial",
+          "description": "Window created; startup skeleton",
+          "entry_action": "show_startup_skeleton"
+        },
+        {
+          "id": "checking_databases",
+          "description": "Open core.db read-only, check schema, attach optional dbs, open user.db",
+          "entry_action": "check_databases"
+        },
+        {"id": "database_error", "description": "core.db missing or invalid", "entry_action": "show_dialog:D08"},
+        {
+          "id": "restoring_session",
+          "description": "Restore layout snapshot, mode and last reference",
+          "entry_action": "restore_session"
+        },
+        {"id": "ready", "description": "Idle; user reading"},
+        {
+          "id": "navigating",
+          "description": "Parse, map, broadcast reference",
+          "entry_action": "start_navigation",
+          "exit_action": "push_history"
+        },
+        {
+          "id": "choosing_reference",
+          "description": "Ambiguous input: candidate list",
+          "entry_action": "show_dialog:D10"
+        },
+        {
+          "id": "searching",
+          "description": "Search job running",
+          "entry_action": "start_search_job",
+          "exit_action": "clear_job_progress"
+        },
+        {"id": "building_guide", "description": "Guide sections arriving", "entry_action": "start_guide_job"},
+        {"id": "census_defining", "description": "Census Builder open", "entry_action": "show_dialog:D03"},
+        {
+          "id": "census_running",
+          "description": "Census job running",
+          "entry_action": "freeze_definition_and_start",
+          "exit_action": "clear_job_progress"
+        },
+        {"id": "claim_checking", "description": "Claim Check job (v1.5)", "entry_action": "start_claim_job"},
+        {"id": "settings_open", "description": "Settings sheet open", "entry_action": "show_dialog:D05"},
+        {"id": "exporting", "description": "Export sheet open or writing", "entry_action": "show_dialog:D06"},
+        {"id": "error_recoverable", "description": "A recoverable failure is shown", "entry_action": "show_error"},
+        {
+          "id": "exiting",
+          "type": "final",
+          "description": "Save snapshot, flush user.db, cancel jobs",
+          "entry_action": "shutdown"
+        }
+      ],
+      "transitions": [
+        {"from": "starting", "event": "window_ready", "to": "checking_databases"},
+        {"from": "checking_databases", "event": "databases_ok", "to": "restoring_session"},
+        {"from": "checking_databases", "event": "database_failed", "to": "database_error"},
+        {"from": "database_error", "event": "retry", "to": "checking_databases"},
+        {"from": "database_error", "event": "locate_database", "to": "checking_databases", "guard": "file_chosen"},
+        {"from": "database_error", "event": "exit", "to": "exiting"},
+        {"from": "restoring_session", "event": "session_restored", "to": "ready"},
+        {"from": "restoring_session", "event": "snapshot_invalid", "to": "ready", "action": "apply_simple_preset"},
+        {"from": "ready", "event": "go_to", "to": "navigating", "guard": "reference_parses"},
+        {"from": "navigating", "event": "panes_rendered", "to": "ready"},
+        {"from": "navigating", "event": "ambiguous_reference", "to": "choosing_reference"},
+        {"from": "choosing_reference", "event": "candidate_chosen", "to": "navigating"},
+        {"from": "choosing_reference", "event": "cancel", "to": "ready"},
+        {"from": "navigating", "event": "engine_error", "to": "error_recoverable"},
+        {"from": "ready", "event": "run_search", "to": "searching", "guard": "query_valid"},
+        {"from": "searching", "event": "page_ready", "to": "searching", "action": "append_rows"},
+        {"from": "searching", "event": "search_done", "to": "ready"},
+        {"from": "searching", "event": "cancel", "to": "ready", "action": "discard_partial"},
+        {"from": "searching", "event": "search_failed", "to": "error_recoverable"},
+        {"from": "ready", "event": "open_guide", "to": "building_guide", "guard": "subject_selected"},
+        {"from": "building_guide", "event": "section_ready", "to": "building_guide", "action": "render_section"},
+        {"from": "building_guide", "event": "guide_done", "to": "ready"},
+        {"from": "building_guide", "event": "cancel", "to": "ready"},
+        {"from": "building_guide", "event": "guide_failed", "to": "error_recoverable"},
+        {"from": "ready", "event": "new_census", "to": "census_defining"},
+        {"from": "census_defining", "event": "run_census", "to": "census_running", "guard": "definition_complete"},
+        {"from": "census_defining", "event": "cancel", "to": "ready"},
+        {"from": "census_running", "event": "census_done", "to": "ready", "action": "show_four_buckets"},
+        {"from": "census_running", "event": "cancel", "to": "ready", "action": "discard_partial_keep_definition"},
+        {"from": "census_running", "event": "census_failed", "to": "error_recoverable"},
+        {"from": "ready", "event": "check_claims", "to": "claim_checking", "guard": "claims_present"},
+        {"from": "claim_checking", "event": "claims_checked", "to": "ready"},
+        {"from": "claim_checking", "event": "cancel", "to": "ready"},
+        {"from": "ready", "event": "open_settings", "to": "settings_open"},
+        {"from": "settings_open", "event": "apply_settings", "to": "ready", "guard": "settings_valid"},
+        {"from": "settings_open", "event": "cancel", "to": "ready"},
+        {"from": "ready", "event": "export", "to": "exporting"},
+        {"from": "exporting", "event": "export_written", "to": "ready"},
+        {"from": "exporting", "event": "cancel", "to": "ready"},
+        {"from": "exporting", "event": "write_failed", "to": "error_recoverable"},
+        {"from": "error_recoverable", "event": "dismiss", "to": "ready"},
+        {"from": "error_recoverable", "event": "retry", "to": "ready", "action": "reissue_last_command"},
+        {"from": "ready", "event": "close_window", "to": "exiting"}
+      ]
+    },
+    {
+      "id": "mode_layout",
+      "description": "Region B: Simple/Study mode and layouts",
+      "initial_state": "mode_simple",
+      "states": [
+        {"id": "mode_simple", "type": "initial", "description": "Simple preset (or its remembered arrangement)"},
+        {"id": "mode_study", "description": "Study preset (or its remembered arrangement)"},
+        {
+          "id": "layout_applying",
+          "description": "Snapshot current, apply target, verify, reflow",
+          "entry_action": "apply_layout"
+        },
+        {
+          "id": "layout_saving",
+          "description": "Save the arrangement (session snapshot v1; named v2)",
+          "entry_action": "save_layout"
+        }
+      ],
+      "transitions": [
+        {"from": "mode_simple", "event": "switch_mode", "to": "layout_applying"},
+        {"from": "mode_study", "event": "switch_mode", "to": "layout_applying"},
+        {"from": "layout_applying", "event": "applied", "to": "mode_simple", "guard": "target = simple"},
+        {"from": "layout_applying", "event": "applied", "to": "mode_study", "guard": "target = study"},
+        {
+          "from": "layout_applying",
+          "event": "invalid_layout",
+          "to": "mode_simple",
+          "action": "toast_layout_reset"
+        },
+        {"from": "mode_study", "event": "restore_layout", "to": "layout_applying", "guard": "layout_chosen"},
+        {
+          "from": "mode_simple",
+          "event": "tool_opened",
+          "to": "mode_simple",
+          "action": "dock_panel_and_offer_study"
+        },
+        {"from": "mode_simple", "event": "save_layout", "to": "layout_saving"},
+        {"from": "mode_study", "event": "save_layout", "to": "layout_saving"},
+        {"from": "layout_saving", "event": "saved", "to": "mode_simple", "guard": "mode = simple"},
+        {"from": "layout_saving", "event": "saved", "to": "mode_study", "guard": "mode = study"}
+      ]
+    },
+    {
+      "id": "panel_sync",
+      "description": "Region C: one instance per panel",
+      "initial_state": "panel_current",
+      "states": [
+        {"id": "panel_current", "type": "initial", "description": "Shows the link set's reference"},
+        {"id": "panel_stale", "description": "Reference changed while hidden"},
+        {"id": "panel_refreshing", "description": "Engine work for this panel", "entry_action": "start_panel_job"},
+        {"id": "panel_unlinked", "description": "Link set Off: pinned"}
+      ],
+      "transitions": [
+        {
+          "from": "panel_current",
+          "event": "reference_changed",
+          "to": "panel_refreshing",
+          "guard": "visible AND linked"
+        },
+        {"from": "panel_current", "event": "reference_changed", "to": "panel_stale", "guard": "hidden AND linked"},
+        {"from": "panel_stale", "event": "panel_shown", "to": "panel_refreshing"},
+        {"from": "panel_refreshing", "event": "content_ready", "to": "panel_current"},
+        {
+          "from": "panel_refreshing",
+          "event": "reference_changed",
+          "to": "panel_refreshing",
+          "action": "cancel_and_restart"
+        },
+        {"from": "panel_current", "event": "unlink", "to": "panel_unlinked"},
+        {"from": "panel_unlinked", "event": "relink", "to": "panel_refreshing", "guard": "link_set_chosen"},
+        {
+          "from": "panel_refreshing",
+          "event": "refresh_failed",
+          "to": "panel_current",
+          "action": "show_inline_error_keep_last"
+        }
+      ]
+    },
+    {
+      "id": "go_to_flow",
+      "description": "Reference box and D01",
+      "initial_state": "typing",
+      "states": [
+        {"id": "typing", "type": "initial"},
+        {"id": "parsed_valid", "entry_action": "enable_go"},
+        {"id": "parsed_ambiguous", "entry_action": "show_dialog:D10"},
+        {"id": "parsed_invalid", "entry_action": "mark_invalid"}
+      ],
+      "transitions": [
+        {"from": "typing", "event": "text_changed", "to": "parsed_valid", "guard": "parse = valid"},
+        {"from": "typing", "event": "text_changed", "to": "parsed_ambiguous", "guard": "parse = ambiguous"},
+        {"from": "typing", "event": "submit", "to": "parsed_invalid", "guard": "parse = invalid"},
+        {"from": "parsed_valid", "event": "submit", "to": "typing", "action": "raise go_to"},
+        {"from": "parsed_ambiguous", "event": "candidate_chosen", "to": "typing", "action": "raise go_to"},
+        {"from": "parsed_invalid", "event": "text_changed", "to": "typing"}
+      ]
+    },
+    {
+      "id": "census_flow",
+      "description": "D03 Census Builder (FR-025)",
+      "initial_state": "draft",
+      "states": [
+        {"id": "draft", "type": "initial"},
+        {"id": "complete", "description": "All required fields present"},
+        {"id": "stored", "description": "Definition saved, still editable"},
+        {"id": "locked", "type": "final", "description": "Run started: read-only; edits create a new version"}
+      ],
+      "transitions": [
+        {"from": "draft", "event": "field_changed", "to": "complete", "guard": "definition_complete"},
+        {"from": "complete", "event": "field_cleared", "to": "draft"},
+        {"from": "complete", "event": "save", "to": "stored"},
+        {"from": "stored", "event": "run", "to": "locked", "action": "freeze_definition"},
+        {"from": "complete", "event": "run", "to": "locked", "action": "store_and_freeze"}
+      ]
+    },
+    {
+      "id": "export_flow",
+      "description": "D06 Export / Copy",
+      "initial_state": "choosing",
+      "states": [
+        {"id": "choosing", "type": "initial"},
+        {"id": "previewing", "entry_action": "render_preview_with_attribution"},
+        {"id": "writing", "entry_action": "write_or_copy"},
+        {"id": "done", "type": "final"}
+      ],
+      "transitions": [
+        {"from": "choosing", "event": "options_changed", "to": "previewing"},
+        {"from": "previewing", "event": "options_changed", "to": "previewing"},
+        {"from": "previewing", "event": "copy_or_save", "to": "writing", "guard": "target_valid"},
+        {"from": "writing", "event": "written", "to": "done"},
+        {"from": "writing", "event": "write_failed", "to": "previewing", "action": "show_error"}
+      ]
+    }
+  ],
+  "releases": {
+    "v1": [
+      "main window, menus, toolbar, status bar",
+      "Simple and Study presets, session restore",
+      "light, dark, high contrast; interface and reading scales",
+      "P01-P11",
+      "D01-D03, D05-D10",
+      "divine-name view (I-P08)",
+      "They Chose over indexed quotations (I-P06)",
+      "Word's Journey (I-P07)",
+      "range before ruling, renderings (I-P09)",
+      "census with controls and four buckets (I-P02, I-P03)",
+      "named shapes T1/T2",
+      "provenance chips and Show method",
+      "AI-made related passages, labeled (D-016)",
+      "author library with status labels (D-019)",
+      "Swete labeling"
+    ],
+    "v1.5": [
+      "P12 Study Ledger (I-P12)",
+      "D04 Claim Check (I-P01)",
+      "share-safe export flags (I-P05)",
+      "pre-registered questions for any search (I-P13)",
+      "My ruling (I-P16)",
+      "accessibility bridge (GW-14)",
+      "closable tabs (GW-15)",
+      "pane image export (GW-21)"
+    ],
+    "v2": [
+      "P13 World Timeline",
+      "P14 Atlas",
+      "Exegetical Guide",
+      "full Word Study",
+      "reverse interlinear",
+      "variants",
+      "clause search and views",
+      "full NT-Use-of-OT browser",
+      "meaning search",
+      "Topic Guide",
+      "Bible Browser",
+      "visual filters",
+      "Gospel harmony",
+      "audio",
+      "printing",
+      "named layouts",
+      "localization",
+      "module manager",
+      "workflows",
+      "citation tool",
+      "sermon manager, markers, preaching mode",
+      "Visual Copy",
+      "I-P10, I-P11, I-P14, I-P17, I-P04, I-P15",
+      "Argue the other side"
+    ],
+    "v3": ["syntax search", "sentence diagramming", "Theology Guide", "Sermon Builder", "optional AI layer G01-G06"],
+    "blocked": ["H04", "H05", "H06", "H07", "H08", "D12", "F07"]
+  },
+  "gap_work_items": [
+    {
+      "id": "GW-01",
+      "library": "simple_shaping",
+      "capability": "load bundled font files privately (per-process collection from the app folder)",
+      "priority": "v1"
+    },
+    {
+      "id": "GW-02",
+      "library": "simple_shaping + simple_widgets",
+      "capability": "paragraph base direction and alignment; per-item direction in SW_LABEL, SW_TEXT_BOX, SW_PARAGRAPH_LIST; gutter on the reading-start side",
+      "priority": "v1"
+    },
+    {
+      "id": "GW-03",
+      "library": "simple_shaping",
+      "capability": "verified Hebrew cantillation and niqqud stacking, meteg, NBSP before paseq, polytonic Greek (fix every D-006 spike defect)",
+      "priority": "v1"
+    },
+    {
+      "id": "GW-04",
+      "library": "simple_widgets",
+      "capability": "shaped path in the remaining text-drawing widgets (data grid, tree, tree table, tabs, chip, select, dialog, status bar, dock title bars, timeline, charts, diagram, map, tooltip)",
+      "priority": "v1"
+    },
+    {
+      "id": "GW-05",
+      "library": "simple_widgets",
+      "capability": "SW_DOCK_HOST: tabbed zones, draggable zone edges, hide/show/remove panel, layout snapshot and restore",
+      "priority": "v1"
+    },
+    {
+      "id": "GW-06",
+      "library": "simple_widgets",
+      "capability": "new SW_PARALLEL_TEXT: verse-aligned multi-column shaped text",
+      "priority": "v1"
+    },
+    {
+      "id": "GW-07",
+      "library": "simple_widgets",
+      "capability": "new SW_INTERLINEAR: wrapping flow of stacked word cells, RTL or LTR",
+      "priority": "v1"
+    },
+    {
+      "id": "GW-08",
+      "library": "simple_widgets",
+      "capability": "SW_PARAGRAPH_LIST: point to (item, offset) hit test, hover-dwell and scroll events, raised small runs and small caps",
+      "priority": "v1"
+    },
+    {
+      "id": "GW-09",
+      "library": "simple_widgets",
+      "capability": "hover card: dwell-opened popover hosting widgets, shaped, per-region requests",
+      "priority": "v1"
+    },
+    {
+      "id": "GW-10",
+      "library": "simple_widgets",
+      "capability": "SW_BAR_CHART grouped multi-series bars",
+      "priority": "v1"
+    },
+    {
+      "id": "GW-11",
+      "library": "simple_widgets",
+      "capability": "SW_STATUS_BAR sections with widgets and click agents",
+      "priority": "v1"
+    },
+    {
+      "id": "GW-12",
+      "library": "simple_widgets",
+      "capability": "SW_QUERY_BUILDER nested groups, NOT, proximity, typed value pickers, clause-tree output",
+      "priority": "v1"
+    },
+    {
+      "id": "GW-13",
+      "library": "simple_widgets",
+      "capability": "rich document view and editor (headings, lists, quotes, inline styles, links, tables; images v1.5)",
+      "priority": "v1"
+    },
+    {
+      "id": "GW-24",
+      "library": "simple_shell + simple_widgets",
+      "capability": "function keys and Ctrl+digit/punctuation reach the accelerator table; F-keys allowed without a modifier",
+      "priority": "v1"
+    },
+    {
+      "id": "GW-26",
+      "library": "simple_widgets + simple_shell",
+      "capability": "cross-processor wake: a SCOOP worker can wake the UI pump (posted message) and the heartbeat interval is settable; today on_tick is a fixed 250 ms heartbeat",
+      "priority": "v1"
+    },
+    {
+      "id": "GW-14",
+      "library": "simple_shell + simple_widgets",
+      "capability": "UI Automation bridge (names, roles, values, focus); reduce-motion flag",
+      "priority": "v1.5"
+    },
+    {
+      "id": "GW-15",
+      "library": "simple_widgets",
+      "capability": "SW_TABS closable, reorderable, overflow menu",
+      "priority": "v1.5"
+    },
+    {
+      "id": "GW-16",
+      "library": "simple_shell + simple_widgets",
+      "capability": "follow the Windows high-contrast setting",
+      "priority": "v1.5"
+    },
+    {
+      "id": "GW-21",
+      "library": "simple_widgets",
+      "capability": "render one widget region to PNG",
+      "priority": "v1.5"
+    },
+    {"id": "GW-17", "library": "simple_widgets", "capability": "new SW_LANE_TIMELINE", "priority": "v2"},
+    {
+      "id": "GW-18",
+      "library": "simple_widgets (SW_PAINTER)",
+      "capability": "dashed strokes, hatch and pattern fills, linear gradients",
+      "priority": "v2"
+    },
+    {
+      "id": "GW-19",
+      "library": "simple_widgets (SW_MAP)",
+      "capability": "regional geometry, routes, labels, layers",
+      "priority": "v2"
+    },
+    {
+      "id": "GW-20",
+      "library": "simple_widgets + simple_cairo + simple_shell",
+      "capability": "print preview, print, print to PDF",
+      "priority": "v2"
+    },
+    {
+      "id": "GW-22",
+      "library": "simple_widgets + simple_shell",
+      "capability": "floating panels in a second window",
+      "priority": "v2"
+    },
+    {
+      "id": "GW-23",
+      "library": "simple_widgets (SW_DIAGRAM)",
+      "capability": "deterministic layered layout",
+      "priority": "v2"
+    },
+    {
+      "id": "GW-25",
+      "library": "simple_widgets (SW_MEDIA_TRANSPORT) + audio stack",
+      "capability": "audio playback codecs (MP3 for LibriVox)",
+      "priority": "v2"
+    }
+  ],
+  "states": [
+    {
+      "id": "S-01",
+      "name": "starting",
+      "description": "Window created; startup skeleton",
+      "is_initial": true,
+      "screen": "SCR-24",
+      "entry_actions": ["show_startup_skeleton", "read_settings"]
+    },
+    {
+      "id": "S-02",
+      "name": "checking_databases",
+      "description": "Open core.db read-only; schema; optional dbs; user.db",
+      "screen": "SCR-24",
+      "entry_actions": ["open_core_db", "check_schema_version", "attach_optional_dbs", "open_or_create_user_db"]
+    },
+    {
+      "id": "S-03",
+      "name": "database_error",
+      "description": "core.db missing or invalid",
+      "screen": "SCR-23",
+      "entry_actions": ["show_db_problem_dialog"]
+    },
+    {
+      "id": "S-04",
+      "name": "restoring_session",
+      "description": "Restore layout snapshot, mode, last reference",
+      "screen": "SCR-24",
+      "entry_actions": ["restore_layout_snapshot", "restore_mode", "restore_last_reference"]
+    },
+    {"id": "S-05", "name": "ready", "description": "Idle; reading", "screen": "SCR-01"},
+    {
+      "id": "S-06",
+      "name": "navigating",
+      "description": "Parse, map versification, broadcast to link set",
+      "screen": "SCR-03",
+      "entry_actions": ["parse_reference", "map_versification", "broadcast_reference"],
+      "exit_actions": ["push_history"]
+    },
+    {
+      "id": "S-07",
+      "name": "choosing_reference",
+      "description": "Ambiguous input: pick a candidate",
+      "screen": "SCR-16",
+      "entry_actions": ["show_candidates"]
+    },
+    {
+      "id": "S-08",
+      "name": "searching",
+      "description": "Search job on a separate processor",
+      "screen": "SCR-09",
+      "entry_actions": ["start_search_job", "show_results_skeleton"],
+      "exit_actions": ["clear_job_progress"]
+    },
+    {
+      "id": "S-09",
+      "name": "building_guide",
+      "description": "Guide sections arrive one by one",
+      "screen": "SCR-10",
+      "entry_actions": ["start_guide_job"]
+    },
+    {
+      "id": "S-10",
+      "name": "census_defining",
+      "description": "Census Builder sheet open",
+      "screen": "SCR-18",
+      "entry_actions": ["show_census_builder"]
+    },
+    {
+      "id": "S-11",
+      "name": "census_running",
+      "description": "Definition frozen; census job running",
+      "screen": "SCR-11",
+      "entry_actions": ["freeze_definition", "start_census_job"],
+      "exit_actions": ["clear_job_progress"]
+    },
+    {
+      "id": "S-12",
+      "name": "claim_checking",
+      "description": "Claim Check job (v1.5)",
+      "screen": "SCR-19",
+      "entry_actions": ["start_claim_job"]
+    },
+    {
+      "id": "S-13",
+      "name": "settings_open",
+      "description": "Settings sheet open",
+      "screen": "SCR-20",
+      "entry_actions": ["show_settings"]
+    },
+    {
+      "id": "S-14",
+      "name": "exporting",
+      "description": "Export sheet open or writing",
+      "screen": "SCR-21",
+      "entry_actions": ["show_export"]
+    },
+    {
+      "id": "S-15",
+      "name": "error_recoverable",
+      "description": "Recoverable failure shown with Retry and Details",
+      "screen": "SCR-01",
+      "entry_actions": ["show_error"]
+    },
+    {
+      "id": "S-16",
+      "name": "exiting",
+      "description": "Save snapshot, flush user.db, cancel jobs",
+      "is_final": true,
+      "entry_actions": ["save_layout_snapshot", "flush_user_db", "cancel_jobs"]
+    },
+    {
+      "id": "S-17",
+      "name": "mode_simple",
+      "description": "Region B: Simple preset",
+      "is_initial": true,
+      "screen": "SCR-01"
+    },
+    {"id": "S-18", "name": "mode_study", "description": "Region B: Study preset", "screen": "SCR-02"},
+    {
+      "id": "S-19",
+      "name": "layout_applying",
+      "description": "Region B: snapshot current, apply target, reflow",
+      "screen": "SCR-22",
+      "entry_actions": ["snapshot_current_layout", "apply_target_layout"]
+    },
+    {
+      "id": "S-20",
+      "name": "layout_saving",
+      "description": "Region B: session snapshot (v1), named layout (v2)",
+      "screen": "SCR-22",
+      "entry_actions": ["save_layout"]
+    },
+    {
+      "id": "S-21",
+      "name": "panel_current",
+      "description": "Region C: panel shows its link set reference",
+      "is_initial": true,
+      "screen": "SCR-03"
+    },
+    {"id": "S-22", "name": "panel_stale", "description": "Region C: reference changed while hidden"},
+    {
+      "id": "S-23",
+      "name": "panel_refreshing",
+      "description": "Region C: engine work for this panel",
+      "screen": "SCR-03",
+      "entry_actions": ["start_panel_job"]
+    },
+    {"id": "S-24", "name": "panel_unlinked", "description": "Region C: link set Off (pinned)"}
+  ],
+  "transitions": [
+    {"id": "T-01", "event": "window_ready", "from": "S-01", "to": "S-02", "label": "window ready"},
+    {
+      "id": "T-02",
+      "event": "databases_ok",
+      "from": "S-02",
+      "to": "S-04",
+      "label": "core.db ok",
+      "requirements": ["FR-002", "D-015"]
+    },
+    {
+      "id": "T-03",
+      "event": "database_failed",
+      "from": "S-02",
+      "to": "S-03",
+      "label": "core.db missing or invalid"
+    },
+    {"id": "T-04", "event": "retry", "from": "S-03", "to": "S-02", "label": "retry"},
+    {"id": "T-05", "event": "locate_database", "from": "S-03", "to": "S-02", "label": "locate [file chosen]"},
+    {"id": "T-06", "event": "exit", "from": "S-03", "to": "S-16", "label": "exit"},
+    {"id": "T-07", "event": "session_restored", "from": "S-04", "to": "S-05", "label": "session restored"},
+    {
+      "id": "T-08",
+      "event": "snapshot_invalid",
+      "from": "S-04",
+      "to": "S-05",
+      "label": "snapshot invalid / apply Simple preset"
+    },
+    {
+      "id": "T-09",
+      "event": "go_to",
+      "from": "S-05",
+      "to": "S-06",
+      "label": "go to [reference parses]",
+      "requirements": ["FR-020", "A01"]
+    },
+    {
+      "id": "T-10",
+      "event": "panes_rendered",
+      "from": "S-06",
+      "to": "S-05",
+      "label": "panes rendered",
+      "requirements": ["NFR-001", "FR-022"]
+    },
+    {
+      "id": "T-11",
+      "event": "ambiguous_reference",
+      "from": "S-06",
+      "to": "S-07",
+      "label": "ambiguous reference",
+      "requirements": ["FR-020"]
+    },
+    {"id": "T-12", "event": "candidate_chosen", "from": "S-07", "to": "S-06", "label": "candidate chosen"},
+    {"id": "T-13", "event": "cancel", "from": "S-07", "to": "S-05", "label": "cancel"},
+    {"id": "T-14", "event": "engine_error", "from": "S-06", "to": "S-15", "label": "engine error"},
+    {
+      "id": "T-15",
+      "event": "run_search",
+      "from": "S-05",
+      "to": "S-08",
+      "label": "run search [query valid]",
+      "requirements": ["B01", "B03", "B05"]
+    },
+    {"id": "T-16", "event": "page_ready", "from": "S-08", "to": "S-08", "label": "page ready / append rows"},
+    {
+      "id": "T-17",
+      "event": "search_done",
+      "from": "S-08",
+      "to": "S-05",
+      "label": "search done",
+      "requirements": ["NFR-002"]
+    },
+    {"id": "T-18", "event": "cancel", "from": "S-08", "to": "S-05", "label": "cancel / discard partial"},
+    {"id": "T-19", "event": "search_failed", "from": "S-08", "to": "S-15", "label": "search failed"},
+    {
+      "id": "T-20",
+      "event": "open_guide",
+      "from": "S-05",
+      "to": "S-09",
+      "label": "open guide [subject selected]",
+      "requirements": ["D09", "C06", "I-P06", "I-P07"]
+    },
+    {
+      "id": "T-21",
+      "event": "section_ready",
+      "from": "S-09",
+      "to": "S-09",
+      "label": "section ready / render section"
+    },
+    {"id": "T-22", "event": "guide_done", "from": "S-09", "to": "S-05", "label": "guide done"},
+    {"id": "T-23", "event": "cancel", "from": "S-09", "to": "S-05", "label": "cancel"},
+    {"id": "T-24", "event": "guide_failed", "from": "S-09", "to": "S-15", "label": "guide failed"},
+    {
+      "id": "T-25",
+      "event": "new_census",
+      "from": "S-05",
+      "to": "S-10",
+      "label": "new census",
+      "requirements": ["FR-025", "I-P02"]
+    },
+    {
+      "id": "T-26",
+      "event": "run_census",
+      "from": "S-10",
+      "to": "S-11",
+      "label": "run [definition complete]",
+      "requirements": ["FR-025"]
+    },
+    {"id": "T-27", "event": "cancel", "from": "S-10", "to": "S-05", "label": "cancel"},
+    {
+      "id": "T-28",
+      "event": "census_done",
+      "from": "S-11",
+      "to": "S-05",
+      "label": "done / show four buckets",
+      "requirements": ["FR-026", "FR-027", "I-P03"]
+    },
+    {"id": "T-29", "event": "cancel", "from": "S-11", "to": "S-05", "label": "cancel / keep definition"},
+    {"id": "T-30", "event": "census_failed", "from": "S-11", "to": "S-15", "label": "census failed"},
+    {
+      "id": "T-31",
+      "event": "check_claims",
+      "from": "S-05",
+      "to": "S-12",
+      "label": "check claims [claims present] (v1.5)",
+      "requirements": ["I-P01"]
+    },
+    {"id": "T-32", "event": "claims_checked", "from": "S-12", "to": "S-05", "label": "claims checked"},
+    {"id": "T-33", "event": "cancel", "from": "S-12", "to": "S-05", "label": "cancel"},
+    {"id": "T-34", "event": "open_settings", "from": "S-05", "to": "S-13", "label": "open settings"},
+    {
+      "id": "T-35",
+      "event": "apply_settings",
+      "from": "S-13",
+      "to": "S-05",
+      "label": "apply [values valid]",
+      "requirements": ["A10", "NFR-013"]
+    },
+    {"id": "T-36", "event": "cancel", "from": "S-13", "to": "S-05", "label": "cancel"},
+    {
+      "id": "T-37",
+      "event": "export",
+      "from": "S-05",
+      "to": "S-14",
+      "label": "export",
+      "requirements": ["E10", "I-P05"]
+    },
+    {"id": "T-38", "event": "export_written", "from": "S-14", "to": "S-05", "label": "written"},
+    {"id": "T-39", "event": "cancel", "from": "S-14", "to": "S-05", "label": "cancel"},
+    {"id": "T-40", "event": "write_failed", "from": "S-14", "to": "S-15", "label": "write failed"},
+    {"id": "T-41", "event": "dismiss", "from": "S-15", "to": "S-05", "label": "dismiss"},
+    {"id": "T-42", "event": "retry", "from": "S-15", "to": "S-05", "label": "retry / reissue last command"},
+    {"id": "T-43", "event": "close_window", "from": "S-05", "to": "S-16", "label": "close window"},
+    {
+      "id": "T-44",
+      "event": "switch_mode",
+      "from": "S-17",
+      "to": "S-19",
+      "label": "switch mode",
+      "requirements": ["A08"]
+    },
+    {"id": "T-45", "event": "switch_mode", "from": "S-18", "to": "S-19", "label": "switch mode"},
+    {"id": "T-46", "event": "applied", "from": "S-19", "to": "S-17", "label": "applied [target simple]"},
+    {"id": "T-47", "event": "applied", "from": "S-19", "to": "S-18", "label": "applied [target study]"},
+    {
+      "id": "T-48",
+      "event": "invalid_layout",
+      "from": "S-19",
+      "to": "S-17",
+      "label": "invalid layout / reset to Simple"
+    },
+    {
+      "id": "T-49",
+      "event": "restore_layout",
+      "from": "S-18",
+      "to": "S-19",
+      "label": "restore layout [chosen]",
+      "requirements": ["A09"]
+    },
+    {
+      "id": "T-50",
+      "event": "tool_opened",
+      "from": "S-17",
+      "to": "S-17",
+      "label": "tool opened / dock panel, offer Study"
+    },
+    {"id": "T-51", "event": "save_layout", "from": "S-17", "to": "S-20", "label": "save layout"},
+    {"id": "T-52", "event": "save_layout", "from": "S-18", "to": "S-20", "label": "save layout"},
+    {"id": "T-53", "event": "saved", "from": "S-20", "to": "S-17", "label": "saved [mode simple]"},
+    {"id": "T-54", "event": "saved", "from": "S-20", "to": "S-18", "label": "saved [mode study]"},
+    {
+      "id": "T-55",
+      "event": "reference_changed",
+      "from": "S-21",
+      "to": "S-23",
+      "label": "reference changed [visible and linked]",
+      "requirements": ["A02", "A08"]
+    },
+    {
+      "id": "T-56",
+      "event": "reference_changed",
+      "from": "S-21",
+      "to": "S-22",
+      "label": "reference changed [hidden and linked]"
+    },
+    {"id": "T-57", "event": "panel_shown", "from": "S-22", "to": "S-23", "label": "panel shown"},
+    {"id": "T-58", "event": "content_ready", "from": "S-23", "to": "S-21", "label": "content ready"},
+    {
+      "id": "T-59",
+      "event": "reference_changed",
+      "from": "S-23",
+      "to": "S-23",
+      "label": "newer reference / cancel and restart"
+    },
+    {"id": "T-60", "event": "unlink", "from": "S-21", "to": "S-24", "label": "link set Off"},
+    {"id": "T-61", "event": "relink", "from": "S-24", "to": "S-23", "label": "relink [set chosen]"},
+    {
+      "id": "T-62",
+      "event": "refresh_failed",
+      "from": "S-23",
+      "to": "S-21",
+      "label": "failed / inline error, keep last"
+    }
+  ],
+  "screens": [
+    {
+      "id": "SCR-01",
+      "name": "Main window - Simple layout",
+      "description": "Bible center, Commentary east, Dictionary and Lexicon south",
+      "widgets": [
+        {
+          "type": "SW_MENU_BAR",
+          "id": "menu_bar",
+          "label": "File Edit View Go Search Study Tools Window Help",
+          "x": 0,
+          "y": 0,
+          "width": 1440,
+          "height": 24
+        },
+        {"type": "SW_BUTTON", "id": "back_btn", "label": "back", "x": 8, "y": 40, "width": 32},
+        {"type": "SW_BUTTON", "id": "forward_btn", "label": "-", "x": 44, "y": 40, "width": 32},
+        {"type": "SW_COMBO", "id": "reference_box", "label": "John 3:16", "x": 84, "y": 40, "width": 220},
+        {"type": "SW_SELECT", "id": "version_picker", "label": "BSB", "x": 312, "y": 40, "width": 180},
+        {
+          "type": "SW_TEXT_BOX",
+          "id": "quick_search",
+          "label": "Search the Bible...",
+          "x": 500,
+          "y": 40,
+          "width": 480
+        },
+        {"type": "SW_SEGMENTED", "id": "mode_switch", "label": "Simple / Study", "x": 990, "y": 40, "width": 160},
+        {"type": "SW_BUTTON", "id": "text_size", "label": "A- A+", "x": 1160, "y": 40, "width": 80},
+        {"type": "SW_SWITCH", "id": "theme_switch", "label": "Dark", "x": 1250, "y": 40, "width": 80},
+        {
+          "type": "SW_PARAGRAPH_LIST",
+          "id": "P01_verse_list",
+          "label": "P01 Bible Text (center, large print)",
+          "x": 0,
+          "y": 80,
+          "width": 1000,
+          "height": 520
+        },
+        {
+          "type": "SW_TABS",
+          "id": "P04_library_tabs",
+          "label": "P04 Commentary and Library (east)",
+          "x": 1000,
+          "y": 80,
+          "width": 440,
+          "height": 520
+        },
+        {
+          "type": "SW_TABS",
+          "id": "P05_lexicon_tabs",
+          "label": "P05 Dictionary and Lexicon (south)",
+          "x": 0,
+          "y": 620,
+          "width": 1440,
+          "height": 240
+        },
+        {
+          "type": "SW_STATUS_BAR",
+          "id": "status_bar",
+          "label": "John 3:16 (BSB) / KJV numbering / core.db 2026.10",
+          "x": 0,
+          "y": 880,
+          "width": 1440,
+          "height": 20
+        }
+      ],
+      "requirements": ["A01", "A08", "A10", "C01", "D01", "NFR-013"]
+    },
+    {
+      "id": "SCR-02",
+      "name": "Main window - Study layout",
+      "description": "Navigator and Notes west; Bible tabs center; Lexicon and Commentary east; tabbed south zone",
+      "widgets": [
+        {
+          "type": "SW_MENU_BAR",
+          "id": "menu_bar",
+          "label": "File Edit View Go Search Study Tools Window Help",
+          "x": 0,
+          "y": 0,
+          "width": 1440
+        },
+        {"type": "SW_COMBO", "id": "reference_box", "label": "Heb 8:8", "x": 84, "y": 40, "width": 220},
+        {"type": "SW_SELECT", "id": "version_picker", "label": "SBLGNT", "x": 312, "y": 40, "width": 180},
+        {"type": "SW_SEGMENTED", "id": "mode_switch", "label": "Simple / Study", "x": 990, "y": 40, "width": 160},
+        {
+          "type": "SW_TOOLBAR",
+          "id": "study_tools",
+          "label": "Parallel Interlinear / Guide Word Count Ledger",
+          "x": 0,
+          "y": 60,
+          "width": 1440
+        },
+        {
+          "type": "SW_TABS",
+          "id": "P11_navigator",
+          "label": "P11 Navigator (west)",
+          "x": 0,
+          "y": 100,
+          "width": 300,
+          "height": 260
+        },
+        {
+          "type": "SW_TABS",
+          "id": "center_tabs",
+          "label": "Center: P01 Bible / P02 Parallel / P03 Interlinear",
+          "x": 300,
+          "y": 100,
+          "width": 780,
+          "height": 480
+        },
+        {
+          "type": "SW_TABS",
+          "id": "P05_lexicon",
+          "label": "P05 Dictionary and Lexicon (east)",
+          "x": 1080,
+          "y": 100,
+          "width": 360,
+          "height": 240
+        },
+        {
+          "type": "SW_TABS",
+          "id": "P06_notes",
+          "label": "P06 Notes (west)",
+          "x": 0,
+          "y": 360,
+          "width": 300,
+          "height": 220
+        },
+        {
+          "type": "SW_TABS",
+          "id": "P04_library",
+          "label": "P04 Commentary and Library (east)",
+          "x": 1080,
+          "y": 360,
+          "width": 360,
+          "height": 220
+        },
+        {
+          "type": "SW_TABS",
+          "id": "south_zone",
+          "label": "South (GW-05 tabs): P07 Search / P08 Guides / P09 Census / P10 Author Library",
+          "x": 0,
+          "y": 600,
+          "width": 1440,
+          "height": 260
+        },
+        {
+          "type": "SW_STATUS_BAR",
+          "id": "status_bar",
+          "label": "Heb 8:8 (SBLGNT) / link A / LXX Jer 38:31 = MT Jer 31:31 / core.db",
+          "x": 0,
+          "y": 880,
+          "width": 1440
+        }
+      ],
+      "requirements": ["A08", "A09", "C04", "B01", "D09"]
+    },
+    {
+      "id": "SCR-03",
+      "name": "P01 Bible Text",
+      "description": "Header row, find bar, verse paragraphs with gutter and marks",
+      "widgets": [
+        {
+          "type": "SW_TABS",
+          "id": "bible_tabs",
+          "label": "BSB John 3 / WLC Gen 1 / +",
+          "x": 0,
+          "y": 0,
+          "width": 780
+        },
+        {"type": "SW_SELECT", "id": "tab_version", "label": "WLC", "x": 0, "y": 40, "width": 120},
+        {"type": "SW_LABEL", "id": "edition_label", "label": "Westminster Leningrad Codex", "x": 130, "y": 40},
+        {"type": "SW_CHIP", "id": "link_chip", "label": "A", "x": 420, "y": 40},
+        {"type": "SW_SELECT", "id": "pointing_level", "label": "Full / Vowels / Consonants", "x": 480, "y": 40},
+        {
+          "type": "SW_TEXT_BOX",
+          "id": "find_box",
+          "label": "Find in this text (Ctrl+F)",
+          "x": 0,
+          "y": 80,
+          "width": 300
+        },
+        {
+          "type": "SW_PARAGRAPH_LIST",
+          "id": "verse_list",
+          "label": "1 bereshit bara elohim ... (RTL, right-aligned, gutter right: GW-02)",
+          "x": 0,
+          "y": 120,
+          "width": 780,
+          "height": 400
+        },
+        {
+          "type": "SW_MARKED_TEXT",
+          "id": "marks",
+          "label": "highlights, find hits, divine names, diff",
+          "x": 0,
+          "y": 540
+        },
+        {
+          "type": "SW_EMPTY_STATE",
+          "id": "empty",
+          "label": "Type a reference above, or pick a book in the Navigator",
+          "x": 0,
+          "y": 580
+        }
+      ],
+      "requirements": ["A01", "A06", "E01", "B08", "I-P08", "FR-008", "FR-009"]
+    },
+    {
+      "id": "SCR-04",
+      "name": "P02 Parallel and Compare",
+      "description": "Verse-aligned columns (GW-06), diff marks, compare-all list",
+      "widgets": [
+        {
+          "type": "SW_SEGMENTED",
+          "id": "parallel_mode",
+          "label": "Parallel / Compare all / Harmony (v2)",
+          "x": 0,
+          "y": 0,
+          "width": 340
+        },
+        {"type": "SW_BUTTON", "id": "columns_btn", "label": "Columns...", "x": 350, "y": 0},
+        {"type": "SW_SWITCH", "id": "diff_switch", "label": "Show differences", "x": 460, "y": 0},
+        {
+          "type": "SW_PARALLEL_TEXT",
+          "id": "parallel_grid",
+          "label": "BSB / KJV / WLC / LXX (Swete) - one row per verse (GW-06)",
+          "x": 0,
+          "y": 40,
+          "width": 780,
+          "height": 440
+        },
+        {
+          "type": "SW_LABEL",
+          "id": "pairing_note",
+          "label": "note row: LXX Ps 22 = MT Ps 23 (title outside verse 1)",
+          "x": 0,
+          "y": 500
+        }
+      ],
+      "requirements": ["A02", "A03", "A04", "FR-022"]
+    },
+    {
+      "id": "SCR-05",
+      "name": "P03 Original Language",
+      "description": "Interlinear flow (GW-07) over verse analysis grid",
+      "widgets": [
+        {"type": "SW_SELECT", "id": "ol_source", "label": "Hebrew OT (WLC)", "x": 0, "y": 0, "width": 180},
+        {
+          "type": "SW_CHECK_BOX",
+          "id": "lines",
+          "label": "Translit Pron Gloss Lemma Strong's Morph",
+          "x": 190,
+          "y": 0
+        },
+        {
+          "type": "SW_INTERLINEAR",
+          "id": "interlinear",
+          "label": "bereshit / be-re-SHEET / in the beginning / H7225 (GW-07)",
+          "x": 0,
+          "y": 40,
+          "width": 780,
+          "height": 220
+        },
+        {
+          "type": "SW_DATA_GRID",
+          "id": "verse_analysis",
+          "label": "# Word Translit Lemma Strong's Morphology Gloss Uses Source",
+          "x": 0,
+          "y": 280,
+          "width": 780,
+          "height": 200
+        }
+      ],
+      "requirements": ["C04", "C12", "C13"]
+    },
+    {
+      "id": "SCR-06",
+      "name": "P04 Commentary and Library",
+      "description": "Commentaries, cross-references, devotional, related (AI-made labeled)",
+      "widgets": [
+        {
+          "type": "SW_TABS",
+          "id": "library_tabs",
+          "label": "Commentaries / Cross-references / Devotional / Related",
+          "x": 0,
+          "y": 0,
+          "width": 440
+        },
+        {"type": "SW_SELECT", "id": "commentary_source", "label": "Matthew Henry", "x": 0, "y": 40, "width": 200},
+        {"type": "SW_SWITCH", "id": "expand_refs", "label": "Expand references", "x": 210, "y": 40},
+        {
+          "type": "SW_RICH_TEXT_VIEW",
+          "id": "commentary_body",
+          "label": "comment for the verse; references underlined (GW-13)",
+          "x": 0,
+          "y": 80,
+          "width": 440,
+          "height": 300
+        },
+        {
+          "type": "SW_CARD",
+          "id": "ai_banner",
+          "label": "Related tab: found by an AI model when this edition was built",
+          "x": 0,
+          "y": 400,
+          "width": 440
+        },
+        {
+          "type": "SW_LIST",
+          "id": "related_list",
+          "label": "Rom 5:8 [cross-reference 57 votes] [AI-made: meaning neighbor]",
+          "x": 0,
+          "y": 440,
+          "width": 440
+        }
+      ],
+      "requirements": ["D01", "D02", "D05", "A07", "G07"]
+    },
+    {
+      "id": "SCR-07",
+      "name": "P05 Dictionary and Lexicon",
+      "description": "Word header, range before ruling, lexicon tabs",
+      "widgets": [
+        {
+          "type": "SW_TABS",
+          "id": "lexicon_tabs",
+          "label": "Word / Compare / Bible Dictionaries",
+          "x": 0,
+          "y": 0,
+          "width": 360
+        },
+        {"type": "SW_LABEL", "id": "word_header", "label": "ekklesia (ek-klay-SEE-ah) assembly", "x": 0, "y": 40},
+        {"type": "SW_CHIP", "id": "strongs_chip", "label": "G1577", "x": 260, "y": 40},
+        {
+          "type": "SW_DATA_GRID",
+          "id": "range_grid",
+          "label": "Range before ruling: Rendering Version Count Example",
+          "x": 0,
+          "y": 80,
+          "width": 360,
+          "height": 140
+        },
+        {
+          "type": "SW_TABS",
+          "id": "lexicon_sources",
+          "label": "Strong's / BDB / Thayer / Abbott-Smith / LSJ",
+          "x": 0,
+          "y": 240,
+          "width": 360
+        },
+        {
+          "type": "SW_BUTTON",
+          "id": "word_actions",
+          "label": "Search this word / Word Study / Journey / Graph",
+          "x": 0,
+          "y": 420
+        }
+      ],
+      "requirements": ["C01", "C02", "C03", "D03", "I-P09", "FR-029"]
+    },
+    {
+      "id": "SCR-08",
+      "name": "P06 Notes",
+      "description": "Verse notes, journal, tags, highlights, prayer, memory",
+      "widgets": [
+        {
+          "type": "SW_TABS",
+          "id": "notes_tabs",
+          "label": "Verse notes / Journal / Tags / Highlights / Prayer / Memory",
+          "x": 0,
+          "y": 0,
+          "width": 300
+        },
+        {
+          "type": "SW_PARAGRAPH_LIST",
+          "id": "verse_notes",
+          "label": "notes on this chapter, edit in place, spell check",
+          "x": 0,
+          "y": 40,
+          "width": 300,
+          "height": 200
+        },
+        {
+          "type": "SW_MARK_LEGEND_VIEW",
+          "id": "highlight_legend",
+          "label": "Highlights legend with live swatches",
+          "x": 0,
+          "y": 260,
+          "width": 300
+        },
+        {
+          "type": "SW_EMPTY_STATE",
+          "id": "empty",
+          "label": "No notes on this chapter yet. New note (Ctrl+N)",
+          "x": 0,
+          "y": 300
+        }
+      ],
+      "requirements": ["E01", "E03", "E04", "E05", "E06", "E07"]
+    },
+    {
+      "id": "SCR-09",
+      "name": "P07 Search Results",
+      "description": "Query bar, summary strip, list and graph",
+      "widgets": [
+        {
+          "type": "SW_TEXT_BOX",
+          "id": "query_box",
+          "label": "lemma:G1577 AND NOT church",
+          "x": 0,
+          "y": 0,
+          "width": 520
+        },
+        {"type": "SW_SELECT", "id": "scope", "label": "All Bibles", "x": 530, "y": 0, "width": 140},
+        {"type": "SW_BUTTON", "id": "builder_btn", "label": "Builder...", "x": 680, "y": 0},
+        {"type": "SW_STATISTIC", "id": "hits", "label": "Hits 114", "x": 0, "y": 40},
+        {"type": "SW_STATISTIC", "id": "verses", "label": "Verses 109", "x": 120, "y": 40},
+        {"type": "SW_STATISTIC", "id": "books", "label": "Books 21", "x": 240, "y": 40},
+        {"type": "SW_BUTTON", "id": "method_btn", "label": "Show method", "x": 360, "y": 40},
+        {
+          "type": "SW_DATA_GRID",
+          "id": "results_grid",
+          "label": "Reference / Text (hit marked) / Version / Source",
+          "x": 0,
+          "y": 80,
+          "width": 1000,
+          "height": 160
+        },
+        {
+          "type": "SW_BAR_CHART",
+          "id": "per_book_chart",
+          "label": "Graph tab: hits per 1,000 words by book",
+          "x": 0,
+          "y": 260,
+          "width": 1000
+        }
+      ],
+      "requirements": ["B01", "B02", "B03", "B04", "B05", "B10", "FR-032"]
+    },
+    {
+      "id": "SCR-10",
+      "name": "P08 Guides",
+      "description": "Guide kind, accordion of engine-built sections, They Chose and Journey views",
+      "widgets": [
+        {
+          "type": "SW_SELECT",
+          "id": "guide_kind",
+          "label": "Passage Guide / Word Study / They Chose / Word's Journey",
+          "x": 0,
+          "y": 0,
+          "width": 260
+        },
+        {"type": "SW_LABEL", "id": "guide_subject", "label": "Heb 8:8-12", "x": 270, "y": 0},
+        {
+          "type": "SW_ACCORDION",
+          "id": "guide_sections",
+          "label": "Cross-references / Commentary snippets / Related (AI-made) / Quotations / Rare words",
+          "x": 0,
+          "y": 40,
+          "width": 1000,
+          "height": 120
+        },
+        {
+          "type": "SW_PARALLEL_TEXT",
+          "id": "they_chose_columns",
+          "label": "They Chose: NT / LXX (Swete) / MT (WLC), marked by agreement",
+          "x": 0,
+          "y": 180,
+          "width": 1000
+        },
+        {
+          "type": "SW_LABEL",
+          "id": "verdict_line",
+          "label": "Verdict: agrees with the Septuagint against the Hebrew",
+          "x": 0,
+          "y": 220
+        },
+        {
+          "type": "SW_DATA_GRID",
+          "id": "journey_grid",
+          "label": "Journey: Witness / Date / Rendering / Count / Method",
+          "x": 0,
+          "y": 260,
+          "width": 1000
+        }
+      ],
+      "requirements": ["D09", "C06", "I-P06", "I-P07", "FR-030", "FR-042"]
+    },
+    {
+      "id": "SCR-11",
+      "name": "P09 Census and Checks",
+      "description": "Definition card, four-bucket strip, controls chart, results",
+      "widgets": [
+        {
+          "type": "SW_CARD",
+          "id": "definition_card",
+          "label": "Question / Corpus / Criteria / Controls / Holds if / Fails if / v2",
+          "x": 0,
+          "y": 0,
+          "width": 1000
+        },
+        {"type": "SW_STATISTIC", "id": "fits", "label": "FITS", "x": 0, "y": 40},
+        {"type": "SW_STATISTIC", "id": "partial", "label": "PARTIAL", "x": 120, "y": 40},
+        {"type": "SW_STATISTIC", "id": "fails", "label": "FAILS", "x": 240, "y": 40},
+        {"type": "SW_STATISTIC", "id": "no_data", "label": "NO_DATA", "x": 360, "y": 40},
+        {
+          "type": "SW_BAR_CHART",
+          "id": "controls_chart",
+          "label": "target vs control words, grouped (GW-10)",
+          "x": 0,
+          "y": 80,
+          "width": 500
+        },
+        {
+          "type": "SW_SEGMENTED",
+          "id": "bucket_filter",
+          "label": "All / FITS / PARTIAL / FAILS / NO_DATA",
+          "x": 0,
+          "y": 120
+        },
+        {
+          "type": "SW_DATA_GRID",
+          "id": "census_grid",
+          "label": "Bucket / Reference / Text / Why / Near miss",
+          "x": 0,
+          "y": 160,
+          "width": 1000
+        },
+        {
+          "type": "SW_PROGRESS",
+          "id": "census_progress",
+          "label": "running... Cancel",
+          "x": 0,
+          "y": 200,
+          "width": 400
+        }
+      ],
+      "requirements": ["I-P02", "I-P03", "FR-025", "FR-026", "FR-027", "FR-028", "NFR-002"]
+    },
+    {
+      "id": "SCR-12",
+      "name": "P10 Author Library",
+      "description": "rix.db search, status chips, citing list, reader with banner",
+      "widgets": [
+        {
+          "type": "SW_TEXT_BOX",
+          "id": "author_search",
+          "label": "Search the author library",
+          "x": 0,
+          "y": 0,
+          "width": 360
+        },
+        {
+          "type": "SW_CHIP",
+          "id": "status_filters",
+          "label": "FRAMEWORK VERDICT DRAFT UNMARKED WITHDRAWN UNGATED",
+          "x": 0,
+          "y": 40
+        },
+        {"type": "SW_CHECK_BOX", "id": "include_withdrawn", "label": "Include withdrawn", "x": 0, "y": 80},
+        {
+          "type": "SW_LIST",
+          "id": "citing_list",
+          "label": "Documents citing Heb 8:8 (status chip each)",
+          "x": 0,
+          "y": 120,
+          "width": 360,
+          "height": 200
+        },
+        {
+          "type": "SW_CARD",
+          "id": "status_banner",
+          "label": "Withdrawn by the author. Kept for the record; not authority.",
+          "x": 380,
+          "y": 0,
+          "width": 620
+        },
+        {
+          "type": "SW_RICH_TEXT_VIEW",
+          "id": "doc_body",
+          "label": "Larry Rix, author library - document text (GW-13)",
+          "x": 380,
+          "y": 40,
+          "width": 620,
+          "height": 280
+        }
+      ],
+      "requirements": ["D-019"]
+    },
+    {
+      "id": "SCR-13",
+      "name": "P11 Navigator",
+      "description": "Books tree and explorer, bookmarks, history, plans, collections",
+      "widgets": [
+        {
+          "type": "SW_TABS",
+          "id": "nav_tabs",
+          "label": "Books / Bookmarks / History / Plans / Collections",
+          "x": 0,
+          "y": 0,
+          "width": 300
+        },
+        {"type": "SW_SEGMENTED", "id": "books_view", "label": "Tree / Explorer", "x": 0, "y": 40},
+        {
+          "type": "SW_TREE",
+          "id": "book_tree",
+          "label": "Old Testament - Genesis - 1 2 3 ...",
+          "x": 0,
+          "y": 80,
+          "width": 300,
+          "height": 200
+        },
+        {
+          "type": "SW_CALENDAR",
+          "id": "plan_calendar",
+          "label": "Plans: today's reading",
+          "x": 0,
+          "y": 300,
+          "width": 300
+        },
+        {"type": "SW_PROGRESS", "id": "plan_progress", "label": "plan 34%", "x": 0, "y": 340, "width": 300}
+      ],
+      "requirements": ["E02", "E08", "E11", "D16"]
+    },
+    {
+      "id": "SCR-14",
+      "name": "P12 Study Ledger (v1.5)",
+      "description": "Replayable log of the session",
+      "widgets": [
+        {
+          "type": "SW_DATA_GRID",
+          "id": "ledger_grid",
+          "label": "Time / Action / Query / Version / Result / My ruling",
+          "x": 0,
+          "y": 0,
+          "width": 1000,
+          "height": 200
+        },
+        {
+          "type": "SW_BUTTON",
+          "id": "ledger_actions",
+          "label": "Replay / Re-run on current data / Record my ruling / Export",
+          "x": 0,
+          "y": 220
+        }
+      ],
+      "requirements": ["I-P12", "I-P16"]
+    },
+    {
+      "id": "SCR-15",
+      "name": "P13 World Timeline (v2)",
+      "description": "Lanes, certainty patterns, disputes, synchronism slice",
+      "widgets": [
+        {"type": "SW_SEGMENTED", "id": "time_kind", "label": "Narrated time / Composition time", "x": 0, "y": 0},
+        {"type": "SW_SELECT", "id": "era_labels", "label": "BC/AD", "x": 300, "y": 0},
+        {
+          "type": "SW_LANE_TIMELINE",
+          "id": "lanes",
+          "label": "Israel and Judah / Rome / Church / Han China / Kush ... (GW-17, GW-18)",
+          "x": 0,
+          "y": 40,
+          "width": 1000,
+          "height": 360
+        },
+        {
+          "type": "SW_DRAWER",
+          "id": "event_drawer",
+          "label": "event: original date expression, sources by grade, disputes",
+          "x": 700,
+          "y": 420,
+          "width": 300
+        }
+      ],
+      "requirements": ["D07"]
+    },
+    {
+      "id": "SCR-16",
+      "name": "D01 Go to Reference / D10 candidates",
+      "description": "Reference entry with pickers; ambiguous candidates",
+      "widgets": [
+        {"type": "SW_COMBO", "id": "goto_box", "label": "Ju 1", "x": 0, "y": 0, "width": 300},
+        {"type": "SW_LIST", "id": "candidates", "label": "Judges 1 / Jude 1", "x": 0, "y": 40, "width": 300},
+        {"type": "SW_LIST", "id": "pickers", "label": "Book / Chapter / Verse", "x": 0, "y": 120, "width": 300},
+        {"type": "SW_LABEL", "id": "goto_system", "label": "KJV numbering", "x": 0, "y": 160},
+        {"type": "SW_BUTTON", "id": "goto_go", "label": "Go", "x": 0, "y": 200},
+        {"type": "SW_BUTTON", "id": "goto_cancel", "label": "Cancel", "x": 60, "y": 200}
+      ],
+      "requirements": ["FR-020"]
+    },
+    {
+      "id": "SCR-17",
+      "name": "D02 Search Builder",
+      "description": "Mode, clause builder, scope, pre-registration (v1.5)",
+      "widgets": [
+        {
+          "type": "SW_SEGMENTED",
+          "id": "sb_mode",
+          "label": "Basic / Boolean / Lemma / Morphology / Shape",
+          "x": 0,
+          "y": 0,
+          "width": 500
+        },
+        {
+          "type": "SW_QUERY_BUILDER",
+          "id": "sb_builder",
+          "label": "field / operator / value rows, groups, NOT, within n words (GW-12)",
+          "x": 0,
+          "y": 40,
+          "width": 600,
+          "height": 160
+        },
+        {"type": "SW_SELECT", "id": "sb_scope", "label": "Scope: All Bibles", "x": 0, "y": 220},
+        {"type": "SW_CHECK_BOX", "id": "sb_marks", "label": "Ignore vowel points and accents", "x": 200, "y": 220},
+        {
+          "type": "SW_GROUP",
+          "id": "sb_prereg",
+          "label": "Write the question first (v1.5): claim, holds if, fails if",
+          "x": 0,
+          "y": 260,
+          "width": 600
+        },
+        {"type": "SW_LABEL", "id": "sb_preview", "label": "about 1,240 verses", "x": 0, "y": 320},
+        {"type": "SW_BUTTON", "id": "sb_run", "label": "Run", "x": 0, "y": 360}
+      ],
+      "requirements": ["B01", "B02", "B03", "B05", "I-P13"]
+    },
+    {
+      "id": "SCR-18",
+      "name": "D03 Census Builder",
+      "description": "Pre-registered census definition with controls",
+      "widgets": [
+        {"type": "SW_TEXT_BOX", "id": "cb_question", "label": "Question", "x": 0, "y": 0, "width": 600},
+        {"type": "SW_SELECT", "id": "cb_corpus", "label": "Corpus: OT (WLC)", "x": 0, "y": 40},
+        {"type": "SW_QUERY_BUILDER", "id": "cb_criteria", "label": "Criteria", "x": 0, "y": 80, "width": 600},
+        {"type": "SW_NUMBER_BOX", "id": "cb_control_count", "label": "Control words: 10", "x": 0, "y": 140},
+        {
+          "type": "SW_LIST",
+          "id": "cb_controls",
+          "label": "frequency-matched controls (editable)",
+          "x": 160,
+          "y": 140,
+          "width": 440
+        },
+        {"type": "SW_TEXT_BOX", "id": "cb_holds", "label": "Holds if...", "x": 0, "y": 200, "width": 600},
+        {"type": "SW_TEXT_BOX", "id": "cb_fails", "label": "Fails if...", "x": 0, "y": 240, "width": 600},
+        {"type": "SW_BUTTON", "id": "cb_run", "label": "Save definition / Run / Cancel", "x": 0, "y": 280}
+      ],
+      "requirements": ["FR-025", "I-P02", "I-P13"]
+    },
+    {
+      "id": "SCR-19",
+      "name": "D04 Claim Check (v1.5)",
+      "description": "Paste text, review extracted claims, check",
+      "widgets": [
+        {
+          "type": "SW_TEXT_BOX",
+          "id": "cc_paste",
+          "label": "Paste an AI answer, a sermon note or a post",
+          "x": 0,
+          "y": 0,
+          "width": 600,
+          "height": 160
+        },
+        {"type": "SW_BUTTON", "id": "cc_find", "label": "Find claims", "x": 0, "y": 180},
+        {
+          "type": "SW_DATA_GRID",
+          "id": "cc_claims",
+          "label": "Claim / Kind (verse, word, number, quotation)",
+          "x": 0,
+          "y": 220,
+          "width": 600
+        },
+        {"type": "SW_BUTTON", "id": "cc_check", "label": "Check", "x": 0, "y": 260}
+      ],
+      "requirements": ["I-P01"]
+    },
+    {
+      "id": "SCR-20",
+      "name": "D05 Settings",
+      "description": "Appearance, languages, texts, sync, data, privacy, keyboard, credits",
+      "widgets": [
+        {
+          "type": "SW_TABS",
+          "id": "settings_tabs",
+          "label": "Appearance / Languages / Texts / Sync / Data / Privacy / Keyboard / About",
+          "x": 0,
+          "y": 0,
+          "width": 700
+        },
+        {"type": "SW_RADIO_GROUP", "id": "theme", "label": "Light / Dark / High contrast", "x": 0, "y": 40},
+        {"type": "SW_SLIDER", "id": "ui_scale", "label": "Interface scale 1.0-3.0", "x": 0, "y": 80, "width": 300},
+        {"type": "SW_NUMBER_BOX", "id": "reading_size", "label": "Reading size 20 px", "x": 320, "y": 80},
+        {"type": "SW_SELECT", "id": "pointing_default", "label": "Hebrew pointing: Full", "x": 0, "y": 120},
+        {"type": "SW_SELECT", "id": "translit_scheme", "label": "Transliteration: academic", "x": 250, "y": 120},
+        {"type": "SW_SWITCH", "id": "follow_along", "label": "Follow along on scroll", "x": 0, "y": 160},
+        {"type": "SW_BUTTON", "id": "settings_actions", "label": "Apply / Cancel", "x": 0, "y": 200}
+      ],
+      "requirements": ["A10", "NFR-013", "FR-003", "FR-064"]
+    },
+    {
+      "id": "SCR-21",
+      "name": "D06 Export / Copy",
+      "description": "What, format, attribution, share-alike notice, flags (v1.5)",
+      "widgets": [
+        {
+          "type": "SW_RADIO_GROUP",
+          "id": "ex_what",
+          "label": "Verses / Notes / Results / Census report / Guide",
+          "x": 0,
+          "y": 0
+        },
+        {"type": "SW_SELECT", "id": "ex_format", "label": "Plain text", "x": 0, "y": 40},
+        {"type": "SW_SELECT", "id": "ex_ref_style", "label": "John 3:16 (BSB)", "x": 200, "y": 40},
+        {
+          "type": "SW_CARD",
+          "id": "ex_share_alike",
+          "label": "Swete Septuagint text: CC BY-SA 4.0 notice",
+          "x": 0,
+          "y": 80,
+          "width": 600
+        },
+        {
+          "type": "SW_CHECK_BOX",
+          "id": "ex_flags",
+          "label": "Verification flag with every claim (v1.5)",
+          "x": 0,
+          "y": 120
+        },
+        {"type": "SW_CHECK_BOX", "id": "ex_strip", "label": "Leave out unchecked items (v1.5)", "x": 0, "y": 140},
+        {
+          "type": "SW_TEXT_BOX",
+          "id": "ex_preview",
+          "label": "Preview",
+          "x": 0,
+          "y": 180,
+          "width": 600,
+          "height": 120
+        },
+        {"type": "SW_BUTTON", "id": "ex_actions", "label": "Copy / Save... / Cancel", "x": 0, "y": 320}
+      ],
+      "requirements": ["E10", "I-P05", "FR-003"]
+    },
+    {
+      "id": "SCR-22",
+      "name": "D07 Layouts",
+      "description": "Presets (v1) and named layouts (v2)",
+      "widgets": [
+        {
+          "type": "SW_LIST",
+          "id": "layout_list",
+          "label": "Simple (preset) / Study (preset) / saved layouts (v2)",
+          "x": 0,
+          "y": 0,
+          "width": 400
+        },
+        {
+          "type": "SW_TEXT_BOX",
+          "id": "layout_name",
+          "label": "Name this layout (v2)",
+          "x": 0,
+          "y": 120,
+          "width": 400
+        },
+        {
+          "type": "SW_BUTTON",
+          "id": "layout_actions",
+          "label": "Apply / Reset to preset / Save current as... (v2)",
+          "x": 0,
+          "y": 160
+        }
+      ],
+      "requirements": ["A08", "A09"]
+    },
+    {
+      "id": "SCR-23",
+      "name": "D08 Database problem",
+      "description": "Startup failure with recovery",
+      "widgets": [
+        {"type": "SW_DIALOG", "id": "db_dialog", "label": "core.db was not found", "x": 0, "y": 0, "width": 480},
+        {"type": "SW_BUTTON", "id": "db_retry", "label": "Retry", "x": 0, "y": 60},
+        {"type": "SW_BUTTON", "id": "db_locate", "label": "Locate...", "x": 80, "y": 60},
+        {"type": "SW_BUTTON", "id": "db_exit", "label": "Exit", "x": 180, "y": 60}
+      ],
+      "requirements": ["FR-002"]
+    },
+    {
+      "id": "SCR-24",
+      "name": "Startup",
+      "description": "Skeleton while databases are checked and the session restored",
+      "widgets": [
+        {"type": "SW_LABEL", "id": "app_name", "label": "simple_bible", "x": 0, "y": 0},
+        {
+          "type": "SW_SKELETON",
+          "id": "startup_skeleton",
+          "label": "shape of the last layout",
+          "x": 0,
+          "y": 40,
+          "width": 800,
+          "height": 300
+        },
+        {
+          "type": "SW_STATUS_BAR",
+          "id": "startup_status",
+          "label": "Opening core.db...",
+          "x": 0,
+          "y": 360,
+          "width": 800
+        }
+      ],
+      "requirements": ["NFR-001"]
+    },
+    {
+      "id": "SCR-25",
+      "name": "Word card popover",
+      "description": "Hover (GW-09) or click card for a word",
+      "widgets": [
+        {"type": "SW_LABEL", "id": "wc_translit", "label": "bereshit (be-re-SHEET)", "x": 0, "y": 0},
+        {"type": "SW_LABEL", "id": "wc_gloss", "label": "in the beginning", "x": 0, "y": 20},
+        {"type": "SW_LABEL", "id": "wc_morph", "label": "preposition + noun, feminine singular", "x": 0, "y": 40},
+        {"type": "SW_CHIP", "id": "wc_chips", "label": "H7225 WLC", "x": 0, "y": 60},
+        {"type": "SW_BUTTON", "id": "wc_actions", "label": "Word Study / Search / Journey / Pin", "x": 0, "y": 80}
+      ],
+      "requirements": ["A06", "C01"]
+    }
+  ],
+  "traceability": {
+    "requirements_to_states": {
+      "FR-002": ["S-02", "T-02"],
+      "FR-020": ["S-06", "S-07", "T-09", "T-11"],
+      "FR-022": ["S-06", "T-10"],
+      "FR-025": ["S-10", "S-11", "T-25", "T-26"],
+      "FR-026": ["S-11", "T-28"],
+      "FR-027": ["S-11", "T-28"],
+      "FR-030": ["S-09", "T-20"],
+      "FR-032": ["S-05"],
+      "NFR-001": ["S-06", "T-10"],
+      "NFR-002": ["S-08", "S-11", "T-17"],
+      "NFR-013": ["S-13", "T-35"],
+      "A01": ["S-05", "S-06", "T-09"],
+      "A02": ["S-21", "S-23", "T-55"],
+      "A08": ["S-17", "S-18", "T-44", "T-55"],
+      "A09": ["S-19", "S-20", "T-49"],
+      "A10": ["S-13", "T-35"],
+      "B01": ["S-08", "T-15"],
+      "B03": ["S-08", "T-15"],
+      "B05": ["S-08", "T-15"],
+      "D09": ["S-09", "T-20"],
+      "C06": ["S-09", "T-20"],
+      "E10": ["S-14", "T-37"],
+      "I-P01": ["S-12", "T-31"],
+      "I-P02": ["S-10", "S-11", "T-25"],
+      "I-P03": ["S-11", "T-28"],
+      "I-P05": ["S-14", "T-37"],
+      "I-P06": ["S-09", "T-20"],
+      "I-P07": ["S-09", "T-20"],
+      "D-019": ["S-05"]
+    },
+    "states_to_screens": {
+      "S-01": "SCR-24",
+      "S-02": "SCR-24",
+      "S-03": "SCR-23",
+      "S-04": "SCR-24",
+      "S-05": "SCR-01",
+      "S-06": "SCR-03",
+      "S-07": "SCR-16",
+      "S-08": "SCR-09",
+      "S-09": "SCR-10",
+      "S-10": "SCR-18",
+      "S-11": "SCR-11",
+      "S-12": "SCR-19",
+      "S-13": "SCR-20",
+      "S-14": "SCR-21",
+      "S-15": "SCR-01",
+      "S-17": "SCR-01",
+      "S-18": "SCR-02",
+      "S-19": "SCR-22",
+      "S-20": "SCR-22",
+      "S-21": "SCR-03",
+      "S-23": "SCR-03"
+    }
+  }
+}

@@ -1,0 +1,31 @@
+# Eiffel build artifacts
+EIFGENs/
+Documentation/
+
+# Compiled files
+*.melted
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Backup and editor files
+*.swp
+*.bak
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs and traces
+exception_trace.log
+*.epr
+*.log
+
+# Third-party text samples (Swete via First1KGreek, CC BY-SA 4.0): kept local, not redistributed here
+.eiffel-workflow/research/_samples/
+
+# Design debates in progress: committed through their own pull request when gated
+.eiffel-workflow/debate/

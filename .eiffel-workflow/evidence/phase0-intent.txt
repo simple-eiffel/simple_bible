@@ -1,0 +1,25 @@
+# Phase 0 Intent Evidence
+# Project: D:\prod\simple_bible
+# Date: 2026-10-06
+
+Intent document: .eiffel-workflow/intent-v2.md (initial: .eiffel-workflow/intent.md)
+Review conducted: yes
+Review engine: Claude Opus (self-review)
+Binding inputs: spec/09-LARRY-ANSWERS (2026-10-06).md (Q-01..Q-16, "all as recommended"); research/04-DECISIONS.md D-001..D-020
+Context read: spec/01, 03, 05 (owns-every-fact table and addendum), 07, 08; research/10, 13; gui/00-GUI-SPEC (skim)
+
+Acceptance criteria: Release 1a 57 (4 conditional), Release 1b 10
+Questions generated: 12 (RQ-01..RQ-12) + 7 spark placements (Q-16: S10, S3, S4, S7, S8, S13, S15)
+Questions answered: 12 of 12 with recommended answers; 7 of 7 sparks with a recommended placement (all pending Larry)
+Refinements recorded: 10 (R-01..R-10)
+Dependency audit: complete (31 entries checked in D:\prod; direct ISE use = base only; Gobo/ISE only via simple_* wrappers)
+Gaps identified: FT-01/FT-02; LG-01 (widened); LG-03; LG-04 (optional); LG-05; LG-06; LG-07..LG-12 (new); GW items as filed
+MML decision: YES-Required
+User approved: yes (Larry, 2026-10-06: "approve as recommended")
+
+Open items needing Larry's word: RQ-05 (wrapped Markdown in 1a), RQ-06 (Markdown store gate),
+RQ-08 (rix.db publication scope), R-07 (GUI spec v3 "Sermon Builder" vs the ratified trust rules), section 6.1 spark placements.
+
+No source code, ECF or git repository was created. /eiffel.contracts not started.
+
+# Status: APPROVED

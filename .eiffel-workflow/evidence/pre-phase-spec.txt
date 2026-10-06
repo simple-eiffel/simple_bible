@@ -1,0 +1,37 @@
+# Pre-Phase Specification Evidence
+# Project: D:\prod\simple_bible
+# Date: 2026-10-06T18:45:00-04:00
+
+Specification completed: yes
+Steps completed: 8/8 (R01-R08)
+Classes designed: 209 named Release 1 classes (L-LIB 145, L-BUILD 44, L-CLI 7, L-GUI 13)
+                  + families: ported shapes (up to 27), CLI commands (15), GUI panels (11), GUI dialogs (9)
+                  + 26 named later-release classes (v1.5 / v2 / v3 / candidate MCP face)
+Deferred classes: 19 (library 14, build 2, CLI 1, GUI 2)
+Contracts defined: about 330 tagged assertion clauses across 42 class sections (05), repeated in class texts (07)
+Requirements traced: 90 functional (incl. FR-NEW-001..021 from R03) + 18 non-functional; 0 untraced
+Risks addressed: 19 (incl. RISK-018..022 found during R01-R03)
+
+Inputs read: research 01-12, REFERENCES, 11-timeline-pilot.csv, 13-USER-VOICE (arrived during R03; folded in as A-021..A-030),
+             gui/00-GUI-SPEC, spec_windows.json, design notes, state diagram, README; design doc;
+             build_rix_db.py, validate_rix_db.py, shape_db.py, scripture_detect.py; fleet memory notes;
+             ecosystem ECFs/READMEs in D:\prod (all dependencies confirmed present)
+
+Key design-changing findings (R03):
+  - eiffel_sqlite_2025 c_sqlite3_step is not `blocking` (sqlite_externals.e:491) -> FT-02 + chunked jobs + GC-probe test
+  - GUI notes' "poll the job" is a SCOOP error -> separate BIB_JOB_MAILBOX and BIB_CANCEL_TOKEN
+  - No NFD/NFC or Mn category in the fleet -> LG-01 (simple_encoding)
+  - SB_ prefix used by Gobo storable -> BIB_ (unused in D:\prod, Gobo, ISE 25.02); C prefix sbib_ (zero C planned)
+  - rix.db verse_refs key on vault book ids -> pinned canonical book table
+  - Swete is uncollated OCR where most NT quotations land -> repair state, OCR note on verdicts
+  - User voice: notes store seam, append-only user data + backup, settings survive migration, follow-only panes,
+    count-scope labels, text seal, copied-phrase search test, panels screen-reader-ready
+
+OOSC2 compliance: PASS
+Eiffel excellence: PASS
+SCOOP: PASS with condition (FT-02 before the GUI phase)
+Ready for implementation: yes for /eiffel.intent (verdict READY with phase-gating conditions; open questions Q-01..Q-16)
+
+No source code, ECF or git repository was created.
+
+# Status: COMPLETE

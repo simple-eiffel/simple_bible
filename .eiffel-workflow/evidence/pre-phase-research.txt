@@ -1,0 +1,29 @@
+# Pre-Phase Research Evidence
+# Project: D:\prod\simple_bible
+# Date: 2026-10-06T14:15:42-04:00
+
+Research completed: yes
+Steps completed: 7/7
+Recommendation: BUILD
+Confidence: HIGH (core engine + data build); MEDIUM (optional AI layer)
+
+References cited: 53 unique URLs in REFERENCES.md (61 across all research files)
+Alternatives researched: 19 (5 free apps, 12 open datasets/platforms, 2 commercial references)
+Enabling technologies researched: 7 (SQLite FTS5, sqlite-vec, llama.cpp, ONNX Runtime + multilingual-e5-small, WebView2, sql.js, Inno Setup)
+Risks identified: 17
+Decisions recorded: 19 (D-001..D-004 by Larry; D-011, D-016, D-019 pending Larry)
+Functional requirements: 40 | Non-functional: 15 | Constraints: 12
+
+Step 0 input: Rix/Upcoming Projects/Bible Study Workbench - Design (2026-10-06).md
+Model survey: Rix/Data/_Small Model Survey (2026-10-06).md PENDING (absent at research time)
+Harvest ledger: 08-HARVEST-LEDGER.md (separate agent; not written here)
+
+Key findings:
+  - eiffel_sqlite_2025 compiles SQLite 3.31.1 (source id 2020-01-27), not 3.51.1 as its README claims; OMIT_LOAD_EXTENSION
+  - FTS5 unicode61 treats Mn marks as separators and strips diacritics for Latin only -> normalized search columns required
+  - simple_shaping exists (0.1.0 pre-release); the "no shaping library" premise is out of date
+  - SBLGNT is now CC BY 4.0; MorphGNT morphology is CC-BY-SA per its README; CCAT Rahlfs needs a user declaration
+  - UBS Paratext Parallel Passages (CC BY-SA 4.0) includes OT quotes in the NT -> seed for quotation comparer
+  - STEPBible TVTMS (CC BY 4.0) -> versification map
+
+# Status: COMPLETE

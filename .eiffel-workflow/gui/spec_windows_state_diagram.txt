@@ -1,0 +1,155 @@
+simple_bible GUI - state diagrams (ASCII)
+2026-10-06. Source: spec_windows.json (root "states"/"transitions" and "state_machines").
+Widget vocabulary: simple_widgets 0.8.1 (SW_* classes), a deliberate deviation from the
+eiffel-gui-ux skill's simple_vision "windows" platform (D-006).
+
+The app runs three orthogonal regions at once. simple_spec_viz draws them in one
+state_machine.svg; its single start dot feeds the initial state of each region.
+
+Notation:  [state]   --event [guard] / action-->   (*) initial   (@) final
+
+======================================================================================
+REGION A - LIFECYCLE AND ACTIVITY (S-01..S-16, T-01..T-43)
+======================================================================================
+
+ (*)
+  |
+  v
+[starting S-01] --window_ready--> [checking_databases S-02]
+                                     |            |
+                     databases_ok    |            | database_failed
+                                     v            v
+                      [restoring_session S-04]  [database_error S-03] --exit--> (@)[exiting S-16]
+                          |          |              |   ^
+        session_restored  |          | snapshot_    |   | retry / locate [file chosen]
+                          |          | invalid /    +---+--> back to [checking_databases]
+                          v          v apply Simple
+                     +---------------------+
+                     |     [ready S-05]    |<------------------------------------------+
+                     +---------------------+                                           |
+   go_to [parses]  |  |  |  |  |  |  |   close_window --> (@)[exiting S-16]           |
+                   v  |  |  |  |  |  |                                                 |
+ [navigating S-06] ---+--+--+--+--+--+-- panes_rendered ------------------------------>|
+     |      ^   |                                                                      |
+     | ambiguous_reference                                                             |
+     v      |   +-- engine_error ------------------------------+                       |
+ [choosing_reference S-07] -- cancel ------------------------->|---------------------->|
+     | candidate_chosen --> [navigating]                       |                       |
+                                                               v                       |
+   run_search [query valid]                         [error_recoverable S-15]           |
+       v                                              |  dismiss -------------------->|
+ [searching S-08] (page_ready / append rows: self)     |  retry / reissue last ----->|
+     | search_done | cancel / discard partial ------------------------------------->|
+     | search_failed ------------------------------->[error_recoverable]             |
+                                                                                       |
+   open_guide [subject selected]                                                       |
+       v                                                                               |
+ [building_guide S-09] (section_ready / render section: self)                          |
+     | guide_done | cancel ----------------------------------------------------------->|
+     | guide_failed -------------------------------->[error_recoverable]              |
+                                                                                       |
+   new_census                                                                          |
+       v                                                                               |
+ [census_defining S-10] -- cancel ------------------------------------------------->|
+     | run_census [definition complete]                                                |
+     v                                                                                 |
+ [census_running S-11] -- census_done / show four buckets -------------------------->|
+     | cancel / keep definition ---------------------------------------------------->|
+     | census_failed ------------------------------->[error_recoverable]              |
+                                                                                       |
+   check_claims [claims present]  (v1.5)                                               |
+       v                                                                               |
+ [claim_checking S-12] -- claims_checked | cancel ---------------------------------->|
+                                                                                       |
+   open_settings                                                                       |
+       v                                                                               |
+ [settings_open S-13] -- apply_settings [values valid] | cancel ------------------->|
+                                                                                       |
+   export                                                                              |
+       v                                                                               |
+ [exporting S-14] -- export_written | cancel ---------------------------------------->|
+     | write_failed -------------------------------->[error_recoverable]
+
+ Concurrency rule: one job of each kind at a time; a newer go_to cancels an older
+ navigation. Jobs (search, guide, census, claim check) run on separate SCOOP
+ processors; the GUI processor only polls (GW-26 adds a wake-up).
+
+======================================================================================
+REGION B - MODE AND LAYOUT (S-17..S-20, T-44..T-54)
+======================================================================================
+
+          (*)
+           |
+           v
+   +----------------+   switch_mode    +---------------------+   switch_mode   +---------------+
+   | [mode_simple   | ---------------> | [layout_applying    | <-------------- | [mode_study   |
+   |      S-17]     | <--------------- |       S-19]         | --------------> |      S-18]    |
+   +----------------+ applied [simple] +---------------------+ applied [study] +---------------+
+     |  ^    |   ^          |  invalid_layout / reset to Simple     ^      |   ^
+     |  |    |   +----------+  (back to mode_simple)                |      |   |
+     |  |    |                          restore_layout [chosen] -----+      |   |
+     |  |    | save_layout                                                  |   |
+     |  |    v                                                   save_layout|   |
+     |  |  +---------------------+                                          |   |
+     |  +--| [layout_saving S-20]|<-----------------------------------------+   |
+     |     +---------------------+ -- saved [mode study] ----------------------+
+     |      saved [mode simple] --> mode_simple
+     |
+     +-- tool_opened / dock the panel, offer "Switch to Study" (self-loop)
+
+ Rule: a mode switch changes layout only. Reference, tabs, selection, notes,
+ results and running jobs are untouched (postcondition of switch_mode).
+
+======================================================================================
+REGION C - PANEL SYNC, one instance per panel (S-21..S-24, T-55..T-62)
+======================================================================================
+
+          (*)
+           |
+           v
+   +-------------------+  reference_changed [hidden and linked]   +-----------------+
+   | [panel_current    | ---------------------------------------> | [panel_stale    |
+   |        S-21]      |                                          |        S-22]    |
+   +-------------------+                                          +-----------------+
+     |   ^   ^     |                                                      |
+     |   |   |     | reference_changed [visible and linked]               | panel_shown
+     |   |   |     v                                                      v
+     |   |   |   +------------------------+ <-----------------------------+
+     |   |   +---| [panel_refreshing S-23]|  reference_changed / cancel and restart (self)
+     |   |       +------------------------+
+     |   |  content_ready  |      ^
+     |   +-----------------+      |
+     |   refresh_failed / inline error, keep last content (to panel_current)
+     |                            |
+     | unlink (link set Off)      | relink [set chosen]
+     v                            |
+   +---------------------+        |
+   | [panel_unlinked S-24]--------+
+   +---------------------+
+
+======================================================================================
+DIALOG MACHINES (in "state_machines" only; not drawn by simple_spec_viz)
+======================================================================================
+
+ go_to_flow (D01, reference box)
+   (*)[typing] --text_changed [valid]-------> [parsed_valid] --submit / raise go_to--> [typing]
+   [typing]    --text_changed [ambiguous]---> [parsed_ambiguous] --candidate_chosen / raise go_to--> [typing]
+   [typing]    --submit [invalid]-----------> [parsed_invalid] --text_changed--> [typing]
+
+ census_flow (D03, FR-025)
+   (*)[draft] --field_changed [complete]--> [complete] --save--> [stored] --run / freeze--> (@)[locked]
+   [complete] --field_cleared--> [draft]
+   [complete] --run / store and freeze--> (@)[locked]
+   locked = read-only; any edit creates a new definition version.
+
+ export_flow (D06)
+   (*)[choosing] --options_changed--> [previewing] (options_changed: self)
+   [previewing] --copy_or_save [target valid]--> [writing] --written--> (@)[done]
+   [writing] --write_failed / show error--> [previewing]
+
+======================================================================================
+COUNTS
+======================================================================================
+ Root machine (visualized): 24 states, 62 transitions, 3 regions, 3 initial, 1 final.
+ Dialog machines: go_to_flow 4/6, census_flow 4/5, export_flow 4/5 (states/transitions).
+ All machines in the JSON: 36 states, 78 transitions (regions counted once).

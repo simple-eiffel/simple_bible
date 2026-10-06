@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>simple_bible - A Free Bible-Study Workbench for Windows</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" type="image/png" href="images/logo.png">
+</head>
+<body>
+    <header>
+        <div class="logo-container">
+            <img src="images/logo.svg" alt="simple_* logo" class="logo">
+        </div>
+        <h1>simple_bible</h1>
+        <p class="tagline">Check what people say about the Bible against the Bible itself &mdash; free, on ordinary hardware</p>
+        <div class="badges">
+            <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License">
+            <img src="https://img.shields.io/badge/Eiffel-25.02-purple.svg" alt="Eiffel 25.02">
+            <img src="https://img.shields.io/badge/DBC-Contracts-green.svg" alt="Design by Contract">
+            <img src="https://img.shields.io/badge/Platform-Windows%20x64-lightgrey.svg" alt="Windows x64">
+        </div>
+    </header>
+
+    <nav>
+        <ul>
+            <li><a href="#overview">Overview</a></li>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#principles">Principles</a></li>
+            <li><a href="#design">Design</a></li>
+            <li><a href="#building">Building</a></li>
+            <li><a href="https://github.com/simple-eiffel/simple_bible">GitHub</a></li>
+        </ul>
+    </nav>
+
+    <main>
+        <section id="overview">
+            <h2>Overview</h2>
+            <p>
+                <strong>simple_bible</strong> is a free Bible-study workbench for Windows. An Eiffel
+                engine over SQLite looks up, counts and compares the biblical text in Hebrew, Greek
+                and English, and every fact it shows carries its source and license.
+            </p>
+            <p>
+                It is written for the reader who has outgrown a free reader but does not want to
+                buy into an expensive library, and for anyone who wants to check a claim about the
+                text (including an AI's claim) against the text itself.
+            </p>
+        </section>
+
+        <section id="status">
+            <h2>Status</h2>
+            <p><strong>Design and contracts. Not usable yet.</strong> Built with the Eiffel Spec Kit:</p>
+            <ul>
+                <li>Done: research, GUI layout spec, specification, approved intent</li>
+                <li>Done: <strong>Phase 1 engine contracts</strong> &mdash; 150 <code>BIB_*</code> classes,
+                    full contracts and MML model queries, 0 errors and 0 warnings</li>
+                <li>Next: design-fork debates, then Phase 2 contract review as a separate-seat debate cycle</li>
+            </ul>
+        </section>
+
+        <section id="principles">
+            <h2>Principles</h2>
+            <ul>
+                <li><strong>The engine owns every fact.</strong> A fact cannot exist without a source, and every
+                    result cites the sources it used. This is enforced by contract.</li>
+                <li><strong>Counts show their failures.</strong> Every pattern or count result carries FITS,
+                    PARTIAL, FAILS and NO_DATA, and can run beside frequency-matched control words.</li>
+                <li><strong>AI is optional and never a source of facts.</strong> Release 1 runs no AI on your machine.</li>
+                <li><strong>No ads, store, accounts, telemetry, activation or paywalls.</strong> Your notes stay yours.</li>
+                <li><strong>Ordinary hardware.</strong> CPU-only, 8 GB of RAM, no GPU needed.</li>
+            </ul>
+        </section>
+
+        <section id="design">
+            <h2>Design</h2>
+            <p>
+                The interface is native <a href="https://github.com/simple-eiffel/simple_widgets">simple_widgets</a>
+                with shaped right-to-left Hebrew. It opens in a <strong>Simple</strong> mode (a three-pane reader where
+                every pane follows the verse) and offers a <strong>Study</strong> mode (docked panels, linked sets,
+                search, guides, counts and the author library). The full research, specification and GUI spec live in
+                <code>.eiffel-workflow/</code> in the repository.
+            </p>
+        </section>
+
+        <section id="building">
+            <h2>Building</h2>
+<pre><code>cd simple_bible
+/d/prod/ec.sh check -config simple_bible.ecf -target simple_bible_tests
+/d/prod/ec.sh test  -config simple_bible.ecf -target simple_bible_tests</code></pre>
+            <p>Dependencies: base, simple_mml, simple_sql, simple_datetime; tests add testing and simple_testing.</p>
+        </section>
+    </main>
+
+    <footer>
+        <p>
+            <strong>simple_bible</strong> is part of the
+            <a href="https://github.com/simple-eiffel">simple_*</a> ecosystem
+        </p>
+        <p class="copyright">
+            Copyright &copy; 2026 Larry Rix. MIT License.
+        </p>
+    </footer>
+</body>
+</html>

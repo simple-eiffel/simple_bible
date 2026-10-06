@@ -1,0 +1,293 @@
+# Phase 1 Compilation Evidence (/eiffel.contracts) - ENGINE LIBRARY ONLY
+# Project: D:\prod\simple_bible
+# Date: 2026-10-06
+# Scope: Release 1a engine library, simple_bible.ecf (RQ-01: engine, build, app are separate ECFs;
+#        bible_build.ecf and simple_bible_app.ecf follow and compile against this target)
+# Compiler: EiffelStudio 25.02.9.8732 win64, through D:/prod/ec.sh modes only (no raw flags)
+# Working directory for every command: /d/prod/simple_bible (EIFGENs land here)
+
+## Commands run (final pass, after CRLF normalization)
+
+cd /d/prod/simple_bible && /d/prod/ec.sh check -config simple_bible.ecf -target simple_bible        > /tmp/final_lib_check.log
+cd /d/prod/simple_bible && /d/prod/ec.sh check -config simple_bible.ecf -target simple_bible_tests  > /tmp/final_tests_check.log
+cd /d/prod/simple_bible && /d/prod/ec.sh test  -config simple_bible.ecf -target simple_bible_tests  > /tmp/final_tests_test.log
+cd /d/prod/simple_bible && ./EIFGENs/simple_bible_tests/F_code/simple_bible.exe                     > /tmp/final_run.log
+
+The library target `simple_bible' has root all_classes="true", so its check type-checks every
+engine class, reachable or not. The tests target roots at TEST_APP.
+
+## Counts READ FROM THE LOGS (not from the ec.sh summary line)
+
+grep -c -i -E "error|warning|obsolete" over each full log:
+  final_lib_check.log    0   ("Degree 3: Checking Types" ... "System Recompiled.")
+  final_tests_check.log  0   ("Degree 1: Generating Metadata", "Melting System Changes", "System Recompiled.")
+  final_tests_test.log   0   ("System Recompiled.", "C compilation completed", F_code exe built)
+Errors: 0. Warnings: 0 (zero-warning policy met; that includes C compiler and linker output).
+
+Note: ec.sh printed "Syntax and type check passed" and exit 0 on EARLIER runs whose logs held syntax
+errors, VEEN/VAPE/VAOL errors and an "Obsolete Call" warning. Each was found by reading the log and
+fixed (see "Fixes made to pass the gate"). Root cause recorded as gap GAP-EC-01 below.
+
+## Log excerpt: library target, check (melt)
+
+=== CHECK MODE (melt only) ===
+Running: ec.exe -batch -config simple_bible.ecf -target simple_bible
+Eiffel Compilation Manager
+Version 25.02.9.8732 - win64
+Degree 6: Examining System
+Degree 5: Parsing Classes
+Degree 4: Analyzing Inheritance
+Degree 3: Checking Types
+Degree 2: Generating Byte Code
+System Recompiled.
+
+## Log excerpt: tests target, check (melt)
+
+Running: ec.exe -batch -config simple_bible.ecf -target simple_bible_tests
+Degree 6: Examining System
+Degree 5: Parsing Classes
+Degree 4: Analyzing Inheritance
+Degree 3: Checking Types
+Degree 2: Generating Byte Code
+Degree 1: Generating Metadata
+Melting System Changes
+System Recompiled.
+
+## Log excerpt: tests target, test (finalize -keep, DBC kept)
+
+=== TEST MODE (finalize -keep) ===
+Running: ec.exe -batch -config simple_bible.ecf -target simple_bible_tests -finalize -keep -c_compile
+Degree 6: Examining System
+Degree -2: Constructing Polymorphic Table
+Degree -3: Generating Optimized Code
+System Recompiled.
+Preparing C compilation using Microsoft Visual Studio 2022 VC++ (17.0)...
+-STACK:5000000 -NODEFAULTLIB:libc -STACK:5000000 -NODEFAULTLIB:libc -SUBSYSTEM:CONSOLE -OUT:simple_bible.exe
+"...mtfinalized.lib" "D:\prod\eiffel_sqlite_2025\Clib\sqlite3.obj" "D:\prod\eiffel_sqlite_2025\Clib\esqlite.obj"
+"...library\net\spec\msc_vc140\win64\lib\mtnet.lib" Mswsock.lib
+C compilation completed
+Built: EIFGENs/simple_bible_tests/F_code/simple_bible.exe (2s ago)
+
+(mtnet.lib is linked by the TESTS target only: ISE `testing' (EQA) depends on ISE `net'. The engine
+library's own closure is base, time and the simple_* libraries below; ISE `logging' (via simple_json)
+needs only base and time.)
+
+## Test run (F_code, all assertions live)
+
+LIB_TESTS, TEST_PROVENANCE, TEST_REFERENCE_PARSER, TEST_VERSIFICATION, TEST_VERSE_HUB, TEST_NORMALIZERS,
+TEST_SEARCH, TEST_CENSUS, TEST_SHAPES, TEST_QUOTATION, TEST_STUDY, TEST_AUTHOR_LIBRARY, TEST_USER_STORE,
+TEST_JOBS_SCOOP, TEST_AI_SEAM, TEST_PLUGIN_PURITY, TEST_LAYERING, TEST_SCOOP_CONSUMER
+========================
+Results: 69 passed, 47 skipped (skeletal), 0 failed
+ALL RUN TESTS PASSED (47 skeletal, Phase 5)
+exit code 0
+
+Skeletal tests print SKIP with their acceptance criterion and are never counted as passes.
+
+## SCOOP consumer test (mandatory gate, Step 6b)
+
+ECF capability: <concurrency support="scoop" use="scoop"/>, <void_safety support="all" use="all"/>,
+all assertions on (precondition, postcondition, check, invariant, loop, supplier_precondition).
+TEST_SCOOP_CONSUMER.test_scoop_compatibility creates `separate SIMPLE_BIBLE' from a non-separate
+BIB_CONFIG (make_from_separate copies plain values), a `separate BIB_CANCEL_TOKEN' and a
+`separate BIB_JOB_MAILBOX', posts a page built on the test processor (copied by
+BIB_JOB_PAGE.make_from_separate), closes it failed with a STRING_32 from the client processor, and
+waits with BIB_JOB_WAITER.await_closed (a SCOOP wait condition: no polling). Compiles with no
+VUAR(2)/VJAR and runs: PASS. TEST_JOBS_SCOOP adds four more cross-processor tests (PASS).
+
+## ECF Dependency Audit (simple_* first)
+
+grep -E '\$ISE_LIBRARY|\$GOBO|gobo' simple_bible.ecf:
+    <library name="base" location="$ISE_LIBRARY\library\base\base.ecf"/>
+    <library name="testing" location="$ISE_LIBRARY\library\testing\testing.ecf"/>   (tests target only)
+
+ECF Dependency Audit:
+- ISE allowed: base (library target); testing (tests target only, EQA for TEST_SET_BASE). time arrives
+  only transitively through simple_datetime.
+- simple_* used (each verified present in D:\prod, each referenced by a skeleton):
+    simple_mml       - MML_SEQUENCE / MML_SET / MML_MAP model queries on every collection attribute
+    simple_sql       - SIMPLE_SQL_DATABASE in BIB_SOURCE_SET (the one connection per processor)
+                       (brings eiffel_sqlite_2025, simple_json, simple_encoding, simple_sorter,
+                       simple_factory, simple_reflection transitively)
+    simple_datetime  - SIMPLE_DATE_TIME in BIB_USER_ITEM (user-record dates)
+    simple_testing   - TEST_SET_BASE (tests target)
+- Not yet referenced by any skeleton, so NOT listed (added in Phase 4 when bodies use them):
+    simple_encoding (direct; after LG-01), simple_regex, simple_json (direct), simple_diff, simple_file,
+    simple_toml, simple_logger, simple_yaml, simple_hash (after LG-09)
+- Forbidden in this ECF (AC-1a-36, checked by TEST_LAYERING.test_engine_ecf_has_no_face_or_build_dependency):
+    simple_widgets, simple_shaping, simple_cairo, simple_shell, simple_onnx, simple_xml, simple_csv,
+    simple_graph, simple_winhttp, simple_http, simple_console, simple_cli -> none present.
+- Violations: none (no direct Gobo; no ISE beyond base/testing).
+- C code: none. Reserved prefix sbib_ unused.
+- New externals: none (no `blocking' question arises in simple_bible itself).
+- Gaps identified: see "Gaps" below.
+
+## What was created
+
+D:\prod\simple_bible\simple_bible.ecf   targets: simple_bible (library, all_classes), simple_bible_tests
+D:\prod\simple_bible\src\               150 classes (16 deferred), CRLF
+D:\prod\simple_bible\testing\           21 classes (TEST_APP, LIB_TESTS, 17 TEST_* suites, TEST_FIXTURES,
+                                        SOURCE_SCAN), 116 test features (69 real, 47 skeletal)
+
+Classes by cluster:
+  src (root)      2   SIMPLE_BIBLE, BIB_CONFIG
+  core           13   enumeration base, book, catalog, versification system, ref, range, mapped ref,
+                      key base, lemma/Strong's/morph/word keys, text span
+  provenance     16   license, grade, voice, provenance, BIB_SOURCED (RQ-02), fact, method, error,
+                      engine result, list result, verdict, finding, bucketed result, trust labels,
+                      licensed item, license gate
+  data            5   source set, data source (d), core source, ai-data source, history source (d, v2)
+  text           12   unicode service (d, LG-01 seam), normalizer (d), Hebrew/Greek/English, set,
+                      stemmer, stop words, pointing reducer, transliterator, script classifier, edit distance
+  reference       6   parser, parse result, reference detector, ref match, quotation detector, quotation match
+  versification   3   map, mapping rule, pairing
+  hub             9   verse hub, version info, verse text, omission, word, verse result,
+                      cross-reference, morph expander, repair state
+  search         13   query, clause, parser, scope, engine, result, hit, concordance, count table,
+                      count result, rank fusion, token diff, diff span
+  census          6   definition, control set, frequency table, engine, run, control comparison
+  shape           8   shape (d), tier, registry, engine, run, finding, lint, candidate
+  quotation       6   index, quotation, alignment, agreement class, comparer, result
+  study          17   range viewer/result/rendering, journey/result/row, divine-name marker/mark,
+                      guide assembler/guide/section, related passages/passage, library/entry,
+                      proper names/name
+  author          4   author library, author doc, doc status, publication-scope rule (RQ-08)
+  export          2   exporter, attribution
+  jobs            8   job (d), search/census/guide jobs, cancel token, mailbox, page, waiter
+  plugin          5   plugin (d), registry, private source (d), lens (d), lens result
+  ai              4   adapter (d), null adapter, AI text, post-check
+  user           11   user item (d), note, highlight, bookmark, tag, visit, user store,
+                      note store (d), db note store, Markdown note store, backup
+
+Not in this phase (by scope): build pipeline classes (bible_build.ecf), CLI and GUI classes
+(simple_bible_app.ecf), 1b classes (checks family, prayer, memory, plans, collections), shape family
+BIB_SHAPE_<slug> (count fixed after the A-014 data check), v1.5/v2/v3 classes.
+
+## Contract statistics
+
+- 197 invariant clauses (all O(1) except two documented collection checks; model clauses appear only
+  in postconditions, C-019).
+- 27 `fact_closure: Result.is_fact_closed' postconditions (every engine query returning a result).
+- 32 MML frame conditions using |=| against `old' (every collection-changing command).
+- 73 Phase-4 bodies written as `check implemented_in_phase_4: False then end' (attached results) or
+  `-- Phase 4' (commands, BOOLEAN/INTEGER queries). Trivial creation, attribute assignment, list
+  append and model queries are written out (they are the specification's representation).
+
+## MML coverage
+
+Every ARRAYED_LIST / HASH_TABLE attribute in src (53, the four buckets counted separately) has a model
+query: MML_SEQUENCE for ordered lists (citations, items, buckets, candidates, clauses, controls,
+pages, sections, rows ...), MML_SET for sets (rules of the map, stop words, book ids, cited hub ids,
+excluded kinds, exclusions), MML_MAP for tables (attached databases, aliases, books, versions,
+settings, shapes, tags, frequencies, per-book counts). Results also expose `facts_model' (RQ-02).
+Audit script result: 0 collection attributes without a model.
+
+## "The engine owns every fact" as written
+
+1. BIB_ENGINE_RESULT: invariants success_xor_error, success_is_cited; `facts_model' (deferred, every
+   value a result carries, each a BIB_SOURCED) and `is_fact_closed' (each fact's provenance is among
+   `citations_model'); every engine query ensures fact_closure (postcondition, never invariant).
+2. BIB_PROVENANCE.key > 0 is the NOT NULL `provenance_key REFERENCES source_provenance' value;
+   BIB_DATA_SOURCE.open_on ensures provenance_declared (every shipped table declares the column).
+3. BIB_FACT [G] has one creation procedure, which takes a provenance (attached).
+4. BIB_BUCKETED_RESULT: four attached bucket lists created together (four_buckets_present,
+   total_consistent); `extend'/`seal' exported only to the census and shape engines; extend's frame:
+   the three other buckets unchanged (|=|). Census/shape runs: counted_per_hub_id (RQ-12).
+5. BIB_MAPPED_REF: create {BIB_VERSIFICATION_MAP}; pair ensures every_moved_target_ruled.
+6. BIB_AI_TEXT: create {BIB_AI_POST_CHECK}; invariants label_present, cites_engine; post-check
+   detectors fail safe (withhold) until v3; BIB_AI_ADAPTER.explain takes an engine result, never text;
+   the facade binds BIB_NULL_AI_ADAPTER.
+7. BIB_METHOD invariant scope_stated; BIB_VERSION_INFO invariants never_bare_lxx, kjv_labeled,
+   sealed (64), counted.
+8. BIB_AUTHOR_DOC: status_valid, banner_for_flagged; search withdrawn_only_if_requested.
+9. BIB_JOB_MAILBOX: cancelled_discards; BIB_JOB.result_value requires not_cancelled.
+
+## Acceptance-criteria mapping (Release 1a)
+
+Engine criteria AC-1a-15..38: 24 of 24 mapped to contracts; each also has a test (real or skeletal).
+  15 parse result invariants + parser never_guesses + verse ambiguous_never_guessed | 3 real, 2 skel
+  16 pair: every_moved_target_ruled, method_names_rules | skel regression set
+  17 BIB_PAIRING aligned; census/shape counted_per_hub_id; distinct_hub_count | 1 real, 2 skel
+  18 BIB_MAPPED_REF selective creation | real static scan (TEST_LAYERING)
+  19 BIB_VERSE_TEXT text_xor_omission, text_never_empty; omission wording; every_version_answered | 2 real, 3 skel
+  20 make_text text_kept (no setter); search_form same_as_build | 1 real, 1 skel
+  21 search_form same_as_build | skel (200-verse copied-phrase golden)
+  22 BIB_STRONGS_KEY padding_insensitive, sense_kept; concordance unsplit_strongs_equals_lemma | 2 skel
+  23 BIB_NORMALIZER idempotent, no_combining_marks (LG-01 seam) | 2 skel
+  24 definition not_frozen preconditions, freeze export, new_version | 4 real, 3 skel
+  25 four buckets; classify absent_tag_is_no_data; evidence not_judgment | 3 real, 2 skel
+  26 BIB_SHAPE required_columns (declares_columns) | skel differential
+  27 compare: no-data rules, edition_named, ocr_flagged; result invariants | 1 real, 2 skel
+  28 BIB_JOURNEY_ROW method_on_row; journey time_ordered | 1 real, 1 skel
+  29 BIB_NAME_MARK surface_labeled; marker swete_is_surface_form | 1 real, 1 skel
+  30 range distinct_glosses; rendering counted | skel
+  31 BIB_METHOD scope_stated; version sealed/counted; rerun same_edition_same_counts | 2 real, 2 skel
+  32 is_fact_closed + 27 fact_closure postconditions | 3 real, 1 skel
+  33 BIB_RELATED_PASSAGE ai invariants; provenance ai_made_has_method; related ai_only_with_ai_data | 2 real, 1 skel
+  34 author doc banner; search withdrawn_only_if_requested, current_first | 1 real, 2 skel
+  35 BIB_VERSION_INFO never_bare_lxx, kjv_labeled | 2 real
+  36 ECF dependency rule | real (reads simple_bible.ecf)
+  37 BIB_JOB cancelled_mailbox_empty; mailbox cancelled_discards; result_value not_cancelled | 4 real SCOOP, 1 skel
+  38 passage_guide text_first_excludes_commentary; guide job; add_section text_first_respected | 1 real, 1 skel
+User-data criteria AC-1a-39..43 (user cluster of the engine library): 5 of 5 mapped
+  (hub-id-only keying; append-only note-store contracts; soft delete; migrate frames; Markdown store
+  rules) | 3 real, 8 skel. AC-1a-42/43 stay conditional on the RQ-06 gate.
+Cross-cutting criteria with an engine side: AC-1a-02/03 (BIB_LICENSE_GATE rule, real), 04 (read side:
+  provenance_declared, skel), 14 (BIB_PUBLICATION_SCOPE_RULE object, real; is_excluded skel; the
+  builder fixture is bible_build's), 47 (banned accessors, real static scan), 51 (exporter contracts,
+  skel), 54 (null adapter, post-check, no AI type in search; real), 57 (registry empty, no effective
+  lens/private source, no private names; real; executable scan skel).
+Build criteria (01, 05-13) and face criteria (44-46, 48-50, 52, 53, 55, 56) belong to bible_build.ecf
+and simple_bible_app.ecf.
+
+## Fixes made to pass the gate (all found by reading logs)
+
+- `reference' is a reserved word: features renamed `ref' (BIB_FINDING, BIB_VERSE_TEXT, BIB_HIT,
+  BIB_PARSE_RESULT, BIB_REF_MATCH, BIB_SHAPE_CANDIDATE). Spec 04/05/07 say `reference' (drift note).
+- Tags `attached', `unique', `frozen' are keywords: renamed is_attached, unique_id, is_frozen_now.
+- `100%' in a manifest string: escaped as 100%%.
+- VEEN: missing representation attributes (controls, sections) added.
+- VAOL(2): `old' over an across-local in BIB_BUCKETED_RESULT.extend; replaced by
+  `other_buckets_model (v) |=| old other_buckets_model (v)'.
+- VAPE: secret features in preconditions (census set_criteria; SIMPLE_BIBLE.attach_private_source)
+  replaced by exported queries (has_control_named_by, can_attach_private_source).
+- Obsolete Call (DIRECTORY.linear_representation) in SOURCE_SCAN: replaced by `entries'.
+
+## Gaps (fleet work items; nothing hacked around)
+
+- GAP-EC-01 (ec.sh): `run_ec' pipes ec.exe into `tee' and reads `$?', which is tee's status, so
+  every mode reports success and "passed" regardless of compiler errors. Fix: use
+  ${PIPESTATUS[0]} (or set -o pipefail) and grep the log for "Error code"/"Syntax error"/"Warning:"
+  before printing the summary. Also: obsolete calls are reported under "Error code: Obsolete Call"
+  with a "Warning:" line, so counting only "Warning code" misses them.
+- LG-01 (simple_encoding): the normalizers are written against the deferred BIB_UNICODE_SERVICE seam;
+  SIMPLE_BIBLE.normalizers (and so `search' and `divine_names') stays a Phase-4 stub until the
+  simple_encoding adapter exists. AC-1a-20/21/23 tests are skeletal until then.
+- FT-01/FT-02 (eiffel_sqlite_2025): SQLite 3.31.1; c_sqlite3_step/open_v2/close not `blocking'.
+  Noted in BIB_SOURCE_SET; not patched here. Gates AC-1a-48 (app) and every worker-processor query.
+- LG-09 (simple_hash 8-bit paths): noted in BIB_MARKDOWN_NOTE_STORE (file_hash).
+- LG-03 (simple_sql STRING_32 accessors): banned accessors absent (static test enforces).
+
+## Design notes for /eiffel.review (departures from 04/05/07, each deliberate)
+
+1. BIB_SOURCED (new deferred class) is how RQ-02 is met: every result item is a BIB_SOURCED,
+   BIB_LIST_RESULT [G -> BIB_SOURCED], so plain values travel as BIB_FACT [G].
+2. BIB_LICENSE_GATE lives in the engine over BIB_LICENSED_ITEM; bible_build's BIB_PINNED_SOURCE should
+   inherit BIB_LICENSED_ITEM, and check_items replaces check_manifest (the manifest is a build class).
+3. BIB_BUCKETED_RESULT.extend/seal exported to {BIB_CENSUS_ENGINE, BIB_SHAPE_ENGINE} only (the build's
+   BIB_SHAPE_PRECOMPUTE calls BIB_SHAPE_ENGINE.run; the engine names no build class).
+4. RQ-01 layering: the facade names no user-cluster type; BIB_CENSUS_JOB does not store runs (the face
+   stores them through BIB_USER_STORE); BIB_PLUGIN has no `commands' (a CLI type; it moves to an
+   app-level extension in simple_bible_app.ecf).
+5. SCOOP: a precondition on a separate argument is a WAIT condition, so the mailbox's page-order rule
+   is a postcondition (`in_order'), not a precondition; BIB_JOB_WAITER uses wait conditions on purpose
+   (no polling). SIMPLE_BIBLE.make_from_separate copies plain configuration values; plug-ins are not
+   copied across processors (the private root must register per processor - open question).
+6. BIB_AI_POST_CHECK detectors answer True (withhold) until v3: fail safe.
+7. BIB_CONTROL_SET.make_frequency_matched keeps 05's `deterministic' self-re-creation clause (test
+   oracle); review decides whether it becomes debug-only.
+8. BIB_GUIDE: "no empty section" is a precondition of creation and add_section, not an invariant (C-019).
+9. BIB_VERSE_RESULT for ambiguous text is a failed answer (error Ambiguous_reference) carrying the
+   candidates, never a guess.
+
+# Status: PASS (0 errors, 0 warnings; SCOOP consumer test PASS; 69 passed, 47 skeletal, 0 failed)
