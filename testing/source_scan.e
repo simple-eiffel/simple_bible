@@ -1,5 +1,8 @@
 note
-	description: "Reads the engine's own source files (from the project folder) for the static layering and purity tests."
+	description: "[
+		Reads the engine's own source files for the static layering and purity
+		tests. Paths are resolved against `root', so the suite runs from any folder.
+	]"
 	author: "Larry Rix"
 	date: "$Date$"
 	revision: "$Revision$"
@@ -16,7 +19,7 @@ feature -- Access
 		do
 			create Result.make (200)
 			across Clusters as c loop
-				create d.make (c)
+				create d.make (root + "/" + c)
 				if d.exists then
 					across d.entries as n loop
 						if n.has_extension ("e") then
@@ -27,13 +30,29 @@ feature -- Access
 			end
 		end
 
+	root: STRING_8
+			-- Project folder: the current folder when it holds the engine ECF,
+			-- otherwise $SIMPLE_EIFFEL/simple_bible.
+		local
+			f: RAW_FILE
+		once
+			create f.make_with_name ("simple_bible.ecf")
+			if f.exists then
+				Result := "."
+			elseif attached (create {EXECUTION_ENVIRONMENT}).item ("SIMPLE_EIFFEL") as l_fleet then
+				Result := l_fleet.to_string_8 + "/simple_bible"
+			else
+				Result := "."
+			end
+		end
+
 	file_text (a_path: STRING_8): STRING_8
-			-- Contents of `a_path' (empty when unreadable).
+			-- Contents of `a_path', relative to `root' (empty when unreadable).
 		local
 			f: PLAIN_TEXT_FILE
 		do
 			create Result.make_empty
-			create f.make_with_name (a_path)
+			create f.make_with_name (root + "/" + a_path)
 			if f.exists and then f.is_readable then
 				f.open_read
 				if f.count > 0 then

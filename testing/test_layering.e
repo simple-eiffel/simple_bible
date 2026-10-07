@@ -1,7 +1,7 @@
 note
 	description: "[
-		Static layering checks over the engine's own sources and ECF (run from
-		the project folder): no face or build dependency (AC-1a-36), no banned
+		Static layering checks over the engine's own sources and ECF (paths
+		resolved by SOURCE_SCAN.root): no face or build dependency (AC-1a-36), no banned
 		accessor (AC-1a-47), only the map creates mapped references (AC-1a-18),
 		no engine cluster names a user-cluster type (RQ-01), no AI path from
 		search (AC-1a-54), no GUI or console type in the engine.
