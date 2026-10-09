@@ -1,0 +1,28 @@
+# Pre-Phase Debate Evidence
+# Project: D:\prod\simple_bible
+# Date: 2026-10-06 (back-filled cycles, Larry approved 2026-10-06)
+# ROE: General Research ROE v1.0 (read 2026-10-06); it references the theological ROE v3.4 for the method mechanics only (GR-1 to GR-12, Rules 15-16, the S1-S6 guard)
+
+Decisions debated:
+  01 - Runtime database layout and search normalization (D-015 + D-009)   [ADJUDICATED, awaiting gate]
+  02 - Notes store (RQ-06)                                                [ADJUDICATED, awaiting gate]
+  03 - Private plug-in seam (D-014)                                       [GATED]
+  04 - SQLite library - patch in place or fork (Q-02)                     [ADJUDICATED, awaiting gate]
+Mode: lite (one gather agent per pathway; BLUE; RED-1/2/3 in separate contexts; BLUE rebuttal; fresh adjudicator)
+Adversarial condition: C2 (executed evidence counts as external confrontation, gated by Larry 2026-10-06); C3 without it
+
+Decisions:
+  D-015: B-S one content file built from separate stages - PREFERRED - 0.65 / 0.80
+  D-009: TN-R build-time folding, checked contentless index - PREFERRED - 0.75 / 0.85 (storage form 0.70 / 0.85)
+  RQ-06: B user.db is the store, Markdown export/import; A'' gated to 1b - PREFERRED - 0.70 / 0.80
+  Q-02: A'' patch eiffel_sqlite_2025 in place (3.53.4 + blocking + hook guard + clean rebuilds) - PREFERRED - 0.82 / 0.88
+  D-014: B' (lens logic runs once in Larry's private export; private data arrives as versioned packs; the public engine runs no private code) - PREFERRED - 0.75 / 0.80
+Do-not-assume entries: see each fork's 04 - VERDICT.md section 6
+Agents: 36 seats (per fork: 3 gathers, BLUE, RED-1/2/3, BLUE rebuttal, fresh adjudicator)
+Spikes run: 40 spike folders (01: 8, 02: 9, 03: 9, 04: 14)
+Reports: debate\_REPORT - Debate Cycle, Internal (2026-10-07).md; EUG case study https://claude.ai/artifact/UyZXhtEFcM7zJgczPECyF8 (private)
+
+Larry's gate:
+  F3: APPROVED as adjudicated - 2026-10-06 - "take the recommends" (policy defaults recorded in the verdict's section 10)
+
+# Status: AWAITING GATE (F1, F2, F4)
