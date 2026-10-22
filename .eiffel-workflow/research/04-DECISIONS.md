@@ -169,3 +169,19 @@
 **Scope:** the shipped app AND the distribution build pipeline. Python may remain in Larry's private research workflow in the vault, but nothing in simple_bible requires it.
 **Implications:** Port list (initial): rix.db builder; distribution-DB builder; scripture reference detector; versification map; census engine (pre-registered counts with controls); shape engine (shape_db.py, shapes 1-27); quotation comparer; precompute jobs (embeddings via simple_onnx, related passages). Each gets a differential test in the test suite.
 **Reversible:** YES.
+
+
+### D-021: The concordance comes into simple_bible; the personal edition comes first (LARRY, DECIDED 2026-10-22)
+**Question:** The printed concordance built from conc.db was shelved on 2026-10-22 (14 books, about 6,750 pages). Where does conc.db get an app, and which edition comes first?
+**Decision (Larry, 2026-10-22):** conc.db is accessed through simple_bible, not a separate simple_conc ("we were going to put this in simple_bible"). Three lookups: by Hebrew/Aramaic/Greek word, by English word, and by verse reference. Then: "take the recommends; personal edition first."
+**Meaning:**
+- **PERSONAL edition first.** It reads conc.db as is, including its research-only layers (the CATSS Rahlfs LXX; the BSB per-word tables awaiting Berean's answer). It is marked "PERSONAL EDITION - not for distribution" in the title bar and the About window, and it is never published.
+- **DISTRIBUTION edition later.** It reads conc_dist.db only (not yet built; blockers in research/14 §6). Credits come from one `notice` table, so they cannot go stale.
+- **Release order:** the personal concordance edition comes before the public Release 1a. The target user of the public release (D-003) is unchanged.
+**Fit with earlier decisions:**
+- **D-014 / fork 03 (B′):** conc.db, with its research-only layers, is a private DATA pack; no private code in any build. The personal edition is the public engine plus that pack.
+- **D-020 / fork 03 item 6:** the conc.db builder (Python, `Scholars/_Tools/`) may stay Python while it builds only the private pack. conc_dist.db, which ships, needs an Eiffel builder with a differential test against the Python.
+- **D-011:** unchanged. Rahlfs appears only in the personal edition; Swete is the distribution LXX.
+- **Concordance rules (Larry, 2026-10-18 to 10-22; research/14 §1):** keyed by headword (`lemma_id`), never by Strong's; "candidates," never "best"; every original-language word shows a transliteration; Hebrew lines up left in tables; never print Larry's name; at most one callout per entry.
+**Open technical forks** (settled by spikes and a budgeted /eiffel.debate, not by Larry): conc.db as its own file, a build stage or a pack; which BIB_ classes carry the word, English and reference lookups; reuse of BIB_CONCORDANCE and the search classes; precomputed `token.translit`.
+**Reversible:** YES.
