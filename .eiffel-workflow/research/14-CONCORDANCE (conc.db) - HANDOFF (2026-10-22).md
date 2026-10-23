@@ -2,7 +2,7 @@
 
 **From:** the CONC session (vault `Obsidian Vault\Scholars`), which built conc.db and its printed-concordance pilot, 2026-10-18 to 2026-10-22.
 **To:** whichever session picks up simple_bible next.
-**Status:** research input. Nothing in simple_bible's spec, contracts or code has been changed. This file has not been committed.
+**Status:** research input. Nothing in simple_bible's spec, contracts or code has been changed.
 
 ## 1. What Larry decided
 
@@ -26,7 +26,7 @@
 
 ## 2. The data: conc.db
 
-- **Path:** `C:\Users\LJR19\OneDrive\Documents\Obsidian Vault\Scholars\Rix\Data\data\conc.db`.
+- **Path:** `Rix/Data/data/conc.db` in Larry's research vault (outside this repository).
   - **1.23 GB.** It was built 2026-10-21 by Python's SQLite 3.50.4.
   - Page size 4096, UTF-8, `user_version` 0, journal mode DELETE.
   - No STRICT tables, no generated columns, no FTS. It should open under the fleet's SQLite 3.31.1, but that is UNTESTED (§7).
