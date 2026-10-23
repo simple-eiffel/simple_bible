@@ -19,7 +19,7 @@
 
 ## Open questions it raises for simple_bible
 
-1. **Dependency (LARRY'S CALL, not yet asked or ruled).** simple_bible would depend directly on Gobo's lexical/parse skeleton libraries, against the simple_*-only rule. Options the GOBO session lists, none decided: (a) an exception for the two skeleton libraries; (b) wrap or vendor the ~15 `YY_*` runtime classes into a small simple_* library (Gobo is MIT; credit required); (c) hand-port the generated tables (not recommended). simple_bible already reaches Gobo kernel indirectly through simple_regex; that does not settle a direct dependency.
+1. **Dependency: RULED (b), Larry, 2026-10-23 ("(b) it is").** The ~15 `YY_*` runtime classes the generated parsers inherit are vendored into a small simple_* library (working name simple_grammar), MIT with Gobo credit kept in the class notes, README and LICENSE. simple_bible depends on that library, never on Gobo's skeleton libraries directly. gelex/geyacc stay build-time tools only. Rejected: (a) an exception for the two skeleton libraries; (c) hand-porting the generated tables. The library is built when the parsers are merged (Phase 4, see item 6), not before.
 2. **FR-020 lists:** `BIB_PARSE_RESULT` cannot hold the lists FR-020 promises; the adapter refuses at the comma.
 3. **Naming the versification system:** undefined. The spike proposes a trailing "(KJV)" / "(Swete)", with "(LXX)" returning both numberings.
 4. **Over-acceptance:** two-letter prefixes accept prose ("So 33", "Ep. 112"); the detector (front half) must not feed those through.
