@@ -4,10 +4,10 @@
 # ROE: General Research ROE v1.0 (read 2026-10-06); it references the theological ROE v3.4 for the method mechanics only (GR-1 to GR-12, Rules 15-16, the S1-S6 guard)
 
 Decisions debated:
-  01 - Runtime database layout and search normalization (D-015 + D-009)   [ADJUDICATED, awaiting gate]
-  02 - Notes store (RQ-06)                                                [ADJUDICATED, awaiting gate]
+  01 - Runtime database layout and search normalization (D-015 + D-009)   [GATED 2026-10-22]
+  02 - Notes store (RQ-06)                                                [GATED 2026-10-22]
   03 - Private plug-in seam (D-014)                                       [GATED]
-  04 - SQLite library - patch in place or fork (Q-02)                     [ADJUDICATED, awaiting gate]
+  04 - SQLite library - patch in place or fork (Q-02)                     [GATED 2026-10-22]
 Mode: lite (one gather agent per pathway; BLUE; RED-1/2/3 in separate contexts; BLUE rebuttal; fresh adjudicator)
 Adversarial condition: C2 (executed evidence counts as external confrontation, gated by Larry 2026-10-06); C3 without it
 
@@ -24,5 +24,8 @@ Reports: debate\_REPORT - Debate Cycle, Internal (2026-10-07).md; EUG case study
 
 Larry's gate:
   F3: APPROVED as adjudicated - 2026-10-06 - "take the recommends" (policy defaults recorded in the verdict's section 10)
+  F1: APPROVED as adjudicated - 2026-10-22 - "take the recommends; personal edition first" (verdict section 10)
+  F2: APPROVED as adjudicated - 2026-10-22 - same words (verdict section 10)
+  F4: APPROVED as adjudicated - 2026-10-22 - same words (verdict section 10; the patch had already landed 2026-10-08/09)
 
-# Status: AWAITING GATE (F1, F2, F4)
+# Status: ALL FOUR GATED (2026-10-22). Next: concordance cycle (research/14, D-021), then one spec fold
