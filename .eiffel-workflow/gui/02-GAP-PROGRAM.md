@@ -21,7 +21,7 @@
 5. **No windows on Larry's desktop.** All GUI tests run headless and offscreen.
 6. **After a merge, clean-rebuild every dependent** (`-clean`). Incremental builds run stale library code.
 7. **Merges are local; pushes to GitHub wait for Larry's word.**
-8. **Leave other sessions' open branches alone.** simple_cairo is on `fix/text-on-two-threads` from the simple_prompter work. Any simple_cairo gap waits until that branch is merged or Larry says otherwise.
+8. **Leave other sessions' open branches alone.** (simple_cairo's `fix/text-on-two-threads` was merged and pushed 2026-10-23 on Larry's word; simple_cairo is on master.)
 
 ## Order
 
@@ -87,6 +87,9 @@
 | GW-02b | simple_widgets `feature/gw-02b-aligned-widgets` | **Merged locally** (0.11.0). 352 pass. Text box, paragraph list and label alignment; gutter on the reading side; evidence `gw02_verses_light/dark.png` |
 | GW-03 | simple_widgets `feature/gw-03-pointed-polytonic` | **Merged locally** (0.12.0). 356 pass. `set_script_face` and `set_small_script_face`; Noto Serif Hebrew/Noto Serif OFL fixtures; 14-40 px no tofu, marks attach; MapM no-break space never splits from paseq; at 14 px the regular face's points go grey, so below 18 px Hebrew uses the true Medium face (GDI weight 500 does not reach it); evidence `gw03_specimen_light/dark.png` |
 | GW-27 | simple_shell `feature/gw-27-follow-system-theme` + simple_widgets `feature/gw-27-window-follows-system` | **Merged locally** (shell 1.16.0, 37 pass + SCOOP 4; widgets 0.13.0, 359 pass). `SHELL_APPEARANCE.system_prefers_dark`, event 53, `set_dark_title_bar` (DWM 20/19); `SW_WINDOW.follow_system_theme`, live swap before modality, `set_on_theme_changed`, `set_theme` stops following, caption matches theme. **Phase 1 complete.** |
+| GW-24 | simple_shell `feature/gw-24-function-and-ctrl-keys` + simple_widgets `feature/gw-24-function-keys-accelerators` | **Merged locally** (shell 1.17.0, 39 pass; widgets 0.14.0, 362 pass). F1-F12 under any modifier, Ctrl+digit/punctuation (not AltGr) as event 4; bare F-key accelerators; fixed a key-down accelerator eating the next keystroke (shown failing before) |
+| GW-26 | simple_shell `feature/gw-26-wake-and-heartbeat` + simple_widgets `feature/gw-26-window-wake` | **Merged locally** (shell 1.18.0, 41 pass + SCOOP 5; widgets 0.15.0, 363 pass). `SHELL_WAKE.wake` from any processor (event 54, coalesced, survives modal loops via the window); `set_heartbeat_ms`; `SW_WINDOW.set_on_wake` before modality. SCOOP test: worker wake seen 16 ms after the post |
+| GW-11 | simple_widgets `feature/gw-11-status-sections` | **Merged locally** (0.16.0, 366 pass). Status-bar sections: text, clickable text, hosted progress/Cancel; hide/show; Hebrew/Greek gate both themes (evidence `gw11_status_light/dark.png`) |
 | Other gaps | - | Not started |
 
 **Clients to rebuild `-clean` before their next build** (simple_widgets 0.9-0.11, simple_shaping 0.2-0.4): simple_chat, simple_narrate, simple_ocr_capture, simple_prompter, simple_taskman and anything else on simple_widgets. Apps that attach a shaping kit now shape ALL their text through the painter.
