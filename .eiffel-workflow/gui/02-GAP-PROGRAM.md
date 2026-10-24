@@ -22,6 +22,7 @@
 6. **After a merge, clean-rebuild every dependent** (`-clean`). Incremental builds run stale library code.
 7. **Merges are local; pushes to GitHub wait for Larry's word.**
 8. **Leave other sessions' open branches alone.** (simple_cairo's `fix/text-on-two-threads` was merged and pushed 2026-10-23 on Larry's word; simple_cairo is on master.)
+9. **After every merge, look for code to push up** (Larry, 2026-10-24). Run `/eiffel.design-scan <library> --since <commit before the merge>` (read-only, a Sonnet agent): it compares the new code with the whole library for duplicated bodies, drift between copies, helper-object and shared-ancestor candidates and hard-coded values that belong in theme tokens. Prefer deferred ancestors inherited side by side (multiple inheritance). Extractions happen on Larry's word, on their own refactor branch, before the next item builds on them.
 
 ## Order
 
