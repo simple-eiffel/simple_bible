@@ -502,7 +502,7 @@ feature {NONE} -- Word study
 					i := i + 1
 				end
 				renderings_grid.set_rows (renderings)
-				create places.make (Max_page)
+				create places.make ({BIB_CONC_PACK}.Max_page_size)
 				places_total := 0
 				if not study_corpus.is_empty then
 					l_view := bible.word_lookup.view (a_lemma_id, study_corpus)
@@ -513,7 +513,7 @@ feature {NONE} -- Word study
 							i := i + 1
 						end
 						often_label.set_text (al_total.value.out.to_string_32 + {STRING_32} " places in the " + bible.conc_pack.corpus_name (study_corpus))
-						is_loading_places := places.count < places_total and places.count = Max_page
+						is_loading_places := places.count < places_total and places.count = {BIB_CONC_PACK}.Max_page_size
 						if is_loading_places and places_total <= All_at_once then
 							from until not is_loading_places loop
 								load_next_page
@@ -552,13 +552,13 @@ feature {NONE} -- Word study
 			l_page: BIB_LIST_RESULT [BIB_PLACE_ROW]
 			i: INTEGER
 		do
-			l_page := bible.conc_pack.place_page_after (study_lemma, study_corpus, places.last.token_id, Max_page)
+			l_page := bible.conc_pack.place_page_after (study_lemma, study_corpus, places.last.token_id, {BIB_CONC_PACK}.Max_page_size)
 			if l_page.is_success then
 				from i := 1 until i > l_page.count loop
 					places.extend (l_page.item (i))
 					i := i + 1
 				end
-				is_loading_places := l_page.count = Max_page and places.count < places_total
+				is_loading_places := l_page.count = {BIB_CONC_PACK}.Max_page_size and places.count < places_total
 			else
 				is_loading_places := False
 			end
@@ -608,9 +608,6 @@ feature {NONE} -- Constants
 
 	Last_book: INTEGER = 66
 			-- Revelation, the last of the vault's book ids (FR-105).
-
-	Max_page: INTEGER = 200
-			-- Places per page ({BIB_CONC_PACK}.Max_page_size).
 
 	All_at_once: INTEGER_64 = 10000
 			-- Up to this many places load before the word shows; longer lists stream on the tick.
