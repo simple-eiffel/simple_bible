@@ -25,7 +25,9 @@ Part of the [Simple Eiffel](https://github.com/simple-eiffel) ecosystem.
 - ✅ **Phase 2 contract review of the concordance slice** (separate-seat cycle, 13 findings ruled, all applied) and **Phase 3 task plan**, both approved
 - ✅ **Phase 4, the concordance engine and command line** (the personal edition comes before the public Release 1a): `SIMPLE_BIBLE.open` checks content.db v1 and attaches the concordance pack read-only; the word view, English and verse lookups and Strong's lookup run on the real data; the word view's first screen takes about 42 ms on the lean build; tests 131 pass, 49 skeletal (reported as skipped), 0 fail
 - ✅ **Build and application ECFs:** `bible_build.ecf` (`bible_build.exe` writes content.db v1) and `simple_bible_app.ecf` (`bible.exe`: `word`, `english`, `verse`, `strongs`)
-- ⏳ The GUI for the concordance (simple_widgets), then the rest of the engine
+- ✅ **The first window** (`bible_gui.exe`, simple_widgets): the GUI guide's Simple layout with one lookup box (a Hebrew, Greek or English word, a verse, a Strong's number), the words found, and the word study (heading, how the Bibles render it, every place, streaming in); light and dark follow Windows
+- ✅ **A personal installer** (Inno Setup, per user) for the project lead's own machines; it carries the personal edition, so it is never published
+- ⏳ More of the window (Study layout, Bible text and commentary once the content pipeline carries them), then the rest of the engine
 
 ## The idea
 
