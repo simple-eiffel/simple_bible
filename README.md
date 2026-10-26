@@ -19,8 +19,10 @@ Part of the [Simple Eiffel](https://github.com/simple-eiffel) ecosystem.
 - ✅ Research (Eiffel Spec Kit pre-phase): scope, landscape, requirements, decisions, risks, plus a feature study of e-Sword and Logos, a user-voice study (294 user comments from 96 sources), a world-timeline design, and a Septuagint source plan
 - ✅ GUI layout and operation spec: native [simple_widgets](https://github.com/simple-eiffel/simple_widgets), with a Simple (three-pane reader) mode and a Study (docked) mode
 - ✅ Specification and intent (Phase 0 approved)
-- ✅ **Phase 1, engine library contracts:** 150 classes (16 deferred) with full `require`/`ensure`/`invariant` and MML model queries; 0 errors, 0 warnings; tests 69 pass, 47 skeletal (reported as skipped), 0 fail
-- ⏳ Design-fork debates (`/eiffel.debate`), then Phase 2 contract review as a separate-seat debate cycle
+- ✅ **Phase 1, engine library contracts:** 150 classes (16 deferred) with full `require`/`ensure`/`invariant` and MML model queries; 0 errors, 0 warnings
+- ✅ **Design-fork debates (`/eiffel.debate`), all five gated:** run-time database layout and search folding, the notes store, private material as data packs (no plug-in code), the SQLite upgrade (3.53.4), and the concordance (its database attached read-only as a pack; its classes in `src/concordance/`)
+- ✅ **One specification fold (2026-10-26)** carried every verdict into the spec, and the engine skeletons follow it: the concordance cluster, one content database, data packs, note export and import; tests 73 pass, 52 skeletal (reported as skipped), 0 fail
+- ⏳ Phase 4 implementation, the concordance first (the personal edition comes before the public Release 1a)
 - ⏳ Build-pipeline and application ECFs
 
 ## The idea
