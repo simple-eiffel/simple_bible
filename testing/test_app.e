@@ -322,6 +322,7 @@ feature {NONE} -- Suites
 			run_test (agent t.test_content_without_provenance_is_refused, "test_content_without_provenance_is_refused")
 			run_test (agent t.test_missing_content_is_refused, "test_missing_content_is_refused")
 			run_test (agent t.test_pack_folder_scan_skips_the_concordance, "test_pack_folder_scan_skips_the_concordance")
+			run_test (agent t.test_pack_folder_scan_compares_files_not_spellings, "test_pack_folder_scan_compares_files_not_spellings")
 			run_test (agent t.test_generic_pack_waits_for_task_7b, "test_generic_pack_waits_for_task_7b")
 			run_test (agent t.test_edition_swap_needs_no_code, "test_edition_swap_needs_no_code")
 		end

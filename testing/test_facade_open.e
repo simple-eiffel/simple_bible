@@ -144,6 +144,29 @@ feature -- Tests
 			remove_test_files
 		end
 
+	test_pack_folder_scan_compares_files_not_spellings
+			-- FR-166 again, with the paths spelled differently: a relative pack folder and an absolute
+			-- `conc_path', then a `conc_path' through "..". Still one file, still not a generic pack
+			-- (design scan 29: the scan compared spellings, so conc.db counted and `open' refused).
+		local
+			l_bible: SIMPLE_BIBLE
+			l_absolute: STRING_32
+		do
+			close_leftovers
+			fixture.build_content (Content_file, {CONC_FIXTURE}.Content_version, False)
+			make_folder
+			fixture.build (Folder_pack_file)
+			l_absolute := (create {SIMPLE_FILE}.make (Folder_pack_file)).absolute_path
+			l_bible := bible (l_absolute.to_string_8, Folder)
+			assert_integers_equal ("absolute conc_path is the folder's file", 0, l_bible.pack_count)
+			l_bible.open
+			assert_true ("open", l_bible.is_open and l_bible.conc_pack.is_available)
+			l_bible.close
+			l_bible := bible ("facade_test_packs\..\facade_test_packs\conc.db", Folder)
+			assert_integers_equal ("dotted conc_path is the folder's file", 0, l_bible.pack_count)
+			remove_test_files
+		end
+
 	test_generic_pack_waits_for_task_7b
 			-- Until Task 7b, a generic pack in the folder makes `open' refuse with a named reason.
 		local
@@ -236,10 +259,12 @@ feature {NONE} -- Fixture
 		end
 
 	make_folder
-			-- Create `Folder' when absent.
+			-- Create `Folder' when absent, and empty it of the files these tests write.
 		local
 			l_ok: BOOLEAN
 		do
+			fixture.delete_file (Folder_pack_file)
+			fixture.delete_file (Folder_other_file)
 			if not (create {SIMPLE_FILE}.make (Folder)).is_directory then
 				l_ok := (create {SIMPLE_FILE}.make (Folder)).create_directory
 			end

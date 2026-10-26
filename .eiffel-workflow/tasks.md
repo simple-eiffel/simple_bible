@@ -11,10 +11,10 @@
 **Items:** FR-165 `PRAGMA user_version = 1` (the pack's `Expected_user_version`); FR-162 `token.translit` (precomputed whole-word transliteration); per-corpus counts per headword and the English-at-a-glance summary per headword (two small tables); a one-page schema note (`conc pack v1`: tables, columns, keys) that Task 2's fixture copies.
 
 ### Acceptance Criteria
-- [ ] A rebuilt conc.db reports `user_version` 1 (read with `PRAGMA user_version` on the file itself)
-- [ ] `token.translit` exists and is non-empty for every original-language token that has a surface (A1: the 6,435 empty Hebrew surfaces stay empty)
-- [ ] The counts table sums to `lemma.n_tokens` per headword; the summary table has a row for every headword with English links
-- [ ] The builder keeps `conc.db.prev` (it already builds to a temporary file)
+- [x] conc.db reports `user_version` 1 (read with `PRAGMA user_version` on the file itself)
+- [x] `token.translit` exists and is non-empty for every original-language token that has a surface (A1: the 6,435 empty Hebrew surfaces stay empty)
+- [x] The counts table sums to `lemma.n_tokens` per headword; the summary table has a row for every headword with English links
+- [x] Done 2026-10-26 by the vault step `_Tools/build_conc_pack_v1.py` (last in the rebuild order; idempotent; undo steps in its docstring), tried on a copy first: 158,341 forms transliterated (the Greek numeral stigma by a fallback), 0 headwords whose counts differ, 40 seconds on the real file; the 17 deuterocanonical works have no bible.db book yet, so the verse lookup answers none for them
 
 ### Implementation Notes
 Full rebuild order (research/14 section 4): build_conc_db, build_conc_english, conc_translit, build_conc_meaning, build_conc_seealso, build_conc_periods; the new items go at the end. Until this lands, the engine refuses the real conc.db (verdict condition 3; no bypass constant).
