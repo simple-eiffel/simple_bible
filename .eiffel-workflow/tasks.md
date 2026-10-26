@@ -187,8 +187,9 @@ Task 7a.
 **Features:** word-view, English and verse-word commands through `conc_pack`, `word_lookup`, `english_index`, `verse_word_lookup`
 
 ### Acceptance Criteria
-- [ ] CLI tests for each command against the fixture
-- [ ] The personal edition marking (FR-157) on the command line's banner
+- [x] CLI tests for each command against the fixture (TEST_CLI_COMMANDS reads the text `bible` prints)
+- [x] The personal edition marking (FR-157) on the command line's banner: the pack's own edition label
+- [x] Run 2026-10-26 on the real content.db and conc.db: `bible verse 1 1 1`, `bible word 9380 --corpus LXX-RAHLFS`, `bible strongs H430`, `bible english god`, Hebrew and Greek printed correctly through PowerShell with UTF-8 output (a plain `cmd` window on an old code page is untested)
 
 ### Dependencies
 Task 7.

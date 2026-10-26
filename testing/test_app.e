@@ -41,6 +41,7 @@ feature {NONE} -- Initialization
 			run_concordance_tests
 			run_facade_open_tests
 			run_content_builder_tests
+			run_cli_command_tests
 			run_conc_timing_tests
 			run_layering_tests
 			run_scoop_consumer
@@ -308,6 +309,19 @@ feature {NONE} -- Suites
 			run_test (agent t.test_close_forgets_the_connection, "test_close_forgets_the_connection")
 			run_test (agent t.test_attach_missing_pack_reports_sqlite_message, "test_attach_missing_pack_reports_sqlite_message")
 			run_test (agent t.test_detach_refused_while_a_cursor_is_open, "test_detach_refused_while_a_cursor_is_open")
+		end
+
+	run_cli_command_tests
+		local
+			t: TEST_CLI_COMMANDS
+		do
+			print ("TEST_CLI_COMMANDS%N")
+			create t
+			run_test (agent t.test_banner_is_the_pack_edition, "test_banner_is_the_pack_edition")
+			run_test (agent t.test_word_command, "test_word_command")
+			run_test (agent t.test_english_command, "test_english_command")
+			run_test (agent t.test_verse_command, "test_verse_command")
+			run_test (agent t.test_strongs_command, "test_strongs_command")
 		end
 
 	run_content_builder_tests
