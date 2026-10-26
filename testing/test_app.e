@@ -301,6 +301,8 @@ feature {NONE} -- Suites
 			run_test (agent t.test_open_attach_detach_close, "test_open_attach_detach_close")
 			run_test (agent t.test_open_core_missing_file_reports, "test_open_core_missing_file_reports")
 			run_test (agent t.test_open_core_not_a_database_reports, "test_open_core_not_a_database_reports")
+			run_test (agent t.test_open_core_folder_reports, "test_open_core_folder_reports")
+			run_test (agent t.test_close_forgets_the_connection, "test_close_forgets_the_connection")
 			run_test (agent t.test_attach_missing_pack_reports_sqlite_message, "test_attach_missing_pack_reports_sqlite_message")
 			run_test (agent t.test_detach_refused_while_a_cursor_is_open, "test_detach_refused_while_a_cursor_is_open")
 		end
