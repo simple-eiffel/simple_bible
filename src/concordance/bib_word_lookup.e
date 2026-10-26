@@ -10,6 +10,9 @@ note
 class
 	BIB_WORD_LOOKUP
 
+inherit
+	BIB_CITATIONS
+
 create
 	make
 
@@ -97,16 +100,6 @@ feature {NONE} -- Implementation
 			else
 				create Result.make ({BIB_ERROR}.Database_problem, "A concordance query failed.")
 			end
-		end
-
-	cite (a_citations: ARRAYED_LIST [BIB_PROVENANCE]; a_provenance: BIB_PROVENANCE)
-			-- Add `a_provenance' to `a_citations' unless it is already there.
-		do
-			if not across a_citations as ic some ic = a_provenance end then
-				a_citations.extend (a_provenance)
-			end
-		ensure
-			cited: across a_citations as ic some ic = a_provenance end
 		end
 
 end

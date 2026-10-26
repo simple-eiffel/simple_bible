@@ -76,6 +76,7 @@ feature -- Lifecycle
 			has_ai_data := False
 			has_author_library := False
 			author_source := Void
+			packs_found := 0
 			if not config.is_valid then
 				create last_error.make ({BIB_ERROR}.Source_unavailable, "The configuration names no content database.")
 			else
@@ -85,14 +86,15 @@ feature -- Lifecycle
 					create last_error.make_with_details ({BIB_ERROR}.Source_unavailable, "The content database was not found.", config.core_path)
 				else
 					l_content.open_on (sources)
+					packs_found := pack_count
 					if attached l_content.last_error as al_error then
 						last_error := al_error
-					elseif pack_count > Max_generic_packs then
-						create last_error.make_with_details ({BIB_ERROR}.Source_unavailable, "The pack folder holds " + pack_count.out + " packs; at most " + Max_generic_packs.out + " attach (FR-138).", config.pack_folder)
+					elseif packs_found > Max_generic_packs then
+						create last_error.make_with_details ({BIB_ERROR}.Source_unavailable, "The pack folder holds " + packs_found.out + " packs; at most " + Max_generic_packs.out + " attach (FR-138).", config.pack_folder)
 						close_after_refusal (l_content)
-					elseif pack_count > 0 then
+					elseif packs_found > 0 then
 							-- Phase 4, Task 7b (2026-10-26): generic packs attach through BIB_PRIVATE_SOURCE.
-						create last_error.make_with_details ({BIB_ERROR}.Source_unavailable, "Generic private packs are not read yet; the pack folder holds " + pack_count.out + ".", config.pack_folder)
+						create last_error.make_with_details ({BIB_ERROR}.Source_unavailable, "Generic private packs are not read yet; the pack folder holds " + packs_found.out + ".", config.pack_folder)
 						close_after_refusal (l_content)
 					else
 						core_schema_valid := True
@@ -110,8 +112,8 @@ feature -- Lifecycle
 			open_or_error: is_open xor (last_error /= Void)
 			core_checked: is_open implies core_schema_valid
 			optional_content_reflects_presence: is_open implies (has_ai_data = content_has_ai_rows and has_author_library = content_has_author_rows)
-			packs_attached: is_open implies (sources.attached_count >= pack_count or last_error /= Void)
-			too_many_packs: pack_count > Max_generic_packs implies last_error /= Void
+			packs_attached: is_open implies (sources.attached_count >= packs_found or last_error /= Void)
+			too_many_packs: packs_found > Max_generic_packs implies last_error /= Void
 			conc_attached_or_reported: (is_open and not config.conc_path.is_empty) implies (conc_pack.is_available or conc_error /= Void)
 			no_history_in_release_1: not has_history
 		end
@@ -155,8 +157,12 @@ feature -- Status
 			Result := attached content as al_content and then al_content.is_open and then al_content.author_document_count > 0
 		end
 
+	packs_found: INTEGER
+			-- `pack_count' as the last `open' counted it, once (design scan 29: the folder was
+			-- scanned up to five times per open, and the postconditions rescanned it).
+
 	pack_count: INTEGER
-			-- Generic private packs FOUND in the pack folder, unclamped: a count above
+			-- Generic private packs FOUND in the pack folder, now, unclamped: a count above
 			-- `Max_generic_packs' is reported by `open' (FR-138), never trimmed here
 			-- (a clamp would make that report vacuous; ruling 2.4).
 		local
@@ -469,21 +475,28 @@ feature {NONE} -- Implementation
 		end
 
 	is_conc_file (a_name: READABLE_STRING_GENERAL): BOOLEAN
-			-- Is the pack-folder file `a_name' the concordance pack `conc_path' names?
+			-- Is the pack-folder file `a_name' the concordance pack `conc_path' names? The same file,
+			-- however each path is spelled (relative, absolute, through ".."): both are resolved to
+			-- canonical absolute paths first (design scan 29).
 		local
-			l_path, l_conc: STRING_32
+			l_entry: STRING_32
 		do
-			if not config.conc_path.is_empty then
-				l_path := config.pack_folder.twin
-				if not (l_path.ends_with ("\") or l_path.ends_with ("/")) then
-					l_path.append_character ('\')
+			if not config.conc_path.is_empty and then (create {SIMPLE_FILE}.make (config.conc_path)).is_file then
+				l_entry := config.pack_folder.twin
+				if not (l_entry.ends_with ("\") or l_entry.ends_with ("/")) then
+					l_entry.append_character ('\')
 				end
-				l_path.append (a_name.to_string_32)
-				l_path.replace_substring_all ("/", "\")
-				l_conc := config.conc_path.twin
-				l_conc.replace_substring_all ("/", "\")
-				Result := l_path.is_case_insensitive_equal (l_conc)
+				l_entry.append (a_name.to_string_32)
+				Result := canonical (l_entry).is_case_insensitive_equal (canonical (config.conc_path))
 			end
+		end
+
+	canonical (a_path: READABLE_STRING_GENERAL): STRING_32
+			-- `a_path' as a canonical absolute path.
+		require
+			path_not_empty: not a_path.is_empty
+		do
+			Result := (create {SIMPLE_PATH}.make_from (a_path)).resolve.to_string
 		end
 
 	sources: BIB_SOURCE_SET

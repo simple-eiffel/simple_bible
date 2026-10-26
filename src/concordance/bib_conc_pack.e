@@ -27,6 +27,8 @@ inherit
 			{NONE} all
 		end
 
+	BIB_CITATIONS
+
 create
 	make
 
@@ -125,6 +127,7 @@ feature -- Commands
 			corpus_provenances.wipe_out
 			has_meanings := False
 			create edition_label_cache.make_empty
+			fallback_provenance := Void
 			if attached sources.database as al_db then
 				create l_schema.make (al_db)
 					-- PRAGMA conc.user_version, never the unqualified pragma, which reads main (ruling 3.3).
@@ -546,14 +549,21 @@ feature {NONE} -- Implementation
 		end
 
 	first_provenance: BIB_PROVENANCE
-			-- Provenance of the pack's first corpus (`check_pack' refuses a pack listing none).
+			-- Provenance of the pack's first corpus (`check_pack' refuses a pack listing none). The
+			-- fallback is made once per check, so a citation list de-duplicates it (design scan 29).
 		do
 			if not corpus_codes.is_empty and then attached corpus_provenances.item (corpus_id (corpus_codes.first)) as al_provenance then
 				Result := al_provenance
+			elseif attached fallback_provenance as al_fallback then
+				Result := al_fallback
 			else
-				create Result.make (1, {STRING_32} "conc", edition_label_cache, create {BIB_LICENSE}.make ({STRING_32} "unknown", False, False, True, {STRING_32} ""), {STRING_32} "no corpus listed")
+				create Result.make (1, {STRING_32} "conc", edition_or_pack, create {BIB_LICENSE}.make ({STRING_32} "unknown", False, False, True, {STRING_32} ""), {STRING_32} "no corpus listed")
+				fallback_provenance := Result
 			end
 		end
+
+	fallback_provenance: detachable BIB_PROVENANCE
+			-- `first_provenance' when the pack lists no corpus; cleared by `check_pack'.
 
 	Entry_columns: STRING_8 = "l.lemma_id, l.language, l.headword, l.translit, l.pron, l.n_tokens, (SELECT c.corpus_id FROM conc.lemma_corpus_count c WHERE c.lemma_id = l.lemma_id ORDER BY c.n DESC, c.corpus_id LIMIT 1) AS top_corpus"
 			-- A headword's columns over `conc.lemma l', with the corpus where it occurs most: its
@@ -630,16 +640,6 @@ feature {NONE} -- Implementation
 			-- The method's scope line for a verse lookup.
 		do
 			Result := "book " + a_ref.book_id.out + ", chapter " + a_ref.chapter.out + ", verse " + a_ref.verse.out
-		end
-
-	cite (a_citations: ARRAYED_LIST [BIB_PROVENANCE]; a_provenance: BIB_PROVENANCE)
-			-- Add `a_provenance' to `a_citations' unless it is already there.
-		do
-			if not across a_citations as ic some ic = a_provenance end then
-				a_citations.extend (a_provenance)
-			end
-		ensure
-			cited: across a_citations as ic some ic = a_provenance end
 		end
 
 	method (a_feature, a_sql: STRING_8; a_corpus_code: READABLE_STRING_8; a_scope: READABLE_STRING_GENERAL; a_count: INTEGER_64): BIB_METHOD
