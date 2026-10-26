@@ -72,7 +72,7 @@
 | 25 | **GW-19** regional map, routes, labels, layers, dark style | simple_widgets | Done 0.36.0 |
 | 26 | **GW-23** deterministic layered diagram layout | simple_widgets | Done 0.37.0, scan 0.37.2 |
 | 27 | **GW-22** floating panels in a second window | simple_widgets + simple_shell | **Done locally 2026-10-25** (widgets 0.39.0, shell 1.23.0) |
-| 28 | **GW-20** print preview, print, print to PDF | simple_widgets + simple_cairo + simple_shell | |
+| 28 | **GW-20** print preview, print, print to PDF | simple_widgets + simple_cairo + simple_shell | **Done locally 2026-10-25** (widgets 0.40.0, shell 1.24.0, cairo 1.6.0) |
 | 29 | **GW-25** audio playback (MP3) | simple_widgets + audio stack | Windows Media Foundation through inline C |
 
 ## Status
@@ -116,6 +116,7 @@
 | Scan 18 | simple_widgets `refactor/scan-18` | **Merged locally 2026-10-25** (0.38.6). HIGH: tab drag outline and dock separators kept 4-pixel literals while the ground scaled (pixel test at text scale 2, before/after). SW_WINDOW names its event numbers. 539 pass. |
 | GW-22 | simple_shell `feature/gw22-framed-panel`, simple_widgets `feature/gw22-floating` | **Merged locally 2026-10-25** (shell 1.23.0, widgets 0.39.0). Framed panels (caption, sizing border, focus, owned by the main window, events 60-65); SW_FLOATING_WINDOW hosts a torn-off dock panel with the owner's theme, input routing and accelerators; a double click on a tab or title bar floats it, closing docks it again. 53 shell and 544 widget tests pass. Evidence gw22_floating_light/dark. Open: popups inside a floating window, snapshot of floating panels, second-monitor placement. |
 | Scan 19 | simple_shell + simple_widgets `refactor/scan-19` | **Merged locally 2026-10-25** (shell 1.23.1, widgets 0.39.1). 4 HIGH fixed with before/after tests: accelerators ran twice from a floating window, closing leaked its cairo frame, a floating panel could be re-shown in a zone, a panel destroyed with its owner answered open. 54 shell and 547 widget tests pass. |
+| GW-20 | simple_cairo `feature/printing-surface`, simple_shell `feature/gw20-printer`, simple_widgets `feature/gw20-printing` | **Merged locally 2026-10-25** (cairo 1.6.0, shell 1.24.0, widgets 0.40.0). SW_PRINT_JOB lays any widget out at the paper's width and ends pages between lines; SW_PAGE_SETUP (Letter/A4, landscape, margins, header, page numbers); SW_PRINT_PREVIEW; print through SHELL_PRINTER with no dialog (tested through Microsoft Print to PDF). FOUND: the shipped cairo.dll cannot write PDF (first page fails, out of memory, likely its zlib) - write_pdf falls back to the Windows PDF printer; a rebuilt cairo.dll is Larry's call. 55 shell, 90 cairo, 552 widget tests pass. Evidence gw20_page_light, gw20_preview_light. |
 | Other gaps | - | Not started |
 
 **Clients to rebuild `-clean` before their next build** (simple_widgets 0.9-0.30, simple_shaping 0.2-0.6.2, simple_shell 1.16-1.22): simple_chat, simple_narrate, simple_ocr_capture, simple_prompter, simple_taskman and anything else on simple_widgets. Apps that attach a shaping kit now shape ALL their text through the painter.
