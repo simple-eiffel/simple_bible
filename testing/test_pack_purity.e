@@ -52,6 +52,19 @@ feature -- Tests
 			end
 		end
 
+	test_scan_sees_every_source_folder
+			-- The static tests read every folder under src (scan 23: the scanner's
+			-- fixed list still named src/plugin and missed src/pack and
+			-- src/concordance, so the purity checks never read them).
+		local
+			s: SOURCE_SCAN
+		do
+			create s
+			assert ("finds the engine's files: " + s.source_files.count.out, s.source_files.count >= 100)
+			assert ("scans src/pack", across s.source_files as f some f.starts_with ("src/pack/") end)
+			assert ("scans src/concordance", across s.source_files as f some f.starts_with ("src/concordance/") end)
+		end
+
 	test_public_executable_has_no_private_strings
 			-- Skeletal (app phase, AC-1a-57): scan the public executable for private names.
 		do

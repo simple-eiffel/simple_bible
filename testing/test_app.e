@@ -243,6 +243,7 @@ feature {NONE} -- Suites
 			run_test (agent t.test_user_items_carry_no_version, "test_user_items_carry_no_version")
 			run_test (agent t.test_user_store_is_the_only_writer, "test_user_store_is_the_only_writer")
 			run_test (agent t.test_note_export_names_are_file_safe, "test_note_export_names_are_file_safe")
+			run_test (agent t.test_file_safe_name_scan23_gaps, "test_file_safe_name_scan23_gaps")
 			run_skeletal (agent t.test_highlight_shows_in_every_version, "test_highlight_shows_in_every_version", "AC-1a-39")
 			run_skeletal (agent t.test_edit_appends_and_delete_is_soft, "test_edit_appends_and_delete_is_soft", "AC-1a-40")
 			run_skeletal (agent t.test_backup_on_exit_restores, "test_backup_on_exit_restores", "AC-1a-40")
@@ -285,6 +286,7 @@ feature {NONE} -- Suites
 			create t
 			run_test (agent t.test_no_plugin_classes, "test_no_plugin_classes")
 			run_test (agent t.test_private_source_is_one_generic_class, "test_private_source_is_one_generic_class")
+			run_test (agent t.test_scan_sees_every_source_folder, "test_scan_sees_every_source_folder")
 			run_test (agent t.test_no_private_names_in_sources, "test_no_private_names_in_sources")
 			run_skeletal (agent t.test_public_executable_has_no_private_strings, "test_public_executable_has_no_private_strings", "AC-1a-57")
 		end
@@ -300,6 +302,7 @@ feature {NONE} -- Suites
 			run_skeletal (agent t.test_word_view_in_pilot_order, "test_word_view_in_pilot_order", "FR-150")
 			run_skeletal (agent t.test_english_lookup_counts_per_bible, "test_english_lookup_counts_per_bible", "FR-151")
 			run_skeletal (agent t.test_verse_lookup_every_corpus, "test_verse_lookup_every_corpus", "FR-152")
+			run_skeletal (agent t.test_word_view_lists_every_fact, "test_word_view_lists_every_fact", "RQ-02")
 			run_skeletal (agent t.test_edition_swap_needs_no_code, "test_edition_swap_needs_no_code", "FR-158")
 		end
 

@@ -29,6 +29,7 @@ feature {NONE} -- Initialization
 			path_not_empty: not a_path.is_empty
 			alias_not_empty: not a_alias.is_empty
 			not_main: not a_alias.same_string ("main")
+			not_concordance: not a_alias.same_string ({BIB_CONC_PACK}.Pack_alias)
 		do
 			path := a_path.to_string_32
 			alias_text := a_alias.to_string_8
@@ -90,5 +91,6 @@ feature {NONE} -- Implementation
 
 invariant
 	not_main: not alias_text.same_string ("main")
+	not_concordance: not alias_text.same_string ({BIB_CONC_PACK}.Pack_alias)
 
 end

@@ -26,6 +26,7 @@ feature {NONE} -- Initialization
 		do
 			store := a_store
 			create written_names.make (0)
+			written_names.compare_objects
 		ensure
 			store_set: store = a_store
 			nothing_written: written_names.is_empty
@@ -111,6 +112,7 @@ feature -- Export and import (debate 02 pathway B)
 			every_failure_reported: failures_reported = failures
 			accounted_for: files_written + failures = live_note_count
 			names_are_safe: across written_names as ic_name all is_file_safe_name (ic_name) end
+			names_distinct: across written_names as ic_name all written_names.occurrences (ic_name) = 1 end
 			front_matter_keys: across written_names as ic_name all has_front_matter_keys (a_folder, ic_name) end
 			atomic: across written_names as ic_name all was_written_atomically (ic_name) end
 			folder_created: folder_exists (a_folder) or failures > 0
@@ -123,13 +125,14 @@ feature -- Export and import (debate 02 pathway B)
 			-- ever overwritten.
 		require
 			open: store.is_open
+			writable: is_writable
 			folder_chosen: not a_folder.is_empty
 		do
 			-- Phase 4
 		ensure
 			never_overwrites: versions_rewritten = 0
 			only_grows: total_note_versions >= old total_note_versions
-			new_or_new_version: imported_count = new_notes_count + new_versions_count
+			every_file_accounted_for: imported_count = new_notes_count + new_versions_count + unchanged_count
 		end
 
 feature -- Export and import: accounting
@@ -167,8 +170,9 @@ feature -- Export and import: accounting
 			non_negative: Result >= 0
 		end
 
-	imported_count, new_notes_count, new_versions_count, versions_rewritten: INTEGER
-			-- What the last import read, added as notes, added as versions, and overwrote (always 0).
+	imported_count, new_notes_count, new_versions_count, unchanged_count, versions_rewritten: INTEGER
+			-- Files the last import read; of those, the new notes, the new versions and
+			-- the unchanged notes; and versions it overwrote (always 0).
 
 	has_front_matter_keys (a_folder, a_name: READABLE_STRING_GENERAL): BOOLEAN
 			-- Does the file `a_name' in `a_folder' carry `id' and `hub_id' front matter?
@@ -193,9 +197,12 @@ feature -- Export and import: file names
 	is_file_safe_name (a_name: READABLE_STRING_GENERAL): BOOLEAN
 			-- Can `a_name' be a Windows file name as is? Not empty; no control
 			-- character and none of < > : " / \ | ? *; not a reserved device name
-			-- (CON, PRN, AUX, NUL, COM1-COM9, LPT1-LPT9), with or without an
-			-- extension; no trailing dot or space. (Debate 02: a raw title such as
-			-- "Romans 8:28" is never a file name.)
+			-- (CON, PRN, AUX, NUL, COM0-COM9, LPT0-LPT9 and their superscript-digit
+			-- forms, CONIN$, CONOUT$), with or without an extension, spaces before
+			-- the extension ignored as Windows ignores them; no trailing dot or
+			-- space. (Debate 02: a raw title such as "Romans 8:28" is never a file
+			-- name. Scan 23 added COM0/LPT0, the superscripts, CONIN$/CONOUT$ and
+			-- the spaced extension.)
 		local
 			i: INTEGER
 			l_char: CHARACTER_32
@@ -220,6 +227,7 @@ feature -- Export and import: file names
 				if l_stem.has ('.') then
 					l_stem := l_stem.substring (1, l_stem.index_of ('.', 1) - 1)
 				end
+				l_stem.right_adjust
 				Result := not Reserved_names.has (l_stem)
 			end
 		ensure
@@ -232,9 +240,10 @@ feature -- Export and import: file names
 	Reserved_names: ARRAYED_LIST [STRING_32]
 			-- Device names Windows reserves, with or without an extension.
 		once
-			create Result.make_from_array (<<{STRING_32} "CON", "PRN", "AUX", "NUL",
-				"COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
-				"LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9">>)
+			create Result.make_from_array (<<{STRING_32} "CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$",
+				"COM0", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+				"LPT0", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+				"COM%/185/", "COM%/178/", "COM%/179/", "LPT%/185/", "LPT%/178/", "LPT%/179/">>)
 			Result.compare_objects
 		end
 

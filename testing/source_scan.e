@@ -112,11 +112,26 @@ feature -- Access
 
 feature -- Constants
 
-	Clusters: ARRAY [STRING_8]
+	Clusters: ARRAYED_LIST [STRING_8]
+			-- "src" and every folder directly under it, found when the scan runs
+			-- (scan 23: a fixed list went stale when src/plugin became src/pack and
+			-- src/concordance arrived, so the purity tests never read them).
+		local
+			d, l_sub: DIRECTORY
 		once
-			Result := <<"src", "src/core", "src/provenance", "src/data", "src/text", "src/reference", "src/versification",
-				"src/hub", "src/search", "src/census", "src/shape", "src/quotation", "src/study", "src/author",
-				"src/export", "src/jobs", "src/plugin", "src/ai", "src/user">>
+			create Result.make (25)
+			Result.extend ("src")
+			create d.make (root + "/src")
+			if d.exists then
+				across d.entries as n loop
+					if not n.name.same_string (".") and not n.name.same_string ("..") then
+						create l_sub.make (root + "/src/" + n.name.to_string_8)
+						if l_sub.exists then
+							Result.extend ("src/" + n.name.to_string_8)
+						end
+					end
+				end
+			end
 		end
 
 end

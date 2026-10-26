@@ -93,8 +93,20 @@ feature -- Status
 feature -- Model
 
 	facts_model: MML_SEQUENCE [BIB_SOURCED]
+			-- The entry, the place total and the first page's rows: every fact the
+			-- view carries (scan 23: it was always empty, so `fact_closure' could
+			-- not fail).
 		do
 			create Result
+			if attached entry as al_entry then
+				Result := Result & al_entry
+			end
+			if attached place_total as al_total then
+				Result := Result & al_total
+			end
+			if attached first_places as al_places then
+				Result := Result + al_places.facts_model
+			end
 		end
 
 feature {NONE} -- Representation
