@@ -26,8 +26,41 @@ feature -- Tests
 			create s
 			l_ecf := s.file_text ("simple_bible.ecf")
 			assert ("ecf read", not l_ecf.is_empty)
+				-- Only the engine target counts: the test target may name more (design scan 31).
+			if l_ecf.has_substring ("<target name=%"simple_bible%">") then
+				l_ecf := l_ecf.substring (l_ecf.substring_index ("<target name=%"simple_bible%">", 1), l_ecf.substring_index ("</target>", 1))
+			end
+			assert ("engine target found", l_ecf.has_substring ("<target name=%"simple_bible%">"))
 			across Forbidden_libraries as l loop
 				assert ("no " + l, not l_ecf.has_substring ("%"" + l + "%""))
+			end
+		end
+
+	test_engine_names_no_build_or_face_class
+			-- RQ-01: the engine never names the build pipeline's or a face's classes (the test target
+			-- compiles them, so a slip would pass here and break only the face builds; scan 31).
+		local
+			s: SOURCE_SCAN
+		do
+			create s
+			across s.source_files as f loop
+				across Build_and_face_classes as c loop
+					assert ("no " + c + " in " + f, not s.code_of (f).has_substring (c))
+				end
+			end
+		end
+
+	test_command_line_cluster_is_a_face
+			-- The command-line commands read the engine only: no SQL and no GUI or console library (scan 31).
+		local
+			s: SOURCE_SCAN
+		do
+			create s
+			assert ("cli sources found", not s.files_in ("cli").is_empty)
+			across s.files_in ("cli") as f loop
+				across <<"SIMPLE_SQL", ".query", ".execute", "SW_", "SIMPLE_CONSOLE", "SIMPLE_CLI">> as c loop
+					assert ("no " + c + " in " + f, not s.code_of (f).has_substring (c))
+				end
 			end
 		end
 
@@ -94,6 +127,12 @@ feature -- Tests
 		end
 
 feature {NONE} -- Constants
+
+	Build_and_face_classes: ARRAY [STRING_8]
+			-- Classes of the build pipeline and the faces, which the engine must never name.
+		once
+			Result := <<"BIB_CONTENT_BUILDER", "BIB_BUILD_APP", "BIB_CLI_COMMANDS", "BIB_CLI_APP">>
+		end
 
 	Forbidden_libraries: ARRAY [STRING_8]
 		once

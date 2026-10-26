@@ -30,6 +30,22 @@ feature -- Access
 			end
 		end
 
+	files_in (a_folder: STRING_8): ARRAYED_LIST [STRING_8]
+			-- Every .e file directly in `a_folder' (relative to `root'), as "<folder>/<file>".
+		local
+			d: DIRECTORY
+		do
+			create Result.make (10)
+			create d.make (root + "/" + a_folder)
+			if d.exists then
+				across d.entries as n loop
+					if n.has_extension ("e") then
+						Result.extend (a_folder + "/" + n.name.to_string_8)
+					end
+				end
+			end
+		end
+
 	root: STRING_8
 			-- Project folder: the current folder when it holds the engine ECF,
 			-- otherwise $SIMPLE_EIFFEL/simple_bible.
