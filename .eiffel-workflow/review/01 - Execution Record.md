@@ -39,6 +39,28 @@ Reading: identical rows; OFFSET cost grows with depth (SQLite steps past every s
 | simple_sql lazy cursor: 88,444 rows in 370 ms lean (was 20,690 ms) | simple_sql 5c987a1, run4 |
 | Static scan reads every source folder (scan 23) | `test_scan_sees_every_source_folder` |
 
+## E6. Spike R2: conc.db's data shape against the value contracts (added after BLUE, main thread)
+
+BLUE could not locate conc.db, so RED's data counts had no second reading. `review/spikes/R2-conc-data-shape/shape.py`, read-only, same conc.db (vault `Rix/Data/data/conc.db`, 1,226,866,688 bytes). Could have failed: a `none`, `aligned` or `xref` basis present, English lemmas with transliterations, or a `token.translit` column.
+```
+sqlite 3.50.4 | user_version: 0
+token columns: ['token_id', 'corpus_id', 'unit_id', 'pos', 'surface', 'after', 'search', 'language', 'lemma_id', 'lemma_basis', 'pos_tag', 'morph', 'stem', 'form', 'person', 'gender', 'number', 'gstate', 'tense', 'voice', 'mood', 'gcase', 'degree', 'src_id', 'sense', 'before']
+lemma_basis values:
+  'computed:spacy-lemma'      3114729
+  'tagged:CATSS'               623693
+  'tagged:MACULA-Hebrew'       475911
+  'tagged:MACULA-Greek'        137779
+  'tagged:Grauman-WH'          137688
+tokens with lemma_id NULL or 0: 0
+tokens with empty or NULL surface: 6435
+lemmas by language, empty translit / all:
+  eng       19838 /    19838
+  grc           0 /    15725
+  hbo           0 /     8656
+  arc           0 /      715
+```
+Reading: RED-1.1 and RED-1.2's counts reproduce exactly (P1-raw, second reading). `lemma_basis` is `<kind>:<source>`, never a bare word; no `token.translit` column yet (FR-162 unbuilt); `user_version` 0 (FR-165 unbuilt).
+
 ## E5. Not runnable yet (no weight until run)
 
 The lookups' bodies and the value creators are Phase 4 stubs; a conc.db fixture arrives with Phase 5. Fact closure (R-C4) and field pinning (R-C8) can only be judged from the contract text.
