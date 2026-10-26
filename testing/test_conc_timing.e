@@ -129,6 +129,9 @@ feature {NONE} -- Fixture
 			Result := (create {SIMPLE_ENV}).item ("SIMPLE_BIBLE_CONC")
 		end
 
+	last_bible: detachable SIMPLE_BIBLE
+			-- The engine `opened_bible' made last, closed by the next call if a failed budget left it open.
+
 	opened_bible: SIMPLE_BIBLE
 			-- An engine over a fixture content.db and the real pack, open.
 		require
@@ -137,6 +140,9 @@ feature {NONE} -- Fixture
 			l_config: BIB_CONFIG
 			l_fixture: CONC_FIXTURE
 		do
+			if attached last_bible as al_bible and then al_bible.is_open then
+				al_bible.close
+			end
 			create l_fixture
 			l_fixture.build_content (Content_file, {CONC_FIXTURE}.Content_version, False)
 			create l_config.make_with_core (Content_file)
@@ -144,6 +150,7 @@ feature {NONE} -- Fixture
 				l_config := l_config.set_conc_path (al_path)
 			end
 			create Result.make (l_config)
+			last_bible := Result
 			Result.open
 			assert_true ("open with the real pack", Result.is_open and then Result.conc_pack.is_available)
 		end
