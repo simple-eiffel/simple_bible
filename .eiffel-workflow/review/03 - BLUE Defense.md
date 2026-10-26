@@ -1,6 +1,6 @@
 # BLUE: defense of the concordance contracts (2026-10-26)
 
-Lens: defend what is written, concede what the record shows. **P1-raw** = read this cycle. BLUE could not locate conc.db (searched D:\prod\simple_bible, D:\_bible, vault roots; the filesystem walks timed out), so RED's data counts carry no BLUE weight either way (GR-12); where the spec independently agrees I say so.
+Lens: defend what is written, concede what the record shows. **P1-raw** = read this cycle. BLUE could not locate conc.db (searched the project folder, the Bible data folder and the vault roots; the filesystem walks timed out), so RED's data counts carry no BLUE weight either way (GR-12); where the spec independently agrees I say so.
 
 ## RED-1
 

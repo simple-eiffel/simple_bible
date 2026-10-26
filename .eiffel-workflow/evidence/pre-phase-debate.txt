@@ -20,7 +20,7 @@ Decisions:
 Do-not-assume entries: see each fork's 04 - VERDICT.md section 6
 Agents: 36 seats (per fork: 3 gathers, BLUE, RED-1/2/3, BLUE rebuttal, fresh adjudicator)
 Spikes run: 40 spike folders (01: 8, 02: 9, 03: 9, 04: 14)
-Reports: debate\_REPORT - Debate Cycle, Internal (2026-10-07).md; EUG case study https://claude.ai/artifact/UyZXhtEFcM7zJgczPECyF8 (private)
+Reports: debate\_REPORT - Debate Cycle, Internal (2026-10-07).md; EUG case study (a private page, not published)
 
 Larry's gate:
   F3: APPROVED as adjudicated - 2026-10-06 - "take the recommends" (policy defaults recorded in the verdict's section 10)

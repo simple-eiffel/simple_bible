@@ -22,7 +22,8 @@ Part of the [Simple Eiffel](https://github.com/simple-eiffel) ecosystem.
 - ✅ **Phase 1, engine library contracts:** 150 classes (16 deferred) with full `require`/`ensure`/`invariant` and MML model queries; 0 errors, 0 warnings
 - ✅ **Design-fork debates (`/eiffel.debate`), all five gated:** run-time database layout and search folding, the notes store, private material as data packs (no plug-in code), the SQLite upgrade (3.53.4), and the concordance (its database attached read-only as a pack; its classes in `src/concordance/`)
 - ✅ **One specification fold (2026-10-26)** carried every verdict into the spec, and the engine skeletons follow it: the concordance cluster, one content database, data packs, note export and import; tests 73 pass, 52 skeletal (reported as skipped), 0 fail
-- ⏳ Phase 4 implementation, the concordance first (the personal edition comes before the public Release 1a)
+- ✅ **Phase 2 contract review of the concordance slice** (separate-seat cycle, 13 findings ruled, all applied) and **Phase 3 task plan**, both approved
+- ⏳ **Phase 4, the concordance first** (the personal edition comes before the public Release 1a): the connection and read-only pack attach, a synthetic test pack, the pack check, the word records, every pack query and the three lookups are built; tests 107 pass, 47 skeletal (reported as skipped), 0 fail. Next: opening the concordance from `SIMPLE_BIBLE`, a minimal content database, the command line, then the GUI
 - ⏳ Build-pipeline and application ECFs
 
 ## The idea
