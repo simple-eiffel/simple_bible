@@ -156,9 +156,9 @@ Tasks 3 and 6.
 **Files:** `testing/test_conc_timing.e` (new; skips when the personal conc.db is absent)
 
 ### Acceptance Criteria
-- [ ] Word view first screen within 200 ms warm for the commonest words (NFR-019), measured inside `without_contracts` on the lean build
-- [ ] Verdict condition 5: deepest offset page of lemma 9380 (LXX), cold. Under 125 ms: `place_page_after` may be dropped; otherwise it stays
-- [ ] Results pasted with the machine and build mode
+- [x] Word view first screen within 200 ms warm (lean: 41-44 ms Greek article, 3 ms Hebrew "and") for the commonest words (NFR-019), measured inside `without_contracts` on the lean build
+- [x] Verdict condition 5 (lean: 132-146 ms, over 125, so `place_page_after` stays; keyset 3.0 ms): deepest offset page of lemma 9380 (LXX), cold. Under 125 ms: `place_page_after` may be dropped; otherwise it stays
+- [x] Results pasted with the machine and build mode: `evidence/phase4-task8-timing.txt`
 
 ### Dependencies
 Tasks 0 and 7.

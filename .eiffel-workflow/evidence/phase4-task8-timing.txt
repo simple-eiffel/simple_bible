@@ -1,0 +1,27 @@
+# Phase 4, Task 8: timing on the real conc.db (pack v1)
+# Date: 2026-10-26. Machine: JACKJACK, Windows 11 Pro 10.0.26300, EiffelStudio 25.02, SQLite 3.53.4 (eiffel_sqlite_2025).
+# Binary: ec.sh release, lean (no contracts): EIFGENs/simple_bible_tests/F_code/simple_bible_lean.exe
+# Pack: the personal conc.db named by SIMPLE_BIBLE_CONC (not in this repository); content.db: the v1 fixture.
+# "first" = first call in the process; the operating system may already hold the file in memory.
+
+TEST_CONC_TIMING
+    word view, Greek article (LXX), first: 43.6 ms (budget 2000 ms)
+    word view, Greek article (LXX), warm 1: 41.1 ms (budget 200 ms)
+    word view, Greek article (LXX), warm 2: 41.3 ms (budget 200 ms)
+    word view, Greek article (LXX), warm 3: 41.1 ms (budget 200 ms)
+    word view, Hebrew 'and', first: 2.8 ms (budget 2000 ms)
+    word view, Hebrew 'and', warm: 3.2 ms (budget 200 ms)
+  PASS: test_word_view_first_screen
+    deepest offset page (row 88,200), first: 145.6 ms (budget 2000 ms)
+    deepest offset page (row 88,200), warm: 132.3 ms (budget 2000 ms)
+    keyset page after row 88,200, warm: 3.0 ms (budget 2000 ms)
+  PASS: test_deep_pages_offset_and_keyset
+    English lookup 'god', first: 186.1 ms (budget 2000 ms)
+    English lookup 'god', warm: 190.3 ms (budget 2000 ms)
+    verse lookup Genesis 1:1 (Hebrew), first: 0.5 ms (budget 2000 ms)
+  PASS: test_english_and_verse_lookups
+
+The lean run also reports test_contracts_are_checked_in_this_build as FAIL, by design: the probe proves the lean binary has no contracts.
+
+Verdict condition 5 (Phase 2): the deepest offset page of lemma 9380 is 132-146 ms lean, over 125 ms, so place_page_after stays (keyset 3.0 ms).
+NFR-019: the word view first screen is 41-44 ms lean for the Greek article (budget 200 ms; debate 05b measured 205 ms before the builder counts).
