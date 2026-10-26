@@ -128,12 +128,110 @@ feature -- Tests
 			assert ("lat not held", not l_codes.is_concordance_language ("lat"))
 		end
 
-	test_reattached_pack_needs_a_new_check
-			-- Skeletal (Phase 4, Task 3; design scan 25): after `check_pack' accepts a pack,
-			-- detaching it through the shared source set and attaching another file under
-			-- "conc" leaves the reader unavailable until `check_pack' runs again. Needs the
-			-- real `attach' (Task 1), so it cannot run on the skeleton.
+	test_pack_accepts_the_fixture
+			-- A v1 pack is accepted once, at attach; its corpora, layers and edition label are
+			-- then read without SQL (Task 3, FR-164, FR-158).
+		local
+			l_fixture: CONC_FIXTURE
+			l_set: BIB_SOURCE_SET
+			l_pack: BIB_CONC_PACK
 		do
+			create l_fixture
+			l_set := attached_set (l_fixture, Pack_file, {CONC_FIXTURE}.Pack_version, "")
+			create l_pack.make (l_set)
+			l_pack.check_pack
+			assert_true ("accepted", l_pack.is_available and l_pack.pack_error = Void)
+			assert_true ("lxx corpus", l_pack.has_corpus ("LXX-RAHLFS"))
+			assert_false ("unknown corpus", l_pack.has_corpus ("XYZ"))
+			assert_true ("lxx layer", l_pack.has_layer ("lxx"))
+			assert_true ("bsb layer", l_pack.has_layer ("bsb"))
+			assert_true ("dictionaries layer", l_pack.has_layer ("dictionaries"))
+			assert_false ("unknown layer", l_pack.has_layer ("targum"))
+			assert_strings_equal ("edition from the pack", {CONC_FIXTURE}.Edition_label, l_pack.edition_label)
+			close_and_clean (l_set, l_fixture)
+		end
+
+	test_pack_refuses_an_old_version
+			-- A pack at another user_version is refused with the reason (FR-164, FR-165).
+		local
+			l_fixture: CONC_FIXTURE
+			l_set: BIB_SOURCE_SET
+			l_pack: BIB_CONC_PACK
+		do
+			create l_fixture
+			l_set := attached_set (l_fixture, Pack_file, 0, "")
+			create l_pack.make (l_set)
+			l_pack.check_pack
+			assert_false ("refused", l_pack.is_available)
+			assert_true ("version named", attached l_pack.pack_error as al_error and then al_error.code = {BIB_ERROR}.Schema_mismatch and then al_error.message.has_substring ("version 0"))
+			close_and_clean (l_set, l_fixture)
+		end
+
+	test_pack_refuses_a_missing_table
+			-- A pack without one of the v1 tables is refused, naming the table.
+		local
+			l_fixture: CONC_FIXTURE
+			l_set: BIB_SOURCE_SET
+			l_pack: BIB_CONC_PACK
+		do
+			create l_fixture
+			l_set := attached_set (l_fixture, Pack_file, {CONC_FIXTURE}.Pack_version, "lemma_english")
+			create l_pack.make (l_set)
+			l_pack.check_pack
+			assert_false ("refused", l_pack.is_available)
+			assert_true ("table named", attached l_pack.pack_error as al_error and then al_error.message.has_substring ("lemma_english"))
+			close_and_clean (l_set, l_fixture)
+		end
+
+	test_pack_refuses_a_file_that_is_not_a_database
+			-- A text file attached as the pack is refused, at attach or at the check.
+		local
+			l_fixture: CONC_FIXTURE
+			l_set: BIB_SOURCE_SET
+			l_pack: BIB_CONC_PACK
+			l_file: PLAIN_TEXT_FILE
+		do
+			create l_fixture
+			l_fixture.build_main (Main_file)
+			create l_file.make_create_read_write (Pack_file)
+			l_file.put_string ("This is not a SQLite database, only text long enough to fill a page header.")
+			l_file.close
+			create l_set.make
+			l_set.open_core (Main_file)
+			l_set.attach ({BIB_CONC_PACK}.Pack_alias, Pack_file)
+			if l_set.last_error = Void then
+				create l_pack.make (l_set)
+				l_pack.check_pack
+				assert_false ("refused at the check", l_pack.is_available)
+				assert_true ("reason given", l_pack.pack_error /= Void)
+			else
+				assert_integers_equal ("refused at attach", 0, l_set.attached_count)
+			end
+			close_and_clean (l_set, l_fixture)
+		end
+
+	test_reattached_pack_needs_a_new_check
+			-- After `check_pack' accepts a pack, detaching it through the shared source set and
+			-- attaching another file under "conc" leaves the reader unavailable until it is
+			-- checked again (design scan 25).
+		local
+			l_fixture: CONC_FIXTURE
+			l_set: BIB_SOURCE_SET
+			l_pack: BIB_CONC_PACK
+		do
+			create l_fixture
+			l_set := attached_set (l_fixture, Pack_file, {CONC_FIXTURE}.Pack_version, "")
+			l_fixture.build (Other_pack_file)
+			create l_pack.make (l_set)
+			l_pack.check_pack
+			assert_true ("first accepted", l_pack.is_available)
+			l_set.detach ({BIB_CONC_PACK}.Pack_alias)
+			l_set.attach ({BIB_CONC_PACK}.Pack_alias, Other_pack_file)
+			assert_true ("other attached", l_set.last_error = Void and l_pack.is_attached)
+			assert_false ("not available until checked", l_pack.is_available)
+			l_pack.check_pack
+			assert_true ("available after its own check", l_pack.is_available)
+			close_and_clean (l_set, l_fixture)
 		end
 
 	test_verse_word_takes_real_hebrew_rows
@@ -163,6 +261,29 @@ feature {NONE} -- Fixture
 	Main_file: STRING = "conc_test_main.db"
 	Pack_file: STRING = "conc_test_pack.db"
 	Old_pack_file: STRING = "conc_test_old_pack.db"
+	Other_pack_file: STRING = "conc_test_other_pack.db"
+
+	attached_set (a_fixture: CONC_FIXTURE; a_pack: STRING; a_version: INTEGER; a_omitted_table: STRING): BIB_SOURCE_SET
+			-- An open source set with a fixture pack built from the arguments attached as "conc".
+		do
+			a_fixture.build_main (Main_file)
+			a_fixture.build_variant (a_pack, a_version, a_omitted_table)
+			create Result.make
+			Result.open_core (Main_file)
+			Result.attach ({BIB_CONC_PACK}.Pack_alias, a_pack)
+		end
+
+	close_and_clean (a_set: BIB_SOURCE_SET; a_fixture: CONC_FIXTURE)
+			-- Close `a_set' and delete every file these tests write.
+		do
+			if a_set.is_open then
+				a_set.close
+			end
+			a_fixture.delete_file (Main_file)
+			a_fixture.delete_file (Pack_file)
+			a_fixture.delete_file (Old_pack_file)
+			a_fixture.delete_file (Other_pack_file)
+		end
 
 	count_of (a_db: SIMPLE_SQL_DATABASE; a_sql: STRING): INTEGER
 			-- The single integer `a_sql' returns (its column is named n).

@@ -323,7 +323,11 @@ feature {NONE} -- Suites
 			run_test (agent t.test_pack_not_valid_until_checked, "test_pack_not_valid_until_checked")
 			run_test (agent t.test_fixture_has_the_reviewed_shapes, "test_fixture_has_the_reviewed_shapes")
 			run_test (agent t.test_language_codes, "test_language_codes")
-			run_skeletal (agent t.test_reattached_pack_needs_a_new_check, "test_reattached_pack_needs_a_new_check", "FR-164")
+			run_test (agent t.test_pack_accepts_the_fixture, "test_pack_accepts_the_fixture")
+			run_test (agent t.test_pack_refuses_an_old_version, "test_pack_refuses_an_old_version")
+			run_test (agent t.test_pack_refuses_a_missing_table, "test_pack_refuses_a_missing_table")
+			run_test (agent t.test_pack_refuses_a_file_that_is_not_a_database, "test_pack_refuses_a_file_that_is_not_a_database")
+			run_test (agent t.test_reattached_pack_needs_a_new_check, "test_reattached_pack_needs_a_new_check")
 			run_skeletal (agent t.test_verse_word_takes_real_hebrew_rows, "test_verse_word_takes_real_hebrew_rows", "FR-152")
 			run_skeletal (agent t.test_verse_word_takes_english_computed_rows, "test_verse_word_takes_english_computed_rows", "FR-152")
 		end

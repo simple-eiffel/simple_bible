@@ -9,11 +9,12 @@
 | `PRAGMA user_version = 1` | set by the builder after the last step | FR-165; `BIB_CONC_PACK.Expected_user_version`; the engine refuses any other value (FR-164, verdict condition 3) |
 | `token.translit` | `TEXT`: whole-word transliteration of `surface` | FR-155, FR-162; empty when the surface is empty (6,435 Hebrew tokens) and for English |
 | `lemma_corpus_count` | `(lemma_id INTEGER, corpus_id INTEGER, n INTEGER, PRIMARY KEY(lemma_id, corpus_id))` | FR-162: "how often", per corpus, without counting tokens at view time (NFR-019) |
+| `meta` row `edition_label` | for conc.db: `PERSONAL EDITION - not for distribution` (FR-157) | The title bar and About read the edition from the pack, so no engine code tests the edition (FR-158) |
 | `lemma_english` | `(lemma_id INTEGER, corpus_id INTEGER, english TEXT, n INTEGER, PRIMARY KEY(lemma_id, corpus_id, english))`; `corpus_id` is the English Bible; one row per original headword, English Bible and English word | FR-162: English at a glance without walking `link` at view time |
 
 ## Tables the engine reads (required for v1)
 
-`corpus`, `work`, `unit`, `lemma`, `token`, `link`, `lemma_xref`, `meaning_source`, `lex_sense`, `lemma_corpus_count`, `lemma_english`. `BIB_CONC_PACK.check_pack` refuses a pack missing any of them.
+`corpus`, `work`, `unit`, `lemma`, `token`, `link`, `lemma_xref`, `meaning_source`, `lex_sense`, `lemma_corpus_count`, `lemma_english`, `meta` (with `edition_label`). `BIB_CONC_PACK.check_pack` refuses a pack missing any of them.
 
 ## Facts the engine relies on (read from conc.db, 2026-10-26)
 
