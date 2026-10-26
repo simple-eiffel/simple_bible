@@ -2,6 +2,8 @@
 
 *Step R02, 2026-10-06. Concepts are taken from the research and the Python reference tools, not invented. Class names use the `BIB_` prefix chosen in R04 (justification there). Where a concept is release-gated, the release is named.*
 
+*Fold 2026-10-26: the five gated verdicts (debates 01 to 05) and D-021 are folded into this file in one pass. Every changed or added passage is marked "(fold 2026-10-26, debate NN)" or "(fold 2026-10-26, D-021)". Locked inputs: the decisions are copied, never reopened. Log: the Fold log of `00-FOLD-2026-10-26.md`.*
+
 ---
 
 ## Domain Concepts
@@ -70,12 +72,13 @@
 **Will become:** `BIB_WORD`.
 
 ### Concept: Key (lemma, Strong's, morphology, word id)
-**Definition:** The only things the engine joins or counts on (FR-024). A Strong's key may carry a sense suffix (H6743a). A display string is never a key (defect E8).
+**Definition:** The only things the engine joins or counts on (FR-024). A Strong's key may carry a sense suffix (H6743a). A display string is never a key (defect E8). **Fold 2026-10-26, D-021 and debate 05b:** two key spaces exist side by side. Core's keys (`BIB_LEMMA_KEY` is lemma text; Strong's; morphology; word id) key `core.db`/`content.db` and `BIB_CONCORDANCE` (FR-023 stays as is, fold plan conflict 1). The concordance pack's **headword** is keyed by conc.db `lemma_id` (a 64-bit integer), and Strong's reaches it only through `lemma_xref`.
 **Will become:** `BIB_KEY` (deferred) with `BIB_LEMMA_KEY`, `BIB_STRONGS_KEY`, `BIB_MORPH_CODE`, `BIB_WORD_ID`.
 
 ### Concept: Normalized Form
 **Definition:** The search form of a text, built by one shared normalizer at build time and at query time (D-009): Hebrew consonantal with final forms folded and marks removed; Greek decomposed, marks removed, lowercased, final sigma folded; English lowercased. Display never comes from it.
 **Behaviors:** `normalize (normalize (s)) = normalize (s)`.
+**Fold 2026-10-26, debate 01 (normalization TN-R with storage form R-N4v, PREFERRED, adopted 2026-10-22; verdict section 5.2):** One Eiffel normalizer folds every searchable text simple_bible builds: it removes general categories **M\*** and **Cf**, maps Hebrew finals and the Greek final sigma, and case-folds; the user's query passes through the same normalizer. FTS5 indexes the folded text with `unicode61 remove_diacritics 2`; display text is never read from the index. In the build **stage**, a stored folded column carries an external-content FTS5 index whose `integrity-check` is required to pass. In the shipped `content.db`, the same index is declared `content=''` with its shadow rows copied from the verified stage and identity-checked; no stored folded column ships unless overturn trigger OT-N1 fires. Folded word search finds whole tokens only (a Hebrew word with a clitic prefix needs lemma search). A pack's fold-rule version is declared (see Data Pack).
 **Will become:** `BIB_NORMALIZER` (deferred), `BIB_HEBREW_NORMALIZER`, `BIB_GREEK_NORMALIZER`, `BIB_ENGLISH_NORMALIZER`.
 
 ### Concept: Cross-reference
@@ -172,6 +175,7 @@
 
 ### Concept: Library Entry
 **Definition:** A public-domain commentary comment, lexicon entry, dictionary article or devotional reading keyed by verse, lemma, topic or date, as structured rich text (neutral markup) with provenance.
+**Fold 2026-10-26, debate 01 (changed whatever the pathway):** the tables `library_resource` and `library_entry` move into the **pack schema** (see Data Pack); `BIB_LIBRARY_ENTRY.make` gains a voice (debate 03 section 8).
 **Will become:** `BIB_LIBRARY`, `BIB_LIBRARY_ENTRY`.
 
 ### Concept: Author Document and Status
@@ -199,24 +203,33 @@
 ### G. Data sources and processes
 
 ### Concept: Data Source
-**Definition:** A SQLite database the engine reads: `core.db` (required), `ai_data.db`, `rix.db`, `history.db` (optional), `user.db` (read-write), and private databases through the plug-in. Each has an identity (schema version, required tables) and is opened by one processor only.
-**Will become:** `BIB_DATA_SOURCE` (deferred), `BIB_CORE_SOURCE`, `BIB_AI_DATA_SOURCE`, `BIB_AUTHOR_LIBRARY`, `BIB_HISTORY_SOURCE`, `BIB_USER_STORE`, `BIB_SOURCE_SET`, `BIB_CONFIG`.
+**Definition (fold 2026-10-26, debate 01; supersedes "A SQLite database the engine reads: `core.db` (required), `ai_data.db`, `rix.db`, `history.db` (optional), `user.db` (read-write), and private databases through the plug-in"):** The run-time layout is **B-S** (PREFERRED, adopted by Larry 2026-10-22; verdict `debate/01 - Runtime database layout and search normalization (D-015 + D-009)/04 - VERDICT.md`, section 5.1). `core.db`, `ai_data.db` and the rix builder's output (`rix.db`) are **build stages**, not run-time files. One shipped, read-only **`content.db`** is **assembled** from the stages (DDL copied verbatim, rows copied, per-table identity with each stage checked in both directions with FTS5 shadow tables included, two builds from one manifest byte-identical). It carries core, the AI-made related passages, the author library (built by its own stage, Larry's gate item 3) and the folded indexes. Optional public content ships as **empty tables**, never as missing files; presence is a count or a manifest flag. `user.db` stays separate and read-write on the user-store processor only. `history.db` (v2) is folded in or kept separate, decided when v2 is specified. **Packs** (Release 1b libraries, third-party packs, Larry's private packs, and conc.db) attach read-only through `SIMPLE_SQL_DATABASE.attach_read_only` on the read-only main connection (see "Data Pack" below; fold 2026-10-26, settlement S1; was "through the query path"). Generic private packs are found by the pack-folder scan, conc.db by `conc_path` (fold 2026-10-26, settlement G1). Each source has an identity (schema version, required tables) and is opened by one processor only.
+**Will become:** `BIB_DATA_SOURCE` (deferred), one content source (replaces `BIB_CORE_SOURCE` and `BIB_AI_DATA_SOURCE`, which collapse; debate 01 section 8, no class name given), `BIB_AUTHOR_LIBRARY`, `BIB_HISTORY_SOURCE`, `BIB_USER_STORE`, `BIB_SOURCE_SET`, `BIB_CONFIG`, and in `bible_build` an assembly step that writes `content.db` from the stages (fold 2026-10-26, debate 01).
 
 ### Concept: User Item
 **Definition:** The reader's own record keyed to a canonical hub id: note, highlight (a reason, not a color), bookmark, tag assignment, prayer item, memory card; also plan progress, collections, layout snapshots, settings.
 **Will become:** `BIB_USER_ITEM` (deferred) and its kinds; `BIB_MEMORY_SCHEDULER`, `BIB_READING_PLAN`.
 
 ### Concept: Note Store and Backup (from research/13, T10/T11)
-**Definition:** Where the reader's notes live: the user database, or a folder of Markdown files the reader owns (Obsidian-compatible), indexed for search and verse backlinks. User data is append-only: an edit is a new version, a delete is soft and recoverable; a rotating local backup is taken on exit.
-**Will become:** `BIB_NOTE_STORE` (deferred), `BIB_DB_NOTE_STORE`, `BIB_MARKDOWN_NOTE_STORE`, `BIB_USER_BACKUP`.
+**Definition (fold 2026-10-26, debate 02; supersedes "the user database, or a folder of Markdown files the reader owns (Obsidian-compatible), indexed for search and verse backlinks"):** For Release 1a, `user.db` is the **system of record** for notes (pathway B, PREFERRED, adopted 2026-10-22; verdict `debate/02 - Notes store (RQ-06)/04 - VERDICT.md`, section 5). It is written only by the user-store processor, through `BIB_DB_NOTE_STORE` behind the `BIB_NOTE_STORE` seam. User data is append-only: an edit is a new version, a delete is soft and recoverable (restore). A rotating local backup is taken on exit. The Markdown folder is no longer the store; it is an **export**:
+- **Export** (on demand) writes one Markdown file per live note, with `id` and `hub_id` front matter, under an id-based or sanitized file name (never a raw title), by atomic write, into a folder the exporter creates, and reports every failure. **Import** reads a folder back as new notes or new versions, never overwriting a row.
+- The default export folder is outside the Obsidian vault, labeled a read-only copy; the reader may point it into the vault (Larry's gate item 3).
+- The **exit snapshot** (a plain-text copy of changed notes at each clean exit, B′) is adopted only if its test DS-B′ passes (Larry's gate item 2). A start-time rotating backup after an unclean exit is recommended for test, not adopted untested.
+- A **file-authoritative Markdown store** (A″) is the **Release 1b candidate**, UNTESTED, behind its gates (DS-3c first); Q-11's preference for a Markdown store is carried to that gate, not dropped.
+- Outside edits to an export are never read back unless imported (risk R-F2-2).
+**Will become:** `BIB_NOTE_STORE` (deferred), `BIB_DB_NOTE_STORE` (1a default) with an export and import feature set, `BIB_MARKDOWN_NOTE_STORE` (the 1b candidate), `BIB_USER_BACKUP` (not blocked by F-9 item (i), which has landed in simple_sql 5a17f97, 2026-10-08) (fold 2026-10-26, debate 02, settlement S7; was "a stub until F-9 item i lands").
 
 ### Concept: Job
 **Definition:** Long engine work (search, census, guide, precompute) running on its own SCOOP processor in chunks, reporting progress and pages through a mailbox, stoppable through a cancel token. A cancelled job produces no findings.
 **Will become:** `BIB_JOB` (deferred), `BIB_SEARCH_JOB`, `BIB_CENSUS_JOB`, `BIB_GUIDE_JOB`, `BIB_CANCEL_TOKEN`, `BIB_JOB_MAILBOX`, `BIB_JOB_PAGE`.
 
-### Concept: Plug-in, Private Source, Lens
-**Definition:** The private seam: a plug-in registers private sources (attached databases labeled by voice) and lenses (readings applied to a passage, labeled by voice and plug-in) without the public build containing any of them.
-**Will become:** `BIB_PLUGIN`, `BIB_PLUGIN_REGISTRY`, `BIB_PRIVATE_SOURCE`, `BIB_LENS`, `BIB_LENS_RESULT`.
+### Concept: Pack, Private Pack, Lens Annotation
+**Definition (fold 2026-10-26, debate 03; supersedes the concept "Plug-in, Private Source, Lens": "a plug-in registers private sources ... and lenses ... without the public build containing any of them"):** There is **no private code seam in Release 1** (pathway B′, PREFERRED, adopted 2026-10-06; verdict `debate/03 - Private plug-in seam (D-014)/04 - VERDICT.md`, section 5). Private material arrives as versioned **data packs** in the published schema. A **private pack** is a pack whose material is Larry's own (scholars, transcripts, primary evidence, lens annotations, `machine_generated.db`, and the concordance database conc.db); it is not public in 1a. A **lens annotation** is a row written by the lens logic (the five frame lenses, graph analytics, and KACC scoring once it exists), which runs **once per vault export** on Larry's machine. It carries a `NOT NULL` voice column and a `provenance_key`, keyed to passages through reference rows (with their versification declared). The public engine runs no private code and no rule interpreter: it finds packs by folder, attaches each read-only, and builds voiced results through the public `make_success`. Lens results are snapshots, current as of the last export.
+**Will become:** `BIB_PRIVATE_SOURCE` (an effective, generic pack source), `BIB_LENS_RESULT` (keeps its voice; `plugin_name` becomes the pack name). Dropped: `BIB_PLUGIN`, `BIB_PLUGIN_REGISTRY`, the deferred `BIB_LENS` (fold 2026-10-26, debate 03).
+
+### Concept: Data Pack (fold 2026-10-26, debate 03 and debate 01)
+**Definition:** A read-only SQLite file in the **public, documented pack schema** (a free tool; the schema holds nothing private; third parties may build packs; Larry's gate item 5). This is the schema of the **generic private data pack** (`BIB_PRIVATE_SOURCE`): it declares `user_version` (checked at open) and a fold-rule version; every row names its provenance (`provenance_key`); a private pack also carries a voice column. There are **two pack kinds**: the concordance pack conc.db is not checked by this schema check; `BIB_CONC_PACK` opens it through its own check (an expected `user_version` plus the required tables), and its provenance is per corpus (`corpus.license`, `ship_class`) and per meaning (`meaning_source`) (fold 2026-10-26, settlement S6). `BIB_CONC_PACK` does not inherit from `BIB_PRIVATE_SOURCE` now: no deferred seam until a real second implementor exists (fold 2026-10-26, settlement G2). conc.db is found by `BIB_CONFIG.conc_path`; generic private packs are found by the pack-folder scan (fold 2026-10-26, settlement G1). A pack's folded search index must come from the Eiffel normalizer (the published pack builder) or pass the published fold-parity fixture; a third-party pack that fails the fixture is **attached and labeled "not diacritic-safe"**, not refused (debate 01 gate item 4). `library_resource` and `library_entry` (Library Entry, above) live in the pack schema. Packs attach read-only on a read-only main connection. The attach goes through simple_sql's `SIMPLE_SQL_DATABASE.attach_read_only` (simple_sql 5a17f97, 2026-10-08). Debates 01 and 03 (2026-10-06) had said "through the query path, never through a `file:` URI" because URI filenames were off on SQLite 3.31.1; debate 05a executed `attach_read_only` on 3.53.4 and SQLite refused writes (fold 2026-10-26, settlement S1). Which class holds export, import and the generic pack features is open for Phase 4 (fold 2026-10-26, settlement G3). Each provenance check names its schema, packs included. At most 10 packs per connection (SQLite limit; attach #11 fails and must report SQLite's own message). Pack results are reachable by the generic public features (by-verse range overlap, Boolean key search, edit-distance fuzzy match, multi-source FTS with source labels).
+**Will become:** `BIB_SOURCE_SET` (attaches), `BIB_PRIVATE_SOURCE`, and for the concordance `BIB_CONC_PACK` (below).
 
 ### Concept: AI Text (later releases)
 **Definition:** Wording produced by a model from one engine result, labeled as AI, post-checked so it introduces no digit, reference or Hebrew/Greek string the engine result did not contain.
@@ -260,6 +273,44 @@
 **Definition:** One allowlisted REPL/one-shot command (closed set, read-only).
 **Will become:** `BIB_COMMAND`, `BIB_COMMAND_SET`, `BIB_COMMAND_PARSER`.
 
+### K. Concordance (fold 2026-10-26, D-021 and debate 05)
+
+*Source: D-021 (`research/04-DECISIONS.md`), research/14 sections 1 to 3 and 6, debate 05a (ESTABLISHED fork 1, PREFERRED fork 4) and debate 05b (pathway B, PREFERRED; all gated 2026-10-26). The concordance is read from conc.db, a 1.23 GB research database that is NOT core.db. Release order (D-021): the personal concordance edition comes before the public Release 1a; the target user of the public release (D-003) is unchanged. Larry's rules (research/14 section 1) are domain rules DR-027 to DR-029 below.*
+
+### Concept: Headword (fold 2026-10-26, D-021, debate 05b)
+**Definition:** The unit a concordance entry is about: one row of conc.db `lemma` (44,934 rows), identified by its own `lemma_id` (a positive 64-bit integer), never by a Strong's number. Strong's numbers live only in `lemma_xref` (Strong's, OSHB, Louw-Nida), reached through `BIB_CONC_PACK.headwords_for_strongs`, which returns candidates, never "the best". A headword has a language (`hbo` Hebrew, `arc` Aramaic, `grc` Greek), the written headword, a transliteration (SBL style), a pronunciation (stress in capitals, for example KHEH-sed), and a token total (`n_tokens`).
+**Is not:** the core `BIB_LEMMA_KEY`. The live `BIB_LEMMA_KEY` is lemma text; the pack's `lemma_id` is a different key space (debate 05b "Do not assume" 2). Core's FR-023 counts stay keyed in core (conflict 1 of the fold plan; rekeying FR-023 is 05b overturn trigger 3 and needs a new debate).
+**Will become:** `BIB_WORD_ENTRY` (value; `lemma_id: INTEGER_64`).
+
+### Concept: Place (fold 2026-10-26, debate 05b)
+**Definition:** One occurrence of a headword in one corpus: one conc.db `token` (4,489,800 rows). It carries the reference text, the whole written word, its transliteration (precomputed in the builder as `token.translit`, debate 05a fork 4), the meaning for this place (SDBH or SDGNT) or the Hebrew stem, and the English in context from the BSB, KJV and STEP layers (Void when the pack lacks that layer). Its license travels in its provenance (`corpus.ship_class`). The every-place list is in token order and is **paged** (first page of 200 rows; the whole list of the Greek article in the Septuagint is 88,444 rows, the Hebrew "and" 50,272).
+**Will become:** `BIB_PLACE_ROW` (value).
+
+### Concept: English Row (fold 2026-10-26, debate 05b)
+**Definition:** One line of the English lookup: an English word, one original-language word behind it (a candidate, never "the best"), the book it occurs in, and a count. The lookup runs from an English word to the Hebrew or Greek words behind it, Bible by Bible, with counts (the pilot's "English index"; 12,965 planned English headwords).
+**Will become:** `BIB_ENGLISH_ROW` (value).
+
+### Concept: Verse Word (fold 2026-10-26, debate 05b)
+**Definition:** One word of a verse in the verse lookup: its position, the written form, its transliteration, and the headword it is a door to (none when the lemma basis is "none"). `lemma_basis` records how the headword was reached: `tagged`, `aligned`, `xref` or `none`. Every word with a headword opens its word view.
+**Will become:** `BIB_VERSE_WORD` (value), listed by `BIB_VERSE_WORDS`.
+
+### Concept: Word View (fold 2026-10-26, D-021, debate 05b, research/14 section 3)
+**Definition:** The concordance entry for one headword. It holds the heading (a word entry), the total of places, the first page of the every-place list, and ten sections in the approved order: 1 heading (transliteration, Hebrew or Greek, pronunciation), 2 how often (in plain words, with Hebrew stems or Greek editions), 3 English at a glance (what the BSB, KJV and STEP use, with counts), 4 what the dictionaries say (each source as a candidate, side by side), 5 through the centuries (counts per writing and per 10,000 words; for Greek, LSJ meanings by five periods), 6 one short callout (at most one), 7 every place, 8 the Greek Old Testament (Septuagint places with Brenton's English for Greek words; the Greek column for Hebrew words), 9 going further (`see_also`), 10 notes. A section the pack cannot answer (for example the Septuagint in conc_dist.db) is reported absent, never faked. The view never holds a whole every-place list; later pages come from the place-page query. Phrase entries exist in the reference design ("Son of Man": head word, an optional article, second word).
+**Will become:** `BIB_WORD_VIEW` (result), assembled by `BIB_WORD_LOOKUP`.
+
+### Concept: Concordance Pack (fold 2026-10-26, D-021, debate 05a fork 1, debate 05b)
+**Definition:** conc.db (personal edition) or conc_dist.db (distribution edition), attached read-only to the engine's read-only connection under the alias `conc`; it stays its own file (ESTABLISHED against folding it into content.db: attaching costs nothing measurable, folding 1.23 GB of research-only layers would break D-021 and debate 03's B′). One reader class owns every SQL statement against it. Shape: corpus, work, unit (chapter, verse, sub, recension), token; `link` (English to original word links and Masoretic to Septuagint links), `lemma`, `lemma_spelling`, `lemma_xref`, `lex_sense` and `lex_sense_ref`, `period_text` and its counts, `see_also`. Corpora and their license class (`corpus.ship_class`): Hebrew Bible WLC-MACULA, Greek NT NT-MACULA, WH1881, LXX-RAHLFS (research only; never ships), ENG-BSB (text public domain; the per-word tables need Berean's permission), ENG-KJV, ENG-STEP, ENG-BRENTON (text ships; its links to the Septuagint are research only). The pack lists which corpora and layers it carries (the Septuagint, the BSB layer, the dictionaries); the engine asks, and never branches on which edition it is.
+**Counters:** two, each stating its key kind and scope: `BIB_CONCORDANCE` (core keys) and `BIB_CONC_PACK.place_total` (`lemma_id`) (debate 05b section 8).
+**Will become:** `BIB_CONC_PACK`, with the lookups `BIB_WORD_LOOKUP`, `BIB_ENGLISH_INDEX`, `BIB_VERSE_WORDS`.
+
+### Concept: Edition (personal and distribution) (fold 2026-10-26, D-021)
+**Definition:** Two editions of the same public engine plus a concordance pack.
+| Edition | Reads | Marking | Meanings | Status |
+|---|---|---|---|---|
+| **Personal** | conc.db as is, including its research-only layers (CATSS Rahlfs LXX; BSB per-word tables) | "PERSONAL EDITION - not for distribution" in the title bar and the About window; never published | Shows the SDBH and SDGNT meanings that conc.db holds (D-021, later than D-012; fold plan conflict 2) | Comes first, before public Release 1a |
+| **Distribution** | conc_dist.db only (not yet built; blockers in research/14 section 6: Swete lemmas as in D-011, Berean's confirmation, permission letters) | Credits from the pack's own `notice` table in Help, About, listed beside the engine's `source_provenance` credits, both generated (fold 2026-10-26, settlement S4) | May carry SDBH and SDGNT meanings (CC BY-SA 4.0 as a whole) when conc_dist.db exists | Later; needs an Eiffel builder with a differential test against the Python builder |
+The public Release 1a keeps D-012 (no Hebrew semantic layer in the MVP) as decided. The engine never tests which edition it is running (05b overturn trigger 4: an edition test in engine code breaks K3 in any pathway and is removed); the edition is what the attached pack says it is (`BIB_CONC_PACK.edition_label`).
+
 ## Concept Relationships
 
 ```
@@ -283,10 +334,17 @@ BIB_QUOTATION ---- has-a ----> BIB_ALIGNMENT; compared-by ----> BIB_QUOTATION_CO
 BIB_QUOTATION_RESULT ---- has-a ----> BIB_AGREEMENT_CLASS
 BIB_GUIDE ---- has-many ----> BIB_GUIDE_SECTION ---- has-a ----> BIB_ENGINE_RESULT
 BIB_AUTHOR_DOC ---- has-a ----> BIB_DOC_STATUS, BIB_VOICE
-BIB_SOURCE_SET ---- has-many ----> BIB_DATA_SOURCE (attached; at most 10 per connection)
-BIB_CORE_SOURCE, BIB_AI_DATA_SOURCE, BIB_AUTHOR_LIBRARY, BIB_HISTORY_SOURCE, BIB_USER_STORE ---- is-a ----> BIB_DATA_SOURCE
-BIB_PRIVATE_SOURCE ---- is-a ----> BIB_DATA_SOURCE          (deferred; private repo implements)
-BIB_PLUGIN ---- has-many ----> BIB_PRIVATE_SOURCE, BIB_LENS
+BIB_SOURCE_SET ---- has-many ----> packs (attached read-only; at most 10 pack slots per connection; main = content.db)   (fold 2026-10-26, debate 01; supersedes "has-many BIB_DATA_SOURCE (attached; at most 10 per connection)")
+the content source (replaces BIB_CORE_SOURCE and BIB_AI_DATA_SOURCE), BIB_AUTHOR_LIBRARY, BIB_HISTORY_SOURCE, BIB_USER_STORE ---- is-a ----> BIB_DATA_SOURCE   (fold 2026-10-26, debate 01)
+BIB_PRIVATE_SOURCE ---- is-a ----> BIB_DATA_SOURCE          (effective, generic pack source; fold 2026-10-26, debate 03; supersedes "deferred; private repo implements")
+(removed, fold 2026-10-26, debate 03: "BIB_PLUGIN ---- has-many ----> BIB_PRIVATE_SOURCE, BIB_LENS")
+SIMPLE_BIBLE ---- owns ----> BIB_CONC_PACK, BIB_WORD_LOOKUP, BIB_ENGLISH_INDEX, BIB_VERSE_WORDS   (fold 2026-10-26, debate 05b)
+BIB_CONC_PACK ---- reads (alias "conc") ----> BIB_SOURCE_SET        (one reader owns every pack SQL statement)
+BIB_WORD_LOOKUP, BIB_ENGLISH_INDEX, BIB_VERSE_WORDS ---- use ----> BIB_CONC_PACK
+BIB_WORD_LOOKUP ---- creates ----> BIB_WORD_VIEW ---- has-a ----> BIB_WORD_ENTRY, place total (BIB_FACT), first page (BIB_LIST_RESULT [BIB_PLACE_ROW])
+BIB_ENGLISH_INDEX ---- returns ----> BIB_LIST_RESULT [BIB_ENGLISH_ROW];  BIB_VERSE_WORDS ---- returns ----> BIB_LIST_RESULT [BIB_VERSE_WORD]
+BIB_WORD_ENTRY, BIB_PLACE_ROW, BIB_ENGLISH_ROW, BIB_VERSE_WORD ---- is-a ----> BIB_SOURCED (carry provenance);  BIB_WORD_VIEW ---- is-a ----> BIB_ENGINE_RESULT
+BIB_VERSE_WORD ---- door-to ----> BIB_WORD_VIEW (by lemma_id)
 BIB_JOB ---- uses ----> BIB_CANCEL_TOKEN (separate), BIB_JOB_MAILBOX (separate)
 BIB_SEARCH_JOB, BIB_CENSUS_JOB, BIB_GUIDE_JOB ---- is-a ----> BIB_JOB
 BIB_AI_POST_CHECK ---- creates ----> BIB_AI_TEXT                (only creator)
@@ -310,7 +368,7 @@ BIB_PANEL ---- subscribes-to ----> BIB_LINK_HUB ---- holds ----> BIB_ACTIVE_REFE
 | DR-005 | NO_DATA is not FAILS | `BIB_VERDICT` distinct values; shapes and census classify absent tags as NO_DATA (postcondition `absent_tag_is_no_data` on classify) |
 | DR-006 | A census definition is frozen after its first run | `set_*` require `not is_frozen`; `run` ensures `definition.is_frozen`; `new_version` creates version + 1 unfrozen |
 | DR-007 | T3 shapes never returned as evidence | `BIB_SHAPE_ENGINE.evidence` require `not a_shape.tier.is_judgment` |
-| DR-008 | Joins and counts by keys only | Concordance/search features take `BIB_KEY` descendants; static SQL check in tests |
+| DR-008 | Joins and counts by keys only | Concordance/search features take `BIB_KEY` descendants; static SQL check in tests. Fold 2026-10-26, debate 05b: the pack reader's features take `lemma_id: INTEGER_64`; `BIB_HEADWORD_KEY` is **not adopted** (as skeletoned it would inherit `BIB_KEY`, and `BIB_CONCORDANCE.count` has no precondition rejecting it); no display-string joins in `BIB_CONC_PACK` (FR-024 static check, queue 4) |
 | DR-009 | Display text never edited; normalized text never displayed | `BIB_VERSE_TEXT.display_text` has no setter; normalized forms live only in the search path |
 | DR-010 | Normalization is idempotent | `BIB_NORMALIZER.normalized` postcondition `idempotent` |
 | DR-011 | Never a bare "LXX" | `BIB_VERSION_INFO` invariant `septuagint_labeled_with_edition` |
@@ -320,15 +378,21 @@ BIB_PANEL ---- subscribes-to ----> BIB_LINK_HUB ---- holds ----> BIB_ACTIVE_REFE
 | DR-015 | Every number re-runs to itself | `BIB_METHOD` carries the canonical query; `SIMPLE_BIBLE.rerun (method)` ensures equal counts on an unchanged database |
 | DR-016 | Builds are deterministic | No clock reads in builders: build date is a `BIB_BUILD_CONTEXT` argument; every export `ORDER BY` a key; per-table checksums compared |
 | DR-017 | Quarantined refs answer NO_DATA, never foreign text | `BIB_VERSE_TEXT` omission kind `quarantined`; verse hub postcondition |
-| DR-018 | Private material labeled by voice; public build contains no lens | `BIB_LENS_RESULT` invariant `voice_attached`; build check that the public target has no effective `BIB_LENS` |
+| DR-018 | Private material labeled by voice; public build contains no private code (fold 2026-10-26, debate 03; supersedes "public build contains no lens", enforced by "build check that the public target has no effective `BIB_LENS`") | `BIB_LENS_RESULT` invariant `voice_attached` (kept); K2′ replaces the lens-descendant build check: the finalized public executable contains no string from the R-2 list in ASCII, UTF-16LE or UTF-32LE, with a positive control that includes a `{STRING_32}` private string; the pack voice column is checked at attach (an unlabeled private result in a fixture run = 0, K4) |
 | DR-019 | One SQLite connection per SCOOP processor; never passed between processors | `BIB_SOURCE_SET` created on and used by one processor; results copied as plain values |
-| DR-020 | At most 10 attached databases per connection (SQLite limit observed in the vault) | `BIB_SOURCE_SET.attach` require `attached_count < Max_attached` |
+| DR-020 | At most 10 attached **packs** per connection; the main database (`content.db`) is not counted (SQLite limit; attach #11 fails and must report SQLite's own message, not "Unknown error"; fold 2026-10-26, debate 01 and debate 03; supersedes "At most 10 attached databases per connection") | `BIB_SOURCE_SET.attach` require `attached_count < Max_attached` (`Max_attached` counts pack slots only; an attach policy is specified, debate 01 queue 4) |
 | DR-021 | A P4-only timeline event never ships (v2) | `BIB_HISTORY_GATE` P4-only gate; build fails |
 | DR-022 | No year zero ever displayed (v2) | `BIB_ASTRO_YEAR.display` postcondition |
 | DR-023 | Edition-dependent verdicts name the edition | `BIB_QUOTATION_RESULT` invariant `edition_note_present` (Swete; OCR note) |
-| DR-024 | User data is never lost by an edit, delete or upgrade | `BIB_NOTE_STORE` history and soft-delete postconditions; `BIB_USER_STORE.migrate` `settings_preserved` |
+| DR-024 | User data is never lost by an edit, delete or upgrade (fold 2026-10-26, debate 02: `user.db` is the system of record in 1a; simple_sql error integrity F-9 and its probe P-ATOMIC must pass before any user-store contract test counts) | `BIB_NOTE_STORE` history and soft-delete postconditions; `BIB_USER_STORE.migrate` `settings_preserved` |
 | DR-025 | Every count names its corpus, edition and unit | `BIB_METHOD` invariant `scope_stated` |
 | DR-026 | A follow-only or independent panel never moves its link set | `BIB_PANEL.scrolled_to` postcondition |
+| DR-027 (fold 2026-10-26, D-021, debate 05b) | Concordance entries are keyed by headword (`lemma_id`), never by Strong's; Strong's reaches a headword only through `lemma_xref` and yields candidates, never "the best" | `BIB_CONC_PACK` signatures take `lemma_id: INTEGER_64`; `headwords_for_strongs` returns a list; FR-024 static check over `BIB_CONC_PACK` (queue 4); core's FR-023 is unchanged (fold plan conflict 1) |
+| DR-028 (fold 2026-10-26, D-021, debate 05b) | The engine never branches on which edition it runs; what the pack is shows only in `edition_label` and in the absence of layers it does not carry | `BIB_CONC_PACK.has_layer`, `has_corpus`, `edition_label`; Phase 4 grep for edition literals in engine code (queue 4; overturn trigger 4) |
+| DR-029 (fold 2026-10-26, D-021, debate 05a and 05b) | Every original-language word shows a transliteration; every every-place list is paged and never loaded whole (Larry's rules, research/14 section 1) | `translit_not_empty` invariants on `BIB_WORD_ENTRY`, `BIB_PLACE_ROW`, `BIB_ENGLISH_ROW`, `BIB_VERSE_WORD`; `place_page` precondition `limit_bounded` (`Max_page_size = 200`); `token.translit` precomputed in the conc.db builder |
+| DR-030 (fold 2026-10-26, debate 01) | `content.db` equals each build stage per table (FTS5 shadow tables included), and two builds from one manifest are byte-identical; optional public content is empty tables, never missing files | The assembly step's postconditions `per_table_identity` and `deterministic` (see 05) |
+| DR-031 (fold 2026-10-26, debate 01) | Search and display fetch filter by FTS rowid range, never by a join on `verse.version_id`; `verse_id` is contiguous per version; `hub_id` is never the FTS rowid (SB-1) | Version-range table; contract in 05 |
+| DR-032 (fold 2026-10-26, debate 02) | No store routine reports success after a failed statement; every export failure is reported | `BIB_DB_NOTE_STORE` contracts and the export postcondition `files_written + failures = live notes` (see 05) |
 
 ## Glossary
 
@@ -354,3 +418,10 @@ BIB_PANEL ---- subscribes-to ----> BIB_LINK_HUB ---- holds ----> BIB_ACTIVE_REFE
 | Gap work item (GW-nn) | A missing capability filed against and fixed in the owning simple_* library |
 | Library gap (LG-nn) | A non-GUI library gap found in this spec (R03) |
 | Differential test | Row-by-row comparison of a Python reference output and the Eiffel port's output |
+| Build stage (fold 2026-10-26, debate 01) | `core.db`, `ai_data.db` or the rix builder's output: a file the build writes and `content.db` is assembled from; not a run-time file |
+| `content.db` (fold 2026-10-26, debate 01) | The one shipped, read-only run-time database assembled from the build stages |
+| Pack / private pack (fold 2026-10-26, debate 03) | A versioned, read-only data file in the public pack schema, attached beside `content.db`; a private pack holds Larry's own material |
+| Headword (fold 2026-10-26, D-021) | A concordance entry's subject, identified by conc.db `lemma_id`, never by Strong's |
+| Place (fold 2026-10-26, D-021) | One occurrence of a headword in a corpus (one conc.db token) |
+| Word view (fold 2026-10-26, D-021) | The concordance entry for one headword, in ten sections in the approved order |
+| Personal edition / distribution edition (fold 2026-10-26, D-021) | The engine plus conc.db (marked "PERSONAL EDITION - not for distribution") or conc_dist.db (later) |

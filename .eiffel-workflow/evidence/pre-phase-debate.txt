@@ -29,3 +29,24 @@ Larry's gate:
   F4: APPROVED as adjudicated - 2026-10-22 - same words (verdict section 10; the patch had already landed 2026-10-08/09)
 
 # Status: ALL FOUR GATED (2026-10-22). Next: concordance cycle (research/14, D-021), then one spec fold
+
+
+# ---------------------------------------------------------------
+# Debate 05: concordance placement and lookups (D-021)
+# Date: 2026-10-26
+# ROE: General Research ROE v1.1 (read 2026-10-26); ROE card v1.1
+
+Decisions debated: 05 - Concordance placement and lookups (D-021)
+Mode: 05a settled-by-spike (forks 1 and 4); 05b code-lite (forks 2+3, class shape)
+Agents: 5 (05b)   Adversarial condition: C2 (executed compiles and spikes; C3 without that reading)
+Budget: gather debate-seat/Sonnet 113,768; BLUE 43,674; RED 52,057; rebuttal 47,758; adjudicator debate-adjudicator/Opus 94,578; total 351,835   Session model: Opus 5.5
+Decisions:
+  05a fork 1: conc.db stays its own file, attached read-only as a pack (attach_read_only) - ESTABLISHED - 0.90/0.90
+  05a fork 4: precompute token.translit in the conc.db builder - PREFERRED - 0.80/0.85
+  05b: pathway B (src/concordance/ beside BIB_CONCORDANCE, no deferred seam now) - PREFERRED - 0.70/0.80
+Do-not-assume entries: 5 (05a) + see 04b section 6
+Spikes run: S1 (attach + word view, runs 1-5), S2 (transliteration cost), S3 (core lexicon capacity); skeletons A/B/C compiled (melt) by the orchestrator
+Found on the way: simple_sql cursor quadratic (20.7 s -> 370 ms) fixed + scan 22 (simple_sql main 5c987a1, not pushed)
+Larry's gate: APPROVED as adjudicated - 2026-10-26 - "1 and your recommends" (abstractions wait for a real second implementor)
+
+# Status: 05a and 05b GATED (2026-10-26). Next: ONE spec fold (verdicts 01-05)
