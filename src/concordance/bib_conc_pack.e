@@ -403,6 +403,18 @@ feature -- Access
 			fact_closure: Result.is_fact_closed
 		end
 
+feature {BIB_WORD_LOOKUP} -- Method records
+
+	lookup_method (a_feature, a_query: STRING_8; a_corpus_code: READABLE_STRING_8; a_scope: READABLE_STRING_GENERAL; a_count: INTEGER_64): BIB_METHOD
+			-- A method record in the pack's own form, for an answer the lookup assembles.
+		require
+			scope_not_empty: not a_scope.is_empty
+		do
+			Result := method (a_feature, a_query, a_corpus_code, a_scope, a_count)
+		ensure
+			named: Result.engine_feature.same_string_general (a_feature)
+		end
+
 feature -- Constants
 
 	Pack_alias: STRING_8 = "conc"
