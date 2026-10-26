@@ -122,10 +122,10 @@ Tasks 3 and 4.
 **Features:** `view`, `rows`, `words`; BIB_WORD_VIEW `section_count`, `section_name`, `is_present`, `facts_model`
 
 ### Acceptance Criteria
-- [ ] Sections come in `approved_order` (research/14 section 3; ruling 1.6)
-- [ ] The five skeletal concordance tests run against the fixture and pass, the edition swap included (verdict condition 4)
-- [ ] `facts_model` holds the entry, the total and every row of the first page (fact closure on real facts)
-- [ ] No label "best" in any word-view string (FR-154)
+- [x] Sections come in `approved_order` (research/14 section 3; ruling 1.6)
+- [x] Four of the five skeletal concordance tests run against the fixture and pass; the edition swap needs `SIMPLE_BIBLE.open` and moves to Task 7 (verdict condition 4)
+- [x] `facts_model` holds the entry, the total and every row of the first page (fact closure on real facts)
+- [ ] No label "best" (the engine has no word-view strings yet; checked again with the face) in any word-view string (FR-154)
 
 ### Dependencies
 Task 5.

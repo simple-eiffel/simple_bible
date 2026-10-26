@@ -29,7 +29,13 @@ feature {NONE} -- Initialization
 			first_page_succeeded: a_first_places.is_success
 			total_covers_page: a_first_places.count <= a_place_total.value
 		do
-			check implemented_in_phase_4: False then end
+			entry := a_entry
+			place_total := a_place_total
+			first_places := a_first_places
+				-- The sections this view has facts for; the others (english, dictionaries,
+				-- centuries, callout, greek_ot, going_further, notes) join as their data does.
+			create present_names.make_from_array (<<"heading", "how_often", "every_place">>)
+			set_success (a_method, a_citations)
 		ensure
 			success: is_success
 			method_set: method = a_method
@@ -41,7 +47,8 @@ feature {NONE} -- Initialization
 
 	make_failure (a_method: BIB_METHOD; a_error: BIB_ERROR)
 		do
-			check implemented_in_phase_4: False then end
+			create present_names.make (0)
+			set_failure (a_method, a_error)
 		ensure
 			failed: not is_success
 			method_set: method = a_method
@@ -66,7 +73,7 @@ feature -- Access
 		require
 			in_range: i >= 1 and i <= section_count
 		do
-			check implemented_in_phase_4: False then end
+			Result := present_names.i_th (i)
 		ensure
 			known: is_known_section (Result)
 		end
@@ -107,7 +114,7 @@ feature -- Status
 		require
 			known: is_known_section (a_name)
 		do
-			check implemented_in_phase_4: False then end
+			Result := across present_names as n some n.same_string (a_name) end
 		ensure
 			heading_when_success: (is_success and a_name.same_string ("heading")) implies Result
 			every_place_when_success: (is_success and a_name.same_string ("every_place")) implies Result
@@ -115,8 +122,18 @@ feature -- Status
 
 	is_in_approved_order: BOOLEAN
 			-- Are the present sections in research/14 section 3 order?
+		local
+			i: INTEGER
 		do
-			check implemented_in_phase_4: False then end
+			Result := across present_names as n all is_known_section (n) end
+			from
+				i := 1
+			until
+				not Result or i >= present_names.count
+			loop
+				Result := approved_position (present_names.i_th (i)) < approved_position (present_names.i_th (i + 1))
+				i := i + 1
+			end
 		ensure
 			subsequence: Result implies (across present_names as n all is_known_section (n) end and across 1 |..| (present_names.count - 1) as l_i all approved_position (present_names.i_th (l_i)) < approved_position (present_names.i_th (l_i + 1)) end)
 		end

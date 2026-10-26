@@ -35,29 +35,89 @@ feature -- Tests
 		end
 
 	test_word_view_in_pilot_order
-			-- Skeletal (Phase 5, FR-150/FR-152 order): the word view's sections come in
-			-- the pilot's approved order over the conc.db fixture.
+			-- FR-150 and research/14 section 3: the word view's sections come in the approved
+			-- order, heading first, every place before the later sections.
+		local
+			l_fixture: CONC_FIXTURE
+			l_view: BIB_WORD_VIEW
 		do
+			create l_fixture
+			l_view := (create {BIB_WORD_LOOKUP}.make (checked_pack (l_fixture))).view ({CONC_FIXTURE}.Article_lemma, "LXX-RAHLFS")
+			assert_true ("success", l_view.is_success)
+			assert_true ("in order", l_view.is_in_approved_order)
+			assert_strings_equal ("heading first", "heading", l_view.section_name (1))
+			assert_true ("every place present", l_view.is_present ("every_place"))
+			assert_false ("notes not yet carried", l_view.is_present ("notes"))
+			assert_strings_equal ("method", "word_view", l_view.method.engine_feature)
+			close_and_clean (last_pack_set, l_fixture)
 		end
 
 	test_english_lookup_counts_per_bible
-			-- Skeletal (Phase 5, FR-151): an English word lists the original words
-			-- behind it, Bible by Bible, with counts that sum to the word's places.
+			-- FR-151: an English word lists the original words behind it, Bible by Bible, with counts.
+		local
+			l_fixture: CONC_FIXTURE
+			l_rows: BIB_LIST_RESULT [BIB_ENGLISH_ROW]
 		do
+			create l_fixture
+			l_rows := (create {BIB_ENGLISH_INDEX}.make (checked_pack (l_fixture))).rows ("created")
+			assert_true ("one bible, one headword", l_rows.is_success and then l_rows.count = 1)
+			assert_strings_equal ("bible", "ENG-BSB", l_rows.item (1).bible)
+			assert_true ("count", l_rows.item (1).count = 1)
+			close_and_clean (last_pack_set, l_fixture)
 		end
 
 	test_verse_lookup_every_corpus
-			-- Skeletal (Phase 5, FR-152): a reference lists every word of the verse in
-			-- every corpus the pack holds, each with its headword.
+			-- FR-152: a reference lists every word of the verse in each corpus, each a door to
+			-- its word view.
+		local
+			l_fixture: CONC_FIXTURE
+			l_lookup: BIB_VERSE_WORDS
+			l_ref: BIB_REF
 		do
+			create l_fixture
+			create l_lookup.make (checked_pack (l_fixture))
+			create l_ref.make (1, 1, 1, create {BIB_VERSIFICATION_SYSTEM}.make_kjv)
+			assert_integers_equal ("hebrew", 2, l_lookup.words (l_ref, "WLC-MACULA").count)
+			assert_integers_equal ("greek", 1, l_lookup.words (l_ref, "LXX-RAHLFS").count)
+			assert_integers_equal ("english", 1, l_lookup.words (l_ref, "ENG-BSB").count)
+			assert_true ("doors", l_lookup.words (l_ref, "WLC-MACULA").item (1).has_door)
+			close_and_clean (last_pack_set, l_fixture)
 		end
 
 	test_word_view_lists_every_fact
-			-- Skeletal (Phase 5, scan 23): a word view's facts_model holds its entry,
-			-- its place total and every row of its first page, so fact closure is
-			-- tested against real facts. (The value classes cannot be built until
-			-- Phase 4, so this cannot run yet.)
+			-- Scan 23: the view's facts are its entry, its total and every row of its first page,
+			-- and every one is cited (fact closure against real facts).
+		local
+			l_fixture: CONC_FIXTURE
+			l_view: BIB_WORD_VIEW
 		do
+			create l_fixture
+			l_view := (create {BIB_WORD_LOOKUP}.make (checked_pack (l_fixture))).view ({CONC_FIXTURE}.Article_lemma, "LXX-RAHLFS")
+			assert_integers_equal ("entry, total, 200 rows", 202, l_view.facts_model.count)
+			assert_true ("closed", l_view.is_fact_closed)
+			close_and_clean (last_pack_set, l_fixture)
+		end
+
+	test_word_view_failures_are_answers
+			-- An unknown headword and an English lemma give a failed view with a reason; a pack whose
+			-- count is smaller than its first page fails the view, never the engine (scan 28).
+		local
+			l_fixture: CONC_FIXTURE
+			l_lookup: BIB_WORD_LOOKUP
+			l_db: SIMPLE_SQL_DATABASE
+			l_view: BIB_WORD_VIEW
+		do
+			create l_fixture
+			create l_lookup.make (checked_pack (l_fixture))
+			l_view := l_lookup.view (999, "LXX-RAHLFS")
+			assert_true ("unknown", not l_view.is_success and then attached l_view.error as al_e and then al_e.code = {BIB_ERROR}.Not_found)
+			assert_false ("english lemma", l_lookup.view ({CONC_FIXTURE}.English_lemma, "ENG-BSB").is_success)
+			create l_db.make (Pack_file)
+			l_db.execute ("UPDATE lemma_corpus_count SET n = 3 WHERE lemma_id = 2")
+			l_db.close
+			l_view := l_lookup.view ({CONC_FIXTURE}.Article_lemma, "LXX-RAHLFS")
+			assert_true ("count disagrees", not l_view.is_success and then attached l_view.error as al_e2 and then al_e2.code = {BIB_ERROR}.Schema_mismatch)
+			close_and_clean (last_pack_set, l_fixture)
 		end
 
 	test_pack_not_valid_until_checked
