@@ -27,7 +27,7 @@ feature -- Query
 			available: pack.is_available
 			word_not_empty: not a_english.is_empty
 		do
-			check implemented_in_phase_4: False then end
+			Result := pack.english_rows (a_english)
 		ensure
 			method_recorded: Result.method.engine_feature.same_string_general ("english_rows")
 			every_row_for_word: Result.is_success implies across 1 |..| Result.count as l_i all Result.item (l_i).english.same_string_general (a_english) end

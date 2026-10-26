@@ -19,4 +19,15 @@ feature -- Access
 		deferred
 		end
 
+feature -- Language (shared by the concordance value classes)
+
+	is_original (a_language: READABLE_STRING_8): BOOLEAN
+			-- Is `a_language' an original-language code of the Bible (Hebrew, Aramaic or Greek)?
+			-- Pure: English ("eng") is a rendering, not an original (Phase 2 review, ruling 1.2).
+		do
+			Result := a_language.same_string ("hbo") or a_language.same_string ("arc") or a_language.same_string ("grc")
+		ensure
+			definition: Result = (a_language.same_string ("hbo") or a_language.same_string ("arc") or a_language.same_string ("grc"))
+		end
+
 end

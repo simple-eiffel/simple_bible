@@ -116,6 +116,7 @@ feature -- Commands
 			attached_now: last_error = Void implies attached_model |=| old attached_model.updated (a_alias, a_path.to_string_32)
 			count_grown: last_error = Void implies attached_count = old attached_count + 1
 			unchanged_on_error: last_error /= Void implies attached_model |=| old attached_model
+			error_mapped: (attached database as al_db and then al_db.has_error) implies last_error /= Void
 		end
 
 	detach (a_alias: STRING_8)

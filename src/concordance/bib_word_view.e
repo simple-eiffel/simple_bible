@@ -32,8 +32,10 @@ feature {NONE} -- Initialization
 			check implemented_in_phase_4: False then end
 		ensure
 			success: is_success
+			method_set: method = a_method
 			entry_set: entry = a_entry
 			total_set: place_total = a_place_total
+			places_set: first_places = a_first_places
 		end
 
 	make_failure (a_method: BIB_METHOD; a_error: BIB_ERROR)
@@ -41,6 +43,9 @@ feature {NONE} -- Initialization
 			check implemented_in_phase_4: False then end
 		ensure
 			failed: not is_success
+			method_set: method = a_method
+			error_set: error = a_error
+			empty_model: facts_model.is_empty
 		end
 
 feature -- Access
@@ -69,8 +74,31 @@ feature -- Status
 
 	is_known_section (a_name: READABLE_STRING_8): BOOLEAN
 			-- One of: heading, how_often, english, dictionaries, centuries, callout, every_place, greek_ot, going_further, notes.
+			-- Compared by content, never with `has' (object identity on strings, oracle gotcha).
 		do
-			check implemented_in_phase_4: False then end
+			Result := across approved_order as n some n.same_string (a_name) end
+		ensure
+			definition: Result = across approved_order as n some n.same_string (a_name) end
+		end
+
+	approved_position (a_name: READABLE_STRING_8): INTEGER
+			-- Place of `a_name' in `approved_order' (1-based); 0 when `a_name' is not a known section.
+		local
+			l_i: INTEGER
+		do
+			from
+				l_i := 1
+			until
+				l_i > approved_order.count or Result > 0
+			loop
+				if approved_order [l_i].same_string (a_name) then
+					Result := l_i
+				end
+				l_i := l_i + 1
+			end
+		ensure
+			zero_when_unknown: (Result = 0) = not is_known_section (a_name)
+			named: Result > 0 implies approved_order [Result].same_string (a_name)
 		end
 
 	is_present (a_name: READABLE_STRING_8): BOOLEAN
@@ -88,6 +116,16 @@ feature -- Status
 			-- Are the present sections in research/14 section 3 order?
 		do
 			check implemented_in_phase_4: False then end
+		ensure
+			subsequence: Result implies (across present_names as n all is_known_section (n) end and across 1 |..| (present_names.count - 1) as l_i all approved_position (present_names.i_th (l_i)) < approved_position (present_names.i_th (l_i + 1)) end)
+		end
+
+feature -- Constants
+
+	approved_order: ARRAY [STRING_8]
+			-- The ten sections in research/14 section 3 order (ruling 1.6; the contract's own names).
+		once
+			Result := <<"heading", "how_often", "english", "dictionaries", "centuries", "callout", "every_place", "greek_ot", "going_further", "notes">>
 		end
 
 feature -- Model
@@ -116,6 +154,7 @@ feature {NONE} -- Representation
 invariant
 	success_has_entry: is_success = (entry /= Void)
 	success_has_total: is_success = (place_total /= Void)
+	success_has_places: is_success = (first_places /= Void)
 	order_kept: is_success implies is_in_approved_order
 
 end

@@ -31,6 +31,8 @@ feature {NONE} -- Initialization
 		ensure
 			english_set: english.same_string_general (a_english)
 			id_set: lemma_id = a_lemma_id
+			headword_set: headword.same_string_general (a_headword)
+			translit_set: translit.same_string_general (a_translit)
 			book_set: book_id = a_book_id
 			count_set: count = a_count
 			provenance_set: provenance = a_provenance
