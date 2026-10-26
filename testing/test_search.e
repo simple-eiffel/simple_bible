@@ -46,8 +46,17 @@ feature -- Tests
 		end
 
 	test_strongs_padding_is_one_key
-			-- Skeletal (Phase 5, AC-1a-22): H1 = H0001 = H00001.
+			-- AC-1a-22: H1 = H0001 = H00001 (one key); H6743a stays apart from H6743.
+		local
+			l_one, l_padded, l_more, l_plain, l_split: BIB_STRONGS_KEY
 		do
+			create l_one.make_from_text ("H1")
+			create l_padded.make_from_text ("H0001")
+			create l_more.make_from_text ("H00001")
+			assert_true ("padded is one key", l_one.is_equal (l_padded) and l_one.is_equal (l_more))
+			create l_plain.make_from_text ("H6743")
+			create l_split.make_from_text ("H6743a")
+			assert_false ("split sense apart", l_plain.is_equal (l_split))
 		end
 
 	test_split_senses_reported_apart
