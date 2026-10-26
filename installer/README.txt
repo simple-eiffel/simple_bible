@@ -1,4 +1,4 @@
-simple_bible 0.1.0 - PERSONAL EDITION - not for distribution
+simple_bible 0.2.0 - PERSONAL EDITION - not for distribution
 =============================================================
 
 This installs the simple_bible concordance on your own machine, with
@@ -6,6 +6,7 @@ everything it needs. Nothing else has to be installed first.
 
 What is in it
 -------------
+  bible_gui.exe      the window ("simple_bible" in the Start menu)
   bible.exe          the command line
   bible_build.exe    rebuilds content.db from a bible.db
   data\content.db    the book list the program opens first
@@ -15,8 +16,21 @@ The personal concordance includes research-only layers (the Rahlfs
 Septuagint from CATSS, the BSB word tables). Keep this installer and the
 installed files on your own machines; never publish them.
 
-Using it
---------
+The window
+----------
+Open "simple_bible" from the Start menu. Type into the box at the top and
+press Enter:
+
+  bara  logos  love          a Hebrew, Greek or English word
+  Gen 1:1   John 3:16        a verse, word by word
+  H1254   G3056              a Strong's number
+
+The centre lists what was found; choosing a row opens its word study
+below: the heading, how the Bibles render it, and every place (a long
+list keeps loading while you read).
+
+The command line
+----------------
 Open "simple_bible prompt" from the Start menu (a console already set to
 UTF-8, so Hebrew and Greek print correctly), or any console if you let the
 installer add bible to your PATH. In another console, run "chcp 65001"
@@ -39,6 +53,6 @@ Installing on another machine without questions
 -----------------------------------------------
 From cmd or PowerShell (not Git Bash, which rewrites /FLAGS):
 
-  simple_bible-personal-0.1.0-Setup.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS="addtopath"
+  simple_bible-personal-0.2.0-Setup.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS="addtopath"
 
 Uninstalling removes the programs, both databases and the PATH entry.

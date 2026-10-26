@@ -16,6 +16,7 @@ if "%SIMPLE_BIBLE_CONC%"=="" (
   exit /b 1
 )
 pushd "%ROOT%"
+"%GITBASH%" -c "/d/prod/ec.sh release -config simple_bible_app.ecf -target bible_gui" || goto :failed
 "%GITBASH%" -c "/d/prod/ec.sh release -config simple_bible_app.ecf -target bible" || goto :failed
 "%GITBASH%" -c "/d/prod/ec.sh release -config bible_build.ecf -target bible_build" || goto :failed
 if not exist "EIFGENs\bible\F_code\bible_lean.exe" goto :failed

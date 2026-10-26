@@ -137,54 +137,15 @@ feature {NONE} -- Commands
 feature {NONE} -- Defaults
 
 	default_content: STRING
-			-- content.db in the data folder beside this program (the installer's place), else in
-			-- %LOCALAPPDATA%\simple_bible (where bible_build writes it).
+			-- content.db where every face looks for it (BIB_DATA_LOCATION).
 		do
-			Result := first_file (<<installed_data ("content.db"), local_data ("content.db")>>)
-			if Result.is_empty then
-				Result := local_data ("content.db")
-			end
+			Result := (create {BIB_DATA_LOCATION}).content_path
 		end
 
 	default_conc: STRING
-			-- conc.db in the data folder beside this program, else the SIMPLE_BIBLE_CONC variable,
-			-- else conc.db in %LOCALAPPDATA%\simple_bible; empty when none exists.
-		local
-			l_variable: STRING
+			-- conc.db where every face looks for it (BIB_DATA_LOCATION); empty when none exists.
 		do
-			if attached (create {SIMPLE_ENV}).item ("SIMPLE_BIBLE_CONC") as al_path then
-				l_variable := al_path.to_string_8
-			else
-				create l_variable.make_empty
-			end
-			Result := first_file (<<installed_data ("conc.db"), l_variable, local_data ("conc.db")>>)
-		end
-
-	installed_data (a_name: STRING): STRING
-			-- `a_name' in the data folder beside this program.
-		do
-			Result := (create {SIMPLE_ENV}).executable_folder.to_string_8 + "\data\" + a_name
-		end
-
-	local_data (a_name: STRING): STRING
-			-- `a_name' in %LOCALAPPDATA%\simple_bible, or beside the current folder when that is unset.
-		do
-			if attached (create {SIMPLE_ENV}).item ("LOCALAPPDATA") as al_folder then
-				Result := al_folder.to_string_8 + "\simple_bible\" + a_name
-			else
-				Result := a_name.twin
-			end
-		end
-
-	first_file (a_paths: ARRAY [STRING]): STRING
-			-- The first of `a_paths' that names an existing file, or empty.
-		do
-			create Result.make_empty
-			across a_paths as ic until not Result.is_empty loop
-				if not ic.is_empty and then (create {SIMPLE_FILE}.make (ic)).is_file then
-					Result := ic
-				end
-			end
+			Result := (create {BIB_DATA_LOCATION}).conc_path
 		end
 
 	Usage: STRING = "[

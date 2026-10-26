@@ -67,6 +67,43 @@ feature -- Tests
 			finish
 		end
 
+	test_lookup_choices
+			-- What a reader types becomes choices (the window's lookup box): a headword, an English
+			-- word, a verse with a prefix joined to its word, a Strong's number, nothing.
+		local
+			l_lookup: BIB_LOOKUP
+			l_choices: ARRAYED_LIST [BIB_LOOKUP_CHOICE]
+		do
+			create l_lookup.make (commands.bible)
+			l_choices := l_lookup.choices_for ("bara")
+			assert_true ("headword", l_choices.count = 1 and then l_choices.first.lemma_id = {CONC_FIXTURE}.Create_lemma)
+			l_choices := l_lookup.choices_for ("created")
+			assert_true ("english", l_choices.count = 1 and then l_choices.first.lemma_id = {CONC_FIXTURE}.Create_lemma and then l_choices.first.detail.has_substring ("behind"))
+			l_choices := l_lookup.choices_for ("Gen 1:1")
+			assert_integers_equal ("two words in the verse", 2, l_choices.count)
+			assert_strings_equal ("prefix joined", "BBRA", l_choices.first.label)
+			assert_strings_equal ("transliterations joined", "b-bara", l_choices.first.detail)
+			assert_true ("opens the word, not the prefix", l_choices.first.lemma_id = {CONC_FIXTURE}.Create_lemma)
+			assert_true ("verse note", l_lookup.note_text.has_substring ("Genesis 1:1 in the Hebrew Bible"))
+			assert_integers_equal ("strongs", 1, l_lookup.choices_for ("H1254").count)
+			assert_true ("empty", l_lookup.choices_for ("  ").is_empty and not l_lookup.note_text.is_empty)
+			assert_true ("nothing", l_lookup.choices_for ("zzz").is_empty and l_lookup.note_text.has_substring ("Nothing found"))
+			finish
+		end
+
+	test_corpus_names_and_headword_corpus
+			-- Readers see corpus names, never codes (FR-156); a headword opens where it occurs most.
+		do
+			assert_strings_equal ("name", "Hebrew Bible", commands.bible.conc_pack.corpus_name ("WLC-MACULA"))
+			assert_strings_equal ("unknown code shown as is", "XYZ", commands.bible.conc_pack.corpus_name ("XYZ"))
+			if attached commands.bible.conc_pack.word_entry ({CONC_FIXTURE}.Create_lemma) as al_entry then
+				assert_strings_equal ("top corpus", "WLC-MACULA", commands.bible.conc_pack.corpus_of (al_entry.provenance))
+			else
+				assert_true ("entry", False)
+			end
+			finish
+		end
+
 feature {NONE} -- Fixture
 
 	Content_file: STRING = "cli_test_content.db"

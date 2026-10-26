@@ -41,6 +41,7 @@ feature {NONE} -- Initialization
 			create corpus_ids.make (8)
 			create corpus_code_of.make (8)
 			create corpus_provenances.make (8)
+			create corpus_names.make (8)
 			create edition_label_cache.make_empty
 		ensure
 			sources_set: sources = a_sources
@@ -104,6 +105,38 @@ feature -- Status
 			unknown_layer_absent: not (a_layer.same_string ("lxx") or a_layer.same_string ("bsb") or a_layer.same_string ("dictionaries")) implies not Result
 		end
 
+	corpus_name (a_code: READABLE_STRING_8): STRING_32
+			-- The name a reader sees for corpus `a_code' (FR-156: never the code), or the code when
+			-- the pack names none.
+		require
+			available: is_available
+		do
+			if attached corpus_names.item (a_code.to_string_8) as al_name and then not al_name.is_empty then
+				Result := al_name
+			else
+				Result := a_code.to_string_32
+			end
+		ensure
+			not_empty: not a_code.is_empty implies not Result.is_empty
+		end
+
+	corpus_of (a_provenance: BIB_PROVENANCE): STRING_8
+			-- The code of the corpus whose provenance `a_provenance' is; empty when it is none of the
+			-- pack's corpora. A headword's provenance names the corpus where it occurs most, so this
+			-- is where its word view opens (design scan 31, F6: no reading of provenance keys).
+		require
+			available: is_available
+		do
+			create Result.make_empty
+			across corpus_provenances as ic until not Result.is_empty loop
+				if ic = a_provenance and then attached corpus_code_of.item (@ic.key) as al_code then
+					Result := al_code
+				end
+			end
+		ensure
+			known_or_empty: not Result.is_empty implies has_corpus (Result)
+		end
+
 	pack_error: detachable BIB_ERROR
 			-- Why `check_pack' refused the attached pack; Void when it accepted it or has not run.
 
@@ -125,6 +158,7 @@ feature -- Commands
 			corpus_ids.wipe_out
 			corpus_code_of.wipe_out
 			corpus_provenances.wipe_out
+			corpus_names.wipe_out
 			has_meanings := False
 			create edition_label_cache.make_empty
 			fallback_provenance := Void
@@ -531,6 +565,7 @@ feature {NONE} -- Implementation
 				corpus_codes.extend (ic.string_value ("code").to_string_8)
 				corpus_ids.force (ic.integer_64_value ("corpus_id"), corpus_codes.last)
 				corpus_code_of.force (corpus_codes.last, ic.integer_64_value ("corpus_id"))
+				corpus_names.force (ic.string_value ("name"), corpus_codes.last)
 				if ic.integer_64_value ("corpus_id") > 0 and not ic.string_value ("code").is_empty then
 					corpus_provenances.force (corpus_provenance (ic.integer_64_value ("corpus_id"), ic.string_value ("code"), ic.string_value ("name"), ic.string_value ("license"), ic.string_value ("ship_class")), ic.integer_64_value ("corpus_id"))
 				end
@@ -559,6 +594,9 @@ feature {NONE} -- Implementation
 
 	corpus_code_of: HASH_TABLE [STRING_8, INTEGER_64]
 			-- Corpus code by id, read once by `check_pack'.
+
+	corpus_names: HASH_TABLE [STRING_32, STRING_8]
+			-- Each corpus's name by code, read once by `check_pack'.
 
 	corpus_provenances: HASH_TABLE [BIB_PROVENANCE, INTEGER_64]
 			-- Each corpus's provenance from its own license and ship class (NFR-007), by id.
