@@ -406,6 +406,44 @@ feature -- Tests
 			close_and_clean (last_pack_set, l_fixture)
 		end
 
+	test_headwords_for_typed_text
+			-- What a reader types: plain letters (pack v2's translit_ascii), the written form, or
+			-- nothing the pack knows.
+		local
+			l_fixture: CONC_FIXTURE
+			l_pack: BIB_CONC_PACK
+			l_answer: BIB_LIST_RESULT [BIB_WORD_ENTRY]
+		do
+			create l_fixture
+			l_pack := checked_pack (l_fixture)
+			l_answer := l_pack.headwords_for_text ("Bara")
+			assert_true ("plain letters", l_answer.is_success and then l_answer.count = 1 and then l_answer.item (1).lemma_id = {CONC_FIXTURE}.Create_lemma)
+			assert_true ("written form", l_pack.headwords_for_text ("BRA").count = 1)
+			assert_true ("search form", l_pack.headwords_for_text ("bra").count = 1)
+			assert_true ("english lemma not a headword", l_pack.headwords_for_text ("create").count = 0)
+			assert_true ("unknown", l_pack.headwords_for_text ("zzz").is_success and l_pack.headwords_for_text ("zzz").count = 0)
+			close_and_clean (last_pack_set, l_fixture)
+		end
+
+	test_english_glance_holds_back_function_words
+			-- English at a glance: per Bible, commonest first, without "and" (it outnumbers the real renderings).
+		local
+			l_fixture: CONC_FIXTURE
+			l_pack: BIB_CONC_PACK
+			l_rows: BIB_LIST_RESULT [BIB_ENGLISH_GLANCE_ROW]
+		do
+			create l_fixture
+			l_pack := checked_pack (l_fixture)
+			l_rows := l_pack.english_glance ({CONC_FIXTURE}.Create_lemma, 5)
+			assert_true ("two renderings", l_rows.is_success and then l_rows.count = 2)
+			assert_strings_equal ("commonest first", "make", l_rows.item (1).english)
+			assert_strings_equal ("then", "created", l_rows.item (2).english)
+			assert_strings_equal ("bible", "ENG-BSB", l_rows.item (1).bible)
+			assert_integers_equal ("at most one", 1, l_pack.english_glance ({CONC_FIXTURE}.Create_lemma, 1).count)
+			assert_true ("cited", l_rows.is_fact_closed)
+			close_and_clean (last_pack_set, l_fixture)
+		end
+
 	test_strongs_key_text
 			-- Padding-insensitive, sense suffix kept, zero refused (conc.db holds "G0").
 		local

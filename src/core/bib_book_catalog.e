@@ -17,13 +17,43 @@ create
 feature {NONE} -- Initialization
 
 	make (a_sources: BIB_SOURCE_SET)
-			-- Create a catalog over `a_sources' (loaded from content.db `book_catalog' in Phase 4).
+			-- A catalog over `a_sources', read from content.db's `book_catalog' when it is open.
 		do
 			sources := a_sources
 			create books.make (90)
 			create aliases.make (400)
+			if a_sources.is_open then
+				load
+			end
 		ensure
 			sources_set: sources = a_sources
+		end
+
+feature {NONE} -- Loading
+
+	load
+			-- Read every book of content.db's `book_catalog' (FR-105 ids), each known by its name
+			-- and its code, lowercased (research/18).
+		require
+			open: sources.is_open
+		local
+			l_id: INTEGER
+			l_code, l_name: STRING_32
+		do
+			books.wipe_out
+			aliases.wipe_out
+			if attached sources.database as al_db then
+				across al_db.query ("SELECT book_id, code, name, is_deuterocanonical FROM main.book_catalog ORDER BY book_id").rows as ic loop
+					l_id := ic.integer_value ("book_id")
+					l_code := ic.string_value ("code")
+					l_name := ic.string_value ("name")
+					if l_id > 0 and not l_code.is_empty and not l_name.is_empty then
+						books.force (create {BIB_BOOK}.make (l_id, l_code, l_name, ic.integer_value ("is_deuterocanonical") /= 0), l_id)
+						aliases.force (l_id, l_name.as_lower)
+						aliases.force (l_id, l_code.as_lower)
+					end
+				end
+			end
 		end
 
 feature -- Access
@@ -54,8 +84,33 @@ feature -- Access
 			-- Ids of every book `a_name' may denote (exact alias, then prefix); empty when none.
 		require
 			name_not_empty: not a_name.is_empty
+		local
+			l_key: STRING_32
+			i: INTEGER
 		do
-			check implemented_in_phase_4: False then end
+			create Result.make (4)
+			l_key := a_name.to_string_32.as_lower
+			l_key.right_adjust
+			l_key.left_adjust
+			if aliases.has (l_key) then
+				Result.extend (aliases.item (l_key))
+			else
+				if l_key.ends_with (".") then
+					l_key.remove_tail (1)
+				end
+				if not l_key.is_empty then
+					across aliases as a loop
+						if (@a.key).starts_with (l_key) and not Result.has (a) then
+								-- Keep the ids in order, so the same name always lists the same books (NFR-006).
+							from i := 1 until i > Result.count or else Result.i_th (i) > a loop
+								i := i + 1
+							end
+							Result.go_i_th (i)
+							Result.put_left (a)
+						end
+					end
+				end
+			end
 		ensure
 			all_known: across Result as b all has_book (b) end
 			alias_is_single: aliases_model.domain [a_name.to_string_32.as_lower] implies Result.count = 1

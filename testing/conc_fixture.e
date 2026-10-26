@@ -88,7 +88,7 @@ feature -- Building
 				l_db.execute ("INSERT INTO book_catalog VALUES (1, 'GEN', 'Genesis', 0)")
 			else
 				l_db.execute ("CREATE TABLE book_catalog(book_id INTEGER PRIMARY KEY, code TEXT NOT NULL, name TEXT NOT NULL, is_deuterocanonical INTEGER NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key))")
-				l_db.execute ("INSERT INTO book_catalog VALUES (1, 'GEN', 'Genesis', 0, 1)")
+				l_db.execute ("INSERT INTO book_catalog VALUES (1, 'GEN', 'Genesis', 0, 1), (2, 'EXO', 'Exodus', 0, 1), (40, 'MAT', 'Matthew', 0, 1)")
 			end
 			l_db.execute ("INSERT INTO source_provenance VALUES (1, 'test-books', 'fixture', 'CC0', 0, 0, 0, 'test fixture', '')")
 			l_db.execute ("INSERT INTO build_run VALUES ('test-build-0', '2026-10-25T09:00:00', 'testing/conc_fixture.e'), ('" + Content_edition + "', '2026-10-26T12:00:00', 'testing/conc_fixture.e')")
@@ -117,7 +117,7 @@ feature -- Building
 
 feature -- Facts the tests check against
 
-	Pack_version: INTEGER = 1
+	Pack_version: INTEGER = 2
 			-- The `user_version' of pack v1 (BIB_CONC_PACK.Expected_user_version).
 
 	Create_lemma: INTEGER_64 = 1
@@ -148,7 +148,7 @@ feature {NONE} -- Tables (conc.db's own definitions, plus pack v1)
 			Result.extend (["work", "CREATE TABLE work(work_id INTEGER PRIMARY KEY, code TEXT UNIQUE NOT NULL, name TEXT, collection TEXT, sort_order INTEGER, notes TEXT)"])
 			Result.extend (["work_book", "CREATE TABLE work_book(work_id INTEGER PRIMARY KEY, book_id INTEGER NOT NULL)"])
 			Result.extend (["unit", "CREATE TABLE unit(unit_id INTEGER PRIMARY KEY, corpus_id INTEGER NOT NULL, work_id INTEGER NOT NULL, recension TEXT NOT NULL DEFAULT '', div1 TEXT, div2 TEXT, div3 TEXT NOT NULL DEFAULT '', seq INTEGER, UNIQUE(corpus_id, work_id, recension, div1, div2, div3))"])
-			Result.extend (["lemma", "CREATE TABLE lemma(lemma_id INTEGER PRIMARY KEY, language TEXT NOT NULL, key TEXT NOT NULL, headword TEXT, search TEXT, pos TEXT, n_tokens INTEGER DEFAULT 0, translit TEXT, pron TEXT, pron_basis TEXT, UNIQUE(language, key))"])
+			Result.extend (["lemma", "CREATE TABLE lemma(lemma_id INTEGER PRIMARY KEY, language TEXT NOT NULL, key TEXT NOT NULL, headword TEXT, search TEXT, pos TEXT, n_tokens INTEGER DEFAULT 0, translit TEXT, pron TEXT, pron_basis TEXT, translit_ascii TEXT, UNIQUE(language, key))"])
 			Result.extend (["token", "CREATE TABLE token(token_id INTEGER PRIMARY KEY, corpus_id INTEGER NOT NULL, unit_id INTEGER NOT NULL, pos INTEGER, surface TEXT, after TEXT, search TEXT, language TEXT, lemma_id INTEGER, lemma_basis TEXT, pos_tag TEXT, morph TEXT, stem TEXT, sense TEXT, translit TEXT)"])
 			Result.extend (["link", "CREATE TABLE link(from_token INTEGER, to_token INTEGER, kind TEXT, source TEXT, method TEXT, PRIMARY KEY(from_token, to_token, kind))"])
 			Result.extend (["lemma_xref", "CREATE TABLE lemma_xref(lemma_id INTEGER, scheme TEXT, value TEXT, n INTEGER, PRIMARY KEY(lemma_id, scheme, value))"])
@@ -168,7 +168,7 @@ feature {NONE} -- Tables (conc.db's own definitions, plus pack v1)
 			Result.extend (["work_book", "INSERT INTO work_book(work_id, book_id) VALUES (1, 1)"])
 			Result.extend (["unit", "INSERT INTO unit(unit_id, corpus_id, work_id, div1, div2, seq) VALUES (1, 1, 1, '1', '1', 1), (2, 5, 1, '1', '1', 1), (3, 4, 1, '1', '1', 1)"])
 			Result.extend (["unit", "INSERT INTO unit(unit_id, corpus_id, work_id, div1, div2, seq) WITH RECURSIVE c(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM c WHERE n < 250) SELECT 100 + n, 4, 1, '2', CAST(n AS TEXT), 1 + n FROM c"])
-			Result.extend (["lemma", "INSERT INTO lemma(lemma_id, language, key, headword, search, pos, n_tokens, translit, pron) VALUES (1, 'hbo', 'bara', 'BRA', 'bra', 'verb', 1, 'bara', 'baw-RAW'), (2, 'grc', 'ho', 'HO', 'o', 'article', 251, 'ho', 'HO'), (3, 'eng', 'create', 'create', 'create', 'verb', 1, '', ''), (4, 'hbo', 'et', 'ET', 'et', 'particle', 1, 'et', 'ET'), (5, 'hbo', 'b', 'B', 'b', 'preposition', 1, 'b', 'beh')"])
+			Result.extend (["lemma", "INSERT INTO lemma(lemma_id, language, key, headword, search, pos, n_tokens, translit, pron, translit_ascii) VALUES (1, 'hbo', 'bara', 'BRA', 'bra', 'verb', 1, 'bara', 'baw-RAW', 'bara'), (2, 'grc', 'ho', 'HO', 'o', 'article', 251, 'ho', 'HO', 'ho'), (3, 'eng', 'create', 'create', 'create', 'verb', 1, '', '', ''), (4, 'hbo', 'et', 'ET', 'et', 'particle', 1, 'et', 'ET', 'et'), (5, 'hbo', 'b', 'B', 'b', 'preposition', 1, 'b', 'beh', 'b')"])
 			Result.extend (["token", "INSERT INTO token(token_id, corpus_id, unit_id, pos, surface, search, language, lemma_id, lemma_basis, translit) VALUES (5, 1, 1, 1, 'BRA', 'bra', 'hbo', 1, 'tagged:MACULA-Hebrew', 'bara'), (2, 1, 1, 2, '', '', 'hbo', 4, 'tagged:MACULA-Hebrew', ''), (3, 5, 2, 1, 'created', 'created', 'eng', 3, 'computed:spacy-lemma', ''), (4, 4, 3, 1, 'HO', 'o', 'grc', 2, 'tagged:CATSS', 'ho'), (1, 1, 1, 1, 'B', 'b', 'hbo', 5, 'tagged:MACULA-Hebrew', 'b')"])
 			Result.extend (["token", "INSERT INTO token(token_id, corpus_id, unit_id, pos, surface, language, lemma_id, lemma_basis, translit) WITH RECURSIVE c(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM c WHERE n < 250) SELECT 1000 + n, 4, 100 + n, 1, 'HO', 'grc', 2, 'tagged:CATSS', 'ho' FROM c"])
 			Result.extend (["link", "INSERT INTO link(from_token, to_token, kind, source, method) VALUES (5, 3, 'translation:ENG-BSB', 'BSB translation tables', 'fixture')"])
@@ -176,7 +176,7 @@ feature {NONE} -- Tables (conc.db's own definitions, plus pack v1)
 			Result.extend (["meaning_source", "INSERT INTO meaning_source(code, name, year, kind, license, ship_class) VALUES ('SDBH', 'Semantic Dictionary of Biblical Hebrew', '2026', 'lexicon', 'CC BY-SA 4.0', 'open')"])
 			Result.extend (["lex_sense", "INSERT INTO lex_sense(sense_id, lemma_id, source, entry, seq, label, depth, gloss, text) VALUES (1, 1, 'SDBH', 'bara', 1, '1', 0, 'create', 'to bring into being')"])
 			Result.extend (["lemma_corpus_count", "INSERT INTO lemma_corpus_count(lemma_id, corpus_id, n) VALUES (1, 1, 1), (4, 1, 1), (5, 1, 1), (2, 4, 251), (3, 5, 1)"])
-			Result.extend (["lemma_english", "INSERT INTO lemma_english(lemma_id, corpus_id, english, n) VALUES (1, 5, 'created', 1)"])
+			Result.extend (["lemma_english", "INSERT INTO lemma_english(lemma_id, corpus_id, english, n) VALUES (1, 5, 'created', 1), (1, 5, 'and', 4), (1, 5, 'make', 2)"])
 			Result.extend (["meta", "INSERT INTO meta(key, value) VALUES ('edition_label', '" + Edition_label + "'), ('builder', 'testing/conc_fixture.e')"])
 		end
 

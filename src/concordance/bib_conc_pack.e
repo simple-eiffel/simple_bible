@@ -192,37 +192,90 @@ feature -- Access
 			available: is_available
 		local
 			l_sql: STRING_8
-			l_entries: ARRAYED_LIST [BIB_WORD_ENTRY]
-			l_citations: ARRAYED_LIST [BIB_PROVENANCE]
-			l_bad: detachable STRING_8
 		do
 			l_sql := "SELECT " + Entry_columns + " FROM conc.lemma_xref x JOIN conc.lemma l ON l.lemma_id = x.lemma_id WHERE x.scheme = 'strongs' AND x.value = ? ORDER BY l.n_tokens DESC, l.lemma_id"
 			run_query (l_sql, {ARRAY [detachable ANY]} <<a_key.text>>)
-			if attached last_rows as al_rows then
-				create l_entries.make (al_rows.rows.count)
-				create l_citations.make (2)
-				across al_rows.rows as ic until l_bad /= Void loop
-					if attached entry_from_row (ic) as al_entry then
-						l_entries.extend (al_entry)
-						cite (l_citations, al_entry.provenance)
-					else
-						l_bad := "Headword " + ic.integer_64_value ("lemma_id").out + " behind this Strong's number is not a Hebrew, Aramaic or Greek headword with a transliteration."
-					end
-				end
-				if attached l_bad as al_bad then
-					create Result.make_failure (method ("headwords_for_strongs", l_sql, "", a_key.text, 0), create {BIB_ERROR}.make ({BIB_ERROR}.Schema_mismatch, al_bad))
-				else
-					if l_citations.is_empty then
-						cite (l_citations, first_provenance)
-					end
-					create Result.make_success (method ("headwords_for_strongs", l_sql, "", a_key.text, l_entries.count), l_citations, l_entries)
-				end
-			else
-				create Result.make_failure (method ("headwords_for_strongs", l_sql, "", a_key.text, 0), query_error)
-			end
+			Result := entries_result ("headwords_for_strongs", l_sql, a_key.text)
 		ensure
 			method_recorded: Result.method.engine_feature.same_string_general ("headwords_for_strongs")
 			fact_closure: Result.is_fact_closed
+		end
+
+	headwords_for_text (a_text: READABLE_STRING_GENERAL): BIB_LIST_RESULT [BIB_WORD_ENTRY]
+			-- Headwords written or transliterated as `a_text', commonest first: Hebrew matched
+			-- without its points (as `lemma.search'), Greek as written or without accents, and
+			-- plain letters without diacritics (`lemma.translit_ascii', pack v2: "bara",
+			-- "shamayim"). What a reader types into the lookup box.
+		require
+			available: is_available
+			text_not_empty: not a_text.is_empty
+		local
+			l_sql: STRING_8
+			l_plain: STRING_32
+		do
+			l_plain := without_hebrew_points (a_text.to_string_32).as_lower
+			l_sql := "SELECT " + Entry_columns + " FROM conc.lemma l WHERE l.language IN ('hbo', 'arc', 'grc') AND (l.search = ? OR l.headword = ? OR l.translit_ascii = ?) ORDER BY l.n_tokens DESC, l.lemma_id LIMIT " + Max_text_matches.out
+			run_query (l_sql, {ARRAY [detachable ANY]} <<l_plain, a_text.to_string_32, l_plain>>)
+			Result := entries_result ("headwords_for_text", l_sql, a_text)
+		ensure
+			method_recorded: Result.method.engine_feature.same_string_general ("headwords_for_text")
+			bounded: Result.count <= Max_text_matches
+			fact_closure: Result.is_fact_closed
+		end
+
+	english_glance (a_lemma_id: INTEGER_64; a_per_bible: INTEGER): BIB_LIST_RESULT [BIB_ENGLISH_GLANCE_ROW]
+			-- English at a glance: for each English Bible, its commonest renderings of `a_lemma_id'
+			-- (the builder's summary, FR-162), at most `a_per_bible' each. The little words a word
+			-- alignment also links to a verb ("be", "they", "and") are held back: the real data
+			-- links them to bara, for one, as often as "creator".
+		require
+			available: is_available
+			id_positive: a_lemma_id > 0
+			per_bible_positive: a_per_bible >= 1
+		local
+			l_sql: STRING_8
+			l_rows: ARRAYED_LIST [BIB_ENGLISH_GLANCE_ROW]
+			l_citations: ARRAYED_LIST [BIB_PROVENANCE]
+			l_bible: INTEGER_64
+			l_taken: INTEGER
+			l_provenance: BIB_PROVENANCE
+		do
+			l_sql := "SELECT corpus_id, english, n FROM conc.lemma_english WHERE lemma_id = ? ORDER BY corpus_id, n DESC, english"
+			run_query (l_sql, {ARRAY [detachable ANY]} <<a_lemma_id>>)
+			if attached last_rows as al_rows then
+				create l_rows.make (8)
+				create l_citations.make (3)
+				across al_rows.rows as ic loop
+					if ic.integer_64_value ("corpus_id") /= l_bible then
+						l_bible := ic.integer_64_value ("corpus_id")
+						l_taken := 0
+					end
+					if l_taken < a_per_bible and ic.integer_64_value ("n") > 0 and then not ic.string_value ("english").is_empty
+						and then not is_function_word (ic.string_value ("english"))
+					then
+						l_provenance := provenance_of_id (l_bible)
+						l_rows.extend (create {BIB_ENGLISH_GLANCE_ROW}.make (corpus_code_of_id (l_bible), ic.string_value ("english"), ic.integer_64_value ("n"), l_provenance))
+						cite (l_citations, l_provenance)
+						l_taken := l_taken + 1
+					end
+				end
+				if l_citations.is_empty then
+					cite (l_citations, first_provenance)
+				end
+				create Result.make_success (method ("english_glance", l_sql, "", "lemma " + a_lemma_id.out, l_rows.count), l_citations, l_rows)
+			else
+				create Result.make_failure (method ("english_glance", l_sql, "", "lemma " + a_lemma_id.out, 0), query_error)
+			end
+		ensure
+			method_recorded: Result.method.engine_feature.same_string_general ("english_glance")
+			no_function_words: Result.is_success implies across 1 |..| Result.count as l_i all not is_function_word (Result.item (l_i).english) end
+			fact_closure: Result.is_fact_closed
+		end
+
+	is_function_word (a_english: READABLE_STRING_GENERAL): BOOLEAN
+			-- Is `a_english' one of the little words English at a glance holds back?
+		do
+			Result := across Function_words as ic some a_english.to_string_32.as_lower.same_string_general (ic) end
 		end
 
 	place_total (a_lemma_id: INTEGER_64; a_corpus_code: READABLE_STRING_8): detachable BIB_FACT [INTEGER_64]
@@ -426,8 +479,22 @@ feature -- Constants
 
 	Max_page_size: INTEGER = 200
 
-	Expected_user_version: INTEGER = 1
-			-- The `user_version' a valid pack carries (FR-164); FR-165's builder stamps it.
+	Expected_user_version: INTEGER = 2
+			-- The `user_version' a valid pack carries (FR-164); FR-165's builder stamps it. Version 2
+			-- (2026-10-26) adds `lemma.translit_ascii', which `headwords_for_text' reads.
+
+	Max_text_matches: INTEGER = 50
+			-- Headwords `headwords_for_text' lists at most.
+
+	Function_words: ARRAY [STRING_8]
+			-- Little English words a word alignment links to a Hebrew or Greek verb or noun along with
+			-- its real rendering; English at a glance holds them back.
+		once
+			Result := <<"a", "an", "the", "and", "or", "but", "of", "to", "in", "on", "at", "by", "for", "from", "with", "as", "into",
+				"be", "is", "are", "was", "were", "been", "am", "have", "has", "had", "do", "did", "does", "will", "shall", "would", "should",
+				"i", "me", "my", "we", "us", "our", "you", "your", "he", "him", "his", "she", "her", "it", "its", "they", "them", "their",
+				"who", "whom", "which", "that", "this", "these", "those", "not", "no", "when", "yet", "so", "then", "there", "one", "about">>
+		end
 
 	Required_tables: ARRAY [STRING_8]
 			-- Tables of pack schema v1 (research/17); `check_pack' refuses a pack missing one.
@@ -585,6 +652,55 @@ feature {NONE} -- Implementation
 			end
 		ensure
 			same_id: attached Result as r implies r.lemma_id = a_row.integer_64_value ("lemma_id")
+		end
+
+	entries_result (a_feature, a_sql: STRING_8; a_scope: READABLE_STRING_GENERAL): BIB_LIST_RESULT [BIB_WORD_ENTRY]
+			-- The headwords in `last_rows' (selected with `Entry_columns'), or the failure: a row that
+			-- is no original-language headword with a transliteration fails the answer, naming it.
+		require
+			scope_not_empty: not a_scope.is_empty
+		local
+			l_entries: ARRAYED_LIST [BIB_WORD_ENTRY]
+			l_citations: ARRAYED_LIST [BIB_PROVENANCE]
+			l_bad: detachable STRING_8
+		do
+			if attached last_rows as al_rows then
+				create l_entries.make (al_rows.rows.count)
+				create l_citations.make (2)
+				across al_rows.rows as ic until l_bad /= Void loop
+					if attached entry_from_row (ic) as al_entry then
+						l_entries.extend (al_entry)
+						cite (l_citations, al_entry.provenance)
+					else
+						l_bad := "Headword " + ic.integer_64_value ("lemma_id").out + " is not a Hebrew, Aramaic or Greek headword with a transliteration."
+					end
+				end
+				if attached l_bad as al_bad then
+					create Result.make_failure (method (a_feature, a_sql, "", a_scope, 0), create {BIB_ERROR}.make ({BIB_ERROR}.Schema_mismatch, al_bad))
+				else
+					if l_citations.is_empty then
+						cite (l_citations, first_provenance)
+					end
+					create Result.make_success (method (a_feature, a_sql, "", a_scope, l_entries.count), l_citations, l_entries)
+				end
+			else
+				create Result.make_failure (method (a_feature, a_sql, "", a_scope, 0), query_error)
+			end
+		ensure
+			named: Result.method.engine_feature.same_string_general (a_feature)
+		end
+
+	without_hebrew_points (a_text: STRING_32): STRING_32
+			-- `a_text' without Hebrew points and cantillation marks (U+0591 to U+05C7), as `lemma.search' holds it.
+		do
+			create Result.make (a_text.count)
+			across a_text as ic loop
+				if ic.natural_32_code < 0x0591 or ic.natural_32_code > 0x05C7 then
+					Result.append_character (ic)
+				end
+			end
+		ensure
+			no_longer: Result.count <= a_text.count
 		end
 
 	Place_select: STRING_8 = "SELECT t.token_id, t.language, t.surface, t.translit, w.name AS work_name, u.div1, u.div2, u.recension FROM conc.token t JOIN conc.unit u ON u.unit_id = t.unit_id JOIN conc.work w ON w.work_id = u.work_id"
