@@ -40,6 +40,7 @@ feature {NONE} -- Initialization
 			run_source_set_tests
 			run_concordance_tests
 			run_facade_open_tests
+			run_conc_timing_tests
 			run_layering_tests
 			run_scoop_consumer
 			print ("%N========================%N")
@@ -308,6 +309,24 @@ feature {NONE} -- Suites
 			run_test (agent t.test_detach_refused_while_a_cursor_is_open, "test_detach_refused_while_a_cursor_is_open")
 		end
 
+	run_conc_timing_tests
+			-- Timing on the real pack, only when SIMPLE_BIBLE_CONC names it (Task 8).
+		local
+			t: TEST_CONC_TIMING
+		do
+			print ("TEST_CONC_TIMING%N")
+			create t
+			if t.is_runnable then
+				run_test (agent t.test_word_view_first_screen, "test_word_view_first_screen")
+				run_test (agent t.test_deep_pages_offset_and_keyset, "test_deep_pages_offset_and_keyset")
+				run_test (agent t.test_english_and_verse_lookups, "test_english_and_verse_lookups")
+			else
+				run_skeletal (agent t.test_word_view_first_screen, "test_word_view_first_screen", "set SIMPLE_BIBLE_CONC")
+				run_skeletal (agent t.test_deep_pages_offset_and_keyset, "test_deep_pages_offset_and_keyset", "set SIMPLE_BIBLE_CONC")
+				run_skeletal (agent t.test_english_and_verse_lookups, "test_english_and_verse_lookups", "set SIMPLE_BIBLE_CONC")
+			end
+		end
+
 	run_facade_open_tests
 		local
 			t: TEST_FACADE_OPEN
@@ -333,6 +352,7 @@ feature {NONE} -- Suites
 		do
 			print ("TEST_CONCORDANCE%N")
 			create t
+			run_test (agent t.test_contracts_are_checked_in_this_build, "test_contracts_are_checked_in_this_build")
 			run_test (agent t.test_pack_absent_until_attached, "test_pack_absent_until_attached")
 			run_test (agent t.test_pack_rules, "test_pack_rules")
 			run_test (agent t.test_word_view_in_pilot_order, "test_word_view_in_pilot_order")

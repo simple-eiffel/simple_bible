@@ -16,6 +16,27 @@ inherit
 
 feature -- Tests
 
+	test_contracts_are_checked_in_this_build
+			-- A probe: an engine precondition broken on purpose must raise a precondition violation,
+			-- or every other test here ran with contracts off (an extending ECF target can drop them).
+			-- Retries only for the violation it expects: in a build without contracts the assert
+			-- fails and the failure must leave this routine (an unconditional retry loops forever).
+		local
+			l_tried, l_raised: BOOLEAN
+			l_error: BIB_ERROR
+		do
+			if not l_tried then
+				l_tried := True
+				create l_error.make (0, "probe")
+			end
+			assert_true ("precondition checked", l_raised)
+		rescue
+			if not l_raised and then attached {PRECONDITION_VIOLATION} (create {EXCEPTION_MANAGER}).last_exception then
+				l_raised := True
+				retry
+			end
+		end
+
 	test_pack_absent_until_attached
 			-- With nothing attached as "conc", the pack reports itself unavailable,
 			-- so no lookup can run (every lookup requires `is_available').
