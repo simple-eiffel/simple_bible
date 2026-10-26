@@ -1,0 +1,30 @@
+# Phase 2 Review Chain Evidence
+# Project: simple_bible, scope: concordance slice (15 classes)
+# Date: 2026-10-26
+
+Seat tokens:
+  RED (debate-seat / Sonnet 5.5): 80,689 tokens (final notice), 30 tool uses, 1,371 s; 02 - RED.md 8,126 bytes; 13 findings (4 HIGH, 6 MEDIUM, 0 LOW, 3 INFO)
+  BLUE (debate-seat / Sonnet 5.5): 53,748 tokens (final notice), 26 tool uses, 1,049 s; 03 - BLUE Defense.md 5,952 bytes; 9 CONCEDE, 4 NARROW, 0 CONTEST
+  Main thread: spike R2 (conc.db data shape, read-only) added to the execution record as E6 after BLUE could not locate conc.db
+  Adjudicator (debate-adjudicator / Opus 5.5): 96,647 tokens, 20 tool uses, 276 s; 04 - VERDICT.md 9,999 bytes
+  Write-up (general-purpose / Sonnet 5.5): 85,507 tokens; synopsis.md and phase2-claude-response.md
+  Total: 231,084 tokens for the three seats (estimate 180,000-240,000; Opus share 42 percent); 316,591 with the write-up. Session model: Opus 5.5
+
+# ROE: General Research ROE v1.1 (2026-10-12), read in full by the adjudicator 2026-10-26
+Review method: debate cycle - seats: RED, BLUE, adjudicator - mode: code-lite
+Adversarial condition: C3 (with executed-evidence proposal: C2)
+Classes reviewed: 15
+Executed: E1 compile (simple_bible, simple_bible_tests: 0 errors, 0 warnings); E2 tests 73 passed / 52 skeletal / 0 failed; spike R1 review/spikes/R1-offset-vs-keyset; spike R2 review/spikes/R2-conc-data-shape; adjudicator runs A1 (empty surfaces all Hebrew) and A2 (unqualified PRAGMA user_version reads main: 7 vs conc 0)
+Findings: 13 raised -> sustained 9 / narrowed 4 / overruled 0
+By severity (after ruling): HIGH 4 MEDIUM 6 LOW 1 INFO 2
+HIGH issues: 1.1 lemma_basis vocabulary vs stored kind:source; 1.2 empty Hebrew surfaces and English translit; 2.4 pack slots (Max_generic_packs 9, overflow reported by open); 3.3 simple_sql user_version_of (schema-qualified) and a cached is_pack_valid
+Escalated to /eiffel.debate: none
+Do-not-assume entries: 6
+Overall: PASS WITH CONDITIONS (5 conditions)
+
+Verdict: .eiffel-workflow/review/04 - VERDICT.md
+Synopsis: .eiffel-workflow/synopsis.md
+Ruled findings: .eiffel-workflow/evidence/phase2-claude-response.md
+Larry's gate (2026-10-26): APPROVED. His word: "Approve" (then "Go"). Verdict and its five conditions adopted; policy default kept (a missing or refused conc.db leaves the Bible open, concordance unavailable, reason in `conc_error`); the executed-evidence rule was already gated (Larry 2026-10-11, oracle rule "Executed runs count as external confrontation"), so the condition grade is C2.
+
+# Status: COMPLETE

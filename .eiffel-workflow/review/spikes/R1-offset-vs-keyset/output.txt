@@ -1,0 +1,4 @@
+sqlite 3.50.4 | places: 88444
+page at row      0: OFFSET    26.6 ms | keyset   30.4 ms | same rows: True
+page at row  44000: OFFSET    64.4 ms | keyset    0.4 ms | same rows: True
+page at row  88200: OFFSET   121.5 ms | keyset    0.5 ms | same rows: True

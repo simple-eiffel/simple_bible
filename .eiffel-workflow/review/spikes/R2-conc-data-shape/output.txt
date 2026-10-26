@@ -1,0 +1,16 @@
+sqlite 3.50.4 | user_version: 0
+token columns: ['token_id', 'corpus_id', 'unit_id', 'pos', 'surface', 'after', 'search', 'language', 'lemma_id', 'lemma_basis', 'pos_tag', 'morph', 'stem', 'form', 'person', 'gender', 'number', 'gstate', 'tense', 'voice', 'mood', 'gcase', 'degree', 'src_id', 'sense', 'before']
+lemma columns: ['lemma_id', 'language', 'key', 'headword', 'search', 'pos', 'n_tokens', 'translit', 'pron', 'pron_basis']
+lemma_basis values:
+  'computed:spacy-lemma'      3114729
+  'tagged:CATSS'               623693
+  'tagged:MACULA-Hebrew'       475911
+  'tagged:MACULA-Greek'        137779
+  'tagged:Grauman-WH'          137688
+tokens with lemma_id NULL or 0: 0
+tokens with empty or NULL surface: 6435
+lemmas by language, empty translit / all:
+  eng       19838 /    19838
+  grc           0 /    15725
+  hbo           0 /     8656
+  arc           0 /      715
