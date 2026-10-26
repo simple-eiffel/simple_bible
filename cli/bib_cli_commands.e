@@ -109,40 +109,31 @@ feature -- Commands
 	english (a_word: READABLE_STRING_GENERAL): STRING_32
 			-- The original words behind English `a_word', Bible by Bible, with counts (FR-151).
 		require
+			open: bible.is_open
 			available: bible.conc_pack.is_available
 			word_not_empty: not a_word.is_empty
 		local
-			l_rows: BIB_LIST_RESULT [BIB_ENGLISH_ROW]
-			l_totals: HASH_TABLE [INTEGER_64, STRING_32]
-			l_keys: ARRAYED_LIST [STRING_32]
-			l_key: STRING_32
-			i: INTEGER
+			l_lookup: BIB_LOOKUP
+			l_totals: like {BIB_LOOKUP}.english_totals
 		do
 			create Result.make (2000)
-			l_rows := bible.english_index.rows (a_word)
-			if attached l_rows.error as al_error then
+				-- One line per Bible and headword, the books summed: the window's totals (design scan 32).
+			create l_lookup.make (bible)
+			l_totals := l_lookup.english_totals (a_word)
+			if attached l_lookup.last_error as al_error then
 				Result.append (al_error.message)
-			elseif l_rows.count = 0 then
+			elseif l_totals.is_empty then
 				Result.append_string_general ("No original word stands behind %"")
 				Result.append_string_general (a_word)
 				Result.append_string_general ("%" in the concordance.")
 			else
-					-- One line per Bible and headword, the books summed.
-				create l_totals.make (l_rows.count)
-				create l_keys.make (l_rows.count)
-				from i := 1 until i > l_rows.count loop
-					l_key := l_rows.item (i).bible.to_string_32 + {STRING_32} "  " + l_rows.item (i).translit + {STRING_32} " - " + l_rows.item (i).headword
-					if l_totals.has (l_key) then
-						l_totals.force (l_totals.item (l_key) + l_rows.item (i).count, l_key)
-					else
-						l_totals.force (l_rows.item (i).count, l_key)
-						l_keys.extend (l_key)
-					end
-					i := i + 1
-				end
-				across l_keys as ic loop
-					Result.append (ic)
-					Result.append_string_general ("  x" + l_totals.item (ic).out + "%N")
+				across l_totals as ic loop
+					Result.append (bible.conc_pack.corpus_name (ic.corpus))
+					Result.append_string_general ("  ")
+					Result.append (ic.translit)
+					Result.append_string_general (" - ")
+					Result.append (ic.headword)
+					Result.append_string_general ("  x" + ic.places.out + "%N")
 				end
 			end
 		ensure
@@ -150,25 +141,33 @@ feature -- Commands
 		end
 
 	verse (a_book, a_chapter, a_verse: INTEGER; a_corpus: READABLE_STRING_8): STRING_32
-			-- Every word of the verse in corpus `a_corpus', each with its headword number (FR-152).
+			-- Every word of the verse in corpus `a_corpus' (empty: the book's own, as the window
+			-- chooses it), each with its headword number (FR-152).
 		require
+			open: bible.is_open
 			available: bible.conc_pack.is_available
 			book_positive: a_book > 0
 			chapter_positive: a_chapter > 0
 			verse_positive: a_verse > 0
 		local
 			l_words: BIB_LIST_RESULT [BIB_VERSE_WORD]
+			l_corpus: STRING_8
 			i: INTEGER
 		do
 			create Result.make (1000)
-			if not bible.conc_pack.has_corpus (a_corpus) then
-				Result.append_string_general ("The concordance has no corpus " + a_corpus + ".")
+			if a_corpus.is_empty then
+				l_corpus := (create {BIB_LOOKUP}.make (bible)).corpus_for_book (a_book)
 			else
-				l_words := bible.verse_word_lookup.words (create {BIB_REF}.make (a_book, a_chapter, a_verse, create {BIB_VERSIFICATION_SYSTEM}.make_kjv), a_corpus)
+				l_corpus := a_corpus.to_string_8
+			end
+			if not bible.conc_pack.has_corpus (l_corpus) then
+				Result.append_string_general ("The concordance has no corpus " + l_corpus + ".")
+			else
+				l_words := bible.verse_word_lookup.words (create {BIB_REF}.make (a_book, a_chapter, a_verse, create {BIB_VERSIFICATION_SYSTEM}.make_kjv), l_corpus)
 				if attached l_words.error as al_error then
 					Result.append (al_error.message)
 				elseif l_words.count = 0 then
-					Result.append_string_general ("No words for that verse in " + a_corpus + ".")
+					Result.append_string_general ({STRING_32} "No words for that verse in the " + bible.conc_pack.corpus_name (l_corpus) + {STRING_32} ".")
 				else
 					from i := 1 until i > l_words.count loop
 						Result.append_string_general (l_words.item (i).position.out + "  ")

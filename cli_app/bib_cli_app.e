@@ -92,7 +92,7 @@ feature {NONE} -- Commands
 			elseif l_command.same_string ("english") and a_args.count >= 2 and then not joined (a_args).is_empty then
 				print (a_commands.english (joined (a_args)))
 			elseif l_command.same_string ("verse") and a_args.count = 4 and then is_positive (a_args.i_th (2)) and then is_positive (a_args.i_th (3)) and then is_positive (a_args.i_th (4)) then
-				print (a_commands.verse (a_args.i_th (2).to_integer, a_args.i_th (3).to_integer, a_args.i_th (4).to_integer, if a_corpus.is_empty then "WLC-MACULA" else a_corpus end))
+				print (a_commands.verse (a_args.i_th (2).to_integer, a_args.i_th (3).to_integer, a_args.i_th (4).to_integer, a_corpus))
 			elseif l_command.same_string ("strongs") and a_args.count = 2 then
 				print (a_commands.strongs (a_args.i_th (2)))
 			else
