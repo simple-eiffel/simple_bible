@@ -29,10 +29,11 @@ None. Blocks Task 8 and any test against the real file.
 **Features:** `open_core`, `attach`, `detach`, `close`, `attached_count`, `attached_model`, `is_attached_alias`, `sqlite_version`
 
 ### Acceptance Criteria
-- [ ] `open_core` opens content.db with simple_sql `make_read_only`; `attach` uses `SIMPLE_SQL_DATABASE.attach_read_only` (FR-160)
-- [ ] Attach #11 fails with SQLite's own message in `last_error` (FR-138, ruling 3.1 `error_mapped`)
-- [ ] A write into an attached pack is refused (test with a throwaway pack file)
-- [ ] Postconditions hold under the test run; compiles clean
+- [x] `open_core` opens content.db with simple_sql `make_read_only`; `attach` uses `SIMPLE_SQL_DATABASE.attach_read_only` (FR-160)
+- [x] A failing attach (a missing file, a file that is not a database) puts SQLite's own message in `last_error` (FR-138, ruling 3.1 `error_mapped`). Attach #11 never reaches SQLite: `attach` requires `attached_count < Max_attached`, and `open` reports too many packs (ruling 2.4, Task 7)
+- [x] `detach` refused by SQLite (a statement still open on the pack) keeps the alias and reports it
+- [x] A write into an attached pack is refused (test with a throwaway pack file)
+- [x] Postconditions hold under the test run; compiles clean
 
 ### Implementation Notes
 `Max_attached` = 10 (ruling 3.2: no override in eiffel_sqlite_2025). One connection per SCOOP processor (DR-019).
