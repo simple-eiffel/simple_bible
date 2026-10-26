@@ -94,6 +94,47 @@ feature -- Reading
 			method_recorded: Result.method.engine_feature.same_string_general ("chapter")
 		end
 
+	has_cross_references: BOOLEAN
+			-- Does content.db carry cross-references (an optional table in v2)?
+
+	cross_references (a_book, a_chapter, a_verse: INTEGER): BIB_LIST_RESULT [BIB_READING_CROSS_REF]
+			-- The cross-references from `a_book' `a_chapter':`a_verse', most voted first; empty when
+			-- content.db carries none (P04's Cross-refs tab).
+		require
+			book_positive: a_book > 0
+			chapter_positive: a_chapter > 0
+			verse_positive: a_verse > 0
+		local
+			l_refs: ARRAYED_LIST [BIB_READING_CROSS_REF]
+			l_citations: ARRAYED_LIST [BIB_PROVENANCE]
+			l_scope: STRING_32
+		do
+			l_scope := a_book.out + " " + a_chapter.out + ":" + a_verse.out
+			create l_refs.make (0)
+			create l_citations.make (1)
+			if not has_cross_references or not attached cross_reference_provenance as al_provenance then
+				create Result.make_success (method ("cross_references", Cross_references_sql, "", l_scope, 0), l_citations, l_refs)
+			else
+				run_query (Cross_references_sql, <<a_book, a_chapter, a_verse>>)
+				if attached last_rows as al_rows then
+					create l_refs.make (al_rows.rows.count)
+					across al_rows.rows as ic loop
+						if ic.integer_value ("to_book") > 0 and ic.integer_value ("to_chapter") > 0 and ic.integer_value ("to_verse_start") > 0 then
+							l_refs.extend (create {BIB_READING_CROSS_REF}.make (ic.integer_value ("to_book"), ic.integer_value ("to_chapter"),
+								ic.integer_value ("to_verse_start"), ic.integer_value ("to_verse_end"), ic.integer_value ("votes"), al_provenance))
+						end
+					end
+					l_citations.extend (al_provenance)
+					create Result.make_success (method ("cross_references", Cross_references_sql, "", l_scope, l_refs.count), l_citations, l_refs)
+				else
+					create Result.make_failure (method ("cross_references", Cross_references_sql, "", l_scope, 0), query_error)
+				end
+			end
+		ensure
+			method_recorded: Result.method.engine_feature.same_string_general ("cross_references")
+			empty_without_table: not has_cross_references implies Result.count = 0
+		end
+
 	last_chapter (a_version: READABLE_STRING_8; a_book: INTEGER): INTEGER
 			-- The last chapter of book `a_book' in `a_version'; 0 when the version lacks the book.
 		require
@@ -115,8 +156,12 @@ feature {NONE} -- Implementation
 	sources: BIB_SOURCE_SET
 	edition: STRING_32
 
+	cross_reference_provenance: detachable BIB_PROVENANCE
+			-- The cross-references' source row, read with the versions.
+
 	load_versions
-			-- Read `version_info' with each version's source.
+			-- Read `version_info' with each version's source, and whether cross-references are carried
+			-- (the optional table's source row; a query error there just means it is absent).
 		require
 			open: sources.is_open
 		local
@@ -124,6 +169,15 @@ feature {NONE} -- Implementation
 			l_provenance: BIB_PROVENANCE
 		do
 			versions.wipe_out
+			run_query ("SELECT p.provenance_key, p.source_key, p.edition, p.license_id, p.non_commercial, p.share_alike, p.restricted, p.credit, p.caveat FROM main.source_provenance p WHERE p.provenance_key = (SELECT provenance_key FROM main.cross_reference LIMIT 1)", {ARRAY [detachable ANY]} <<>>)
+			if attached last_rows as al_rows then
+				across al_rows.rows as ic loop
+					create l_license.make (non_empty (ic.string_value ("license_id")), ic.integer_value ("non_commercial") /= 0,
+						ic.integer_value ("share_alike") /= 0, ic.integer_value ("restricted") /= 0, ic.string_value ("credit"))
+					create cross_reference_provenance.make (ic.integer_64_value ("provenance_key"), non_empty (ic.string_value ("source_key")), non_empty (ic.string_value ("edition")), l_license, ic.string_value ("caveat"))
+					has_cross_references := True
+				end
+			end
 			run_query (Versions_sql, {ARRAY [detachable ANY]} <<>>)
 			if attached last_rows as al_rows then
 				across al_rows.rows as ic loop
@@ -174,6 +228,8 @@ feature {NONE} -- SQL
 	Versions_sql: STRING_8 = "SELECT v.version_code, v.name, v.language, v.direction, v.versification, v.caveat, v.provenance_key, p.source_key, p.edition, p.license_id, p.non_commercial, p.share_alike, p.restricted, p.credit FROM main.version_info v JOIN main.source_provenance p ON p.provenance_key = v.provenance_key ORDER BY v.sort_order, v.version_code"
 
 	Chapter_sql: STRING_8 = "SELECT verse, text FROM main.verse_text WHERE version_code = ? AND book_id = ? AND chapter = ? ORDER BY verse"
+
+	Cross_references_sql: STRING_8 = "SELECT to_book, to_chapter, to_verse_start, to_verse_end, votes FROM main.cross_reference WHERE from_book = ? AND from_chapter = ? AND from_verse = ? ORDER BY votes DESC, to_book, to_chapter, to_verse_start LIMIT 200"
 
 	Last_chapter_sql: STRING_8 = "SELECT coalesce(max(chapter), 0) AS last FROM main.verse_text WHERE version_code = ? AND book_id = ?"
 

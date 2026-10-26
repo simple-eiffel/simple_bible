@@ -105,6 +105,41 @@ feature -- Lookup
 			reason_when_empty: Result.is_empty implies not note_text.is_empty
 		end
 
+	place_named (a_text: READABLE_STRING_GENERAL): detachable TUPLE [book, chapter, verse: INTEGER]
+			-- The place a reference box holds: "John 3:16", "Gen 1 1", "John 3" or "1 John 4" (verse 0:
+			-- the whole chapter); Void when the text names no book the catalog knows.
+		local
+			l_text, l_book: STRING_32
+			l_words: LIST [STRING_32]
+			l_last, l_before: STRING_32
+			l_colon: INTEGER
+		do
+			l_text := a_text.to_string_32
+			l_text.left_adjust
+			l_text.right_adjust
+			l_words := l_text.split (' ')
+			from until l_words.is_empty or else not l_words.last.is_empty loop
+				l_words.finish
+				l_words.remove
+			end
+			if l_words.count >= 2 then
+				l_last := l_words.last
+				l_before := l_words.i_th (l_words.count - 1)
+				l_colon := l_last.index_of (':', 1)
+				if l_colon > 1 and l_colon < l_last.count then
+					l_book := joined_words (l_words, l_words.count - 1)
+					Result := resolved (l_book, l_last.substring (1, l_colon - 1), l_last.substring (l_colon + 1, l_last.count))
+				elseif l_words.count >= 3 and then l_last.is_integer and then l_before.is_integer then
+					Result := resolved (joined_words (l_words, l_words.count - 2), l_before, l_last)
+				end
+				if Result = Void and then l_last.is_integer then
+					Result := resolved (joined_words (l_words, l_words.count - 1), l_last, "0")
+				end
+			end
+		ensure
+			place_positive: attached Result implies (Result.book > 0 and Result.chapter > 0 and Result.verse >= 0)
+		end
+
 	is_verse_text (a_text: READABLE_STRING_32): BOOLEAN
 			-- Is `a_text' "<book> <chapter>:<verse>" with a book the catalog knows?
 		do
@@ -180,7 +215,7 @@ feature {NONE} -- Kinds of lookup
 					end
 					a_choices.extend (create {BIB_LOOKUP_CHOICE}.make (l_surface, l_translit, l_lemma))
 				end
-				note_text := bible.books.book (a_book).name + {STRING_32} " " + a_chapter.out + {STRING_32} ":" + a_verse.out + {STRING_32} " in the " + bible.conc_pack.corpus_name (l_corpus) + {STRING_32} ": " + count_words (a_choices.count, "word")
+				note_text := bible.books.book (a_book).name + {STRING_32} " " + a_chapter.out + {STRING_32} ":" + a_verse.out + {STRING_32} " in the " + bible.conc_pack.corpus_short_name (l_corpus) + {STRING_32} ": " + count_words (a_choices.count, "word")
 			end
 		end
 
@@ -201,7 +236,7 @@ feature {NONE} -- Kinds of lookup
 			if last_error = Void then
 				across english_totals (a_text) as ic loop
 					a_choices.extend (create {BIB_LOOKUP_CHOICE}.make (ic.headword,
-						{STRING_32} "behind %"" + a_text + {STRING_32} "%" " + ic.places.out + {STRING_32} " times in the " + bible.conc_pack.corpus_name (ic.corpus),
+						{STRING_32} "behind %"" + a_text + {STRING_32} "%" " + ic.places.out + {STRING_32} " times in the " + bible.conc_pack.corpus_short_name (ic.corpus),
 						ic.lemma_id))
 				end
 			end
@@ -286,6 +321,36 @@ feature {NONE} -- Implementation
 					if not l_candidates.is_empty then
 						Result := [l_candidates.first, l_chapter.to_integer, l_verse.to_integer]
 					end
+				end
+			end
+		end
+
+	joined_words (a_words: LIST [STRING_32]; a_count: INTEGER): STRING_32
+			-- The first `a_count' words of `a_words', joined by spaces.
+		local
+			i: INTEGER
+		do
+			create Result.make (20)
+			from i := 1 until i > a_count or i > a_words.count loop
+				if not Result.is_empty then
+					Result.append_character (' ')
+				end
+				Result.append (a_words.i_th (i))
+				i := i + 1
+			end
+		end
+
+	resolved (a_book, a_chapter, a_verse: STRING_32): detachable TUPLE [book, chapter, verse: INTEGER]
+			-- The place, when `a_book' is a known book and the numbers are whole (verse 0 allowed).
+		local
+			l_candidates: ARRAYED_LIST [INTEGER]
+		do
+			if not a_book.is_empty and then a_chapter.is_integer and then a_verse.is_integer
+				and then a_chapter.to_integer > 0 and then a_verse.to_integer >= 0
+			then
+				l_candidates := bible.books.candidates_for_name (a_book)
+				if not l_candidates.is_empty then
+					Result := [l_candidates.first, a_chapter.to_integer, a_verse.to_integer]
 				end
 			end
 		end

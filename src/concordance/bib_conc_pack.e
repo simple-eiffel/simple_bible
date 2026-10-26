@@ -120,6 +120,26 @@ feature -- Status
 			not_empty: not a_code.is_empty implies not Result.is_empty
 		end
 
+	corpus_short_name (a_code: READABLE_STRING_8): STRING_32
+			-- `corpus_name' cut before its first qualifier (" (", " - ", " with ", ", "): "Septuagint"
+			-- for "Septuagint, Rahlfs 1935 (CATSS ...)", the label a column or chip has room for.
+		require
+			available: is_available
+		local
+			l_cut: INTEGER
+		do
+			Result := corpus_name (a_code).twin
+			across <<{STRING_32} " (", {STRING_32} " - ", {STRING_32} " with ", {STRING_32} ", ">> as ic loop
+				l_cut := Result.substring_index (ic, 1)
+				if l_cut > 1 then
+					Result := Result.substring (1, l_cut - 1)
+				end
+			end
+		ensure
+			not_empty: not a_code.is_empty implies not Result.is_empty
+			never_longer: Result.count <= corpus_name (a_code).count
+		end
+
 	corpus_of (a_provenance: BIB_PROVENANCE): STRING_8
 			-- The code of the corpus whose provenance `a_provenance' is; empty when it is none of the
 			-- pack's corpora. A headword's provenance names the corpus where it occurs most, so this
@@ -495,6 +515,65 @@ feature -- Access
 			fact_closure: Result.is_fact_closed
 		end
 
+feature -- Dictionary meanings (P05.5)
+
+	lexicon_entries (a_lemma_id: INTEGER_64): BIB_LIST_RESULT [BIB_LIBRARY_ENTRY]
+			-- Every dictionary meaning of headword `a_lemma_id', each source in its own words, sense
+			-- by sense: Abbott-Smith and BDB first, then LSJ, the UBS dictionaries and TBESH.
+		require
+			available: is_available
+			id_positive: a_lemma_id > 0
+		local
+			l_entries: ARRAYED_LIST [BIB_LIBRARY_ENTRY]
+			l_citations: ARRAYED_LIST [BIB_PROVENANCE]
+			l_provenance: BIB_PROVENANCE
+			l_title: STRING_32
+		do
+			run_query (Lexicon_sql, <<a_lemma_id>>)
+			if attached last_rows as al_rows then
+				create l_entries.make (al_rows.rows.count)
+				create l_citations.make (4)
+				across al_rows.rows as ic loop
+					l_provenance := meaning_provenance (ic)
+					cite (l_citations, l_provenance)
+					l_title := ic.string_value ("gloss")
+					if l_title.is_empty then
+						l_title := ic.string_value ("label")
+					end
+					if l_title.is_empty then
+						l_title := ic.string_value ("source_name")
+					end
+					if not l_title.is_empty and not ic.string_value ("source").is_empty then
+						l_entries.extend (create {BIB_LIBRARY_ENTRY}.make (ic.string_value ("source").to_string_8, l_title, ic.string_value ("text"), l_provenance))
+					end
+				end
+				if l_citations.is_empty then
+					cite (l_citations, first_provenance)
+				end
+				create Result.make_success (method ("lexicon_entries", Lexicon_sql, "", "lemma " + a_lemma_id.out, l_entries.count), l_citations, l_entries)
+			else
+				create Result.make_failure (method ("lexicon_entries", Lexicon_sql, "", "lemma " + a_lemma_id.out, 0), query_error)
+			end
+		ensure
+			named: Result.method.engine_feature.same_string_general ("lexicon_entries")
+		end
+
+	short_gloss (a_lemma_id: INTEGER_64): STRING_32
+			-- A headword's one-line English meaning ("to love"): STEPBible's gloss, else a lexicon's
+			-- first sense; empty when the pack has none.
+		require
+			available: is_available
+			id_positive: a_lemma_id > 0
+		do
+			create Result.make_empty
+			run_query (Gloss_sql, <<a_lemma_id>>)
+			if attached last_rows as al_rows then
+				across al_rows.rows as ic loop
+					Result := ic.string_value ("gloss")
+				end
+			end
+		end
+
 feature {BIB_WORD_LOOKUP} -- Method records
 
 	lookup_method (a_feature, a_query: STRING_8; a_corpus_code: READABLE_STRING_8; a_scope: READABLE_STRING_GENERAL; a_count: INTEGER_64): BIB_METHOD
@@ -826,6 +905,38 @@ feature {NONE} -- Implementation
 		do
 			Result := edition_or_pack
 		end
+
+	meaning_provenance (a_row: SIMPLE_SQL_ROW): BIB_PROVENANCE
+			-- The provenance of a dictionary meaning: its `meaning_source' row (keys from 1000).
+		local
+			l_license_id: STRING_32
+		do
+			l_license_id := a_row.string_value ("license")
+			if l_license_id.is_empty then
+				l_license_id := {STRING_32} "unknown"
+			end
+			create Result.make (1000 + a_row.integer_64_value ("source_row"), {STRING_32} "conc.db meaning_source " + a_row.string_value ("source"),
+				edition_text (a_row.string_value ("source_name"), a_row.string_value ("year")),
+				create {BIB_LICENSE}.make (l_license_id, False, False, not a_row.string_value ("ship_class").same_string_general ("open"), a_row.string_value ("credit")), "")
+		end
+
+	edition_text (a_name, a_year: STRING_32): STRING_32
+			-- "Name (year)", or the name alone, or "dictionary" when it has none.
+		do
+			if a_name.is_empty then
+				Result := {STRING_32} "dictionary"
+			elseif a_year.is_empty then
+				Result := a_name
+			else
+				Result := a_name + {STRING_32} " (" + a_year + {STRING_32} ")"
+			end
+		ensure
+			not_empty: not Result.is_empty
+		end
+
+	Lexicon_sql: STRING_8 = "SELECT s.source, s.seq, coalesce(s.label, '') AS label, coalesce(s.gloss, '') AS gloss, coalesce(s.text, '') AS text, coalesce(m.name, '') AS source_name, coalesce(m.year, '') AS year, coalesce(m.license, '') AS license, coalesce(m.ship_class, '') AS ship_class, coalesce(m.credit, '') AS credit, coalesce(m.rowid, 0) AS source_row FROM conc.lex_sense s LEFT JOIN conc.meaning_source m ON m.code = s.source WHERE s.lemma_id = ? AND s.source <> 'STEP' ORDER BY CASE s.source WHEN 'AS1922' THEN 1 WHEN 'BDB1906' THEN 2 WHEN 'LSJ' THEN 3 WHEN 'ML1889' THEN 4 WHEN 'SDGNT' THEN 5 WHEN 'SDBH' THEN 6 WHEN 'TBESH' THEN 7 ELSE 9 END, s.source, s.seq"
+
+	Gloss_sql: STRING_8 = "SELECT coalesce(gloss, '') AS gloss FROM conc.lex_sense WHERE lemma_id = ? AND coalesce(gloss, '') <> '' AND source IN ('STEP', 'AS1922', 'BDB1906', 'SDGNT', 'SDBH', 'TBESH') ORDER BY CASE source WHEN 'STEP' THEN 1 WHEN 'AS1922' THEN 2 WHEN 'BDB1906' THEN 3 ELSE 4 END, seq LIMIT 1"
 
 	pack_path: STRING_32
 			-- The attached pack's file, for error details.

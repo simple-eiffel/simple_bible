@@ -32,6 +32,7 @@ feature -- Tests
 			assert_integers_equal ("books", 3, l_builder.books_written)
 			assert_integers_equal ("versions", 3, l_builder.versions_written)
 			assert_integers_equal ("verses", 4, l_builder.verses_written)
+			assert_integers_equal ("cross-references, a book outside 1 to 66 left out", 1, l_builder.cross_references_written)
 			fixture.build (Pack_file)
 			create l_config.make_with_core (Out_file)
 			l_config := l_config.set_conc_path (Pack_file)
@@ -42,6 +43,7 @@ feature -- Tests
 			assert_true ("Hebrew reads right to left", attached l_bible.text_reader.version ("WLC") as al_wlc and then al_wlc.is_right_to_left and then al_wlc.language.same_string ("hbo"))
 			assert_true ("personal only is restricted", attached l_bible.text_reader.version ("NWT2013") as al_nwt and then al_nwt.provenance.license.is_restricted)
 			assert_integers_equal ("Genesis 1 in the KJV", 2, l_bible.text_reader.chapter ("KJV", 1, 1).count)
+			assert_true ("a single-verse target", l_bible.text_reader.cross_references (1, 1, 1).count = 1 and then not l_bible.text_reader.cross_references (1, 1, 1).item (1).is_range)
 			l_bible.close
 			remove_test_files
 		end
@@ -136,6 +138,8 @@ feature {NONE} -- Fixture
 				l_db.execute ("INSERT INTO bible_books VALUES (1, 'Genesis', 'Gen', 0), (2, 'Exodus', 'Exod', 0), (40, 'Matthew', 'Matt', 1)")
 				l_db.execute ("CREATE TABLE bible_versions(id INTEGER PRIMARY KEY, abbreviation TEXT, name TEXT, license TEXT, caveat TEXT)")
 				l_db.execute ("INSERT INTO bible_versions VALUES (12, 'KJV', 'KJV', 'MIT', ''), (16, 'WLC', 'WLC', 'MIT', 'HEBREW versification'), (31, 'NWT2013', 'New World Translation', 'personal_only (see source_provenance)', '')")
+				l_db.execute ("CREATE TABLE cross_references(id INTEGER PRIMARY KEY, from_book_id INTEGER, from_chapter INTEGER, from_verse INTEGER, to_book_id INTEGER, to_chapter INTEGER, to_verse_start INTEGER, to_verse_end INTEGER, votes INTEGER, source TEXT)")
+				l_db.execute ("INSERT INTO cross_references (from_book_id, from_chapter, from_verse, to_book_id, to_chapter, to_verse_start, to_verse_end, votes, source) VALUES (1, 1, 1, 40, 1, 1, NULL, 5, 'openbible'), (1, 1, 1, 99, 1, 1, 1, 9, 'openbible')")
 				l_db.execute ("CREATE TABLE bible_verses(id INTEGER PRIMARY KEY, version_id INTEGER, book_id INTEGER, chapter INTEGER, verse INTEGER, text TEXT)")
 				l_db.execute ("INSERT INTO bible_verses (version_id, book_id, chapter, verse, text) VALUES (12, 1, 1, 1, 'In the beginning'), (12, 1, 1, 2, 'And the earth'), (16, 1, 1, 1, 'BRASYT'), (31, 40, 1, 1, 'The book')")
 			else
