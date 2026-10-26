@@ -65,6 +65,7 @@ feature {NONE} -- Initialization
 			create user_path.make_from_separate (other.user_path)
 			create note_folder.make_from_separate (other.note_folder)
 			create default_version.make_from_separate (other.default_version)
+			create conc_path.make_from_separate (other.conc_path)
 			is_portable := other.is_portable
 			create plugin_registry.make
 		ensure
@@ -81,6 +82,7 @@ feature {NONE} -- Initialization
 			create history_path.make_empty
 			create user_path.make_empty
 			create note_folder.make_empty
+			create conc_path.make_empty
 			default_version := "BSB"
 			create plugin_registry.make
 		end
@@ -93,6 +95,11 @@ feature -- Access
 	history_path: STRING_32
 	user_path: STRING_32
 	note_folder: STRING_32
+
+	conc_path: STRING_32
+			-- The concordance pack: conc.db (personal edition) or conc_dist.db
+			-- (distribution edition). The edition swap is this one path; the
+			-- engine never tests the edition (D-021, debate 05b). Empty: no pack.
 	default_version: STRING_8
 	plugin_registry: BIB_PLUGIN_REGISTRY
 
@@ -154,6 +161,17 @@ feature -- Builder (returns Current for chaining; documented CQS exception)
 		ensure
 			set: rix_path.same_string_general (a_path)
 			others_unchanged: core_path ~ old core_path and ai_data_path ~ old ai_data_path and user_path ~ old user_path
+			result_is_current: Result = Current
+		end
+
+	set_conc_path (a_path: READABLE_STRING_GENERAL): like Current
+			-- Use `a_path' as the concordance pack (debate 05b).
+		do
+			conc_path := a_path.to_string_32
+			Result := Current
+		ensure
+			set: conc_path.same_string_general (a_path)
+			others_unchanged: core_path ~ old core_path and user_path ~ old user_path
 			result_is_current: Result = Current
 		end
 

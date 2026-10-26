@@ -161,6 +161,39 @@ feature -- Engines (one per instance)
 			create Result.make (sources)
 		end
 
+	conc_pack: BIB_CONC_PACK
+			-- The concordance pack reader (debate 05b): conc.db or conc_dist.db,
+			-- attached read-only under `{BIB_CONC_PACK}.Pack_alias'.
+		require
+			open: is_open
+		once ("OBJECT")
+			create Result.make (sources)
+		end
+
+	word_lookup: BIB_WORD_LOOKUP
+			-- The word view (D-021).
+		require
+			open: is_open
+		once ("OBJECT")
+			create Result.make (conc_pack)
+		end
+
+	english_index: BIB_ENGLISH_INDEX
+			-- The English lookup (D-021).
+		require
+			open: is_open
+		once ("OBJECT")
+			create Result.make (conc_pack)
+		end
+
+	verse_word_lookup: BIB_VERSE_WORDS
+			-- The verse lookup (D-021).
+		require
+			open: is_open
+		once ("OBJECT")
+			create Result.make (conc_pack)
+		end
+
 	census: BIB_CENSUS_ENGINE
 		require
 			open: is_open
