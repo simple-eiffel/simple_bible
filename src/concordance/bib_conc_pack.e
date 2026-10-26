@@ -17,6 +17,11 @@ class
 inherit
 	BIB_SQLITE_REPORTING
 
+	BIB_LANGUAGE_CODES
+		export
+			{NONE} all
+		end
+
 create
 	make
 
@@ -26,6 +31,9 @@ feature {NONE} -- Initialization
 		do
 			sources := a_sources
 			create corpus_codes.make (0)
+			create corpus_ids.make (8)
+			create corpus_code_of.make (8)
+			create corpus_provenances.make (8)
 			create edition_label_cache.make_empty
 		ensure
 			sources_set: sources = a_sources
@@ -107,6 +115,9 @@ feature -- Commands
 			validated_serial := 0
 			pack_error := Void
 			corpus_codes.wipe_out
+			corpus_ids.wipe_out
+			corpus_code_of.wipe_out
+			corpus_provenances.wipe_out
 			has_meanings := False
 			create edition_label_cache.make_empty
 			if attached sources.database as al_db then
@@ -123,6 +134,8 @@ feature -- Commands
 					read_pack_facts (al_db)
 					if pack_error /= Void then
 							-- `read_pack_facts' reported a query SQLite refused.
+					elseif corpus_codes.is_empty then
+						create pack_error.make_with_details ({BIB_ERROR}.Schema_mismatch, "The concordance pack lists no corpus.", pack_path)
 					elseif edition_label_cache.is_empty then
 						create pack_error.make_with_details ({BIB_ERROR}.Schema_mismatch, "The concordance pack does not name its edition (meta edition_label).", pack_path)
 					else
@@ -151,22 +164,47 @@ feature -- Access
 		end
 
 	word_entry (a_lemma_id: INTEGER_64): detachable BIB_WORD_ENTRY
-			-- Heading of `a_lemma_id'; Void when unknown.
+			-- Heading of `a_lemma_id'; Void when unknown, and for an English lemma, which is a
+			-- rendering, not a headword (ruling 1.2).
 		require
 			available: is_available
 			id_positive: a_lemma_id > 0
 		do
-			check implemented_in_phase_4: False then end
+			run_query ("SELECT lemma_id, language, headword, translit, pron, n_tokens FROM conc.lemma WHERE lemma_id = ?", {ARRAY [detachable ANY]} <<a_lemma_id>>)
+			if attached last_rows as al_rows and then not al_rows.rows.is_empty and then attached al_rows.rows.first as al_row then
+				Result := entry_from_row (al_row)
+			end
 		ensure
 			same_headword: attached Result as r implies r.lemma_id = a_lemma_id
 		end
 
 	headwords_for_strongs (a_key: BIB_STRONGS_KEY): BIB_LIST_RESULT [BIB_WORD_ENTRY]
-			-- Headword candidates behind `a_key' through lemma_xref only.
+			-- Headword candidates behind `a_key' through lemma_xref only (FR-153), commonest first.
 		require
 			available: is_available
+		local
+			l_sql: STRING_8
+			l_entries: ARRAYED_LIST [BIB_WORD_ENTRY]
+			l_citations: ARRAYED_LIST [BIB_PROVENANCE]
 		do
-			check implemented_in_phase_4: False then end
+			l_sql := "SELECT l.lemma_id, l.language, l.headword, l.translit, l.pron, l.n_tokens FROM conc.lemma_xref x JOIN conc.lemma l ON l.lemma_id = x.lemma_id WHERE x.scheme = 'strongs' AND x.value = ? ORDER BY l.n_tokens DESC, l.lemma_id"
+			run_query (l_sql, {ARRAY [detachable ANY]} <<a_key.text>>)
+			if attached last_rows as al_rows then
+				create l_entries.make (al_rows.rows.count)
+				create l_citations.make (2)
+				across al_rows.rows as ic loop
+					if attached entry_from_row (ic) as al_entry then
+						l_entries.extend (al_entry)
+						cite (l_citations, al_entry.provenance)
+					end
+				end
+				if l_citations.is_empty then
+					cite (l_citations, first_provenance)
+				end
+				create Result.make_success (method ("headwords_for_strongs", l_sql, "", a_key.text, l_entries.count), l_citations, l_entries)
+			else
+				create Result.make_failure (method ("headwords_for_strongs", l_sql, "", a_key.text, 0), query_error)
+			end
 		ensure
 			method_recorded: Result.method.engine_feature.same_string_general ("headwords_for_strongs")
 			fact_closure: Result.is_fact_closed
@@ -178,8 +216,15 @@ feature -- Access
 			available: is_available
 			id_positive: a_lemma_id > 0
 			corpus_known: has_corpus (a_corpus_code)
+		local
+			l_total: INTEGER_64
 		do
-			check implemented_in_phase_4: False then end
+				-- The builder's per-corpus count (FR-162): no token is counted at view time (NFR-019).
+			run_query ("SELECT n FROM conc.lemma_corpus_count WHERE lemma_id = ? AND corpus_id = ?", {ARRAY [detachable ANY]} <<a_lemma_id, corpus_id (a_corpus_code)>>)
+			if attached last_rows as al_rows and then not al_rows.rows.is_empty and then attached al_rows.rows.first as al_row then
+				l_total := al_row.integer_64_value ("n").max (0)
+			end
+			create Result.make (l_total, provenance_of (a_corpus_code))
 		ensure
 			non_negative: Result.value >= 0
 		end
@@ -192,8 +237,12 @@ feature -- Access
 			corpus_known: has_corpus (a_corpus_code)
 			offset_non_negative: a_offset >= 0
 			limit_bounded: a_limit >= 1 and a_limit <= Max_page_size
+		local
+			l_sql: STRING_8
 		do
-			check implemented_in_phase_4: False then end
+			l_sql := Place_select + " WHERE t.lemma_id = ? AND t.corpus_id = ? ORDER BY t.token_id LIMIT ? OFFSET ?"
+			run_query (l_sql, {ARRAY [detachable ANY]} <<a_lemma_id, corpus_id (a_corpus_code), a_limit, a_offset>>)
+			Result := place_result ("place_page", l_sql, a_corpus_code, "lemma " + a_lemma_id.out + ", rows from " + (a_offset + 1).out)
 		ensure
 			method_recorded: Result.method.engine_feature.same_string_general ("place_page")
 			bounded: Result.count <= a_limit
@@ -213,8 +262,12 @@ feature -- Access
 			corpus_known: has_corpus (a_corpus_code)
 			after_non_negative: a_after_token_id >= 0
 			limit_bounded: a_limit >= 1 and a_limit <= Max_page_size
+		local
+			l_sql: STRING_8
 		do
-			check implemented_in_phase_4: False then end
+			l_sql := Place_select + " WHERE t.lemma_id = ? AND t.corpus_id = ? AND t.token_id > ? ORDER BY t.token_id LIMIT ?"
+			run_query (l_sql, {ARRAY [detachable ANY]} <<a_lemma_id, corpus_id (a_corpus_code), a_after_token_id, a_limit>>)
+			Result := place_result ("place_page_after", l_sql, a_corpus_code, "lemma " + a_lemma_id.out + ", rows after token " + a_after_token_id.out)
 		ensure
 			method_recorded: Result.method.engine_feature.same_string_general ("place_page_after")
 			bounded: Result.count <= a_limit
@@ -224,13 +277,46 @@ feature -- Access
 		end
 
 	english_rows (a_english: READABLE_STRING_GENERAL): BIB_LIST_RESULT [BIB_ENGLISH_ROW]
-			-- Candidates behind `a_english', one row per original word and book (the SQL of BIB_ENGLISH_INDEX).
-			-- Normalization of `a_english' (case, diacritics) is settled by debate 01 (D-009), not here.
+			-- Candidates behind `a_english', one row per English Bible, original word and book (FR-151;
+			-- the SQL of BIB_ENGLISH_INDEX). The word is matched against `token.search' in lowercase;
+			-- fuller normalization (diacritics) is settled by debate 01 (D-009), not here.
 		require
 			available: is_available
 			word_not_empty: not a_english.is_empty
+		local
+			l_sql: STRING_8
+			l_rows: ARRAYED_LIST [BIB_ENGLISH_ROW]
+			l_citations: ARRAYED_LIST [BIB_PROVENANCE]
+			l_bible_id: INTEGER_64
+			l_bad: detachable STRING_8
+			l_provenance: BIB_PROVENANCE
 		do
-			check implemented_in_phase_4: False then end
+			l_sql := "SELECT e.corpus_id AS bible_id, o.lemma_id, l.headword, l.translit, wb.book_id, count(*) AS n FROM conc.token e JOIN conc.link k ON k.to_token = e.token_id AND k.kind LIKE 'translation:ENG-%%' JOIN conc.token o ON o.token_id = k.from_token JOIN conc.lemma l ON l.lemma_id = o.lemma_id JOIN conc.unit u ON u.unit_id = o.unit_id JOIN conc.work_book wb ON wb.work_id = u.work_id WHERE e.search = ? GROUP BY e.corpus_id, o.lemma_id, wb.book_id ORDER BY e.corpus_id, n DESC, o.lemma_id, wb.book_id"
+			run_query (l_sql, {ARRAY [detachable ANY]} <<a_english.to_string_32.as_lower>>)
+			if attached last_rows as al_rows then
+				create l_rows.make (al_rows.rows.count)
+				create l_citations.make (2)
+				across al_rows.rows as ic until l_bad /= Void loop
+					l_bible_id := ic.integer_64_value ("bible_id")
+					if ic.string_value ("translit").is_empty or ic.integer_value ("book_id") <= 0 or ic.integer_64_value ("lemma_id") <= 0 then
+						l_bad := "An English link in the concordance pack has no headword transliteration or book (lemma " + ic.integer_64_value ("lemma_id").out + ")."
+					else
+						l_provenance := provenance_of_id (l_bible_id)
+						l_rows.extend (create {BIB_ENGLISH_ROW}.make (a_english, corpus_code_of_id (l_bible_id), ic.integer_64_value ("lemma_id"), ic.string_value ("headword"), ic.string_value ("translit"), ic.integer_value ("book_id"), ic.integer_64_value ("n"), l_provenance))
+						cite (l_citations, l_provenance)
+					end
+				end
+				if attached l_bad as al_bad then
+					create Result.make_failure (method ("english_rows", l_sql, "", a_english, 0), create {BIB_ERROR}.make ({BIB_ERROR}.Schema_mismatch, al_bad))
+				else
+					if l_citations.is_empty then
+						cite (l_citations, first_provenance)
+					end
+					create Result.make_success (method ("english_rows", l_sql, "", a_english, l_rows.count), l_citations, l_rows)
+				end
+			else
+				create Result.make_failure (method ("english_rows", l_sql, "", a_english, 0), query_error)
+			end
 		ensure
 			method_recorded: Result.method.engine_feature.same_string_general ("english_rows")
 			every_row_for_word: Result.is_success implies across 1 |..| Result.count as l_i all Result.item (l_i).english.same_string_general (a_english) end
@@ -239,15 +325,59 @@ feature -- Access
 
 	verse_words (a_ref: BIB_REF; a_corpus_code: READABLE_STRING_8): BIB_LIST_RESULT [BIB_VERSE_WORD]
 			-- Every word of `a_ref' in corpus `a_corpus_code', in order (the SQL of BIB_VERSE_WORDS).
-			-- Phase 4 (ruling 1.1): the stored `token.lemma_basis' is `<kind>:<source>' (for
-			-- example "tagged:MACULA-Hebrew", "computed:spacy-lemma"). Each word is built with
-			-- the KIND only, the text before the colon, so BIB_VERSE_WORD sees its domain
-			-- vocabulary (tagged, computed, aligned, xref, none), never storage spelling.
+			-- Ruling 1.1: the stored `token.lemma_basis' is `<kind>:<source>' (for example
+			-- "tagged:MACULA-Hebrew", "computed:spacy-lemma"); each word is built with the KIND
+			-- only, the text before the colon, so BIB_VERSE_WORD sees its domain vocabulary
+			-- (tagged, computed, aligned, xref, none), never storage spelling. The book is found
+			-- through the pack's `work_book' keys (FR-024). The default recension only, for now
+			-- (2026-10-26): an LXX book kept only in recensions answers no words yet.
 		require
 			available: is_available
 			corpus_known: has_corpus (a_corpus_code)
+		local
+			l_sql: STRING_8
+			l_words: ARRAYED_LIST [BIB_VERSE_WORD]
+			l_provenance: BIB_PROVENANCE
+			l_bad: detachable STRING_8
+			l_language, l_kind: STRING_8
+			l_surface, l_translit: STRING_32
+			l_lemma, l_previous: INTEGER_64
+			l_position: INTEGER
 		do
-			check implemented_in_phase_4: False then end
+			l_sql := "SELECT t.pos, t.language, t.surface, t.translit, t.lemma_id, t.lemma_basis FROM conc.token t JOIN conc.unit u ON u.unit_id = t.unit_id JOIN conc.work_book wb ON wb.work_id = u.work_id WHERE t.corpus_id = ? AND wb.book_id = ? AND u.div1 = ? AND u.div2 = ? AND u.recension = '' ORDER BY t.pos"
+			run_query (l_sql, {ARRAY [detachable ANY]} <<corpus_id (a_corpus_code), a_ref.book_id, a_ref.chapter.out, a_ref.verse.out>>)
+			l_provenance := provenance_of (a_corpus_code)
+			if attached last_rows as al_rows then
+				create l_words.make (al_rows.rows.count)
+				across al_rows.rows as ic until l_bad /= Void loop
+					l_position := ic.integer_value ("pos")
+					l_language := ic.string_value ("language").to_string_8
+					l_surface := ic.string_value ("surface")
+					l_translit := ic.string_value ("translit")
+					l_lemma := ic.integer_64_value ("lemma_id").max (0)
+					if l_lemma = 0 then
+						l_kind := "none"
+					else
+						l_kind := basis_kind (ic.string_value ("lemma_basis").to_string_8)
+					end
+					if l_position < 1 or l_position <= l_previous or not is_concordance_language (l_language)
+						or ((is_original (l_language) and not l_surface.is_empty) and l_translit.is_empty)
+						or not is_known_basis (l_kind) or (l_kind.same_string ("none") and l_lemma /= 0)
+					then
+						l_bad := "A word of the verse breaks the pack's rules (position " + l_position.out + ")."
+					else
+						l_words.extend (create {BIB_VERSE_WORD}.make (l_position, l_language, l_surface, l_translit, l_lemma, l_kind, l_provenance))
+						l_previous := l_position
+					end
+				end
+				if attached l_bad as al_bad then
+					create Result.make_failure (method ("verse_words", l_sql, a_corpus_code, verse_scope (a_ref), 0), create {BIB_ERROR}.make ({BIB_ERROR}.Schema_mismatch, al_bad))
+				else
+					create Result.make_success (method ("verse_words", l_sql, a_corpus_code, verse_scope (a_ref), l_words.count), {ARRAY [BIB_PROVENANCE]} <<l_provenance>>, l_words)
+				end
+			else
+				create Result.make_failure (method ("verse_words", l_sql, a_corpus_code, verse_scope (a_ref), 0), query_error)
+			end
 		ensure
 			method_recorded: Result.method.engine_feature.same_string_general ("verse_words")
 			positions_valid: Result.is_success implies across 1 |..| Result.count as l_i all Result.item (l_i).position >= 1 end
@@ -267,7 +397,7 @@ feature -- Constants
 	Required_tables: ARRAY [STRING_8]
 			-- Tables of pack schema v1 (research/17); `check_pack' refuses a pack missing one.
 		once
-			Result := <<"corpus", "work", "unit", "lemma", "token", "link", "lemma_xref", "meaning_source", "lex_sense", "lemma_corpus_count", "lemma_english", "meta">>
+			Result := <<"corpus", "work", "work_book", "unit", "lemma", "token", "link", "lemma_xref", "meaning_source", "lex_sense", "lemma_corpus_count", "lemma_english", "meta">>
 		end
 
 feature {NONE} -- Implementation
@@ -295,8 +425,13 @@ feature {NONE} -- Implementation
 			-- Read the corpus codes, whether meanings exist and the edition label, once. A query
 			-- SQLite refuses sets `pack_error', so the pack is never accepted with empty facts.
 		do
-			across a_db.query ("SELECT code FROM " + Pack_alias + ".corpus ORDER BY corpus_id").rows as ic loop
+			across a_db.query ("SELECT corpus_id, code, name, license, ship_class FROM " + Pack_alias + ".corpus ORDER BY corpus_id").rows as ic loop
 				corpus_codes.extend (ic.string_value ("code").to_string_8)
+				corpus_ids.force (ic.integer_64_value ("corpus_id"), corpus_codes.last)
+				corpus_code_of.force (corpus_codes.last, ic.integer_64_value ("corpus_id"))
+				if ic.integer_64_value ("corpus_id") > 0 and not ic.string_value ("code").is_empty then
+					corpus_provenances.force (corpus_provenance (ic.integer_64_value ("corpus_id"), ic.string_value ("code"), ic.string_value ("name"), ic.string_value ("license"), ic.string_value ("ship_class")), ic.integer_64_value ("corpus_id"))
+				end
 			end
 			note_failure (a_db)
 			has_meanings := not a_db.query ("SELECT 1 FROM " + Pack_alias + ".lex_sense LIMIT 1").rows.is_empty
@@ -315,6 +450,251 @@ feature {NONE} -- Implementation
 			end
 		ensure
 			first_kept: old pack_error /= Void implies pack_error = old pack_error
+		end
+
+	corpus_ids: HASH_TABLE [INTEGER_64, STRING_8]
+			-- Corpus id by code, read once by `check_pack'.
+
+	corpus_code_of: HASH_TABLE [STRING_8, INTEGER_64]
+			-- Corpus code by id, read once by `check_pack'.
+
+	corpus_provenances: HASH_TABLE [BIB_PROVENANCE, INTEGER_64]
+			-- Each corpus's provenance from its own license and ship class (NFR-007), by id.
+
+	corpus_provenance (a_id: INTEGER_64; a_code, a_name, a_license, a_ship_class: STRING_32): BIB_PROVENANCE
+			-- Provenance of corpus `a_id': its license text and its ship class as the caveat.
+		require
+			id_positive: a_id > 0
+			code_not_empty: not a_code.is_empty
+		local
+			l_ship: STRING_32
+			l_identifier: STRING_32
+			l_license: BIB_LICENSE
+		do
+			l_ship := a_ship_class.as_lower
+			if a_license.is_empty then
+				l_identifier := a_code
+			else
+				l_identifier := a_license
+			end
+			create l_license.make (l_identifier, l_ship.has_substring ("_nc"), l_ship.has_substring ("share_alike"), l_ship.has_substring ("restricted") or l_ship.has_substring ("verify"), a_license)
+			create Result.make (a_id, {STRING_32} "conc:" + a_code, a_name, l_license, a_ship_class)
+		end
+
+	corpus_id (a_code: READABLE_STRING_8): INTEGER_64
+			-- Id of corpus `a_code'; 0 when the pack does not list it.
+		do
+			Result := corpus_ids.item (a_code.to_string_8)
+		end
+
+	corpus_code_of_id (a_id: INTEGER_64): STRING_8
+			-- Code of corpus `a_id', or its number when the pack does not list it.
+		do
+			if attached corpus_code_of.item (a_id) as al_code then
+				Result := al_code
+			else
+				Result := a_id.out
+			end
+		end
+
+	provenance_of (a_code: READABLE_STRING_8): BIB_PROVENANCE
+			-- Provenance of corpus `a_code'.
+		do
+			Result := provenance_of_id (corpus_id (a_code))
+		end
+
+	provenance_of_id (a_id: INTEGER_64): BIB_PROVENANCE
+			-- Provenance of corpus `a_id', or of the pack's first corpus when it does not list it.
+		do
+			if attached corpus_provenances.item (a_id) as al_provenance then
+				Result := al_provenance
+			else
+				Result := first_provenance
+			end
+		end
+
+	first_provenance: BIB_PROVENANCE
+			-- Provenance of the pack's first corpus (`check_pack' refuses a pack listing none).
+		do
+			if not corpus_codes.is_empty and then attached corpus_provenances.item (corpus_id (corpus_codes.first)) as al_provenance then
+				Result := al_provenance
+			else
+				create Result.make (1, {STRING_32} "conc", edition_label_cache, create {BIB_LICENSE}.make ({STRING_32} "unknown", False, False, True, {STRING_32} ""), {STRING_32} "no corpus listed")
+			end
+		end
+
+	lemma_provenance (a_lemma_id: INTEGER_64): BIB_PROVENANCE
+			-- Provenance of a headword: the corpus where it occurs most (its tagging is that corpus's).
+		do
+			Result := first_provenance
+			run_query ("SELECT corpus_id FROM conc.lemma_corpus_count WHERE lemma_id = ? ORDER BY n DESC, corpus_id LIMIT 1", {ARRAY [detachable ANY]} <<a_lemma_id>>)
+			if attached last_rows as al_rows and then not al_rows.rows.is_empty and then attached al_rows.rows.first as al_row then
+				Result := provenance_of_id (al_row.integer_64_value ("corpus_id"))
+			end
+		end
+
+	entry_from_row (a_row: SIMPLE_SQL_ROW): detachable BIB_WORD_ENTRY
+			-- The heading `a_row' holds; Void unless it is an original-language headword with a
+			-- headword and a transliteration (BIB_WORD_ENTRY's creator requires both).
+		local
+			l_id: INTEGER_64
+			l_language: STRING_8
+		do
+			l_id := a_row.integer_64_value ("lemma_id")
+			l_language := a_row.string_value ("language").to_string_8
+			if l_id > 0 and is_original (l_language) and not a_row.string_value ("headword").is_empty and not a_row.string_value ("translit").is_empty then
+				create Result.make (l_id, l_language, a_row.string_value ("headword"), a_row.string_value ("translit"), a_row.string_value ("pron"), a_row.integer_64_value ("n_tokens").max (0), lemma_provenance (l_id))
+			end
+		ensure
+			same_id: attached Result as r implies r.lemma_id = a_row.integer_64_value ("lemma_id")
+		end
+
+	Place_select: STRING_8 = "SELECT t.token_id, t.language, t.surface, t.translit, w.name AS work_name, u.div1, u.div2, u.recension FROM conc.token t JOIN conc.unit u ON u.unit_id = t.unit_id JOIN conc.work w ON w.work_id = u.work_id"
+			-- The every-place columns; each query adds its WHERE, ORDER BY and LIMIT.
+
+	place_result (a_feature, a_sql: STRING_8; a_corpus_code: READABLE_STRING_8; a_scope: STRING_8): BIB_LIST_RESULT [BIB_PLACE_ROW]
+			-- The place rows in `last_rows', or the failure: a row that breaks BIB_PLACE_ROW's rules
+			-- fails the whole answer (Schema_mismatch), never the engine.
+		local
+			l_rows: ARRAYED_LIST [BIB_PLACE_ROW]
+			l_provenance: BIB_PROVENANCE
+			l_bad: detachable STRING_8
+			l_language: STRING_8
+			l_surface, l_translit: STRING_32
+		do
+			l_provenance := provenance_of (a_corpus_code)
+			if attached last_rows as al_rows then
+				create l_rows.make (al_rows.rows.count)
+				across al_rows.rows as ic until l_bad /= Void loop
+					l_language := ic.string_value ("language").to_string_8
+					l_surface := ic.string_value ("surface")
+					l_translit := ic.string_value ("translit")
+					if ic.integer_64_value ("token_id") <= 0 or not is_concordance_language (l_language) or ((is_original (l_language) and not l_surface.is_empty) and l_translit.is_empty) then
+						l_bad := "Token " + ic.integer_64_value ("token_id").out + " in the concordance pack has no transliteration or a language the engine does not know."
+					else
+						l_rows.extend (create {BIB_PLACE_ROW}.make (ic.integer_64_value ("token_id"), l_language, reference_text (ic), l_surface, l_translit, l_provenance))
+					end
+				end
+				if attached l_bad as al_bad then
+					create Result.make_failure (method (a_feature, a_sql, a_corpus_code, a_scope, 0), create {BIB_ERROR}.make ({BIB_ERROR}.Schema_mismatch, al_bad))
+				else
+					create Result.make_success (method (a_feature, a_sql, a_corpus_code, a_scope, l_rows.count), {ARRAY [BIB_PROVENANCE]} <<l_provenance>>, l_rows)
+				end
+			else
+				create Result.make_failure (method (a_feature, a_sql, a_corpus_code, a_scope, 0), query_error)
+			end
+		ensure
+			named: Result.method.engine_feature.same_string_general (a_feature)
+		end
+
+	reference_text (a_row: SIMPLE_SQL_ROW): STRING_32
+			-- "Genesis 1:1", with the recension when the place has one.
+		do
+			Result := a_row.string_value ("work_name") + {STRING_32} " " + a_row.string_value ("div1") + {STRING_32} ":" + a_row.string_value ("div2")
+			if not a_row.string_value ("recension").is_empty then
+				Result := Result + {STRING_32} " (" + a_row.string_value ("recension") + {STRING_32} ")"
+			end
+		ensure
+			not_empty: not Result.is_empty
+		end
+
+	verse_scope (a_ref: BIB_REF): STRING_8
+			-- The method's scope line for a verse lookup.
+		do
+			Result := "book " + a_ref.book_id.out + ", chapter " + a_ref.chapter.out + ", verse " + a_ref.verse.out
+		end
+
+	basis_kind (a_stored: STRING_8): STRING_8
+			-- The kind in a stored `<kind>:<source>' basis: the text before the colon (ruling 1.1).
+		do
+			if a_stored.has (':') then
+				Result := a_stored.substring (1, a_stored.index_of (':', 1) - 1)
+			else
+				Result := a_stored.twin
+			end
+		end
+
+	is_known_basis (a_kind: STRING_8): BOOLEAN
+			-- Is `a_kind' in BIB_VERSE_WORD's basis vocabulary?
+		do
+			Result := across <<"tagged", "computed", "aligned", "xref", "none">> as ic some a_kind.same_string (ic) end
+		end
+
+	cite (a_citations: ARRAYED_LIST [BIB_PROVENANCE]; a_provenance: BIB_PROVENANCE)
+			-- Add `a_provenance' to `a_citations' unless it is already there.
+		do
+			if not across a_citations as ic some ic = a_provenance end then
+				a_citations.extend (a_provenance)
+			end
+		ensure
+			cited: across a_citations as ic some ic = a_provenance end
+		end
+
+	method (a_feature, a_sql: STRING_8; a_corpus_code: READABLE_STRING_8; a_scope: READABLE_STRING_GENERAL; a_count: INTEGER_64): BIB_METHOD
+			-- The method record of one pack query (NFR-006): its SQL, scope and count.
+		require
+			scope_not_empty: not a_scope.is_empty
+		do
+			create Result.make (a_feature, a_sql, a_corpus_code, a_scope, create {ARRAYED_LIST [STRING_32]}.make (0), create {ARRAYED_LIST [STRING_32]}.make (0), {ARRAY [INTEGER_64]} <<a_count>>, {BIB_RELEASE}.Engine_version, edition_or_pack, sqlite_version_or_unknown)
+		ensure
+			named: Result.engine_feature.same_string_general (a_feature)
+		end
+
+	edition_or_pack: STRING_32
+			-- The pack's edition label for the method record, or "concordance pack" before one is read.
+		do
+			if edition_label_cache.is_empty then
+				Result := {STRING_32} "concordance pack"
+			else
+				Result := edition_label_cache
+			end
+		end
+
+	sqlite_version_or_unknown: STRING_32
+			-- SQLite's version for the method record.
+		do
+			if sources.sqlite_version.is_empty then
+				Result := {STRING_32} "unknown"
+			else
+				Result := sources.sqlite_version
+			end
+		end
+
+	last_rows: detachable SIMPLE_SQL_RESULT
+			-- Rows of the latest `run_query'; Void when it failed.
+
+	last_query_error: detachable BIB_ERROR
+			-- Why the latest `run_query' failed.
+
+	run_query (a_sql: STRING_8; a_args: ARRAY [detachable ANY])
+			-- Run `a_sql' with `a_args' on the pack's connection: the rows go to `last_rows', a
+			-- refusal to `last_query_error' with SQLite's own words.
+		require
+			sql_not_empty: not a_sql.is_empty
+		do
+			last_rows := Void
+			last_query_error := Void
+			if attached sources.database as al_db then
+				last_rows := al_db.query_with_args (a_sql, a_args)
+				if al_db.has_error then
+					last_rows := Void
+					create last_query_error.make_with_details ({BIB_ERROR}.Database_problem, "A concordance query failed.", sqlite_message (al_db, a_sql))
+				end
+			else
+				create last_query_error.make ({BIB_ERROR}.Source_unavailable, "The concordance pack is not open.")
+			end
+		ensure
+			rows_xor_error: (last_rows /= Void) xor (last_query_error /= Void)
+		end
+
+	query_error: BIB_ERROR
+			-- `last_query_error', or a general one when there is none.
+		do
+			if attached last_query_error as al_error then
+				Result := al_error
+			else
+				create Result.make ({BIB_ERROR}.Database_problem, "A concordance query failed.")
+			end
 		end
 
 	pack_path: STRING_32

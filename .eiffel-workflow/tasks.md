@@ -86,7 +86,7 @@ Tasks 1 and 2.
 ### Acceptance Criteria
 - [x] Every field pinned by the postconditions (rulings 1.2, 1.3) holds on fixture rows
 - [x] `test_verse_word_takes_real_hebrew_rows` and `test_verse_word_takes_english_computed_rows` move from skeletal to run, and pass
-- [ ] Provenance from `corpus.license` / `ship_class` and `meaning_source` on every value (NFR-007): built where the pack makes the values, so checked in Task 5
+- [x] Provenance from `corpus.license` / `ship_class` on every value (NFR-007), built by the pack in Task 5 (`meaning_source` comes with the meanings, Task 6)
 
 ### Dependencies
 Task 2.
@@ -99,12 +99,12 @@ Task 2.
 **Features:** `word_entry`, `headwords_for_strongs`, `place_total`, `place_page`, `place_page_after`, `english_rows`, `verse_words`
 
 ### Acceptance Criteria
-- [ ] Parameterized SQL only; joins by `lemma_id`, `token_id`, `unit_id`, never display strings (FR-024, V-56)
-- [ ] Strong's appears only in `headwords_for_strongs` through `lemma_xref` (FR-153; a static test greps the pack's signatures)
-- [ ] `verse_words` maps stored `<kind>:<source>` to the kind (ruling 1.1)
-- [ ] `place_page` and `place_page_after` return the same rows as spike R1 for the same window (keyset after the first page)
-- [ ] Long lists go through the lazy `query_cursor`, closed when left early (FR-159)
-- [ ] `place_total` reads the precomputed counts (Task 0) when present
+- [x] Parameterized SQL only; joins by `lemma_id`, `token_id`, `unit_id`, never display strings (FR-024, V-56)
+- [ ] Strong's appears only in `headwords_for_strongs` through `lemma_xref` (FR-153): the query is done and tested; the static test that greps the pack's signatures is still to write
+- [x] `verse_words` maps stored `<kind>:<source>` to the kind (ruling 1.1)
+- [x] `place_page` and `place_page_after` return the same rows as spike R1 for the same window (keyset after the first page)
+- [x] No list is ever loaded whole (FR-159): every place query is a page of at most 200 rows, so no cursor is held open between calls
+- [x] `place_total` reads the precomputed counts (Task 0) when present
 
 ### Implementation Notes
 Port the SQL from `conc_pilot.py` (reference only, D-020). Each query gets a fixture test.
@@ -115,6 +115,8 @@ Tasks 3 and 4.
 ---
 
 ## Task 6: the three lookups and the word view
+
+*Open from Task 5: place rows carry no context yet (meaning, stem, BSB/KJV/STEP), and `verse_words` reads the default recension only.*
 
 **Files:** `src/concordance/bib_word_lookup.e`, `bib_english_index.e`, `bib_verse_words.e`, `bib_word_view.e`
 **Features:** `view`, `rows`, `words`; BIB_WORD_VIEW `section_count`, `section_name`, `is_present`, `facts_model`

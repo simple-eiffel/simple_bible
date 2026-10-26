@@ -282,6 +282,134 @@ feature -- Tests
 			close_and_clean (l_set, l_fixture)
 		end
 
+	test_word_entry_reads_the_heading
+			-- An original headword comes back with its transliteration, pronunciation and the
+			-- provenance of the corpus it is tagged in; English lemmas and unknown ids give Void.
+		local
+			l_fixture: CONC_FIXTURE
+			l_pack: BIB_CONC_PACK
+		do
+			create l_fixture
+			l_pack := checked_pack (l_fixture)
+			if attached l_pack.word_entry ({CONC_FIXTURE}.Create_lemma) as al_entry then
+				assert_strings_equal ("headword", "BRA", al_entry.headword)
+				assert_strings_equal ("translit", "bara", al_entry.translit)
+				assert_strings_equal ("pron", "baw-RAW", al_entry.pron)
+				assert_strings_equal ("provenance from its corpus", "conc:WLC-MACULA", al_entry.provenance.source_key)
+			else
+				assert_true ("entry found", False)
+			end
+			assert_true ("english lemma is no headword", l_pack.word_entry ({CONC_FIXTURE}.English_lemma) = Void)
+			assert_true ("unknown id", l_pack.word_entry (999) = Void)
+			close_and_clean (last_pack_set, l_fixture)
+		end
+
+	test_headwords_for_strongs_go_through_xref
+			-- A Strong's number finds its headwords only through lemma_xref (FR-153); padding does
+			-- not matter; an unknown number is a successful empty answer.
+		local
+			l_fixture: CONC_FIXTURE
+			l_pack: BIB_CONC_PACK
+			l_answer: BIB_LIST_RESULT [BIB_WORD_ENTRY]
+		do
+			create l_fixture
+			l_pack := checked_pack (l_fixture)
+			l_answer := l_pack.headwords_for_strongs (create {BIB_STRONGS_KEY}.make_from_text ("H01254"))
+			assert_true ("found", l_answer.is_success and then l_answer.count = 1 and then l_answer.item (1).lemma_id = {CONC_FIXTURE}.Create_lemma)
+			assert_true ("cited", l_answer.is_fact_closed)
+			l_answer := l_pack.headwords_for_strongs (create {BIB_STRONGS_KEY}.make_from_text ("H9999"))
+			assert_true ("unknown is empty success", l_answer.is_success and l_answer.count = 0)
+			close_and_clean (last_pack_set, l_fixture)
+		end
+
+	test_strongs_key_text
+			-- Padding-insensitive, sense suffix kept, zero refused (conc.db holds "G0").
+		local
+			l_key: BIB_STRONGS_KEY
+		do
+			create l_key.make_from_text ("H0001")
+			assert_strings_equal ("unpadded", "H1", l_key.text)
+			create l_key.make_from_text ("H6743a")
+			assert_strings_equal ("suffix kept", "a", l_key.sense_suffix)
+			assert_strings_equal ("canonical", "H6743a", l_key.text)
+			assert_false ("zero refused", l_key.is_strongs_text ("G0"))
+			assert_false ("bad prefix", l_key.is_strongs_text ("X12"))
+			assert_false ("too many digits", l_key.is_strongs_text ("H123456"))
+		end
+
+	test_places_page_by_offset_and_by_keyset
+			-- The article's 251 places come back 200 then 51, in token order; the keyset page after
+			-- the first page is the same rows as the offset page (spike R1); totals come from the
+			-- builder's counts; every row carries its corpus's provenance.
+		local
+			l_fixture: CONC_FIXTURE
+			l_pack: BIB_CONC_PACK
+			l_first, l_second, l_after: BIB_LIST_RESULT [BIB_PLACE_ROW]
+			l_same: BOOLEAN
+			i: INTEGER
+		do
+			create l_fixture
+			l_pack := checked_pack (l_fixture)
+			assert_integers_equal ("total", {CONC_FIXTURE}.Article_places, l_pack.place_total ({CONC_FIXTURE}.Article_lemma, "LXX-RAHLFS").value.to_integer_32)
+			l_first := l_pack.place_page ({CONC_FIXTURE}.Article_lemma, "LXX-RAHLFS", 0, 200)
+			assert_true ("first page", l_first.is_success and then l_first.count = 200)
+			assert_true ("first place", l_first.item (1).token_id = 4)
+			assert_strings_equal ("reference", "Genesis 1:1", l_first.item (1).reference_text)
+			assert_strings_equal ("restricted corpus cited", "restricted_nc (RESEARCH ONLY)", l_first.citation (1).caveat)
+			l_second := l_pack.place_page ({CONC_FIXTURE}.Article_lemma, "LXX-RAHLFS", 200, 200)
+			assert_integers_equal ("second page", 51, l_second.count)
+			l_after := l_pack.place_page_after ({CONC_FIXTURE}.Article_lemma, "LXX-RAHLFS", l_first.item (200).token_id, 200)
+			l_same := l_after.count = l_second.count
+			from i := 1 until not l_same or i > l_after.count loop
+				l_same := l_after.item (i).token_id = l_second.item (i).token_id
+				i := i + 1
+			end
+			assert_true ("keyset equals offset", l_same)
+			assert_strings_equal ("method", "place_page_after", l_after.method.engine_feature)
+			assert_true ("no place in another corpus", l_pack.place_page ({CONC_FIXTURE}.Article_lemma, "WLC-MACULA", 0, 200).count = 0)
+			close_and_clean (last_pack_set, l_fixture)
+		end
+
+	test_english_rows_bible_by_bible
+			-- "created" (any case) leads to Hebrew "bara" in the BSB, Genesis, once (FR-151).
+		local
+			l_fixture: CONC_FIXTURE
+			l_pack: BIB_CONC_PACK
+			l_rows: BIB_LIST_RESULT [BIB_ENGLISH_ROW]
+		do
+			create l_fixture
+			l_pack := checked_pack (l_fixture)
+			l_rows := l_pack.english_rows ("Created")
+			assert_true ("one row", l_rows.is_success and then l_rows.count = 1)
+			assert_strings_equal ("bible", "ENG-BSB", l_rows.item (1).bible)
+			assert_true ("headword", l_rows.item (1).lemma_id = {CONC_FIXTURE}.Create_lemma and l_rows.item (1).book_id = 1 and l_rows.item (1).count = 1)
+			assert_true ("cited", l_rows.is_fact_closed)
+			assert_true ("unknown word", l_pack.english_rows ("zzz").count = 0)
+			close_and_clean (last_pack_set, l_fixture)
+		end
+
+	test_verse_words_every_corpus
+			-- Genesis 1:1 in the Hebrew corpus: two words in order, the second with an empty
+			-- surface; in the BSB: one English word with the basis kind "computed".
+		local
+			l_fixture: CONC_FIXTURE
+			l_pack: BIB_CONC_PACK
+			l_ref: BIB_REF
+			l_words: BIB_LIST_RESULT [BIB_VERSE_WORD]
+		do
+			create l_fixture
+			l_pack := checked_pack (l_fixture)
+			create l_ref.make (1, 1, 1, create {BIB_VERSIFICATION_SYSTEM}.make_kjv)
+			l_words := l_pack.verse_words (l_ref, "WLC-MACULA")
+			assert_true ("two hebrew words", l_words.is_success and then l_words.count = 2)
+			assert_strings_equal ("basis kind", "tagged", l_words.item (1).lemma_basis)
+			assert_true ("empty surface", l_words.item (2).surface.is_empty and l_words.item (2).has_door)
+			l_words := l_pack.verse_words (l_ref, "ENG-BSB")
+			assert_true ("one english word", l_words.is_success and then l_words.count = 1)
+			assert_strings_equal ("computed", "computed", l_words.item (1).lemma_basis)
+			close_and_clean (last_pack_set, l_fixture)
+		end
+
 	test_verse_word_takes_real_hebrew_rows
 			-- A verse word and a place row build from conc.db's real Hebrew shape: an empty
 			-- surface and no transliteration (6,435 such tokens, WLC-MACULA), basis kind
@@ -330,7 +458,8 @@ feature -- Tests
 			l_row.set_context ("to bring into being", "qal", "created", Void, Void)
 			assert_true ("meaning set", attached l_row.meaning as al_m and then al_m.same_string ("to bring into being"))
 			assert_true ("kjv absent", l_row.kjv = Void)
-			create l_english.make ("created", {CONC_FIXTURE}.Create_lemma, "BRA", "bara", 1, 1, l_provenance)
+			create l_english.make ("created", "ENG-BSB", {CONC_FIXTURE}.Create_lemma, "BRA", "bara", 1, 1, l_provenance)
+			assert_strings_equal ("bible", "ENG-BSB", l_english.bible)
 			assert_strings_equal ("english", "created", l_english.english)
 			assert_strings_equal ("headword not swapped", "BRA", l_english.headword)
 		end
@@ -347,6 +476,22 @@ feature {NONE} -- Fixture
 	Pack_file: STRING = "conc_test_pack.db"
 	Old_pack_file: STRING = "conc_test_old_pack.db"
 	Other_pack_file: STRING = "conc_test_other_pack.db"
+
+	last_pack_set: BIB_SOURCE_SET
+			-- The source set `checked_pack' opened last.
+		attribute
+			create Result.make
+		end
+
+	checked_pack (a_fixture: CONC_FIXTURE): BIB_CONC_PACK
+			-- A pack reader over the fixture, attached and accepted; its set is `last_pack_set'.
+		do
+			last_pack_set := attached_set (a_fixture, Pack_file, {CONC_FIXTURE}.Pack_version, "")
+			create Result.make (last_pack_set)
+			Result.check_pack
+		ensure
+			accepted: Result.is_available
+		end
 
 	attached_set (a_fixture: CONC_FIXTURE; a_pack: STRING; a_version: INTEGER; a_omitted_table: STRING): BIB_SOURCE_SET
 			-- An open source set with a fixture pack built from the arguments attached as "conc".
