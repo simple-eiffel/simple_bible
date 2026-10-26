@@ -235,19 +235,56 @@ feature -- Tests
 		end
 
 	test_verse_word_takes_real_hebrew_rows
-			-- Skeletal (Phase 4, Phase 2 review rulings 1.1 and 1.2): a verse word builds
-			-- from conc.db's real shapes: a Hebrew token with an empty surface and no
-			-- transliteration (6,435 such tokens, WLC-MACULA), and the stored basis
-			-- "tagged:MACULA-Hebrew" mapped to the kind "tagged". The creators that came
-			-- before the review refused both.
+			-- A verse word and a place row build from conc.db's real Hebrew shape: an empty
+			-- surface and no transliteration (6,435 such tokens, WLC-MACULA), basis kind
+			-- "tagged" (Phase 2 rulings 1.1 and 1.2; the creators before the review refused it).
+		local
+			l_word: BIB_VERSE_WORD
+			l_row: BIB_PLACE_ROW
 		do
+			create l_word.make (2, "hbo", "", "", {CONC_FIXTURE}.Unwritten_lemma, "tagged", test_provenance)
+			assert_true ("empty surface kept", l_word.surface.is_empty and l_word.translit.is_empty)
+			assert_true ("door to the word view", l_word.has_door)
+			create l_row.make (2, "hbo", "Gen 1:1", "", "", test_provenance)
+			assert_true ("place row too", l_row.surface.is_empty and l_row.meaning = Void)
 		end
 
 	test_verse_word_takes_english_computed_rows
-			-- Skeletal (Phase 4, rulings 1.1 and 1.2): an English token (language "eng",
-			-- basis "computed:spacy-lemma" mapped to "computed", no transliteration)
-			-- builds a verse word and a place row.
+			-- An English token (basis kind "computed", no transliteration) builds a verse word
+			-- and a place row (rulings 1.1 and 1.2).
+		local
+			l_word: BIB_VERSE_WORD
+			l_row: BIB_PLACE_ROW
 		do
+			create l_word.make (1, "eng", "created", "", {CONC_FIXTURE}.English_lemma, "computed", test_provenance)
+			assert_strings_equal ("basis kind", "computed", l_word.lemma_basis)
+			assert_strings_equal ("language", "eng", l_word.language)
+			create l_row.make (3, "eng", "Gen 1:1", "created", "", test_provenance)
+			assert_strings_equal ("surface", "created", l_row.surface)
+		end
+
+	test_value_creators_pin_every_field
+			-- Every field lands where it was given (ruling 1.3); a place row's context is
+			-- optional and set together.
+		local
+			l_entry: BIB_WORD_ENTRY
+			l_row: BIB_PLACE_ROW
+			l_english: BIB_ENGLISH_ROW
+			l_provenance: BIB_PROVENANCE
+		do
+			l_provenance := test_provenance
+			create l_entry.make ({CONC_FIXTURE}.Create_lemma, "hbo", "BRA", "bara", "baw-RAW", 1, l_provenance)
+			assert_strings_equal ("headword", "BRA", l_entry.headword)
+			assert_strings_equal ("translit", "bara", l_entry.translit)
+			assert_strings_equal ("pron", "baw-RAW", l_entry.pron)
+			assert_true ("provenance", l_entry.provenance = l_provenance)
+			create l_row.make (1, "hbo", "Gen 1:1", "BRA", "bara", l_provenance)
+			l_row.set_context ("to bring into being", "qal", "created", Void, Void)
+			assert_true ("meaning set", attached l_row.meaning as al_m and then al_m.same_string ("to bring into being"))
+			assert_true ("kjv absent", l_row.kjv = Void)
+			create l_english.make ("created", {CONC_FIXTURE}.Create_lemma, "BRA", "bara", 1, 1, l_provenance)
+			assert_strings_equal ("english", "created", l_english.english)
+			assert_strings_equal ("headword not swapped", "BRA", l_english.headword)
 		end
 
 	test_edition_swap_needs_no_code
@@ -283,6 +320,12 @@ feature {NONE} -- Fixture
 			a_fixture.delete_file (Pack_file)
 			a_fixture.delete_file (Old_pack_file)
 			a_fixture.delete_file (Other_pack_file)
+		end
+
+	test_provenance: BIB_PROVENANCE
+			-- A provenance for values built by hand.
+		do
+			create Result.make (1, "conc_test", "fixture", create {BIB_LICENSE}.make ("CC BY 4.0", False, False, False, "test fixture"), "")
 		end
 
 	count_of (a_db: SIMPLE_SQL_DATABASE; a_sql: STRING): INTEGER

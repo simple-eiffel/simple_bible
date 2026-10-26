@@ -34,7 +34,13 @@ feature {NONE} -- Initialization
 			basis_known: across <<"tagged", "computed", "aligned", "xref", "none">> as b some a_lemma_basis.same_string (b) end
 			none_means_no_lemma: a_lemma_basis.same_string ("none") = (a_lemma_id = 0)
 		do
-			check implemented_in_phase_4: False then end
+			position := a_position
+			language := a_language.to_string_8
+			surface := a_surface.to_string_32
+			translit := a_translit.to_string_32
+			lemma_id := a_lemma_id
+			lemma_basis := a_lemma_basis.to_string_8
+			provenance := a_provenance
 		ensure
 			position_set: position = a_position
 			language_set: language.same_string (a_language)

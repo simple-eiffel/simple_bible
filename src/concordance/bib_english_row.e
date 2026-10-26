@@ -27,7 +27,13 @@ feature {NONE} -- Initialization
 			count_positive: a_count > 0
 			translit_not_empty: not a_translit.is_empty
 		do
-			check implemented_in_phase_4: False then end
+			english := a_english.to_string_32
+			lemma_id := a_lemma_id
+			headword := a_headword.to_string_32
+			translit := a_translit.to_string_32
+			book_id := a_book_id
+			count := a_count
+			provenance := a_provenance
 		ensure
 			english_set: english.same_string_general (a_english)
 			id_set: lemma_id = a_lemma_id
