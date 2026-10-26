@@ -109,8 +109,8 @@ feature -- Commands
 			last_error := Void
 			if not (create {RAW_FILE}.make_with_name (a_path)).exists then
 				create last_error.make_with_details ({BIB_ERROR}.Source_unavailable, "The content database was not found.", a_path)
-			else
-				create l_db.make_read_only (a_path)
+			elseif attached read_only_connection (a_path) as al_db then
+				l_db := al_db
 					-- Reading sqlite_master makes a file that is not a database fail here, at open.
 				l_result := l_db.query ("SELECT sqlite_version() AS v, (SELECT count(*) FROM sqlite_master) AS n")
 				if not l_db.has_error and then not l_result.rows.is_empty and then attached l_result.rows.first as al_row then
@@ -122,6 +122,8 @@ feature -- Commands
 					create last_error.make_with_details ({BIB_ERROR}.Database_problem, "The content database cannot be read.", sqlite_message (l_db, a_path))
 					l_db.close
 				end
+			else
+				create last_error.make_with_details ({BIB_ERROR}.Database_problem, "SQLite could not open the content database.", a_path)
 			end
 		ensure
 			open_or_error: is_open xor (last_error /= Void)
@@ -188,10 +190,14 @@ feature -- Commands
 			database := Void
 			attached_paths.wipe_out
 			is_open := False
+			create core_path.make_empty
+			create sqlite_version.make_empty
 		ensure
 			closed: not is_open
 			none_attached: attached_count = 0
 			no_connection: database = Void
+			path_cleared: core_path.is_empty
+			version_cleared: sqlite_version.is_empty
 		end
 
 feature -- Connection (engine-internal; faces never see a source set)
@@ -205,6 +211,24 @@ feature -- Constants
 			-- SQLite attach limit (DR-020; attach #11 fails): pack slots only.
 
 feature {NONE} -- Implementation
+
+	read_only_connection (a_path: READABLE_STRING_GENERAL): detachable SIMPLE_SQL_DATABASE
+			-- A read-only connection to `a_path', or Void when SQLite cannot open it (a folder,
+			-- a file it may not read). simple_sql's `make_read_only' raises on an open failure,
+			-- and an open that fails is an answer here, never control flow (design scan 26).
+		require
+			path_not_empty: not a_path.is_empty
+			file_exists: (create {RAW_FILE}.make_with_name (a_path)).exists
+		local
+			l_failed: BOOLEAN
+		do
+			if not l_failed then
+				create Result.make_read_only (a_path)
+			end
+		rescue
+			l_failed := True
+			retry
+		end
 
 	sqlite_message (a_db: SIMPLE_SQL_DATABASE; a_fallback: READABLE_STRING_GENERAL): STRING_32
 			-- SQLite's own message for the last failure on `a_db' (FR-138), or `a_fallback' when it gave none.

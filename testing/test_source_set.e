@@ -79,6 +79,38 @@ feature -- Tests
 			delete_file (Garbage_file)
 		end
 
+	test_open_core_folder_reports
+			-- A path SQLite cannot open (here a folder, which passes the exists check) is
+			-- reported, not raised (design scan 26: make_read_only raises on open failure).
+		local
+			l_set: BIB_SOURCE_SET
+			l_dir: DIRECTORY
+		do
+			create l_dir.make_with_name (Folder_path)
+			if not l_dir.exists then
+				l_dir.create_dir
+			end
+			create l_set.make
+			l_set.open_core (Folder_path)
+			assert_false ("not open", l_set.is_open)
+			assert_true ("reported", attached l_set.last_error as al_error and then al_error.code = {BIB_ERROR}.Database_problem)
+			l_dir.delete
+		end
+
+	test_close_forgets_the_connection
+			-- After close, the path and the engine version of the closed connection are gone.
+		local
+			l_set: BIB_SOURCE_SET
+		do
+			make_database (Main_file)
+			create l_set.make
+			l_set.open_core (Main_file)
+			l_set.close
+			assert_true ("path cleared", l_set.core_path.is_empty)
+			assert_true ("version cleared", l_set.sqlite_version.is_empty)
+			delete_file (Main_file)
+		end
+
 	test_attach_missing_pack_reports_sqlite_message
 			-- A pack that cannot attach leaves the alias table unchanged and carries SQLite's message.
 		local
@@ -133,6 +165,7 @@ feature {NONE} -- Fixture
 	Pack_file: STRING = "srcset_pack.db"
 	Missing_file: STRING = "srcset_missing.db"
 	Garbage_file: STRING = "srcset_garbage.db"
+	Folder_path: STRING = "srcset_folder.db"
 
 	make_database (a_name: STRING)
 			-- Database file `a_name' with table t holding one row.
