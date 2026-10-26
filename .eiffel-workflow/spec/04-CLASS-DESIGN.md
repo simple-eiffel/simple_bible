@@ -2,13 +2,15 @@
 
 *Step R04, 2026-10-06. Applies OOSC2 principles to the domain model (02) as changed by the verdicts in 03. Class names are final for the spec; the GUI spec's `SB_*` placeholders map one for one to `BIB_*` (A-009).*
 
+*Fold 2026-10-26: the five gated verdicts (debates 01 to 05) and D-021 are folded into this file in one pass; the GUI is native simple_widgets (D-006, decided 2026-10-06) and every GUI gap work item GW is done (gui/02-GAP-PROGRAM.md, Phase 4 complete 2026-10-26). Every changed or added passage is marked "(fold 2026-10-26, debate NN)" or "(fold 2026-10-26, D-021)"; superseded text is quoted in the Fold log of `00-FOLD-2026-10-26.md`. Locked inputs: decisions are copied, never reopened. The live source classes (`src/data`, `src/user`, `src/plugin`, `src/bib_config.e`) are still the Release 1 skeletons; this file states the target.*
+
 ---
 
 ## 0. Naming and layering decisions
 
-**Prefix.** `BIB_` for every class except the facade `SIMPLE_BIBLE` (fleet convention: `SIMPLE_<LIB>` is the entry class). `SB_` is rejected because Gobo's storable library defines `SB_*` classes (`gobo-26.06/gobo/library/storable/src/`), and simple_* libraries wrap Gobo. `BIB_` is used by no class in `D:\prod`, Gobo or the ISE 25.02 libraries (searched 2026-10-06). **C:** zero C planned; if a C helper is ever needed, its prefix is `sbib_` (unused in every `.h`, `.c` and `.e` under `D:\prod`), and any C that can wait is declared `blocking` (fleet laws).
+**Prefix.** `BIB_` for every class except the facade `SIMPLE_BIBLE` (fleet convention: `SIMPLE_<LIB>` is the entry class). `SB_` is rejected because Gobo's storable library defines `SB_*` classes (`gobo-26.06/gobo/library/storable/src/`), and simple_* libraries wrap Gobo. `BIB_` is used by no class in the fleet's root folder, Gobo or the ISE 25.02 libraries (searched 2026-10-06). **C:** zero C planned; if a C helper is ever needed, its prefix is `sbib_` (unused in every `.h`, `.c` and `.e` under the fleet's root folder), and any C that can wait is declared `blocking` (fleet laws).
 
-**Layers and ECF targets** (one repository `D:\prod\simple_bible`, one ECF `simple_bible.ecf`, several targets; no ECF is written in this phase):
+**Layers and ECF targets** (one repository `simple_bible`, one ECF `simple_bible.ecf`, several targets; no ECF is written in this phase):
 
 | Layer | Target | Root | Clusters | May depend on |
 |-------|--------|------|----------|---------------|
@@ -17,13 +19,15 @@
 | L-CLI face | `bible` (`bible.exe`) | `BIB_CLI_APP` | `src/`, `cli/` | L-LIB + simple_cli, simple_console |
 | L-GUI face | `simple_bible_app` | `BIB_GUI_APP` | `src/`, `gui/` | L-LIB + simple_widgets, simple_shaping, simple_cairo, simple_shell |
 | Tests | `simple_bible_tests` | `TEST_APP` | `src/`, `build/`, `cli/`, `test/` (GUI tests offscreen in `test/gui/`) | + simple_testing |
-| Private plug-in | separate private repo and ECF (Larry's) | Larry's root registering his plug-in | his clusters | L-LIB (+ L-GUI/L-CLI targets it wraps) |
+| Private packs (fold 2026-10-26, debate 03; supersedes "Private plug-in: separate private repo and ECF (Larry's), Larry's root registering his plug-in") | no target in Release 1: Larry's export tool (Python allowed; D-020 scope is the shipped product only) writes versioned packs in the public pack schema | none | none | none (the public engine reads packs; it links no private code) |
 
 **Dependency rules (enforced by tests that read the ECF and grep class texts):**
 1. L-GUI and L-CLI classes never name a `SIMPLE_SQL_*` type and contain no SQL text (FR-124). They see only `SIMPLE_BIBLE`, engine result types and `BIB_JOB` descendants.
 2. L-LIB never names an `SW_*`, `SHELL_*` or console type.
-3. L-BUILD is the only layer that writes `core.db`, `ai_data.db`, `rix.db` and `history.db`; L-LIB opens them read-only; only `BIB_USER_STORE` writes (`user.db`).
-4. The public targets contain no effective descendant of `BIB_LENS` or `BIB_PRIVATE_SOURCE` (FR-NEW-010).
+3. L-BUILD is the only layer that writes the build stages (`core.db`, `ai_data.db`, the rix stage) and `history.db`, and the only layer that **assembles `content.db`** from the stages; L-LIB opens `content.db` and every pack read-only; only `BIB_USER_STORE` writes (`user.db`). (fold 2026-10-26, debate 01; supersedes "L-BUILD is the only layer that writes `core.db`, `ai_data.db`, `rix.db` and `history.db`; L-LIB opens them read-only")
+4. The public executable contains no private string (K2′: no string from the R-2 list in ASCII, UTF-16LE or UTF-32LE, positive control including a `{STRING_32}` private string) and no private code; there is no plug-in registry and no deferred lens class. (fold 2026-10-26, debate 03; supersedes "The public targets contain no effective descendant of `BIB_LENS` or `BIB_PRIVATE_SOURCE` (FR-NEW-010)")
+5. The SQLite binding is `eiffel_sqlite_2025` 1.1.0 (SQLite 3.53.4, `blocking` externals; the patch landed 2026-10-08/09, debate 04 gate item 2) behind the one door `simple_sql`; the Release 1 DDL ceiling stays at 3.31.1 features (RQ-03 option 2). Every dependent is rebuilt with `-clean` after a binding change. (fold 2026-10-26, debate 04)
+6. Every provenance check names its schema, packs included. (fold 2026-10-26, debate 01)
 
 ## 1. Class Inventory
 
@@ -35,8 +39,8 @@ Release column: R1 = Release 1 (1a/1b split per Q-01 noted where relevant), v1.5
 
 | Class | Role | Single Responsibility | Harvest |
 |-------|------|----------------------|---------|
-| `SIMPLE_BIBLE` | Facade | Open the sources for one processor and hand out the engines | (S-38 replaced) |
-| `BIB_CONFIG` | Builder | Database paths (exe-relative, `%LOCALAPPDATA%`, `bible.toml`), plug-in registry, options | S-11, C-01 data-dir logic |
+| `SIMPLE_BIBLE` | Facade | Open the sources for one processor and hand out the engines (fold 2026-10-26, debate 05b: also `conc_pack`, `word_lookup`, `english_index`, `verse_word_lookup`) | (S-38 replaced) |
+| `BIB_CONFIG` | Builder | Database paths (exe-relative, `%LOCALAPPDATA%`, `bible.toml`), options. Fold 2026-10-26: gains `conc_path` (debate 05b); the content path replaces the per-database paths (`ai_data_path`, `rix_path`; debate 01); the plug-in registry is dropped (debate 03); the notes folder becomes the export folder in 1a (debate 02) | S-11, C-01 data-dir logic |
 
 **core: identity and keys (12)**
 
@@ -72,15 +76,14 @@ Release column: R1 = Release 1 (1a/1b split per Q-01 noted where relevant), v1.5
 | `BIB_FINDING` | Data | Reference, verdict, grounds, near-miss, evidence |
 | `BIB_BUCKETED_RESULT [G -> BIB_FINDING]` | Data | The four buckets together |
 
-**data: sources (5)** (`BIB_AUTHOR_LIBRARY` is listed under author; `BIB_HISTORY_SOURCE` is v2)
+**data: sources (4)** (fold 2026-10-26, debate 01; was "(5)"; `BIB_AUTHOR_LIBRARY` is listed under author; `BIB_HISTORY_SOURCE` is v2)
 
 | Class | Role | Single Responsibility | Harvest |
 |-------|------|----------------------|---------|
 | `BIB_DATA_SOURCE` (d) | Base | One database's identity, schema check, provenance access | - |
-| `BIB_CORE_SOURCE` | Source | `core.db` (required, read-only) | S-09 schema knowledge |
-| `BIB_AI_DATA_SOURCE` | Source | `ai_data.db` (optional, read-only) | - |
+| one content source (fold 2026-10-26, debate 01; replaces `BIB_CORE_SOURCE` "`core.db` (required, read-only)" and `BIB_AI_DATA_SOURCE` "`ai_data.db` (optional, read-only)", which collapse; the verdict gives no class name) | Source | The one shipped read-only `content.db` (core, AI-made related passages, author library, folded indexes); optional public content is empty tables, so `has_ai_data` becomes a presence count | S-09 schema knowledge |
 | `BIB_USER_STORE` | Store | `user.db` (read-write; one writer processor) | C-17 history |
-| `BIB_SOURCE_SET` | Coordinator | One connection per processor; attaches (at most 10) | - |
+| `BIB_SOURCE_SET` | Coordinator | One connection per processor; main = `content.db`; attaches packs read-only through `attach_read_only` (at most 10 pack slots; fold 2026-10-26, debate 01, debate 05a; was "attaches (at most 10)") | - |
 
 **text (11)**
 
@@ -137,13 +140,37 @@ Release column: R1 = Release 1 (1a/1b split per Q-01 noted where relevant), v1.5
 | `BIB_QUERY_CLAUSE` | Data | One node (word, phrase, and/or/not, regex, lemma, strongs, morph) | - |
 | `BIB_QUERY_PARSER` | Engine | Query text to clause tree or positioned error (VR-03..05) | - |
 | `BIB_SEARCH_SCOPE` | Data | Versions, book range, collection | S-28 facets |
-| `BIB_SEARCH_ENGINE` | Engine | FTS5 over normalized columns, regex, key search; chunked by book | - |
+| `BIB_SEARCH_ENGINE` | Engine | FTS5 over the folded index (shipped `content=''`; stage external-content), regex (target text, display or folded, stated), key search; chunked by book (fold 2026-10-26, debate 01; was "FTS5 over normalized columns") | - |
 | `BIB_SEARCH_RESULT` | Result | Pages of hits, per-book counts, method | S-29 |
 | `BIB_HIT` | Data | Reference, version, display text, hit spans | - |
-| `BIB_CONCORDANCE` | Engine | Counts and hits by key (FR-023) | - |
+| `BIB_CONCORDANCE` | Engine | Counts and hits by core key (FR-023; untouched by debate 05b, fold plan conflict 1: its keys are core keys, never conc.db `lemma_id`) | - |
 | `BIB_COUNT_TABLE` | Data | Per-book counts and corpus sizes; frequency per 1,000 words | - |
 | `BIB_RANK_FUSION` | Utility | Reciprocal rank fusion | S-06, X-04 |
 | `BIB_TOKEN_DIFF` | Utility | Word diff over normalized token keys (simple_diff underneath) | - |
+
+**concordance (9)** (new cluster `src/concordance/`; fold 2026-10-26, debate 05b, pathway B "exactly as compiled", PREFERRED, gated 2026-10-26; D-021; sources: the compiled skeletons `debate/05 - Concordance placement and lookups (D-021)/spikes/skeletons/B/new/*.e` and `B/override/simple_bible.e`)
+
+| Class | Role | Single Responsibility (public features, from the skeleton) |
+|-------|------|----------------------|
+| `BIB_CONC_PACK` | Pack reader | Owns **every** SQL statement against the attached concordance pack (alias `Pack_alias = "conc"`, whichever file it is: conc.db or conc_dist.db). Created with `make (a_sources: BIB_SOURCE_SET)`. Status: `is_available`, `has_corpus (a_code)`, `has_layer (a_layer)` ("lxx", "bsb", "dictionaries"; conc_dist.db may lack some). Access: `edition_label: STRING_32` (title bar and About; the engine never branches on it), `word_entry (a_lemma_id: INTEGER_64): detachable BIB_WORD_ENTRY`, `headwords_for_strongs (a_key: BIB_STRONGS_KEY): BIB_LIST_RESULT [BIB_WORD_ENTRY]` (through `lemma_xref` only), `place_total (a_lemma_id; a_corpus_code): BIB_FACT [INTEGER_64]`, `place_page (a_lemma_id; a_corpus_code; a_offset, a_limit): BIB_LIST_RESULT [BIB_PLACE_ROW]` (one page of the every-place list in token order). Constants `Pack_alias`, `Max_page_size = 200`. Its `sources` is exported only to `{BIB_ENGLISH_INDEX, BIB_VERSE_WORDS, BIB_WORD_LOOKUP}` |
+| `BIB_WORD_LOOKUP` | Lookup | The word view: `view (a_lemma_id: INTEGER_64; a_corpus_code): BIB_WORD_VIEW` assembles the heading, the place total and the first page of places from the pack reader, in the approved section order. Created with `make (a_pack)`; `pack` exported (preconditions use it) |
+| `BIB_ENGLISH_INDEX` | Lookup | The English lookup: `rows (a_english): BIB_LIST_RESULT [BIB_ENGLISH_ROW]` (an English word to the original words behind it, one row per original word and book, with counts) |
+| `BIB_VERSE_WORDS` | Lookup | The verse lookup: `words (a_ref: BIB_REF; a_corpus_code): BIB_LIST_RESULT [BIB_VERSE_WORD]` (every word of the verse in order, each a door to its word view) |
+| `BIB_WORD_ENTRY` | Value (`BIB_SOURCED`) | The heading of a word view: `lemma_id`, `language` (hbo, arc, grc), `headword`, `translit`, `pron`, `token_total`, `provenance` |
+| `BIB_PLACE_ROW` | Value (`BIB_SOURCED`) | One row of the every-place list: `token_id`, `reference_text`, `surface`, `translit`, `provenance`; optional `meaning` (SDBH or SDGNT), `stem`, and `bsb`, `kjv`, `step` in context (Void when the pack lacks that layer); optional columns set by `set_context` |
+| `BIB_ENGLISH_ROW` | Value (`BIB_SOURCED`) | One line of the English lookup: `english`, `lemma_id`, `headword`, `translit`, `book_id`, `count`, `provenance` |
+| `BIB_VERSE_WORD` | Value (`BIB_SOURCED`) | One word of a verse: `position`, `surface`, `translit`, `lemma_id` (0 when none), `lemma_basis` (tagged, aligned, xref, none), `provenance`; `has_door` |
+| `BIB_WORD_VIEW` | Result (`BIB_ENGINE_RESULT`; creation `make_success`, `make_failure`) | Heading (`entry`), `place_total`, the FIRST page of places (`first_places`), and the ten sections in the approved order: `section_count`, `section_name (i)`, `is_known_section`, `is_present`, `is_in_approved_order`; a section the pack cannot answer is reported absent, not faked; never holds a whole list |
+
+**What the debate rejected or deferred (debate 05b section 5):**
+- `BIB_CONCORDANCE` is **untouched** (it keeps core-database counts).
+- **No deferred seam now.** A deferred source with core and pack as effectors is raised for one query family only if core.db is built and its `lemma` and `alignment` can answer a headword, place or English query in `lemma_id` terms, or a `lemma_xref` bridge is specified (overturn trigger 1); a second pack needing the same lookups needs a deferred source plus a composite or router (trigger 2). Abstractions wait for a real second implementor (Larry's gate, 2026-10-26).
+- **`BIB_HEADWORD_KEY` is NOT adopted** (as skeletoned it inherits `BIB_KEY`, and the live `BIB_CONCORDANCE.count (a_key: BIB_KEY ...)` has no precondition, so it would accept a headword key that core.db cannot answer). Add it only if it does not conform to `BIB_KEY`, or if `count` gains a precondition rejecting it; compile first (queue 1).
+- Merging the three lookup classes into `BIB_CONC_PACK` is a Phase 4 choice that needs a compile; the pathway is unchanged.
+- Two counters, each stating its key kind and scope: `BIB_CONCORDANCE` (core keys) and `BIB_CONC_PACK.place_total` (`lemma_id`). Where FR-023's headword counts live: **in core, unchanged** (fold plan conflict 1; rekeying is overturn trigger 3).
+- Melt-compiled skeletons do not predict runtime, final size or Phase 4 line counts (do not assume 5).
+
+**Builder side (not engine classes):** the conc.db builder (Python, `Scholars/_Tools/`) may stay Python while it builds only the private pack (D-021, D-020 fork 03 item 6). It gains `token.translit` (precomputed; debate 05a fork 4, PREFERRED) and per-corpus counts plus the English-at-a-glance summary per headword (debate 05b addendum). conc_dist.db, which ships, needs an Eiffel builder and a port of the transliteration rules (`BIB_TRANSLITERATOR`) with a differential test against `conc_translit.py` over the 158,342 distinct written forms.
 
 **census (5)**
 
@@ -192,7 +219,7 @@ Release column: R1 = Release 1 (1a/1b split per Q-01 noted where relevant), v1.5
 | `BIB_GUIDE_ASSEMBLER` | Engine | Passage Guide, Word Study, They Chose, Word's Journey from engine results |
 | `BIB_GUIDE` | Result | Ordered sections (no empty sections) |
 | `BIB_GUIDE_SECTION` | Data | Section id, title, engine result |
-| `BIB_RELATED_PASSAGES` | Engine | Related passages with reasons (core + ai_data) |
+| `BIB_RELATED_PASSAGES` | Engine | Related passages with reasons (core + AI-made rows, read from the one `content.db`; fold 2026-10-26, debate 01; was "core + ai_data") |
 | `BIB_RELATED_PASSAGE` | Data | Target, reasons, AI-made label |
 | `BIB_LIBRARY` | Engine | Commentary/lexicon/dictionary/devotional entries by verse, lemma, topic, date |
 | `BIB_LIBRARY_ENTRY` | Data | Neutral rich-text body + provenance |
@@ -214,9 +241,9 @@ Release column: R1 = Release 1 (1a/1b split per Q-01 noted where relevant), v1.5
 | `BIB_MEMORY_SCHEDULER` | Engine | Spaced-repetition next-due dates (deterministic) |
 | `BIB_READING_PLAN` | Engine+data | Plan generation and progress |
 | `BIB_NOTE_STORE` (d) | Store seam | Where notes live; panels and CLI see only this (03 A-021) |
-| `BIB_DB_NOTE_STORE` | Store | Notes in user.db (default) |
-| `BIB_MARKDOWN_NOTE_STORE` | Store | Notes as Markdown files in a user folder, indexed into user.db for search and backlinks (13 S5; which store ships first is Q-11) |
-| `BIB_USER_BACKUP` | Utility | Rotating local backup of user data on exit; restore (03 A-022) |
+| `BIB_DB_NOTE_STORE` | Store | Notes in user.db: **the Release 1a store** (system of record; append-only versions, soft delete, restore). Fold 2026-10-26, debate 02: gains an **export** feature set (one Markdown file per live note, `id` and `hub_id` front matter, id-based or sanitized file names, atomic write, folder created by the exporter, every failure reported) and an **import** feature set (a folder read back as new notes or new versions, never overwriting a row), beside it; the exit snapshot (B′) is added only if its test DS-B′ passes. The verdict names no class for the export and import features; the class home is fixed at Phase 4 |
+| `BIB_MARKDOWN_NOTE_STORE` | Store | **The Release 1b candidate** (pathway A″, file-authoritative, UNTESTED, behind its gates; fold 2026-10-26, debate 02; was "Notes as Markdown files in a user folder, indexed into user.db for search and backlinks (13 S5; which store ships first is Q-11)"; Q-11 is answered by Larry's own fallback, "user.db first"). Its conflict path must set `last_error`, or the inherited `body_set` and `history_grown` postconditions fail; the colon trap in `add_note`'s "write `<folder>/<title>.md`" moves here with R9 |
+| `BIB_USER_BACKUP` | Utility | Rotating local backup of user data on exit; restore (03 A-022); F-9 item (i) (online backup retries SQLITE_BUSY and LOCKED) has landed in simple_sql `5a17f97` (2026-10-08, with items a to d and f to i, per the debate 02 gate), so the class is no longer blocked by it; it is a skeleton only because Phase 4 has not written it (fold 2026-10-26, settlement S7; was the verdict's section 8.3 "stays a stub until F-9 (i)"); the backup retries BUSY and LOCKED (fold 2026-10-26, debate 02) |
 
 **checks (8)**
 
@@ -235,7 +262,7 @@ Release column: R1 = Release 1 (1a/1b split per Q-01 noted where relevant), v1.5
 
 | Class | Role | Single Responsibility |
 |-------|------|----------------------|
-| `BIB_AUTHOR_LIBRARY` | Source + engine | `rix.db`: search, documents citing a passage, reader |
+| `BIB_AUTHOR_LIBRARY` | Source + engine | The author library (the rix stage's output, shipped inside `content.db`; fold 2026-10-26, debate 01, Larry's gate item 3; was "`rix.db`"): search, documents citing a passage, reader. Its folded index is built the same way beside the untouched R15 tables |
 | `BIB_AUTHOR_DOC` | Data | Document with status and voice |
 | `BIB_DOC_STATUS` | Enumeration | framework, verdict, draft, unmarked, withdrawn, ungated |
 
@@ -258,15 +285,17 @@ Release column: R1 = Release 1 (1a/1b split per Q-01 noted where relevant), v1.5
 | `BIB_JOB_MAILBOX` | Shared buffer | Progress, pages, completion, error as plain values (own processor) |
 | `BIB_JOB_PAGE` | Data | One page of copied rows |
 
-**plugin (5)**
+**plugin cluster, now pack cluster (2)** (fold 2026-10-26, debate 03, pathway B′ PREFERRED, adopted 2026-10-06; was "plugin (5)"; debate 03 section 8 says only that "the plugin folder" listing in spec 07 changes, so the folder name is left to spec 07)
 
 | Class | Role | Harvest |
 |-------|------|---------|
-| `BIB_PLUGIN` (d) | Seam: name, version, sources, lenses | S-16 |
-| `BIB_PLUGIN_REGISTRY` | Registry of compiled-in plug-ins (empty in public build) | S-19 |
-| `BIB_PRIVATE_SOURCE` (d) | Private database attached when present, with voice | S-10 (seam only) |
-| `BIB_LENS` (d) | A reading applied to a passage | S-16 |
-| `BIB_LENS_RESULT` | Lens output labeled by voice and plug-in | - |
+| ~~`BIB_PLUGIN` (d)~~ | **Dropped** ("Seam: name, version, sources, lenses") | S-16 |
+| ~~`BIB_PLUGIN_REGISTRY`~~ | **Dropped** ("Registry of compiled-in plug-ins (empty in public build)") | S-19 |
+| `BIB_PRIVATE_SOURCE` | Now an **effective, generic pack source** (was deferred, "Private database attached when present, with voice"): a generic private data pack found by the pack-folder scan, attached read-only, its voice column and `user_version` checked at attach (conc.db is not one: fold 2026-10-26, settlement S6) | S-10 (seam only) |
+| ~~`BIB_LENS` (d)~~ | **Dropped** ("A reading applied to a passage"); lens logic runs once per vault export on Larry's machine and arrives as annotation rows in a pack | S-16 |
+| `BIB_LENS_RESULT` | Lens output labeled by voice and **pack** name (`plugin_name` becomes the pack name; voice kept) | - |
+
+The public engine must provide the **generic primitives** that read packs (debate 03 "Known costs"): by-verse range overlap, Boolean key search, edit-distance fuzzy match (`BIB_EDIT_DISTANCE`), and multi-source FTS with source labels. The verdict names no host classes for them; library queries (FR-116) and search (B01 to B05) must state that they cover attached packs (debate 03 section 2.3 gap). Voiced results are built through the public `make_success`. `BIB_CONC_PACK` (concordance cluster) is a separate, purpose-built pack reader; it does not pass the generic pack-schema check: conc.db is a concordance pack of its own kind, opened through `BIB_CONC_PACK`'s own check (an expected `user_version` plus the required tables; provenance per corpus and per meaning), and `BIB_CONC_PACK` has no inheritance relation to `BIB_PRIVATE_SOURCE` now (no deferred seam until a real second implementor; Larry, 2026-10-26). conc.db is found by `BIB_CONFIG.conc_path`; generic private packs by the pack-folder scan. Which class holds export, import and the generic pack features is open for Phase 4 (name proposed by the fold where a class is named; fixed in Phase 4) (fold 2026-10-26, settlements S6, G1, G2, G3).
 
 **ai (4)**
 
@@ -311,9 +340,10 @@ Release column: R1 = Release 1 (1a/1b split per Q-01 noted where relevant), v1.5
 | `BIB_SWETE_REPAIR` | Repairs, Sollupulo collation, numbering-gap report, `source_repairs` | 12 |
 | `BIB_DEFECT_RULE` | One defect-register item as a rule | - |
 | `BIB_DEFECT_RULES_STEP` | Quarantine, caveats, gap flags, protections | Defect register |
-| `BIB_NORMALIZE_STEP` | Normalized columns via the shared normalizers | - |
+| `BIB_NORMALIZE_STEP` | Folded text via the shared normalizers (removes M\* and Cf; stage keeps a stored folded column; fold 2026-10-26, debate 01; was "Normalized columns via the shared normalizers") | - |
 | `BIB_VERSIFICATION_STEP` | `versification_map` from TVTMS + vault LXX Jer concordance + Swete entries | - |
-| `BIB_FTS_STEP` | FTS5 tables over normalized columns | - |
+| `BIB_FTS_STEP` | FTS5 over the folded text: in the stage, an external-content index over the stored folded column with `integrity-check` required to pass; the shipped index is declared `content=''` (fold 2026-10-26, debate 01; was "FTS5 tables over normalized columns") | - |
+| `BIB_ASSEMBLY_STEP` (new; fold 2026-10-26, debate 01: "a new **assembly step** class in `bible_build`"; the verdict gives no class name, name proposed by the fold; fixed in Phase 4) | Writes the shipped `content.db` from the stages: DDL copied verbatim, rows copied, per-table identity with each stage checked both directions (`EXCEPT`, FTS5 shadow tables included, the verified stage index against the shipped contentless index), two builds byte-identical; optional public content shipped as empty tables | - |
 | `BIB_TABLE_CHECKSUM` | Ordered per-table SHA-256 | - |
 | `BIB_CREDITS_GENERATOR` | Credits file and About text from provenance | FR-003 |
 | `BIB_DB_COMPARATOR` | Row-by-row differential compare of two databases | validate_rix_db.py |
@@ -375,17 +405,19 @@ Release column: R1 = Release 1 (1a/1b split per Q-01 noted where relevant), v1.5
 | `BIB_MCP_APP` | Root of a `bible_mcp` target: MCP over stdio (no listening port), each tool call answered by the engine with provenance (13 S6) |
 | `BIB_MCP_TOOL_SET` | Maps MCP tools onto `BIB_COMMAND_SET` (same allowlist as the CLI) |
 
-Needs a fleet MCP protocol library (none exists in `D:\prod` today: LG-06).
+Needs a fleet MCP protocol library (none exists in the fleet's root folder today: LG-06).
 
 ### 1.6 Counts by layer
 
 | Layer | Release 1 named classes | Families (Release 1) | Deferred (named) | Later releases |
 |-------|-------------------------|----------------------|------------------|----------------|
-| L-LIB engine | 145 | shapes (up to 27) | 14 | 18 |
+| L-LIB engine | 145 (before the fold) | shapes (up to 27) | 14 | 18 |
 | L-BUILD | 44 (incl. 1 R1b) | - | 2 (`BIB_BUILD_STEP`, `BIB_PRECOMPUTE_JOB`) | 2 |
 | L-CLI | 7 | 15 commands | 1 | - |
 | L-GUI | 13 | 11 panels + 9 dialogs | 2 | 4 (P12-P14, D04) |
 | **Total** | **209** | **up to 62** | **19** | **26** (incl. 2 for the MCP face, Q-12) |
+
+**Fold delta (fold 2026-10-26; arithmetic only, the inventory rows above were not recounted):** L-LIB +9 concordance classes, -1 net for the source collapse (two sources become one), -3 for the dropped plug-in classes (`BIB_PLUGIN`, `BIB_PLUGIN_REGISTRY`, `BIB_LENS`) = **+5 (150)**; deferred in L-LIB -3 (`BIB_PLUGIN`, `BIB_LENS` dropped, `BIB_PRIVATE_SOURCE` now effective) = **11**; L-BUILD +1 (assembly step) = **45**. Totals after the fold: **215** named classes, **16** deferred. Not counted: the export and import feature set (no class named by debate 02), the generic pack primitives (no host class named by debate 03); which class holds them is open for Phase 4, recorded as a Phase 4 design item, not a decision (fold 2026-10-26, settlement G3). `BIB_MARKDOWN_NOTE_STORE` stays in the L-LIB count but is the 1b candidate (debate 02).
 
 Tests (not counted): `TEST_APP`, `LIB_TESTS` and one `TEST_*` class per cluster, all inheriting `TEST_SET_BASE` (fleet test convention); golden fixtures under `test/fixtures/`.
 
@@ -405,13 +437,13 @@ feature -- Configuration
 
 feature -- Lifecycle (commands)
     open
-        -- Open core.db (required) and the optional sources present, read-only, on this processor.
+        -- Open content.db (required) read-only as the main database and attach the packs found in the pack folder, read-only, on this processor.   (fold 2026-10-26, debate 01 and debate 03; was "Open core.db (required) and the optional sources present, read-only, on this processor.")
     close
 
 feature -- Status
     is_open: BOOLEAN
-    has_ai_data: BOOLEAN
-    has_author_library: BOOLEAN
+    has_ai_data: BOOLEAN                         -- presence count over the empty-table model, not a file test (fold 2026-10-26, debate 01)
+    has_author_library: BOOLEAN                  -- same: a presence count or manifest flag
     has_history: BOOLEAN                         -- v2
     last_error: detachable BIB_ERROR
 
@@ -435,7 +467,11 @@ feature -- Engines (queries; each requires is_open)
     author_library: BIB_AUTHOR_LIBRARY           -- requires has_author_library
     checks: BIB_CHECK_RUNNER
     exporter: BIB_EXPORTER
-    plugins: BIB_PLUGIN_REGISTRY
+    conc_pack: BIB_CONC_PACK                      -- fold 2026-10-26, debate 05b (once per instance, requires is_open)
+    word_lookup: BIB_WORD_LOOKUP                  -- fold 2026-10-26, debate 05b
+    english_index: BIB_ENGLISH_INDEX              -- fold 2026-10-26, debate 05b
+    verse_word_lookup: BIB_VERSE_WORDS            -- fold 2026-10-26, debate 05b
+    -- (removed, fold 2026-10-26, debate 03: "plugins: BIB_PLUGIN_REGISTRY"; the facade's plug-in features are removed before release)
 
 feature -- Convenience (queries delegating to engines)
     verse (a_text: READABLE_STRING_GENERAL): BIB_VERSE_RESULT
@@ -494,6 +530,62 @@ feature -- Comparison
 end
 ```
 
+### BIB_SOURCE_SET (fold 2026-10-26, debate 01, debate 03, debate 05a)
+```eiffel
+class BIB_SOURCE_SET
+feature -- Commands
+    open_core (a_path: READABLE_STRING_GENERAL)
+        -- Open `a_path' (the shipped content.db) read-only as the main database.
+    attach (a_alias: STRING_8; a_path: READABLE_STRING_GENERAL)
+        -- Attach `a_path' read-only as `a_alias' through SIMPLE_SQL_DATABASE.attach_read_only.
+    detach (a_alias: STRING_8)
+    close
+feature -- Status
+    is_attached_alias (a_alias: READABLE_STRING_8): BOOLEAN      -- BIB_CONC_PACK.is_available asks this of Pack_alias
+feature -- Constants
+    Max_attached: INTEGER = 10                                   -- pack slots only
+end
+```
+- **One main** (`content.db`); `Max_attached` counts **pack slots only**; an attach policy is specified (debate 01 queue 4; an open pack count overflows the limit in any layout, risk R-F1-1; attach #11 reports SQLite's own message).
+- **conc.db is a pack** (debate 05a fork 1, ESTABLISHED, confidence 0.90): `BIB_SOURCE_SET.attach` calls `SIMPLE_SQL_DATABASE.attach_read_only` under the alias `conc` (`BIB_CONC_PACK.Pack_alias`). The personal-edition marking follows D-021 and is carried by the pack, not tested by the engine. A write into the attached pack is refused by SQLite ("attempt to write a readonly database"). Overturn: a pack count above the 10-attachment limit, or an attached query more than 20% slower than direct on a future SQLite.
+- **Superseded** (fold 2026-10-26): the skeleton's `ATTACH DATABASE 'file:...?mode=ro' AS <alias>` form (`bib_source_set.e`, `attach` body comment and the class note's "ai_data.db, rix.db and private sources are attached read-only"). Debates 01 and 03 dropped that form on the 3.31.1 finding (URI handling off, CANTOPEN), and `attach_read_only` (URI, `mode=ro`, works on read-only connections) landed in simple_sql (5a17f97, 2026-10-08); the attach uses `attach_read_only` (fold 2026-10-26, settlement S1). The class note's FT-02 paragraph ("not yet declared `blocking`... Not patched here") is also stale: the six `blocking` externals landed in eiffel_sqlite_2025 `11f69b9` (debate 04 gate).
+- Settled: attach through `SIMPLE_SQL_DATABASE.attach_read_only`. Debates 01 and 03 (2026-10-06) had specified the query path (`query ("ATTACH ...")`, because `execute` has precondition `database_is_writable`) because URI filenames were off on SQLite 3.31.1; debate 05a executed `attach_read_only` on 3.53.4 and SQLite refused writes (fold 2026-10-26, settlement S1).
+
+### BIB_CONFIG (fold 2026-10-26, debates 01 to 05)
+| Feature | Change | Source |
+|---|---|---|
+| `conc_path` | **Added** (the concordance pack's file; "BIB_CONFIG gains `conc_path`"); the route for conc.db, whereas generic private packs are found by the pack-folder scan (fold 2026-10-26, settlement G1) | debate 05b |
+| main database path | The per-path setters shrink to the **content path** (`set_ai_data_path` goes; `ai_data_path` and `rix_path` leave) | debate 01 section 8 |
+| `plugin_registry`, `set_plugin_registry` | **Removed** (line 39 "drops the plug-in registry from `BIB_CONFIG`"; `make_from_separate` no longer creates a registry) | debate 03 section 8 |
+| `ai_data_present`, `rix_present` | Become empty-table presence counts, not file tests | debate 01 section 8 |
+| `note_folder`, `set_note_folder` | In 1a an export (and snapshot) folder, outside the vault by default; `set_note_store_folder` moves to 1b | debate 02 section 8.2, gate item 3 |
+| pack folder | The folder in which generic private packs are found and attached by `open` (conc.db is not found by this scan: settlement G1); the config feature name is not given by any verdict (name proposed by the fold; fixed in Phase 4) (fold 2026-10-26, settlement G1) | debate 03 section 8 (spec 07 line 89) |
+
+### Concordance cluster (fold 2026-10-26, debate 05b; shapes from the skeletons)
+```eiffel
+class BIB_CONC_PACK
+create make (a_sources: BIB_SOURCE_SET)
+feature -- Status
+    is_available: BOOLEAN                          -- sources.is_attached_alias (Pack_alias)
+    has_corpus (a_code: READABLE_STRING_8): BOOLEAN
+    has_layer (a_layer: READABLE_STRING_8): BOOLEAN
+feature -- Access
+    edition_label: STRING_32
+    word_entry (a_lemma_id: INTEGER_64): detachable BIB_WORD_ENTRY
+    headwords_for_strongs (a_key: BIB_STRONGS_KEY): BIB_LIST_RESULT [BIB_WORD_ENTRY]
+    place_total (a_lemma_id: INTEGER_64; a_corpus_code: READABLE_STRING_8): BIB_FACT [INTEGER_64]
+    place_page (a_lemma_id: INTEGER_64; a_corpus_code: READABLE_STRING_8; a_offset, a_limit: INTEGER): BIB_LIST_RESULT [BIB_PLACE_ROW]
+feature -- Constants
+    Pack_alias: STRING_8 = "conc"
+    Max_page_size: INTEGER = 200
+end
+
+class BIB_WORD_LOOKUP    view (a_lemma_id: INTEGER_64; a_corpus_code: READABLE_STRING_8): BIB_WORD_VIEW
+class BIB_ENGLISH_INDEX  rows (a_english: READABLE_STRING_GENERAL): BIB_LIST_RESULT [BIB_ENGLISH_ROW]
+class BIB_VERSE_WORDS    words (a_ref: BIB_REF; a_corpus_code: READABLE_STRING_8): BIB_LIST_RESULT [BIB_VERSE_WORD]
+```
+Paging rule (debate 05a "Do not assume" 1, 5): the every-place list is never loaded whole (first 200 rows: 25 to 28 ms; whole list up to 0.9 s lean for the Greek article); `ORDER BY` on an unindexed column is not lazy; a cursor left early holds SQLite's read lock, so close it. The shipped build is lean (timing trumps contracts); tests that time reads use `without_contracts`. The first-screen budget risk (NFR-001: the commonest words about 200 ms warm, up to 2.8 s with cold pages, debate 05b addendum) has two remedies named by the verdict: precompute per-corpus counts and the English-at-a-glance summary per headword in the conc.db builder (the orchestrator addendum adds this builder item; overturn: a measured first screen under 200 ms cold for lemma 8 without it), or fill sections asynchronously.
+
 ## 4. Data Class Design: results
 
 ### BIB_ENGINE_RESULT (deferred)
@@ -550,6 +642,7 @@ BIB_ENGINE_RESULT (d)
   ├── BIB_VERSE_RESULT      ├── BIB_PAIRING          ├── BIB_SEARCH_RESULT
   ├── BIB_CENSUS_RUN        ├── BIB_SHAPE_RUN        ├── BIB_QUOTATION_RESULT
   ├── BIB_RANGE_RESULT      ├── BIB_JOURNEY_RESULT   ├── BIB_GUIDE
+  ├── BIB_WORD_VIEW (fold 2026-10-26, debate 05b)
   ├── BIB_LENS_RESULT       └── BIB_LIST_RESULT [G]   (cross-references, related passages,
                                                        library entries, author docs, names, check findings)
 
@@ -557,9 +650,12 @@ BIB_FINDING
   └── BIB_SHAPE_FINDING
 
 BIB_DATA_SOURCE (d)
-  ├── BIB_CORE_SOURCE   ├── BIB_AI_DATA_SOURCE   ├── BIB_AUTHOR_LIBRARY
+  ├── the content source (replaces BIB_CORE_SOURCE and BIB_AI_DATA_SOURCE; fold 2026-10-26, debate 01)   ├── BIB_AUTHOR_LIBRARY
   ├── BIB_USER_STORE    ├── BIB_HISTORY_SOURCE (v2)
-  └── BIB_PRIVATE_SOURCE (d)  ── effective classes only in Larry's private repo
+  └── BIB_PRIVATE_SOURCE  ── effective, generic pack source (fold 2026-10-26, debate 03; was deferred, "effective classes only in Larry's private repo")
+
+BIB_SOURCED (d)  (live class, src/provenance/bib_sourced.e; fold 2026-10-26, debate 05b)
+  └── BIB_WORD_ENTRY, BIB_PLACE_ROW, BIB_ENGLISH_ROW, BIB_VERSE_WORD   (concordance values; `provenance` is an attribute of each)
 
 BIB_NORMALIZER (d)
   ├── BIB_HEBREW_NORMALIZER   ├── BIB_GREEK_NORMALIZER   └── BIB_ENGLISH_NORMALIZER
@@ -567,11 +663,11 @@ BIB_NORMALIZER (d)
 BIB_SHAPE (d)         └── BIB_SHAPE_<slug> (family)
 BIB_CHECK (d)         └── the five effective checks
 BIB_USER_ITEM (d)     └── NOTE, HIGHLIGHT, BOOKMARK, TAG_ASSIGNMENT, PRAYER_ITEM, MEMORY_CARD, VISIT
-BIB_NOTE_STORE (d)    ├── BIB_DB_NOTE_STORE   └── BIB_MARKDOWN_NOTE_STORE
+BIB_NOTE_STORE (d)    ├── BIB_DB_NOTE_STORE (1a)   └── BIB_MARKDOWN_NOTE_STORE (1b candidate; fold 2026-10-26, debate 02)
 BIB_JOB [R] (d)       ├── BIB_SEARCH_JOB [BIB_SEARCH_RESULT]   ├── BIB_CENSUS_JOB [BIB_CENSUS_RUN]
                       └── BIB_GUIDE_JOB [BIB_GUIDE]
 BIB_AI_ADAPTER (d)    └── BIB_NULL_AI_ADAPTER   (v3: BIB_LOCAL_CHAT_ADAPTER)
-BIB_PLUGIN (d), BIB_LENS (d)  ── effective classes only in Larry's private repo
+(removed, fold 2026-10-26, debate 03: "BIB_PLUGIN (d), BIB_LENS (d)  ── effective classes only in Larry's private repo")
 BIB_BUILD_STEP (d)    ├── every importer, repair, rule, normalize, versification, FTS, schema step
                       └── BIB_PRECOMPUTE_JOB (d) └── the six precompute stages
 BIB_COMMAND (d)       └── BIB_CMD_<name> (family)
@@ -587,7 +683,9 @@ BIB_RESULT_ADAPTER [R] (d) └── one effective adapter per panel content kin
 | `BIB_VERSE_RESULT` etc. | `BIB_ENGINE_RESULT` | Each is an engine answer with method and citations | YES: adds content, keeps `success_xor_error` |
 | `BIB_LIST_RESULT [G]` | `BIB_ENGINE_RESULT` | A list answer is an answer | YES |
 | `BIB_SHAPE_FINDING` | `BIB_FINDING` | A shape finding is a finding with tier and evidence | YES: strengthens invariant only (`tier_not_judgment_if_evidence`) |
-| `BIB_CORE_SOURCE` etc. | `BIB_DATA_SOURCE` | Each is a database with identity and schema check | YES: `BIB_USER_STORE` redefines `is_read_only` as False; clients of the parent never assume read-write |
+| `BIB_WORD_VIEW` | `BIB_ENGINE_RESULT` | A word view is an engine answer with method and citations (fold 2026-10-26, debate 05b) | YES: its invariant `success_has_entry`, `success_has_total` and `order_kept` only add to `success_xor_error` |
+| `BIB_WORD_ENTRY`, `BIB_PLACE_ROW`, `BIB_ENGLISH_ROW`, `BIB_VERSE_WORD` | `BIB_SOURCED` | Each is a value that carries its own provenance (fold 2026-10-26, debate 05b) | YES: each defines `provenance` as an attribute and keeps it set by its creation postcondition |
+| the content source, `BIB_USER_STORE`, etc. (fold 2026-10-26, debate 01; was `BIB_CORE_SOURCE` etc.) | `BIB_DATA_SOURCE` | Each is a database with identity and schema check | YES: `BIB_USER_STORE` redefines `is_read_only` as False; clients of the parent never assume read-write |
 | `BIB_HEBREW_NORMALIZER` etc. | `BIB_NORMALIZER` | Each normalizes one script | YES: idempotence postcondition inherited |
 | `BIB_SHAPE_<slug>` | `BIB_SHAPE` | Each is a named pattern | YES: `classify` contract inherited (absent tags give NO_DATA) |
 | check classes | `BIB_CHECK` | Each is a check | YES |
@@ -612,7 +710,7 @@ BIB_RESULT_ADAPTER [R] (d) └── one effective adapter per panel content kin
 | Processor | Objects | Notes |
 |-----------|---------|-------|
 | GUI (CLI: main) | `BIB_MAIN_WINDOW`, widgets, the one shaping kit, `BIB_LINK_HUB`, `BIB_STATE_MACHINE`, `BIB_JOB_MONITOR` | Never runs SQL; text shaping only here |
-| Lookup worker | `separate SIMPLE_BIBLE` (own `BIB_SOURCE_SET`) | Bounded lookups only (< 50 ms p95): verse hub, word card, lexicon, cross-references |
+| Lookup worker | `separate SIMPLE_BIBLE` (own `BIB_SOURCE_SET`) | Bounded verse-and-word lookups only (< 50 ms p95): verse hub, word card, lexicon, cross-references; the concordance first screen has its own budget (NFR-019; RISK-038), not this one (fold 2026-10-26, settlement S5) |
 | Job workers (at most two on 4 cores) | `separate BIB_SEARCH_JOB` / `BIB_CENSUS_JOB` / `BIB_GUIDE_JOB`, each with its own `SIMPLE_BIBLE` | Chunked by book; checks the token between chunks; writes the mailbox |
 | One per job: token | `separate BIB_CANCEL_TOKEN` | Set by the GUI, read by the job; never blocked by the job's work |
 | One per job: mailbox | `separate BIB_JOB_MAILBOX` | Written by the job, polled by the GUI; holds copied values only |

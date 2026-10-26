@@ -2,6 +2,8 @@
 
 *Step R07, 2026-10-06. Synthesis of 01-06. Eiffel class texts below are **specification text** for /eiffel.intent and /eiffel.contracts; no `.e` file, ECF or repository is created in this phase. Bodies marked `-- (Phase 4)` are left for implementation; contracts are the specification.*
 
+*Fold 2026-10-26 (debates 01-05, D-021): the run-time database table, the SQLite row, the notes store, the plug-in seam, the concordance pack and the edition swap below follow the five gated verdicts. Each changed passage is marked "(fold 2026-10-26, debate NN)" or "(fold 2026-10-26, D-021)"; superseded text is quoted in the Fold log of `00-FOLD-2026-10-26.md`.*
+
 ---
 
 ## Overview
@@ -9,24 +11,27 @@
 simple_bible is a free Windows Bible-study workbench in which a deterministic Eiffel engine over SQLite does all the counting, lookup, comparison and checking of the Hebrew, Greek and English text, and every fact carries its source and license. It is built as:
 
 1. **An engine library** (`simple_bible`, 145 classes in Release 1 plus ported shapes) exposing `SIMPLE_BIBLE` and its engines. Every answer is a result object with a method record and citations; census and shape answers always carry FITS, PARTIAL, FAILS and NO_DATA together; cross-version pairing is possible only through the versification map; AI text can only be created from an engine answer and is always labeled.
-2. **A build pipeline** (`bible_build`, 44 classes) that assembles `core.db`, `ai_data.db` and `rix.db` from pinned upstream sources and the vault, under a license gate, deterministically, with generated credits; it hosts the Eiffel ports of the vault's Python tools, each accepted by a differential test against golden outputs.
-3. **Two faces** that depend only on engine abstractions: a native simple_widgets GUI (`simple_bible_app`; 13 classes plus 11 panels and 9 dialogs in v1) and a CLI/REPL (`bible.exe`; 7 classes plus 15 allowlisted commands).
-4. **A private plug-in seam** (5 classes, 3 deferred) that Larry's separate repository implements at compile time.
+2. **A build pipeline** (`bible_build`, 44 classes) that builds the core, AI-data and author-library **stages** from pinned upstream sources and the vault, then assembles the one shipped `content.db` from them, under a license gate, deterministically, with generated credits (fold 2026-10-26, debate 01; was "assembles `core.db`, `ai_data.db` and `rix.db` from pinned upstream sources and the vault"); it hosts the Eiffel ports of the vault's Python tools, each accepted by a differential test against golden outputs.
+3. **Two faces** that depend only on engine abstractions: a native simple_widgets GUI (`simple_bible_app`; 13 classes plus 11 panels and 9 dialogs in v1) and a CLI/REPL (`bible.exe`; 7 classes plus 15 allowlisted commands, and three more for the concordance lookups: word view, English, verse words; fold 2026-10-26, debate 05b, FR-061). The engine library's class count above does not yet include the nine `src/concordance/` classes (fold 2026-10-26, debate 05b).
+4. **A private data-pack seam (B′)**: no private code and no plug-in registry in the public engine; private material arrives as versioned, read-only packs in a published schema, attached through `attach_read_only` (fold 2026-10-26, settlement S1; was "through the query path") and read by generic public features; the lens logic runs once per vault export in Larry's own export tool (fold 2026-10-26, debate 03; was "A private plug-in seam (5 classes, 3 deferred) that Larry's separate repository implements at compile time"). The **concordance** (`src/concordance/`, nine classes) reads conc.db as one such read-only pack (fold 2026-10-26, debate 05 and D-021).
 
-Release 1 runs no AI on the user's machine; it ships precomputed, labeled AI-made related passages (D-016). Release 1 scope split (1a engine-and-reader, 1b library content packs) is recommended and awaits Larry (Q-01).
+Release 1 runs no AI on the user's machine; it ships precomputed, labeled AI-made related passages (D-016). Release 1 scope split (1a engine-and-reader, 1b library content packs) is recommended and awaits Larry (Q-01). **Release order (fold 2026-10-26, D-021):** the personal concordance edition (the public engine plus the private conc.db pack) comes before public Release 1a; the target user of the public release (D-003) is unchanged.
 
 ## Prerequisites and gap register (must be tracked before the phases that need them)
 
 | ID | Item | Owning library | Needed by | Status |
 |----|------|----------------|-----------|--------|
-| FT-01 | Upgrade the amalgamation from 3.31.1 to current; fix README drift (D-007) | eiffel_sqlite_2025 | optional for Release 1 (spec designs to 3.31.1) | fleet task, not started |
-| FT-02 | Mark `c_sqlite3_step`, `c_sqlite3_open_v2`, `c_sqlite3_close` `blocking` (fleet GC law) | eiffel_sqlite_2025 | GUI phase (NFR-016); do with FT-01 | HELD for Larry's gate (patch in place vs fork) |
+| FT-01 | Upgrade the amalgamation to **3.53.4** (current as of 2026-10-07), unchanged flags; docs in both libraries (D-007) (fold 2026-10-26, debate 04; was "Upgrade the amalgamation from 3.31.1 to current; fix README drift (D-007)") | eiffel_sqlite_2025 | optional for Release 1 (spec designs to the 3.31.1 DDL ceiling, RQ-03 option 2) | **LANDED** (eiffel_sqlite_2025 1.1.0, SQLite 3.53.4; verified 2026-10-22 by a clean simple_bible build: 69 passed, 47 skipped, 0 failed) (fold 2026-10-26, debate 04; was "fleet task, not started") |
+| FT-02 | Mark **six** externals (`step`, `prepare_v2`, `open_v2`, `close`, `close_v2`, `backup_step`) `blocking`; no hook guard (commit e80c57c made the five hook setters safe under `blocking` and lifted the guard) (fold 2026-10-26, debate 04, settlement S3; was "guard the five hook setters"; was "Mark `c_sqlite3_step`, `c_sqlite3_open_v2`, `c_sqlite3_close` `blocking` (fleet GC law)") | eiffel_sqlite_2025 | GUI phase P5 (hard; NFR-016), P2 (preferred); ships with FT-01; the FT-02-only build is the contingency; every dependent is rebuilt `-clean` afterward and its generated C checked for `EIF_ENTER_C` around `sqlite3_step` | **LANDED** with FT-01; no hook guard (`e80c57c` made the hooks safe under `blocking`) (fold 2026-10-26, debate 04, settlement S3; was "HELD for Larry's gate (patch in place vs fork)") |
+| F-9 | simple_sql error integrity (items a-d, f-i) and eiffel_sqlite_2025 COMMIT flag (item e): `atomic` rolls back on a failed statement, errors are sticky inside a transaction, a failed COMMIT is reported, the migration runner fails on any failed statement, online backup retries SQLITE_BUSY/LOCKED | simple_sql; eiffel_sqlite_2025 | **before P2's `user` cluster tests**; the P-ATOMIC probes must pass on the fixed library before any user-store contract test counts (fold 2026-10-26, debate 02) | **LANDED** (simple_sql `5a17f97`; eiffel_sqlite_2025 `23db5d0`) (fold 2026-10-26, debate 02) |
+| F-1, F-4, F-2, F-5, F-7, F-SN | simple_file: atomic write (temp, flush, `MoveFileExW` replace with write-through), ReadOnly-folder create, UTF-8 `read_text`, OS failures reported through `has_error`/`last_error`, file-safe names (F-SN, confirm against simple_file 1.1.0 `7f31278`); simple_yaml: front-matter split (F-7); simple_hash: STRING_32 paths (LG-09) | simple_file, simple_yaml, simple_hash | the export and import of the notes store (P2) | landing status not recorded in the verdict (F-SN: simple_file 1.1.0 lists stream-name handling; confirm it covers F-SN) (fold 2026-10-26, debate 02) |
+| F-3b, F-11, F-1″, LG-10 | One-pass enumeration; streaming SHA-256; hold-then-rename save by handle with a full path; 100 ns timestamps | simple_file, simple_hash | Release 1b only (the file-authoritative notes candidate A″) | UNTESTED; gated by DS-3c first (fold 2026-10-26, debate 02) |
 | LG-01 | Unicode NFD/NFC and general category incl. Mn/Mc/Me | simple_encoding | `BIB_GREEK_NORMALIZER`, Swete repair | to file |
 | LG-03 | `STRING_32` variants of `string_value_or_void` / `_or_default` | simple_sql | engine coding rule (until then, banned accessors) | to file |
 | LG-04 | GPU execution provider runtime (optional) | simple_onnx | build-time embeddings speed | optional |
 | LG-05 | bge-m3 (XLM-R SentencePiece) tokenizer compatibility, if the check fails | simple_onnx | `BIB_EMBEDDING_PRECOMPUTE` | check first |
 | LG-06 | MCP protocol library (JSON-RPC over stdio), new fleet library | new (`simple_mcp`) | the MCP face, only if Q-12 says yes | not started |
-| GW-01..13, 24, 26 | v1 GUI gap items (fonts, RTL alignment, cantillation, shaped grids, dock, parallel text, interlinear, paragraph-list hit tests, hover card, grouped bars, status sections, query builder, rich text, function keys, cross-processor wake) | simple_shaping, simple_widgets, simple_shell | GUI panels (see 03 A-011 order) | filed in gui/spec_windows_design_notes §9 |
+| GW-01..13, 24, 26 (every GW gap is done; Phase 4 complete 2026-10-26: gui/02-GAP-PROGRAM.md) (fold 2026-10-26, D-006) | v1 GUI gap items (fonts, RTL alignment, cantillation, shaped grids, dock, parallel text, interlinear, paragraph-list hit tests, hover card, grouped bars, status sections, query builder, rich text, function keys, cross-processor wake) | simple_shaping, simple_widgets, simple_shell | GUI panels (see 03 A-011 order) | filed in gui/spec_windows_design_notes §9 |
 | GW-14..16, 21 | v1.5 GUI items | same | v1.5 | - |
 | GW-17..20, 22, 23, 25 | v2 GUI items | same | v2 | - |
 
@@ -36,13 +41,78 @@ Every item is fixed in its owning library, followed by a downstream-dependents s
 
 | Database | Mode | Holder | Contents (Release 1) |
 |----------|------|--------|----------------------|
-| `core.db` | read-only | every engine processor | `book_catalog` (vault ids, FR-105), `versification_system`, `versification_map`, `version`, `verse` (display text, `verse_suffix`, omission kind, repair state, provenance key), `verse_norm` + FTS5 (`unicode61 remove_diacritics 2`) over normalized text, `word` (keys, morph code, gloss, transliteration, pronunciation), `lemma`, `strongs` (split senses), `morph_code` (English expansion), `cross_reference` (votes), `quotation`, `alignment`, `lemma_frequency`, `shape`, `shape_instance`, `shape_evidence`, `shape_run`, `proper_name*` (TIPNR), `library_resource`, `library_entry` (R1b per Q-01), `source_provenance`, `source_repairs`, `quarantine`, `caveat`, `import_gap`, `build_run`, `table_checksum` |
-| `ai_data.db` | read-only, optional | engine processors | `related_passage` (target, reason kind, votes, `is_ai_made`, method, model id) ; vectors in v2 (Q-06) |
-| `rix.db` | read-only, optional | engine processors | exactly the R15 schema of `build_rix_db.py` (`docs`, `verse_refs`, `docs_fts`) |
-| `user.db` | read-write | user-store processor only | notes, highlights, bookmarks, tags, history, prayer, memory cards, plan progress, collections, layout snapshots, settings, census definitions and runs, (v1.5) ledger |
-| `history.db` | read-only, v2 | engine processors | 11 §5.3 schema, `v_shippable` export only |
+| `content.db` **(the one shipped content file; fold 2026-10-26, debate 01, B-S)**, assembled from the core, AI-data and rix build stages (rows below) | read-only | every engine processor | **Core stage part:** `book_catalog` (vault ids, FR-105), `versification_system`, `versification_map`, `version`, `verse` (display text, `verse_suffix`, omission kind, repair state, provenance key; `verse_id` contiguous per version, with a version-range table), `verse_fts`: an FTS5 index (`unicode61 remove_diacritics 2`) over text folded at build time by one Eiffel normalizer, declared `content=''` in the shipped file, its four shadow tables copied from the verified stage and identical to it (fold 2026-10-26, debate 01, TN-R and R-N4v; was "`verse_norm` + FTS5 (`unicode61 remove_diacritics 2`) over normalized text"; no stored `verse_norm` column ships unless overturn trigger OT-N1 fires), `word` (keys, morph code, gloss, transliteration, pronunciation), `lemma`, `strongs` (split senses), `morph_code` (English expansion), `cross_reference` (votes), `quotation`, `alignment`, `lemma_frequency`, `shape`, `shape_instance`, `shape_evidence`, `shape_run`, `proper_name*` (TIPNR), `source_provenance` (one table, same file), `source_repairs`, `quarantine`, `caveat`, `import_gap`, `build_run`, `table_checksum` (the changelog and seal work from per-table checksums, since the file hash changes whenever the author library is rebuilt). `library_resource` and `library_entry` (R1b per Q-01) move into the pack schema (fold 2026-10-26, debates 01 and 03). **AI-data stage part:** `related_passage` (target, reason kind, votes, `is_ai_made`, method, model id); vectors in v2 (Q-06). **Author-library stage part:** `docs`, `verse_refs`, `docs_fts` (R15) plus its folded index built beside the untouched R15 tables. **Optional public content ships as empty tables, never as missing files;** presence is a count or a manifest flag (fold 2026-10-26, debate 01) |
+| `core.db`, `ai_data.db`, `rix.db` | **build stages only; not shipped as separate files** (fold 2026-10-26, debate 01; was three read-only run-time databases: `core.db` required, `ai_data.db` "read-only, optional" with `related_passage`, and `rix.db` "read-only, optional", "exactly the R15 schema of `build_rix_db.py`") | the build | The rix stage file is the object of AC-1a-10 (the builder's output equals the Python golden, `mtime` included); "exactly the R15 schema" applies to that stage file, not to `content.db`. Each stage keeps its own provenance and stored folded column; the assembly step copies DDL verbatim and rows, checks per-table identity with each stage in both directions (FTS5 shadow tables included), and checks that two builds from one manifest are byte-identical (fold 2026-10-26, debate 01) |
+| Packs (generic private data packs: `*.db` in the pack folder, found by the folder scan; conc.db is a second kind, found by `conc_path`: fold 2026-10-26, settlements S6, G1) | read-only, optional, **attached read-only through `SIMPLE_SQL_DATABASE.attach_read_only`** on the read-only main (fold 2026-10-26, settlement S1; was "through the query path (never a `file:` URI)") | engine processors | A generic private data pack declares its `user_version` (checked at open), a `NOT NULL` voice column, `provenance_key` and `source_provenance` in its own file (conc.db is checked by `BIB_CONC_PACK`'s own check instead: expected `user_version` plus required tables, provenance per corpus and per meaning; fold 2026-10-26, settlement S6), and reference rows with their versification declared. The pack format is public and documented; third parties may build packs; Larry's lens annotations and `machine_generated.db` ship only as private packs (fold 2026-10-26, debate 03). A pack whose folded index fails the published fold-parity fixture is attached and labeled "not diacritic-safe", not refused (fold 2026-10-26, debate 01, gate item 4). The concordance pack **conc.db** (1.23 GB, personal edition) is described under "Concordance pack and edition swap" below (fold 2026-10-26, debate 05 and D-021) |
+| `user.db` | read-write | user-store processor only | notes (system of record, append-only versions, soft delete, restore; fold 2026-10-26, debate 02), highlights, bookmarks, tags, history, prayer, memory cards, plan progress, collections, layout snapshots, settings, census definitions and runs, (v1.5) ledger |
+| `history.db` | read-only, v2 | engine processors | 11 §5.3 schema, `v_shippable` export only; v2: folded into `content.db` or a separate file, decided when v2 is specified (fold 2026-10-26, debate 01) |
 
-All DDL uses only SQLite 3.31.1 features: `CHECK` and `NOT NULL` instead of `STRICT`; no `->>`; no math functions; generated columns allowed.
+All DDL uses only the SQLite 3.31.1 feature ceiling: `CHECK` and `NOT NULL` instead of `STRICT`; no `->>`; no math functions; generated columns allowed. The run-time engine is SQLite **3.53.4** (eiffel_sqlite_2025 1.1.0) with the six `blocking` externals; the Release 1 DDL ceiling stays at 3.31.1 features (RQ-03 option 2) (fold 2026-10-26, debate 04).
+
+### Attach policy and per-schema checks (fold 2026-10-26, debates 01, 03, 04)
+
+| Rule | Statement | Source |
+|------|-----------|--------|
+| One main | The engine's main connection opens `content.db` read-only; `user.db` is never on an engine connection | debate 01, verdict 5.1 item 4 |
+| Attach through `attach_read_only` | Packs attach with `SIMPLE_SQL_DATABASE.attach_read_only` (URI, `mode=ro`, simple_sql 5a17f97, 2026-10-08; executed on 3.53.4 by debate 05a: write refused); never `ATTACH 'file:...?mode=ro'` through `perform`/`execute` (the skeleton's form at `bib_source_set.e:111-112` is dropped). Superseded: "`query ("ATTACH ...")` on the read-only main" (debates 01 and 03, written when SQLite 3.31.1 had URI filenames off) (fold 2026-10-26, settlement S1) | debates 01, 03, 05a |
+| Slots | `Max_attached` (10 on both 3.31.1 and 3.53.4; attach #11 fails) counts **pack slots only**; an attach policy (attach on demand, or a slot cap per engine connection) is specified and tested under SCOOP; attach number 11 reports SQLite's own message, not "Unknown error" | debate 01 queue 4; debate 03 OT-6 |
+| Named schema | Every provenance check names its schema: `PRAGMA <schema>.foreign_key_check` for `content.db` and every pack. A bare `foreign_key_check` is never used (3.31.1 false pass; 3.53.4 reports the violation) | debates 01, 04 |
+| Rowid range | `verse_id` is contiguous per version; every search and display-fetch path filters by an FTS rowid range, never by a join on `verse.version_id`; `hub_id` is never the FTS rowid | debate 01, SB-1 |
+| Provenance measure | K7-A: every content table `content.db` defines (FTS5 shadow tables excepted) declares `provenance_key ... NOT NULL REFERENCES source_provenance` with `source_provenance` in the same file | debate 01, K7-A |
+
+### Build stages, assembly and folded search (fold 2026-10-26, debate 01)
+
+| Item | Specification | Status word |
+|------|---------------|-------------|
+| Layout | B-S: stages separate; one assembly step writes `content.db` (DDL verbatim, rows copied, per-table `EXCEPT` identity in both directions with each stage, FTS5 shadow tables included, two-build byte identity); optional public content as empty tables; `user.db` separate; packs attach read-only | PREFERRED, 0.65 / 0.80 (debate 01, Larry's gate 2026-10-22: adopted) |
+| Assembly step | A new class in `bible_build` carries the `per_table_identity` and `deterministic` postconditions; `BIB_AI_DATA_SOURCE` and `BIB_CORE_SOURCE` collapse into one content source; `has_ai_data` becomes a presence count | debate 01, section 8 |
+| Normalizer | One Eiffel normalizer (`BIB_*_NORMALIZER` over LG-01) folds every searchable text the build makes: remove general categories M\* and Cf, map Hebrew finals and Greek final sigma, case-fold; the user's query passes through the same normalizer. Display text is never read from the index | PREFERRED, 0.75 / 0.85 (TN-R) |
+| Storage form | Stage: a stored folded column and an external-content FTS5 index, `integrity-check` required to pass, residue census over the column. Shipped: the same index declared `content=''`, shadow rows copied from the stage; no stored folded column ships unless OT-N1 fires. The author library's folded index is built the same way beside the untouched R15 tables | PREFERRED over a shipped stored column, 0.70 / 0.85 (R-N4v) |
+| Pack folds | A pack's folded index comes from the Eiffel pack builder or passes the published fold-parity fixture; the pack format declares its fold-rule version | debate 01, 5.2 item 6 and section 8 |
+| Prefix search | A `prefix=` index only if prefix search is gated at 10x | debate 01, section 8 (03 line 40) |
+| Highlight | No `highlight()` or `snippet()` on the folded index (no Release 1a consumer) | debate 01, known costs |
+| User anchors | User items anchor to `hub_id`, not to the FTS rowid, so per-version rowid renumbering touches no anchor | debate 01, section 7 note |
+
+### Notes store (fold 2026-10-26, debate 02)
+
+| Item | Specification | Status word |
+|------|---------------|-------------|
+| Release 1a store | Pathway B: `user.db` is the system of record for notes, written only by the user-store processor through `BIB_DB_NOTE_STORE` behind `BIB_NOTE_STORE` (append-only versions, soft delete, restore; the seam stays). All note writes go through the one processor that owns the store's state | PREFERRED, 0.70 / 0.80 (Larry's gate 2026-10-22: adopted; Q-11's own fallback "otherwise user.db first") |
+| Export | On demand, one Markdown file per live note with `id` and `hub_id` front matter, an id-based or sanitized file name (never a raw title), an atomic write, into a folder the exporter creates; every failure is reported (`files_written + failures = live notes`). Default folder outside the Obsidian vault, labeled a read-only copy; the user may point it into the vault | debate 02, 5 item 2 and gate item 3 |
+| Import | Reads a folder back as new notes or new versions; never overwrites a row | debate 02, 5 item 2 |
+| Exit snapshot (B′) | An automatic plain-text copy of changed notes at each clean exit, **if DS-B′ passes**; a rotating backup at start after an unclean exit is recommended for test (DS-B-S8), not adopted untested | debate 02, 5 item 4 and gate item 2 |
+| Prerequisite | F-9 (above): P-ATOMIC passes on the fixed library before any user-store contract test counts (overturn trigger OT-1); the user-store contracts forbid any store routine reporting success after a failed statement | debate 02, 5 item 3 |
+| 1b candidate | A″ (file-authoritative Markdown folder) is gated and UNTESTED, behind DS-3c (one GUI test on a scratch vault, allowed once, at a time Larry chooses), then DS-10, DS-2″, DS-1/DS-8, DS-R1, DS-R2 and the A″-only fixes. `BIB_MARKDOWN_NOTE_STORE` is the 1b candidate, not a 1a class | debate 02, 5 item 5 and gate item 4 |
+| Libraries | simple_yaml is needed in 1a for export (`to_yaml`) and import (parse) | debate 02, 8.1 |
+
+### Private packs, plug-in seam B′ (fold 2026-10-26, debate 03)
+
+| Item | Specification | Status word |
+|------|---------------|-------------|
+| Seam | B′: the lens logic (five frame lenses, graph analytics, KACC scoring once it exists) runs once per vault export on Larry's machine and writes rows with a `NOT NULL` voice column and `provenance_key`, keyed to passages through reference rows; private databases are re-emitted into versioned packs in the published schema (`user_version` checked at open; generic private data packs only, conc.db has its own check: fold 2026-10-26, settlement S6) | PREFERRED, 0.75 / 0.80 (Larry's gate 2026-10-06: adopted) |
+| Public engine | Runs no private code and no rule interpreter; finds generic private packs by folder (conc.db by `conc_path`: fold 2026-10-26, settlement G1), attaches each through `SIMPLE_SQL_DATABASE.attach_read_only` on a read-only main (fold 2026-10-26, settlement S1; was `query ("ATTACH ...")`), builds voiced results through the public `make_success`. User queries over private corpora run through generic public features (by-verse range overlap, Boolean key search, edit-distance fuzzy match, multi-source FTS with source labels), and those searches and FR-116 library queries cover attached packs | debate 03, 5 items 3-4; 8 |
+| Removed | `BIB_PLUGIN`, `BIB_PLUGIN_REGISTRY`, the deferred `BIB_LENS`, `set_plugin_registry`, the `plugins` accessor and the plug-in folder; `BIB_PRIVATE_SOURCE` becomes an effective generic pack source; `BIB_LENS_RESULT` keeps its voice, `plugin_name` becoming the pack name | debate 03, section 8 |
+| Purity test | `test_plugin_purity` is re-specified (K2′, AC-1a-57): the public executable contains no string from the private list in ASCII, UTF-16LE or UTF-32LE, and the positive control includes a `{STRING_32}` private string | debate 03, section 8 |
+| Export tool | The private export tool may stay Python (D-020 scope is the shipped product only) | debate 03, gate item 6 |
+
+### Concordance pack and edition swap (fold 2026-10-26, debate 05 and D-021)
+
+| Item | Specification | Status word |
+|------|---------------|-------------|
+| Placement | conc.db stays its own file and attaches read-only as a pack: `BIB_SOURCE_SET.attach` calls `SIMPLE_SQL_DATABASE.attach_read_only` (alias `conc`, URI `mode=ro`, works on a read-only connection). It is never folded into `content.db`: folding 1.23 GB of research-only layers into the shipped file would break D-021 (personal edition = public engine plus a private pack) and debate 03's B′. Measured: a write into the attached pack is refused by SQLite ("attempt to write a readonly database"); attached queries cost the same as direct (first page of 200 places 28.2 versus 25.0 ms) | ESTABLISHED, 0.90 / 0.90 (05a fork 1; gated 2026-10-26) |
+| Pack count | The pack uses one of the 10 attach slots (`Max_attached`); overturn: a pack count above 10, or an attached query more than 20 percent slower than direct on a future SQLite | 05a |
+| Classes | `src/concordance/` beside an untouched `BIB_CONCORDANCE`: `BIB_CONC_PACK` (every pack SQL statement, `Pack_alias = "conc"`, `Max_page_size = 200`, `lemma_id: INTEGER_64` signatures), `BIB_WORD_LOOKUP`, `BIB_ENGLISH_INDEX`, `BIB_VERSE_WORDS`, and the value classes `BIB_WORD_ENTRY`, `BIB_PLACE_ROW`, `BIB_ENGLISH_ROW`, `BIB_VERSE_WORD`, `BIB_WORD_VIEW`, as compiled in `debate/05.../spikes/skeletons/B/`. `SIMPLE_BIBLE` gains `conc_pack`, `word_lookup`, `english_index` and `verse_word_lookup`; `BIB_CONFIG` gains `conc_path`. No deferred seam now | PREFERRED, 0.70 / 0.80 (05b; gated 2026-10-26) |
+| Headword rule | The concordance pack's lookups are keyed by `lemma_id`, never by Strong's; Strong's only through `lemma_xref` (`headwords_for_strongs`). `BIB_CONCORDANCE` and FR-023 (counts by lemma, Strong's, morphology, surface; AC-1a-22) stay as they are for Release 1a; rekeying FR-023 is 05b overturn trigger 3 and needs a new debate (fold conflict 1) | fold plan, conflict 1 |
+| Two counters | `BIB_CONCORDANCE.count` (core keys) and `BIB_CONC_PACK.place_total` (`lemma_id`), each stating its key kind and scope | 05b, section 8 |
+| Paging | Every-place and English lists are paged, never loaded whole: first 200 places 25-28 ms; the whole list for the Greek article in the LXX (88,444 rows) 572-874 ms lean, 9.6-10.6 s in a contract build, so the shipped build is lean and tests that time reads run `without_contracts`. A cursor left early is closed (it holds SQLite's read lock). `ORDER BY` on an unindexed column is not lazy | 05a, do-not-assume 1, 2, 4, 5 |
+| Pack builder: transliteration | `token.translit` is precomputed in the conc.db builder (158,342 distinct written forms covering 1,375,071 tokens, 1.2 s with the pilot's rules, 0 failures, 7.6 MB, 0.6 percent of conc.db). Not a form table (saves 3.5 MB but adds a join to every every-place row) and not a port of the rules into the engine for the personal edition. Overturn: a view that transliterates text not in conc.db (needs `BIB_TRANSLITERATOR` rules in Eiffel) | PREFERRED, 0.80 / 0.85 (05a fork 4) |
+| Pack builder: first-screen aggregates | Precompute, per headword, the per-corpus counts and the English-at-a-glance summary (a few tens of thousands of rows) so the first screen reads rows instead of aggregating hundreds of thousands. Measured first screen (lean F_code, back to back, three rounds): Greek article NT 205 / 398 / 197 ms; Hebrew "and" (50,272 places) 2,773 / 277 / 140 ms; a word with 246 places 3 / 2 / 2 ms. Overturn: a measured first screen under 200 ms cold for lemma 8 without it | orchestrator addendum to 05b |
+| Pack builder: schema version | The conc.db builder sets `PRAGMA user_version` (conc.db has 0 today), so `BIB_CONC_PACK` can check its expected version at open together with the required tables (fold 2026-10-26, settlement S6). conc.db is a concordance pack of its own kind: it is not checked by debate 03's generic pack-schema check (`user_version`, a `NOT NULL` voice column, `provenance_key`), which governs generic private data packs (`BIB_PRIVATE_SOURCE`); its provenance is per corpus (`corpus.license`, `ship_class`) and per meaning (`meaning_source`), as 05b's K6 measures (fold 2026-10-26, settlement S6). `BIB_CONC_PACK` has no inheritance relation to `BIB_PRIVATE_SOURCE` now (fold 2026-10-26, settlement G2). conc.db is found by `BIB_CONFIG.conc_path`, generic private packs by the pack-folder scan (fold 2026-10-26, settlement G1) | 05b; debate 03; D-021 |
+| Builder language | The conc.db builder (Python, `Scholars/_Tools/`) may stay Python while it builds only the private pack. The distribution pack `conc_dist.db` needs an Eiffel builder with a differential test against `conc_translit.py`, form by form, over the 158,342 forms | D-021, D-020 fork 03 item 6, 05a |
+| Editions | **Personal edition**: reads conc.db as is (research-only layers included: the CATSS Rahlfs LXX; the BSB per-word tables awaiting Berean's answer); marked "PERSONAL EDITION - not for distribution" in the title bar and the About window; never published. **Distribution edition**: reads conc_dist.db only (not yet built; blockers in research/14 section 6); credits generated from the pack's own `notice` table, listed in About beside the engine's `source_provenance` credits (FR-003; nothing typed by hand; fold 2026-10-26, settlement S4) | D-021 |
+| Edition swap | The edition is a pack path: the same `BIB_CONC_PACK` reads conc.db or conc_dist.db by changing `conc_path`; no code change. `BIB_CONC_PACK.edition_label` is what the pack says it is (title bar and About); the engine never branches on it, and no edition test appears in engine code (05b overturn trigger 4: remove it). `has_layer` ("lxx", "bsb", "dictionaries") tells the face which sections exist, since conc_dist.db may lack some | 05a, 05b |
+| Meanings | The personal edition shows the SDBH and SDGNT meanings conc.db holds (D-021, later than D-012). Public Release 1a keeps D-012 (no Hebrew semantic layer in the MVP); the distribution edition may carry them (CC BY-SA) when conc_dist.db exists (fold conflict 2) | fold plan, conflict 2 |
+| Core build | Whether core.db's specified `lemma` and `alignment` tables can answer a headword query in `lemma_id` terms is UNTESTED; when core.db is built, read its schema once (05b queue 3, overturn trigger 1) | 05b |
 
 ## Class Specifications
 
@@ -81,12 +151,17 @@ feature -- Configuration
 feature -- Lifecycle
 
     open
-            -- Open core.db (required) and the optional databases present, read-only, on this processor.
+            -- Open content.db (required) read-only, then attach the packs found in the pack folder, on this processor.
+            -- (fold 2026-10-26, debates 01 and 03; was "Open core.db (required) and the optional databases present")
         require
             not_open: not is_open
         do
-            -- (Phase 4) sources.open_core (config.core_path); check schema; attach optional sources;
-            -- let each registered plug-in attach its private sources (A-012).
+            -- (Phase 4) sources.open_core (config.content_path); check schema; attach each pack found in
+            -- the pack folder on the read-only main through attach_read_only (fold 2026-10-26, settlement S1), checking
+            -- user_version, the voice column and provenance per named schema (generic private data packs; conc.db is attached
+            -- from config.conc_path and opened through BIB_CONC_PACK's own check: fold 2026-10-26, settlements S6, G1); no plug-in registry.
+            -- (fold 2026-10-26, debates 01 and 03; was "attach optional sources; let each registered
+            -- plug-in attach its private sources (A-012)")
         ensure
             open_or_error: is_open xor (last_error /= Void)
             core_checked: is_open implies core_schema_valid
@@ -111,15 +186,18 @@ feature -- Status
         end
 
     core_schema_valid: BOOLEAN
-            -- Did core.db pass its schema-version and required-table check?
+            -- Did content.db pass its schema-version and required-table check? (fold 2026-10-26, debate 01; was "core.db")
 
     has_ai_data: BOOLEAN
     has_author_library: BOOLEAN
     has_history: BOOLEAN
-            -- Optional databases present and open (history: v2).
+            -- Optional public content present: a count over the empty-by-default tables of content.db
+            -- (never a missing file; history: v2). (fold 2026-10-26, debate 01; was "Optional databases present and open")
+
+    -- (fold 2026-10-26, debate 05) Whether the concordance pack is attached is `conc_pack.is_available`.
 
     database_edition: STRING_32
-            -- Build id of core.db.
+            -- Build id of content.db.
 
     last_error: detachable BIB_ERROR
             -- Why `open` failed.
@@ -202,8 +280,26 @@ feature -- Engines
     exporter: BIB_EXPORTER
         once ("OBJECT") create Result.make end
 
-    plugins: BIB_PLUGIN_REGISTRY
-        do Result := config.plugin_registry end
+    -- (fold 2026-10-26, debate 03) The `plugins: BIB_PLUGIN_REGISTRY` accessor is removed; private
+    -- material arrives as packs read through generic public features.
+
+    conc_pack: BIB_CONC_PACK
+        require open: is_open
+        once ("OBJECT") create Result.make (sources) end
+
+    word_lookup: BIB_WORD_LOOKUP
+        require open: is_open
+        once ("OBJECT") create Result.make (conc_pack) end
+
+    english_index: BIB_ENGLISH_INDEX
+        require open: is_open
+        once ("OBJECT") create Result.make (conc_pack) end
+
+    verse_word_lookup: BIB_VERSE_WORDS
+        require open: is_open
+        once ("OBJECT") create Result.make (conc_pack) end
+            -- conc_pack, word_lookup, english_index and verse_word_lookup: the concordance
+            -- (fold 2026-10-26, debate 05; debate/05.../spikes/skeletons/B/override/simple_bible.e)
 
 feature -- Convenience
 
@@ -1084,7 +1180,7 @@ invariant
 end
 
 note
-    description: "A document in Larry's author library (rix.db). Status travels with it everywhere (D-019)."
+    description: "A document in Larry's author library (the rix stage, shipped inside content.db; fold 2026-10-26, debate 01). Status travels with it everywhere (D-019)."
 class
     BIB_AUTHOR_DOC
 
@@ -1352,7 +1448,7 @@ end
 
 ```eiffel
 note
-    description: "One SQLite connection per processor (DR-019) with its attached databases (at most 10, DR-020). Never passed between processors."
+    description: "One SQLite connection per processor (DR-019): one read-only main (content.db) with its attached packs (at most 10 pack slots, DR-020), each attached read-only through `attach_read_only` (fold 2026-10-26, settlement S1; was "through the query path"). Never passed between processors. (fold 2026-10-26, debates 01, 03, 05a; was 'with its attached databases (at most 10, DR-020)')"
 class
     BIB_SOURCE_SET
 
@@ -1371,7 +1467,8 @@ feature -- Model
 feature -- Commands
     open_core (a_path: READABLE_STRING_GENERAL)
         require not_open: not is_open
-        do -- (Phase 4) SIMPLE_SQL_DATABASE.make_read_only; record sqlite_version
+        do -- (Phase 4) SIMPLE_SQL_DATABASE.make_read_only on content.db; record sqlite_version
+           -- (fold 2026-10-26, debate 01: `open_core` opens the one content main; was core.db)
         ensure open_or_error: is_open xor (last_error /= Void)
         end
 
@@ -1381,7 +1478,10 @@ feature -- Commands
             alias_valid: is_valid_alias (a_alias)
             not_attached: not attached_model.domain [a_alias]
             under_limit: attached_count < Max_attached
-        do -- (Phase 4) ATTACH DATABASE ... AS <alias> (read-only URI)
+        do -- (Phase 4) SIMPLE_SQL_DATABASE.attach_read_only (a_path, a_alias) on the read-only main
+           -- (fold 2026-10-26, debates 01, 03, 05a; was "ATTACH DATABASE ... AS <alias> (read-only URI)":
+           -- the `file:...?mode=ro` form through perform/execute is dropped; the pack's user_version, voice
+           -- column and provenance are checked per named schema; attach number 11 reports SQLite's own message)
         ensure
             attached_now: last_error = Void implies attached_model |=| old attached_model.updated (a_alias, a_path.to_string_32)
             count_grown: last_error = Void implies attached_count = old attached_count + 1
@@ -1389,6 +1489,12 @@ feature -- Commands
 
 feature -- Constants
     Max_attached: INTEGER = 10
+            -- Counts pack slots only (the main is content.db; user.db is not on engine connections);
+            -- an attach policy (attach on demand, or a slot cap) is specified (fold 2026-10-26, debate 01).
+
+feature -- Status (concordance)
+    is_attached_alias (a_alias: STRING_8): BOOLEAN
+            -- Is a pack attached under `a_alias'? (used by BIB_CONC_PACK.is_available; fold 2026-10-26, debate 05)
 
 invariant
     within_limit: attached_count >= 0 and attached_count <= Max_attached
@@ -1451,7 +1557,7 @@ feature -- Status
 end
 
 note
-    description: "Assembles core.db from pinned sources (D-005): verify, gate, import, repair, defect rules, normalize, map, FTS, checksum, credits."
+    description: "Builds the core stage from pinned sources (D-005): verify, gate, import, repair, defect rules, normalize, map, FTS, checksum, credits; a separate assembly step then writes content.db from the stages (fold 2026-10-26, debate 01; was \"Assembles core.db from pinned sources\")."
 class
     BIB_DISTRIBUTION_BUILDER
 
@@ -1481,42 +1587,13 @@ feature -- Model
 end
 ```
 
-### BIB_PLUGIN_REGISTRY
+### BIB_PLUGIN_REGISTRY (removed; fold 2026-10-26, debate 03)
 
-```eiffel
-note
-    description: "Compiled-in private plug-ins (A-012). Empty in the public build; Larry's private root registers his before SIMPLE_BIBLE.open."
-class
-    BIB_PLUGIN_REGISTRY
+`BIB_PLUGIN_REGISTRY` (compiled-in private plug-ins, A-012; `plugin_count`, `is_sealed`, `has_plugin`, `plugins_model`, `register`, `seal`) is **removed**: the public engine has no private code seam in Release 1. Private material arrives as versioned data packs read by generic public features (B′, section "Private packs, plug-in seam B′" above). `BIB_PRIVATE_SOURCE` becomes an effective generic pack source; `BIB_LENS_RESULT` keeps `voice_attached` with `plugin_name` becoming the pack name; `BIB_LIBRARY_ENTRY.make` gains `a_voice: BIB_VOICE`. (Old class text deleted; quoted in the Fold log of `00-FOLD-2026-10-26.md`.)
 
-create
-    make
+### BIB_SOURCE_SET after the fold
 
-feature -- Status
-    plugin_count: INTEGER
-    is_sealed: BOOLEAN
-    has_plugin (a_name: STRING_8): BOOLEAN
-
-feature -- Model
-    plugins_model: MML_SEQUENCE [BIB_PLUGIN]
-
-feature -- Commands
-    register (a_plugin: BIB_PLUGIN)
-        require
-            not_sealed: not is_sealed
-            not_registered: not has_plugin (a_plugin.name)
-        do -- (Phase 4)
-        ensure
-            appended: plugins_model |=| (old plugins_model & a_plugin)
-        end
-
-    seal
-        do is_sealed := True ensure sealed: is_sealed end
-
-invariant
-    count_non_negative: plugin_count >= 0
-end
-```
+See the class text of `BIB_SOURCE_SET`: one main (`content.db`), `Max_attached` counts pack slots only, packs attach through `attach_read_only` (fold 2026-10-26, debates 01, 03, 05a). The concordance classes are specified in "Concordance pack and edition swap" and in 04 and 05 (fold 2026-10-26, debate 05).
 
 ## Remaining classes (interface by reference)
 
@@ -1531,19 +1608,20 @@ The remaining Release 1 classes follow the contracts in 05 and the interfaces in
 
 ## Dependencies
 
-All libraries below were confirmed present in `D:\prod` on 2026-10-06 (ECF file named). Versions are the `package.json` / CHANGELOG values seen today where present.
+All libraries below were confirmed present in the fleet's root folder on 2026-10-06 (ECF file named). Versions are the `package.json` / CHANGELOG values seen today where present.
 
 | Library | ECF | Purpose | Layer | Version seen |
 |---------|-----|---------|-------|--------------|
 | simple_sql | `simple_sql/simple_sql.ecf` | All SQLite access, FTS5, read-only open, vector store (v2) | LIB | 0.1.0 (package.json) |
-| eiffel_sqlite_2025 | `eiffel_sqlite_2025/sqlite_2025.ecf` (through simple_sql) | SQLite 3.31.1 binding; FT-01/FT-02 | LIB | header 3.31.1 |
+| eiffel_sqlite_2025 | `eiffel_sqlite_2025/sqlite_2025.ecf` (through simple_sql) | SQLite 3.53.4 binding (1.1.0, FT-01 landed; 3.31.1 before it); six `blocking` externals (FT-02); no hook guard (`e80c57c` made Eiffel callbacks safe under `blocking`; fold 2026-10-26, settlement S3; was "Eiffel callbacks refused by a guard"); the Release 1 DDL ceiling stays 3.31.1 (fold 2026-10-26, debate 04; was "SQLite 3.31.1 binding; FT-01/FT-02") | LIB | 1.1.0 (SQLite 3.53.4) |
 | simple_mml | `simple_mml/simple_mml.ecf` | Model queries in postconditions | LIB | - |
 | simple_encoding | `simple_encoding/simple_encoding.ecf` | UTF-8/32; NFD/NFC + Mn after LG-01 | LIB | - |
 | simple_regex | `simple_regex/simple_regex.ecf` | Regex search, reference patterns, checks | LIB | 1.0.1 |
 | simple_json | `simple_json/simple_json.ecf` | Method records, user-store payloads, golden fixtures | LIB | 0.2.0 |
 | simple_hash | `simple_hash/simple_hash.ecf` | SHA-256 (manifest, checksums, fixtures) | LIB, BUILD | 0.1.0 |
 | simple_diff | `simple_diff/simple_diff.ecf` | LCS diff under `BIB_TOKEN_DIFF` (token keys mapped to ASCII lines) | LIB | - |
-| simple_file | `simple_file/simple_file.ecf` | Paths, data-folder discovery | LIB | 0.1.0 |
+| simple_file | `simple_file/simple_file.ecf` | Paths, data-folder discovery; atomic export write, file-safe names (F-1, F-4, F-2, F-5, F-SN; fold 2026-10-26, debate 02) | LIB | 0.1.0 (1.1.0 lists stream-name handling) |
+| simple_yaml | `simple_yaml/simple_yaml.ecf` | Notes export front matter (`to_yaml`) and import (parse), Release 1a (fold 2026-10-26, debate 02) | LIB | - |
 | simple_toml | `simple_toml/simple_toml.ecf` | `bible.toml` configuration | LIB | 0.1.2 |
 | simple_logger | `simple_logger/simple_logger.ecf` | Diagnostics | LIB | 0.1.0 |
 | simple_datetime | `simple_datetime/simple_datetime.ecf` | User-record dates, memory scheduling (never in builders' rows) | LIB | 0.1.1 |
@@ -1568,7 +1646,7 @@ All libraries below were confirmed present in `D:\prod` on 2026-10-06 (ECF file 
 ## File Structure
 
 ```
-D:\prod\simple_bible\
+simple_bible\
 ├── simple_bible.ecf                  (targets: simple_bible, bible_build, bible, simple_bible_app, simple_bible_tests)
 ├── README.md, CHANGELOG.md, docs\index.html   (C-018)
 ├── src\                              (L-LIB)
@@ -1577,7 +1655,11 @@ D:\prod\simple_bible\
 │   │                bib_ref_range.e bib_mapped_ref.e bib_key.e bib_lemma_key.e bib_strongs_key.e bib_morph_code.e bib_word_id.e
 │   ├── provenance\  bib_license.e bib_provenance.e bib_grade.e bib_voice.e bib_fact.e bib_method.e
 │   │                bib_engine_result.e bib_list_result.e bib_error.e bib_verdict.e bib_finding.e bib_bucketed_result.e
-│   ├── data\        bib_data_source.e bib_core_source.e bib_ai_data_source.e bib_user_store.e bib_source_set.e
+│   ├── data\        bib_data_source.e bib_content_source.e bib_user_store.e bib_source_set.e
+│   │                (fold 2026-10-26, debate 01: bib_core_source.e and bib_ai_data_source.e collapse into one content source)
+│   ├── concordance\ bib_conc_pack.e bib_word_lookup.e bib_english_index.e bib_verse_words.e bib_word_entry.e
+│   │                bib_place_row.e bib_english_row.e bib_verse_word.e bib_word_view.e
+│   │                (fold 2026-10-26, debate 05b: as compiled in debate/05.../spikes/skeletons/B/new/)
 │   ├── text\        bib_normalizer.e bib_hebrew_normalizer.e bib_greek_normalizer.e bib_english_normalizer.e
 │   │                bib_stemmer.e bib_stop_words.e bib_pointing_reducer.e bib_transliterator.e bib_script_classifier.e
 │   │                bib_edit_distance.e bib_normalizer_set.e
@@ -1603,7 +1685,9 @@ D:\prod\simple_bible\
 │   ├── author\      bib_author_library.e bib_author_doc.e bib_doc_status.e
 │   ├── export\      bib_exporter.e bib_attribution.e
 │   ├── jobs\        bib_job.e bib_search_job.e bib_census_job.e bib_guide_job.e bib_cancel_token.e bib_job_mailbox.e bib_job_page.e
-│   ├── plugin\      bib_plugin.e bib_plugin_registry.e bib_private_source.e bib_lens.e bib_lens_result.e
+│   ├── pack\        bib_private_source.e bib_lens_result.e
+│   │                (fold 2026-10-26, debate 03: the plugin\ cluster is dropped: bib_plugin.e, bib_plugin_registry.e, bib_lens.e removed;
+│   │                bib_private_source.e becomes an effective generic pack source; the verdict removes the plug-in folder but names no replacement: `pack\` and `bib_content_source.e` (which stands for "one content source") are names proposed by the fold; fixed in Phase 4)
 │   └── ai\          bib_ai_adapter.e bib_null_ai_adapter.e bib_ai_text.e bib_ai_post_check.e
 ├── build\                            (L-BUILD; 44 classes; root bib_build_app.e)
 │   ├── pipeline\    bib_build_app.e bib_build_context.e bib_build_manifest.e bib_pinned_source.e bib_license_gate.e
@@ -1630,12 +1714,12 @@ D:\prod\simple_bible\
     ├── test_app.e  lib_tests.e       (fleet test convention; TEST_SET_BASE)
     ├── test_reference_parser.e  test_versification.e  test_verse_hub.e  test_normalizers.e  test_search.e
     ├── test_census.e  test_shapes.e  test_quotation.e  test_study.e  test_author_library.e  test_user_store.e
-    ├── test_jobs_scoop.e  test_gc_probe.e (NFR-016)  test_ai_seam.e  test_plugin_purity.e (FR-NEW-010)
+    ├── test_jobs_scoop.e  test_gc_probe.e (NFR-016)  test_ai_seam.e  test_pack_purity.e (FR-NEW-010; was test_plugin_purity, re-specified to K2′: no private string in ASCII, UTF-16LE or UTF-32LE; fold 2026-10-26, debate 03; `test_pack_purity` name proposed by the fold; fixed in Phase 4)  test_concordance.e (fold 2026-10-26, debate 05: spikes S1 attach-and-word-view and S2 translit-cost rerun as tests; first-screen measurement; name proposed by the fold; fixed in Phase 4)
     ├── test_layering.e (no SQL in gui/ or cli/; banned accessors; static join check FR-024)
     ├── test_build_determinism.e  test_license_gate.e  test_defect_register.e (A1, B1-B4, C, D, E1-E11)
     ├── test_rix_differential.e  test_shape_differential.e  test_detector_differential.e (D-020 ports)
     ├── test_cli_commands.e  gui\test_panels_offscreen.e  gui\test_state_machines.e
-    └── fixtures\  (small core.db fixture; golden outputs with SHA-256; vault snapshot for rix.db; never private data)
+    └── fixtures\  (small content.db fixture assembled from small stage fixtures; golden outputs with SHA-256; vault snapshot for the rix stage; never private data; fold 2026-10-26, debate 01)
 ```
 
 ## Phase plan (one Spec Kit pass per phase, C-011)
@@ -1643,9 +1727,9 @@ D:\prod\simple_bible\
 | Phase | Scope | Depends on |
 |-------|-------|-----------|
 | P0 spike | D-006 spike offscreen (Gen 1:1 WLC with cantillation, Gen 1:1 LXX Swete, John 1:1 WH in `SW_LABEL`/`SW_TEXT_BOX`); file GW-01..03 defects | simple_widgets owners |
-| P1 build core | L-BUILD: manifest, gate, catalog, importers for core texts, Swete repair, defect rules, normalize (LG-01), versification, FTS, checksums, credits | LG-01 |
-| P2 engine | L-LIB: core, provenance, data, text, reference, versification, hub, search, census, shapes, quotation, study, author, export, checks, user, jobs, plugin, ai seam | P1 fixture DB |
-| P3 ports | rix.db builder, detectors, shapes, precompute; differential tests vs golden outputs | P1, P2 |
+| P1 build core | L-BUILD: manifest, gate, catalog, importers for core texts, Swete repair, defect rules, normalize (LG-01), versification, FTS (stage index verified, shipped index contentless), checksums, credits, and the assembly step that writes `content.db` from the stages (fold 2026-10-26, debate 01) | LG-01 |
+| P2 engine | L-LIB: core, provenance, data, concordance, text, reference, versification, hub, search, census, shapes, quotation, study, author, export, checks, user (with note export and import), jobs, pack seam, ai seam (fold 2026-10-26, debates 02, 03, 05; was "..., user, jobs, plugin, ai seam") | P1 fixture DB; **F-9 and the P-ATOMIC probes passing before the `user` cluster's tests count** (debate 02) |
+| P3 ports | rix stage builder, detectors, shapes, precompute; differential tests vs golden outputs; for the distribution edition only, the conc_dist.db Eiffel builder with its `BIB_TRANSLITERATOR` differential test against `conc_translit.py` (fold 2026-10-26, D-021) | P1, P2 |
 | P4 CLI | L-CLI; simple_chat retarget (ledger R-6) | P2 |
-| P5 GUI | L-GUI panels in gap order (03 A-011) | P0, GW items, FT-02 |
-| P6 installer | core edition, OFL fonts, non-live identity verification | P4, P5 |
+| P5 GUI | L-GUI panels in gap order (03 A-011); native simple_widgets, every GW gap done (fold 2026-10-26, D-006); the concordance word view, English lookup and verse lookup (personal edition first, D-021) | P0, GW items, FT-02 (landed), every dependent rebuilt `-clean` after FT-02 (fold 2026-10-26, debate 04) |
+| P6 installer | core edition (public: no conc pack; the personal edition is the same executable plus the private pack and is never installed publicly), OFL fonts, non-live identity verification (fold 2026-10-26, D-021) | P4, P5 |
