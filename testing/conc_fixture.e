@@ -6,7 +6,9 @@ note
 		pack v1's additions (research/17): `token.translit', `lemma_corpus_count',
 		`lemma_english' and `PRAGMA user_version' 1.
 
-		It holds the shapes the Phase 2 review named: a Hebrew token with an empty
+		It holds the shapes the Phase 2 review named, and one found in the real file:
+		a Hebrew prefix that shares its word's position (MACULA splits morphemes;
+		Genesis 1:1 begins with two tokens at position 1); a Hebrew token with an empty
 		surface (ruling 1.2, A1), an English token with the basis
 		"computed:spacy-lemma", "tagged:<source>" bases, a Strong's row in
 		`lemma_xref', corpora with `license' and `ship_class', and the Greek
@@ -165,14 +167,14 @@ feature {NONE} -- Tables (conc.db's own definitions, plus pack v1)
 			Result.extend (["work_book", "INSERT INTO work_book(work_id, book_id) VALUES (1, 1)"])
 			Result.extend (["unit", "INSERT INTO unit(unit_id, corpus_id, work_id, div1, div2, seq) VALUES (1, 1, 1, '1', '1', 1), (2, 5, 1, '1', '1', 1), (3, 4, 1, '1', '1', 1)"])
 			Result.extend (["unit", "INSERT INTO unit(unit_id, corpus_id, work_id, div1, div2, seq) WITH RECURSIVE c(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM c WHERE n < 250) SELECT 100 + n, 4, 1, '2', CAST(n AS TEXT), 1 + n FROM c"])
-			Result.extend (["lemma", "INSERT INTO lemma(lemma_id, language, key, headword, search, pos, n_tokens, translit, pron) VALUES (1, 'hbo', 'bara', 'BRA', 'bra', 'verb', 1, 'bara', 'baw-RAW'), (2, 'grc', 'ho', 'HO', 'o', 'article', 251, 'ho', 'HO'), (3, 'eng', 'create', 'create', 'create', 'verb', 1, '', ''), (4, 'hbo', 'et', 'ET', 'et', 'particle', 1, 'et', 'ET')"])
-			Result.extend (["token", "INSERT INTO token(token_id, corpus_id, unit_id, pos, surface, search, language, lemma_id, lemma_basis, translit) VALUES (1, 1, 1, 1, 'BRA', 'bra', 'hbo', 1, 'tagged:MACULA-Hebrew', 'bara'), (2, 1, 1, 2, '', '', 'hbo', 4, 'tagged:MACULA-Hebrew', ''), (3, 5, 2, 1, 'created', 'created', 'eng', 3, 'computed:spacy-lemma', ''), (4, 4, 3, 1, 'HO', 'o', 'grc', 2, 'tagged:CATSS', 'ho')"])
+			Result.extend (["lemma", "INSERT INTO lemma(lemma_id, language, key, headword, search, pos, n_tokens, translit, pron) VALUES (1, 'hbo', 'bara', 'BRA', 'bra', 'verb', 1, 'bara', 'baw-RAW'), (2, 'grc', 'ho', 'HO', 'o', 'article', 251, 'ho', 'HO'), (3, 'eng', 'create', 'create', 'create', 'verb', 1, '', ''), (4, 'hbo', 'et', 'ET', 'et', 'particle', 1, 'et', 'ET'), (5, 'hbo', 'b', 'B', 'b', 'preposition', 1, 'b', 'beh')"])
+			Result.extend (["token", "INSERT INTO token(token_id, corpus_id, unit_id, pos, surface, search, language, lemma_id, lemma_basis, translit) VALUES (1, 1, 1, 1, 'BRA', 'bra', 'hbo', 1, 'tagged:MACULA-Hebrew', 'bara'), (2, 1, 1, 2, '', '', 'hbo', 4, 'tagged:MACULA-Hebrew', ''), (3, 5, 2, 1, 'created', 'created', 'eng', 3, 'computed:spacy-lemma', ''), (4, 4, 3, 1, 'HO', 'o', 'grc', 2, 'tagged:CATSS', 'ho'), (5, 1, 1, 1, 'B', 'b', 'hbo', 5, 'tagged:MACULA-Hebrew', 'b')"])
 			Result.extend (["token", "INSERT INTO token(token_id, corpus_id, unit_id, pos, surface, language, lemma_id, lemma_basis, translit) WITH RECURSIVE c(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM c WHERE n < 250) SELECT 1000 + n, 4, 100 + n, 1, 'HO', 'grc', 2, 'tagged:CATSS', 'ho' FROM c"])
 			Result.extend (["link", "INSERT INTO link(from_token, to_token, kind, source, method) VALUES (1, 3, 'translation:ENG-BSB', 'BSB translation tables', 'fixture')"])
 			Result.extend (["lemma_xref", "INSERT INTO lemma_xref(lemma_id, scheme, value, n) VALUES (1, 'strongs', 'H1254', 1), (2, 'strongs', 'G3588', 251)"])
 			Result.extend (["meaning_source", "INSERT INTO meaning_source(code, name, year, kind, license, ship_class) VALUES ('SDBH', 'Semantic Dictionary of Biblical Hebrew', '2026', 'lexicon', 'CC BY-SA 4.0', 'open')"])
 			Result.extend (["lex_sense", "INSERT INTO lex_sense(sense_id, lemma_id, source, entry, seq, label, depth, gloss, text) VALUES (1, 1, 'SDBH', 'bara', 1, '1', 0, 'create', 'to bring into being')"])
-			Result.extend (["lemma_corpus_count", "INSERT INTO lemma_corpus_count(lemma_id, corpus_id, n) VALUES (1, 1, 1), (4, 1, 1), (2, 4, 251), (3, 5, 1)"])
+			Result.extend (["lemma_corpus_count", "INSERT INTO lemma_corpus_count(lemma_id, corpus_id, n) VALUES (1, 1, 1), (4, 1, 1), (5, 1, 1), (2, 4, 251), (3, 5, 1)"])
 			Result.extend (["lemma_english", "INSERT INTO lemma_english(lemma_id, corpus_id, english, n) VALUES (1, 5, 'created', 1)"])
 			Result.extend (["meta", "INSERT INTO meta(key, value) VALUES ('edition_label', '" + Edition_label + "'), ('builder', 'testing/conc_fixture.e')"])
 		end

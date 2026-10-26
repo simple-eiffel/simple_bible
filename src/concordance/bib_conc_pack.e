@@ -348,7 +348,9 @@ feature -- Access
 			-- only, the text before the colon, so BIB_VERSE_WORD sees its domain vocabulary
 			-- (tagged, computed, aligned, xref, none), never storage spelling. The book is found
 			-- through the pack's `work_book' keys (FR-024). The default recension only, for now
-			-- (2026-10-26): an LXX book kept only in recensions answers no words yet.
+			-- (2026-10-26): an LXX book kept only in recensions answers no words yet. The morphemes
+			-- of one word share its position (MACULA: Genesis 1:1 begins with two tokens at
+			-- position 1), so positions never decrease, and token order breaks the tie.
 		require
 			available: is_available
 			corpus_known: has_corpus (a_corpus_code)
@@ -362,7 +364,7 @@ feature -- Access
 			l_lemma, l_previous: INTEGER_64
 			l_position: INTEGER
 		do
-			l_sql := "SELECT t.pos, t.language, t.surface, t.translit, t.lemma_id, t.lemma_basis FROM conc.token t JOIN conc.unit u ON u.unit_id = t.unit_id JOIN conc.work_book wb ON wb.work_id = u.work_id WHERE t.corpus_id = ? AND wb.book_id = ? AND u.div1 = ? AND u.div2 = ? AND u.recension = '' ORDER BY t.pos"
+			l_sql := "SELECT t.pos, t.language, t.surface, t.translit, t.lemma_id, t.lemma_basis FROM conc.token t JOIN conc.unit u ON u.unit_id = t.unit_id JOIN conc.work_book wb ON wb.work_id = u.work_id WHERE t.corpus_id = ? AND wb.book_id = ? AND u.div1 = ? AND u.div2 = ? AND u.recension = '' ORDER BY t.pos, t.token_id"
 			run_query (l_sql, {ARRAY [detachable ANY]} <<corpus_id (a_corpus_code), a_ref.book_id, a_ref.chapter.out, a_ref.verse.out>>)
 			l_provenance := provenance_of (a_corpus_code)
 			if attached last_rows as al_rows then
@@ -378,7 +380,7 @@ feature -- Access
 					else
 						l_kind := basis_kind (ic.string_value ("lemma_basis").to_string_8)
 					end
-					if l_position < 1 or l_position <= l_previous or not is_concordance_language (l_language)
+					if l_position < 1 or l_position < l_previous or not is_concordance_language (l_language)
 						or not is_translit_complete (l_language, l_surface, l_translit)
 						or not is_known_basis (l_kind) or (l_kind.same_string ("none") and l_lemma /= 0)
 					then
@@ -399,7 +401,7 @@ feature -- Access
 		ensure
 			method_recorded: Result.method.engine_feature.same_string_general ("verse_words")
 			positions_valid: Result.is_success implies across 1 |..| Result.count as l_i all Result.item (l_i).position >= 1 end
-			ascending: across 1 |..| (Result.count - 1) as l_i all Result.item (l_i).position < Result.item (l_i + 1).position end
+			in_word_order: across 1 |..| (Result.count - 1) as l_i all Result.item (l_i).position <= Result.item (l_i + 1).position end
 			fact_closure: Result.is_fact_closed
 		end
 

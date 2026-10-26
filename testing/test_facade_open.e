@@ -22,6 +22,7 @@ feature -- Tests
 		local
 			l_bible: SIMPLE_BIBLE
 		do
+			close_leftovers
 			fixture.build_content (Content_file, {CONC_FIXTURE}.Content_version, False)
 			fixture.build (Pack_file)
 			l_bible := bible (Pack_file, "")
@@ -42,6 +43,7 @@ feature -- Tests
 		local
 			l_bible: SIMPLE_BIBLE
 		do
+			close_leftovers
 			fixture.build_content (Content_file, {CONC_FIXTURE}.Content_version, False)
 			l_bible := bible ("", "")
 			l_bible.open
@@ -57,6 +59,7 @@ feature -- Tests
 		local
 			l_bible: SIMPLE_BIBLE
 		do
+			close_leftovers
 			fixture.build_content (Content_file, {CONC_FIXTURE}.Content_version, False)
 			fixture.delete_file (Pack_file)
 			l_bible := bible (Pack_file, "")
@@ -72,6 +75,7 @@ feature -- Tests
 		local
 			l_bible: SIMPLE_BIBLE
 		do
+			close_leftovers
 			fixture.build_content (Content_file, {CONC_FIXTURE}.Content_version, False)
 			fixture.build_variant (Pack_file, 0, "")
 			l_bible := bible (Pack_file, "")
@@ -88,6 +92,7 @@ feature -- Tests
 		local
 			l_bible: SIMPLE_BIBLE
 		do
+			close_leftovers
 			fixture.build_content (Content_file, 0, False)
 			l_bible := bible ("", "")
 			l_bible.open
@@ -101,6 +106,7 @@ feature -- Tests
 		local
 			l_bible: SIMPLE_BIBLE
 		do
+			close_leftovers
 			fixture.build_content (Content_file, {CONC_FIXTURE}.Content_version, True)
 			l_bible := bible ("", "")
 			l_bible.open
@@ -126,6 +132,7 @@ feature -- Tests
 		local
 			l_bible: SIMPLE_BIBLE
 		do
+			close_leftovers
 			fixture.build_content (Content_file, {CONC_FIXTURE}.Content_version, False)
 			make_folder
 			fixture.build (Folder_pack_file)
@@ -142,6 +149,7 @@ feature -- Tests
 		local
 			l_bible: SIMPLE_BIBLE
 		do
+			close_leftovers
 			fixture.build_content (Content_file, {CONC_FIXTURE}.Content_version, False)
 			make_folder
 			fixture.build_main (Folder_other_file)
@@ -160,6 +168,7 @@ feature -- Tests
 			l_personal, l_distribution: SIMPLE_BIBLE
 			l_db: SIMPLE_SQL_DATABASE
 		do
+			close_leftovers
 			fixture.build_content (Content_file, {CONC_FIXTURE}.Content_version, False)
 			fixture.build (Pack_file)
 			fixture.build (Other_pack_file)
@@ -195,6 +204,25 @@ feature {NONE} -- Fixture
 			create Result
 		end
 
+	opened_bibles: ARRAYED_LIST [SIMPLE_BIBLE]
+			-- Every engine these tests made, so one that a failed test left open is closed.
+		once
+			create Result.make (4)
+		end
+
+	close_leftovers
+			-- Close any engine a failed test left open.
+		do
+			across opened_bibles as ic loop
+				if ic.is_open then
+					ic.close
+				end
+			end
+			opened_bibles.wipe_out
+		ensure
+			none_left: opened_bibles.is_empty
+		end
+
 	bible (a_conc_path, a_pack_folder: STRING): SIMPLE_BIBLE
 			-- An unopened engine over `Content_file' with these paths.
 		local
@@ -204,6 +232,7 @@ feature {NONE} -- Fixture
 			l_config := l_config.set_conc_path (a_conc_path)
 			l_config := l_config.set_pack_folder (a_pack_folder)
 			create Result.make (l_config)
+			opened_bibles.extend (Result)
 		end
 
 	make_folder
@@ -221,6 +250,7 @@ feature {NONE} -- Fixture
 		local
 			l_ok: BOOLEAN
 		do
+			close_leftovers
 			fixture.delete_file (Content_file)
 			fixture.delete_file (Pack_file)
 			fixture.delete_file (Folder_pack_file)

@@ -31,7 +31,7 @@ feature -- Query
 		ensure
 			method_recorded: Result.method.engine_feature.same_string_general ("verse_words")
 			positions_valid: Result.is_success implies across 1 |..| Result.count as l_i all Result.item (l_i).position >= 1 end
-			ascending: across 1 |..| (Result.count - 1) as l_i all Result.item (l_i).position < Result.item (l_i + 1).position end
+			in_word_order: across 1 |..| (Result.count - 1) as l_i all Result.item (l_i).position <= Result.item (l_i + 1).position end
 			fact_closure: Result.is_fact_closed
 		end
 
