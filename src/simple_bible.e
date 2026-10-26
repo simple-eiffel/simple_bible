@@ -51,17 +51,13 @@ feature -- Configuration
 
 	config: BIB_CONFIG
 
-	can_attach_private_source: BOOLEAN
-			-- Is there room for one more attached database (SQLite limit 10)?
-		do
-			Result := sources.attached_count < sources.Max_attached
-		end
-
 feature -- Lifecycle
 
 	open
-			-- Open core.db (required) and the optional databases present, read-only, on this
-			-- processor; then let each registered plug-in attach its private sources.
+			-- Open content.db (required) read-only as the main database, attach the
+			-- generic private packs found in the pack folder and the concordance pack
+			-- named by `conc_path', all read-only, on this processor (2026-10-26 fold:
+			-- debates 01, 03 and 05).
 		require
 			not_open: not is_open
 		do
@@ -69,9 +65,9 @@ feature -- Lifecycle
 		ensure
 			open_or_error: is_open xor (last_error /= Void)
 			core_checked: is_open implies core_schema_valid
-			optional_sources_reflect_files: is_open implies (has_ai_data = config.ai_data_present and has_author_library = config.rix_present)
+			optional_content_reflects_presence: is_open implies (has_ai_data = content_has_ai_rows and has_author_library = content_has_author_rows)
+			packs_attached: is_open implies (sources.attached_count >= pack_count or last_error /= Void)
 			no_history_in_release_1: not has_history
-			plugins_sealed: is_open implies config.plugin_registry.is_sealed
 		end
 
 	close
@@ -92,10 +88,31 @@ feature -- Status
 		end
 
 	core_schema_valid: BOOLEAN
-			-- Did core.db pass its schema-version, required-table and provenance-column checks?
+			-- Did content.db pass its schema-version, required-table and provenance-column checks?
 
 	has_ai_data: BOOLEAN
 	has_author_library: BOOLEAN
+
+	content_has_ai_rows: BOOLEAN
+			-- Does content.db carry AI-made rows? (Optional content ships as empty tables.)
+		do
+			-- Phase 4: content source's `ai_row_count' > 0.
+		end
+
+	content_has_author_rows: BOOLEAN
+			-- Does content.db carry the author library's documents?
+		do
+			-- Phase 4: content source's `author_document_count' > 0.
+		end
+
+	pack_count: INTEGER
+			-- Generic private packs found in the pack folder.
+		do
+			-- Phase 4: scan `config.pack_folder'.
+		ensure
+			non_negative: Result >= 0
+			within_slots: Result <= sources.Max_attached
+		end
 
 	has_history: BOOLEAN
 			-- history.db is v2: always False in Release 1 (RQ-07).
@@ -105,7 +122,7 @@ feature -- Status
 		end
 
 	database_edition: STRING_32
-			-- Build id of core.db.
+			-- Build id of content.db.
 
 	last_error: detachable BIB_ERROR
 			-- Why `open' failed.
@@ -159,6 +176,39 @@ feature -- Engines (one per instance)
 			open: is_open
 		once ("OBJECT")
 			create Result.make (sources)
+		end
+
+	conc_pack: BIB_CONC_PACK
+			-- The concordance pack reader (debate 05b): conc.db or conc_dist.db,
+			-- attached read-only under `{BIB_CONC_PACK}.Pack_alias'.
+		require
+			open: is_open
+		once ("OBJECT")
+			create Result.make (sources)
+		end
+
+	word_lookup: BIB_WORD_LOOKUP
+			-- The word view (D-021).
+		require
+			open: is_open
+		once ("OBJECT")
+			create Result.make (conc_pack)
+		end
+
+	english_index: BIB_ENGLISH_INDEX
+			-- The English lookup (D-021).
+		require
+			open: is_open
+		once ("OBJECT")
+			create Result.make (conc_pack)
+		end
+
+	verse_word_lookup: BIB_VERSE_WORDS
+			-- The verse lookup (D-021).
+		require
+			open: is_open
+		once ("OBJECT")
+			create Result.make (conc_pack)
 		end
 
 	census: BIB_CENSUS_ENGINE
@@ -256,13 +306,6 @@ feature -- Engines (one per instance)
 			null_bound: attached {BIB_NULL_AI_ADAPTER} Result
 		end
 
-	plugins: BIB_PLUGIN_REGISTRY
-		do
-			Result := config.plugin_registry
-		ensure
-			from_config: Result = config.plugin_registry
-		end
-
 feature -- Convenience
 
 	verse (a_text: READABLE_STRING_GENERAL): BIB_VERSE_RESULT
@@ -292,7 +335,8 @@ feature -- Convenience
 		end
 
 	credits: STRING_32
-			-- Credits generated from source_provenance (FR-003).
+			-- Credits generated from source_provenance and each attached pack's own
+			-- notice table; nothing typed by hand (FR-003, settlement S4).
 		require
 			open: is_open
 		do
@@ -301,27 +345,13 @@ feature -- Convenience
 			not_empty: not Result.is_empty
 		end
 
-feature {BIB_PLUGIN} -- Private sources
-
-	attach_private_source (a_source: BIB_PRIVATE_SOURCE)
-			-- Attach `a_source' (plug-ins only, during `open').
-		require
-			open: is_open
-			room: can_attach_private_source
-			present: a_source.is_available
-		do
-			-- Phase 4: a_source.open_on (sources)
-		ensure
-			attached_or_error: a_source.is_open or a_source.last_error /= Void
-		end
-
 feature {NONE} -- Implementation
 
 	sources: BIB_SOURCE_SET
 			-- This processor's single connection and its attachments.
 
 	author_source: detachable BIB_AUTHOR_LIBRARY
-			-- rix.db when present.
+			-- The author library inside content.db (debate 01, Larry's gate item 3).
 
 	normalizers: BIB_NORMALIZER_SET
 			-- Hebrew, Greek and English normalizers, shared with the build.

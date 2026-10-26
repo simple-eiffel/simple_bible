@@ -43,7 +43,7 @@ feature -- Definition (fixed before any run)
 		end
 
 	required_columns: ARRAY [STRING_8]
-			-- core.db columns the shape reads (AC-1a-26).
+			-- content.db columns the shape reads (AC-1a-26).
 		deferred
 		end
 

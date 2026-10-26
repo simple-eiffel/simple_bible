@@ -19,7 +19,7 @@ create
 feature {NONE} -- Initialization
 
 	make (a_sources: BIB_SOURCE_SET; a_books: BIB_BOOK_CATALOG)
-			-- Create the map over core.db `versification_map'.
+			-- Create the map over content.db `versification_map'.
 		do
 			sources := a_sources
 			books := a_books

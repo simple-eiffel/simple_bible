@@ -36,7 +36,8 @@ feature {NONE} -- Initialization
 			run_user_store_tests
 			run_jobs_scoop_tests
 			run_ai_seam_tests
-			run_plugin_purity_tests
+			run_pack_purity_tests
+			run_concordance_tests
 			run_layering_tests
 			run_scoop_consumer
 			print ("%N========================%N")
@@ -241,6 +242,7 @@ feature {NONE} -- Suites
 			run_test (agent t.test_notes_keyed_by_hub_id, "test_notes_keyed_by_hub_id")
 			run_test (agent t.test_user_items_carry_no_version, "test_user_items_carry_no_version")
 			run_test (agent t.test_user_store_is_the_only_writer, "test_user_store_is_the_only_writer")
+			run_test (agent t.test_note_export_names_are_file_safe, "test_note_export_names_are_file_safe")
 			run_skeletal (agent t.test_highlight_shows_in_every_version, "test_highlight_shows_in_every_version", "AC-1a-39")
 			run_skeletal (agent t.test_edit_appends_and_delete_is_soft, "test_edit_appends_and_delete_is_soft", "AC-1a-40")
 			run_skeletal (agent t.test_backup_on_exit_restores, "test_backup_on_exit_restores", "AC-1a-40")
@@ -275,17 +277,30 @@ feature {NONE} -- Suites
 			run_test (agent t.test_facade_binds_null_adapter, "test_facade_binds_null_adapter")
 		end
 
-	run_plugin_purity_tests
+	run_pack_purity_tests
 		local
-			t: TEST_PLUGIN_PURITY
+			t: TEST_PACK_PURITY
 		do
-			print ("TEST_PLUGIN_PURITY%N")
+			print ("TEST_PACK_PURITY%N")
 			create t
-			run_test (agent t.test_public_registry_is_empty, "test_public_registry_is_empty")
-			run_test (agent t.test_registry_seals, "test_registry_seals")
-			run_test (agent t.test_no_effective_lens_or_private_source, "test_no_effective_lens_or_private_source")
+			run_test (agent t.test_no_plugin_classes, "test_no_plugin_classes")
+			run_test (agent t.test_private_source_is_one_generic_class, "test_private_source_is_one_generic_class")
 			run_test (agent t.test_no_private_names_in_sources, "test_no_private_names_in_sources")
 			run_skeletal (agent t.test_public_executable_has_no_private_strings, "test_public_executable_has_no_private_strings", "AC-1a-57")
+		end
+
+	run_concordance_tests
+		local
+			t: TEST_CONCORDANCE
+		do
+			print ("TEST_CONCORDANCE%N")
+			create t
+			run_test (agent t.test_pack_absent_until_attached, "test_pack_absent_until_attached")
+			run_test (agent t.test_pack_rules, "test_pack_rules")
+			run_skeletal (agent t.test_word_view_in_pilot_order, "test_word_view_in_pilot_order", "FR-150")
+			run_skeletal (agent t.test_english_lookup_counts_per_bible, "test_english_lookup_counts_per_bible", "FR-151")
+			run_skeletal (agent t.test_verse_lookup_every_corpus, "test_verse_lookup_every_corpus", "FR-152")
+			run_skeletal (agent t.test_edition_swap_needs_no_code, "test_edition_swap_needs_no_code", "FR-158")
 		end
 
 	run_layering_tests

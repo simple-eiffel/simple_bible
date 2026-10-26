@@ -68,7 +68,7 @@ feature -- Search
 feature -- Status
 
 	keys_resolve (a_clause: BIB_QUERY_CLAUSE): BOOLEAN
-			-- Does the key of `a_clause' exist in core.db?
+			-- Does the key of `a_clause' exist in content.db?
 		require
 			key_clause: a_clause.is_key_clause
 		do

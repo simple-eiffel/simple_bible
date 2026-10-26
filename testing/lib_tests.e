@@ -17,10 +17,10 @@ feature -- Tests
 			l_config: BIB_CONFIG
 		do
 			create l_config.make_with_core ("core.db")
-			l_config := l_config.set_ai_data_path ("ai_data.db").set_rix_path ("rix.db").set_user_path ("user.db").set_default_version ("KJV")
+			l_config := l_config.set_conc_path ("conc.db").set_pack_folder ("packs").set_user_path ("user.db").set_default_version ("KJV")
 			assert ("core kept", l_config.core_path.same_string_general ("core.db"))
-			assert ("ai set", l_config.ai_data_path.same_string_general ("ai_data.db"))
-			assert ("rix set", l_config.rix_path.same_string_general ("rix.db"))
+			assert ("conc set", l_config.conc_path.same_string_general ("conc.db"))
+			assert ("pack folder set", l_config.pack_folder.same_string_general ("packs"))
 			assert ("user set", l_config.user_path.same_string_general ("user.db"))
 			assert ("default version", l_config.default_version.same_string ("KJV"))
 			assert ("valid", l_config.is_valid)
@@ -50,7 +50,7 @@ feature -- Tests
 		do
 			create l_config.make_portable
 			assert ("portable", l_config.is_portable)
-			assert ("no plug-ins", l_config.plugin_registry.plugin_count = 0)
+			assert ("no pack folder until set", l_config.pack_folder.is_empty)
 		end
 
 	test_open_checks_core_schema

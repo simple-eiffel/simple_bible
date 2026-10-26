@@ -1,5 +1,5 @@
 note
-	description: "Morphology code to English from the TEHMC/TEGMC tables in core.db."
+	description: "Morphology code to English from the TEHMC/TEGMC tables in content.db."
 	author: "Larry Rix"
 	date: "$Date$"
 	revision: "$Revision$"
@@ -20,7 +20,7 @@ feature {NONE} -- Initialization
 feature -- Conversion
 
 	has_expansion (a_code: BIB_MORPH_CODE): BOOLEAN
-			-- Does core.db expand `a_code'?
+			-- Does content.db expand `a_code'?
 		do
 			-- Phase 4
 		end

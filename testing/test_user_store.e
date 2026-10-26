@@ -36,12 +36,33 @@ feature -- Tests
 	test_user_store_is_the_only_writer
 		local
 			u: BIB_USER_STORE
-			c: BIB_CORE_SOURCE
+			c: BIB_CONTENT_SOURCE
 		do
 			create u.make ("user.db")
-			create c.make ("core.db")
+			create c.make ("content.db")
 			assert ("user store writes", not u.is_read_only)
-			assert ("core read-only", c.is_read_only)
+			assert ("content read-only", c.is_read_only)
+		end
+
+	test_note_export_names_are_file_safe
+			-- Debate 02: export file names are id-based or sanitized, never a raw
+			-- title; a title like "Romans 8:28" is not a file name.
+		local
+			l_notes: BIB_DB_NOTE_STORE
+		do
+			create l_notes.make (create {BIB_USER_STORE}.make ("user.db"))
+			assert ("id-based name", l_notes.is_file_safe_name ("note-42.md"))
+			assert ("CONSOLE is not a device", l_notes.is_file_safe_name ("CONSOLE.md"))
+			assert ("colon refused", not l_notes.is_file_safe_name ("Romans 8:28.md"))
+			assert ("pipe refused", not l_notes.is_file_safe_name ("a|b.md"))
+			assert ("device name refused", not l_notes.is_file_safe_name ("CON.md"))
+			assert ("device name in lower case refused", not l_notes.is_file_safe_name ("prn"))
+			assert ("COM1 with an extension refused", not l_notes.is_file_safe_name ("COM1.txt"))
+			assert ("trailing dot refused", not l_notes.is_file_safe_name ("notes."))
+			assert ("trailing space refused", not l_notes.is_file_safe_name ("notes "))
+			assert ("tab refused", not l_notes.is_file_safe_name ({STRING_32} "a%Tb"))
+			assert ("empty refused", not l_notes.is_file_safe_name (""))
+			assert ("nothing written yet", l_notes.files_written = 0)
 		end
 
 	test_highlight_shows_in_every_version

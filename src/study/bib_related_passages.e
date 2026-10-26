@@ -1,8 +1,8 @@
 note
 	description: "[
-		Related passages with reasons from core.db (cross-reference votes, shared
-		rare lemmas) and, when ai_data.db is present, labeled AI-made neighbors
-		(FR-111). Without ai_data.db the answer degrades, never fails.
+		Related passages with reasons from content.db (cross-reference votes, shared
+		rare lemmas) and, when content.db carries AI-made rows, labeled AI-made neighbors
+		(FR-111). Without those rows the answer degrades, never fails.
 	]"
 	author: "Larry Rix"
 	date: "$Date$"

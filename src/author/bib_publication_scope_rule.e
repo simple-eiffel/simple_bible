@@ -1,6 +1,6 @@
 note
 	description: "[
-		The rix.db publication-scope exclusion RULE (RQ-08, AC-1a-14): Larry's
+		The author library's publication-scope exclusion RULE (RQ-08, AC-1a-14): Larry's
 		own work ships in full (D-019); documents matching an APPROVED exclusion
 		list (material centered on private individuals, raw AI chats) do not.
 
@@ -8,7 +8,7 @@ note
 		content. A pattern ending in "/" excludes a folder (relative-path
 		prefix); any other pattern excludes one exact relative path. The rule
 		answers only after the list is approved, and an approved list is sealed.
-		The build pipeline's rix.db builder applies it with its own
+		The build pipeline's rix stage builder applies it with its own
 		differential fixture; the list itself needs Larry's approval before the
 		first public build.
 	]"

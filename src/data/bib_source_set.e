@@ -1,15 +1,17 @@
 note
 	description: "[
-		One SQLite connection per processor (DR-019) with its attached databases
-		(at most 10, DR-020). Never passed between processors: each SCOOP
+		One SQLite connection per processor (DR-019) with its attached packs (at
+		most 10 pack slots, DR-020). Never passed between processors: each SCOOP
 		processor that runs engine code owns its own SIMPLE_BIBLE and therefore
-		its own source set. core.db is the main database; ai_data.db, rix.db and
-		private sources are attached read-only.
+		its own source set. The shipped content.db is the main database; packs
+		(generic private packs from the pack folder, and the concordance pack
+		from `conc_path') attach read-only through
+		SIMPLE_SQL_DATABASE.attach_read_only, and SQLite refuses any write into
+		them (2026-10-26 spec fold: debates 01 and 03, settlement S1, debate 05a).
 
-		Fleet dependency FT-02: eiffel_sqlite_2025's `c_sqlite3_step',
-		`c_sqlite3_open_v2' and `c_sqlite3_close' are not yet declared
-		`blocking'; until they are, a long query on a worker stalls every other
-		processor at its next allocation during a collection. Not patched here.
+		Fleet dependency FT-02 has landed: eiffel_sqlite_2025 1.1.0 (SQLite
+		3.53.4) declares its long externals `blocking', so a long query on a
+		worker no longer stalls the other processors' collections (debate 04).
 	]"
 	author: "Larry Rix"
 	date: "$Date$"
@@ -38,10 +40,10 @@ feature {NONE} -- Initialization
 feature -- Status
 
 	is_open: BOOLEAN
-			-- Is core.db open on this processor?
+			-- Is content.db open on this processor?
 
 	core_path: STRING_32
-			-- Path of the main database (core.db).
+			-- Path of the main database (content.db).
 
 	attached_count: INTEGER
 			-- Number of attached databases.
@@ -87,7 +89,7 @@ feature -- Model
 feature -- Commands
 
 	open_core (a_path: READABLE_STRING_GENERAL)
-			-- Open `a_path' (core.db) read-only as the main database.
+			-- Open `a_path' (the shipped content.db) read-only as the main database.
 		require
 			not_open: not is_open
 			path_not_empty: not a_path.is_empty
@@ -109,7 +111,7 @@ feature -- Commands
 			under_limit: attached_count < Max_attached
 			path_not_empty: not a_path.is_empty
 		do
-			-- Phase 4: ATTACH DATABASE 'file:...?mode=ro' AS <alias>.
+			-- Phase 4: database.attach_read_only (a_path, a_alias).
 		ensure
 			attached_now: last_error = Void implies attached_model |=| old attached_model.updated (a_alias, a_path.to_string_32)
 			count_grown: last_error = Void implies attached_count = old attached_count + 1
@@ -146,7 +148,7 @@ feature -- Connection (engine-internal; faces never see a source set)
 feature -- Constants
 
 	Max_attached: INTEGER = 10
-			-- SQLite attach limit (DR-020; attach #11 fails).
+			-- SQLite attach limit (DR-020; attach #11 fails): pack slots only.
 
 feature {NONE} -- Representation
 

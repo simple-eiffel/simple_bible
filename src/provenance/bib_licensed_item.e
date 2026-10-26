@@ -2,7 +2,7 @@ note
 	description: "[
 		Anything that may be shipped under a license: a key, its license and the
 		manifest's ship flag. The build's BIB_PINNED_SOURCE (bible_build.ecf)
-		and rix.db documents inherit it, so one gate rule serves the build and
+		and author-library documents inherit it, so one gate rule serves the build and
 		the engine.
 	]"
 	author: "Larry Rix"
