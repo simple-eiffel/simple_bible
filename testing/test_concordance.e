@@ -52,6 +52,14 @@ feature -- Tests
 		do
 		end
 
+	test_word_view_lists_every_fact
+			-- Skeletal (Phase 5, scan 23): a word view's facts_model holds its entry,
+			-- its place total and every row of its first page, so fact closure is
+			-- tested against real facts. (The value classes cannot be built until
+			-- Phase 4, so this cannot run yet.)
+		do
+		end
+
 	test_edition_swap_needs_no_code
 			-- Skeletal (Phase 5, FR-158, V-54): the same executable reads conc.db and
 			-- conc_dist.db by `conc_path' alone; no engine code tests the edition.

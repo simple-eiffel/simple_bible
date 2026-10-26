@@ -106,12 +106,13 @@ feature -- Status
 		end
 
 	pack_count: INTEGER
-			-- Generic private packs found in the pack folder.
+			-- Generic private packs found in the pack folder (the concordance pack,
+			-- when `conc_path' names one, takes one of the same slots: scan 23).
 		do
 			-- Phase 4: scan `config.pack_folder'.
 		ensure
 			non_negative: Result >= 0
-			within_slots: Result <= sources.Max_attached
+			within_slots: Result + (if config.conc_path.is_empty then 0 else 1 end) <= sources.Max_attached
 		end
 
 	has_history: BOOLEAN

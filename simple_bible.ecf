@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="ISO-8859-1"?>
 <system xmlns="http://www.eiffel.com/developers/xml/configuration-1-23-0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.eiffel.com/developers/xml/configuration-1-23-0 http://www.eiffel.com/developers/xml/configuration-1-23-0.xsd" name="simple_bible" uuid="7E24895F-CE2C-4906-AE7A-DE5868CB4165" library_target="simple_bible">
-	<description>simple_bible ENGINE library (RQ-01: engine, build and app are separate ECFs). SIMPLE_BIBLE facade and BIB_ classes: results with method and citations, versification map, verse hub, search, concordance, census and shapes with all four buckets, quotations, study engines, author library, user store and note store seam, jobs (SCOOP), private plug-in seam, AI seam. Zero C (reserved prefix sbib_).</description>
+	<description>simple_bible ENGINE library (RQ-01: engine, build and app are separate ECFs). SIMPLE_BIBLE facade and BIB_ classes: results with method and citations, versification map, verse hub, search, concordance, census and shapes with all four buckets, quotations, study engines, author library, user store and note store seam, jobs (SCOOP), data packs, the concordance, AI seam. Zero C (reserved prefix sbib_).</description>
 
 	<!-- The engine library. Faces (simple_bible_app.ecf) and the build
 	     pipeline (bible_build.ecf) depend on this target; it depends on no

@@ -65,6 +65,29 @@ feature -- Tests
 			assert ("nothing written yet", l_notes.files_written = 0)
 		end
 
+	test_file_safe_name_scan23_gaps
+			-- Scan 23: names Windows also refuses that the first rule let through.
+		local
+			l_notes: BIB_DB_NOTE_STORE
+		do
+			create l_notes.make (create {BIB_USER_STORE}.make ("user.db"))
+			assert ("COM0 refused", not l_notes.is_file_safe_name ("COM0.md"))
+			assert ("LPT0 refused", not l_notes.is_file_safe_name ("lpt0"))
+			assert ("COM superscript one refused", not l_notes.is_file_safe_name ({STRING_32} "COM%/185/.md"))
+			assert ("LPT superscript three refused", not l_notes.is_file_safe_name ({STRING_32} "LPT%/179/"))
+			assert ("CONIN$ refused", not l_notes.is_file_safe_name ("CONIN$"))
+			assert ("CONOUT$ refused", not l_notes.is_file_safe_name ("conout$.txt"))
+			assert ("device name before a spaced extension refused", not l_notes.is_file_safe_name ("NUL .md"))
+			assert ("less-than refused", not l_notes.is_file_safe_name ("a<b"))
+			assert ("greater-than refused", not l_notes.is_file_safe_name ("a>b"))
+			assert ("quote refused", not l_notes.is_file_safe_name ("a%"b"))
+			assert ("slash refused", not l_notes.is_file_safe_name ("a/b"))
+			assert ("backslash refused", not l_notes.is_file_safe_name ("a\b"))
+			assert ("question mark refused", not l_notes.is_file_safe_name ("a?b"))
+			assert ("asterisk refused", not l_notes.is_file_safe_name ("a*b"))
+			assert ("COM10 is not a device", l_notes.is_file_safe_name ("COM10.md"))
+		end
+
 	test_highlight_shows_in_every_version
 			-- Skeletal (Phase 5, AC-1a-39): a BSB highlight on John 3:16 appears on John 3:16 in every version.
 		do
