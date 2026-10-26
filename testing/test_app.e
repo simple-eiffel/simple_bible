@@ -42,6 +42,7 @@ feature {NONE} -- Initialization
 			run_facade_open_tests
 			run_content_builder_tests
 			run_cli_command_tests
+			run_reading_tests
 			run_conc_timing_tests
 			run_layering_tests
 			run_scoop_consumer
@@ -325,6 +326,16 @@ feature {NONE} -- Suites
 			run_test (agent t.test_lookup_choices, "test_lookup_choices")
 			run_test (agent t.test_lookup_reports_a_broken_pack, "test_lookup_reports_a_broken_pack")
 			run_test (agent t.test_corpus_names_and_headword_corpus, "test_corpus_names_and_headword_corpus")
+		end
+
+	run_reading_tests
+		local
+			t: TEST_READING
+		do
+			print ("TEST_READING%N")
+			create t
+			run_test (agent t.test_versions_and_a_chapter, "test_versions_and_a_chapter")
+			run_test (agent t.test_place_rows_know_their_verse, "test_place_rows_know_their_verse")
 		end
 
 	run_content_builder_tests

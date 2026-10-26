@@ -741,7 +741,7 @@ feature {NONE} -- Implementation
 			no_longer: Result.count <= a_text.count
 		end
 
-	Place_select: STRING_8 = "SELECT t.token_id, t.language, t.surface, t.translit, w.name AS work_name, u.div1, u.div2, u.recension FROM conc.token t JOIN conc.unit u ON u.unit_id = t.unit_id JOIN conc.work w ON w.work_id = u.work_id"
+	Place_select: STRING_8 = "SELECT t.token_id, t.language, t.surface, t.translit, w.name AS work_name, u.div1, u.div2, u.recension, coalesce(wb.book_id, 0) AS book_id FROM conc.token t JOIN conc.unit u ON u.unit_id = t.unit_id JOIN conc.work w ON w.work_id = u.work_id LEFT JOIN conc.work_book wb ON wb.work_id = u.work_id"
 			-- The every-place columns; each query adds its WHERE, ORDER BY and LIMIT.
 
 	place_result (a_feature, a_sql: STRING_8; a_corpus_code: READABLE_STRING_8; a_scope: STRING_8): BIB_LIST_RESULT [BIB_PLACE_ROW]
@@ -764,7 +764,8 @@ feature {NONE} -- Implementation
 					if ic.integer_64_value ("token_id") <= 0 or not is_concordance_language (l_language) or not is_translit_complete (l_language, l_surface, l_translit) then
 						l_bad := "Token " + ic.integer_64_value ("token_id").out + " in the concordance pack has no transliteration or a language the engine does not know."
 					else
-						l_rows.extend (create {BIB_PLACE_ROW}.make (ic.integer_64_value ("token_id"), l_language, reference_text (ic), l_surface, l_translit, l_provenance))
+						l_rows.extend (create {BIB_PLACE_ROW}.make (ic.integer_64_value ("token_id"), l_language, reference_text (ic), l_surface, l_translit, l_provenance,
+							ic.integer_value ("book_id"), plain_number (ic.string_value ("div1")), plain_number (ic.string_value ("div2"))))
 					end
 				end
 				if attached l_bad as al_bad then
@@ -777,6 +778,16 @@ feature {NONE} -- Implementation
 			end
 		ensure
 			named: Result.method.engine_feature.same_string_general (a_feature)
+		end
+
+	plain_number (a_text: STRING_32): INTEGER
+			-- `a_text' as a positive whole number (a chapter or verse); 0 when it is not one ("12a").
+		do
+			if a_text.is_integer and then a_text.to_integer > 0 then
+				Result := a_text.to_integer
+			end
+		ensure
+			not_negative: Result >= 0
 		end
 
 	reference_text (a_row: SIMPLE_SQL_ROW): STRING_32

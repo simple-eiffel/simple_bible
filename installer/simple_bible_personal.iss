@@ -10,7 +10,7 @@
 ;                     emoji art simple_shaping draws and its licence (LICENSE-ASSETS.md)
 ;    bible.exe        the command line (release build, no contracts: FR-160)
 ;    bible_build.exe  rebuilds content.db from a bible.db
-;    data\content.db  content.db v1 (research/18), from the build machine
+;    data\content.db  content.db v2 (research/18: books, 21 versions, every verse), from the build machine
 ;    data\conc.db     the personal concordance pack (pack v1, research/17)
 ;  The programs link SQLite and the C runtime in; besides Windows' own DLLs only the
 ;  window needs cairo.dll, shipped beside it. Each program finds data\ beside itself,
@@ -23,7 +23,7 @@
 ; ============================================================================
 
 #define AppName        "simple_bible"
-#define AppVersion     "0.2.0"
+#define AppVersion     "0.3.0"
 #define AppPublisher   "Larry Rix"
 #define GuiExe         "..\EIFGENs\bible_gui\F_code\bible_gui_lean.exe"
 #define CairoDll       GetEnv("SIMPLE_EIFFEL") + "\simple_cairo\cairo.dll"

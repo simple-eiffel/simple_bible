@@ -1,4 +1,4 @@
-simple_bible 0.2.0 - PERSONAL EDITION - not for distribution
+simple_bible 0.3.0 - PERSONAL EDITION - not for distribution
 =============================================================
 
 This installs the simple_bible concordance on your own machine, with
@@ -25,9 +25,16 @@ press Enter:
   Gen 1:1   John 3:16        a verse, word by word
   H1254   G3056              a Strong's number
 
-The centre lists what was found; choosing a row opens its word study
+The Bible text sits in the middle: pick a version at the top right,
+step chapters with Previous and Next, click a verse to list its
+original words on the left. A verse you look up opens there.
+
+The left side lists what was found; choosing a row opens its word study
 below: the heading, how the Bibles render it, and every place (a long
-list keeps loading while you read).
+list keeps loading while you read). Click a place to read it.
+
+View > Show design pills (Ctrl+Shift+P) labels each part of the window
+with its code from the GUI guide.
 
 The command line
 ----------------
@@ -53,6 +60,6 @@ Installing on another machine without questions
 -----------------------------------------------
 From cmd or PowerShell (not Git Bash, which rewrites /FLAGS):
 
-  simple_bible-personal-0.2.0-Setup.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS="addtopath"
+  simple_bible-personal-0.3.0-Setup.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS="addtopath"
 
 Uninstalling removes the programs, both databases and the PATH entry.

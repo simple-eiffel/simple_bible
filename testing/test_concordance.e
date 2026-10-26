@@ -584,7 +584,7 @@ feature -- Tests
 			create l_word.make (2, "hbo", "", "", {CONC_FIXTURE}.Unwritten_lemma, "tagged", test_provenance)
 			assert_true ("empty surface kept", l_word.surface.is_empty and l_word.translit.is_empty)
 			assert_true ("door to the word view", l_word.has_door)
-			create l_row.make (2, "hbo", "Gen 1:1", "", "", test_provenance)
+			create l_row.make (2, "hbo", "Gen 1:1", "", "", test_provenance, 1, 1, 1)
 			assert_true ("place row too", l_row.surface.is_empty and l_row.meaning = Void)
 		end
 
@@ -598,7 +598,7 @@ feature -- Tests
 			create l_word.make (1, "eng", "created", "", {CONC_FIXTURE}.English_lemma, "computed", test_provenance)
 			assert_strings_equal ("basis kind", "computed", l_word.lemma_basis)
 			assert_strings_equal ("language", "eng", l_word.language)
-			create l_row.make (3, "eng", "Gen 1:1", "created", "", test_provenance)
+			create l_row.make (3, "eng", "Gen 1:1", "created", "", test_provenance, 1, 1, 1)
 			assert_strings_equal ("surface", "created", l_row.surface)
 		end
 
@@ -617,7 +617,7 @@ feature -- Tests
 			assert_strings_equal ("translit", "bara", l_entry.translit)
 			assert_strings_equal ("pron", "baw-RAW", l_entry.pron)
 			assert_true ("provenance", l_entry.provenance = l_provenance)
-			create l_row.make (1, "hbo", "Gen 1:1", "BRA", "bara", l_provenance)
+			create l_row.make (1, "hbo", "Gen 1:1", "BRA", "bara", l_provenance, 1, 1, 1)
 			l_row.set_context ("to bring into being", "qal", "created", Void, Void)
 			assert_true ("meaning set", attached l_row.meaning as al_m and then al_m.same_string ("to bring into being"))
 			assert_true ("kjv absent", l_row.kjv = Void)

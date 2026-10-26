@@ -22,7 +22,8 @@ create
 
 feature {NONE} -- Initialization
 
-	make (a_token_id: INTEGER_64; a_language: READABLE_STRING_8; a_reference_text, a_surface, a_translit: READABLE_STRING_GENERAL; a_provenance: BIB_PROVENANCE)
+	make (a_token_id: INTEGER_64; a_language: READABLE_STRING_8; a_reference_text, a_surface, a_translit: READABLE_STRING_GENERAL; a_provenance: BIB_PROVENANCE;
+			a_book_id, a_chapter, a_verse: INTEGER)
 			-- Row for token `a_token_id' in language `a_language'; optional columns are set with `set_context'.
 			-- `a_surface' may be empty for a real Hebrew token (Phase 2 review, ruling 1.2).
 		require
@@ -37,6 +38,9 @@ feature {NONE} -- Initialization
 			surface := a_surface.to_string_32
 			translit := a_translit.to_string_32
 			provenance := a_provenance
+			book_id := a_book_id.max (0)
+			chapter := a_chapter.max (0)
+			verse := a_verse.max (0)
 		ensure
 			id_set: token_id = a_token_id
 			language_set: language.same_string (a_language)
@@ -56,6 +60,19 @@ feature -- Access
 	surface: STRING_32
 	translit: STRING_32
 	provenance: BIB_PROVENANCE
+
+	book_id: INTEGER
+			-- The vault book id of the place (FR-105); 0 when the pack maps the work to none.
+
+	chapter: INTEGER
+	verse: INTEGER
+			-- The place's chapter and verse in its corpus's own numbering; 0 when not a plain number.
+
+	is_readable: BOOLEAN
+			-- Can the reading pane open this place?
+		do
+			Result := book_id > 0 and chapter > 0 and verse > 0
+		end
 
 	meaning: detachable STRING_32
 			-- SDBH or SDGNT meaning for this place, when the pack carries one.

@@ -39,6 +39,12 @@ feature -- Access
 	books_written: INTEGER
 			-- Books the last `build' wrote.
 
+	versions_written: INTEGER
+			-- Versions the last `build' wrote.
+
+	verses_written: INTEGER
+			-- Verses the last `build' wrote, across every version.
+
 	last_error: detachable STRING_32
 			-- Why the last `build' failed.
 
@@ -75,6 +81,8 @@ feature -- Building
 		do
 			last_error := Void
 			books_written := 0
+			versions_written := 0
+			verses_written := 0
 			if not (create {SIMPLE_FILE}.make (a_bible_db)).is_file then
 				last_error := {STRING_32} "bible.db was not found: " + a_bible_db.to_string_32
 			else
@@ -90,9 +98,19 @@ feature -- Building
 				end
 				run (l_db, "INSERT INTO source_provenance VALUES (1, 'bible.db bible_books', 'vault', 'public domain (book names and order)', 0, 0, 0, 'Book list from the vault bible.db', '')")
 				run (l_db, "INSERT INTO book_catalog (book_id, code, name, is_deuterocanonical, provenance_key) SELECT id, abbreviation, name, 0, 1 FROM src.bible_books ORDER BY id")
+					-- v2: every version's text, each version its own source row (research/18).
+				run (l_db, Versions_provenance_sql)
+				run (l_db, Version_info_sql)
+				run (l_db, "INSERT INTO verse_text SELECT v.abbreviation, b.book_id, b.chapter, b.verse, coalesce(b.text, ''), 100 + v.id FROM src.bible_verses b JOIN src.bible_versions v ON v.id = b.version_id ORDER BY v.abbreviation, b.book_id, b.chapter, b.verse")
 				if last_error = Void then
 					across l_db.query ("SELECT count(*) AS n FROM book_catalog").rows as ic loop
 						books_written := ic.integer_value ("n")
+					end
+					across l_db.query ("SELECT count(*) AS n FROM version_info").rows as ic loop
+						versions_written := ic.integer_value ("n")
+					end
+					across l_db.query ("SELECT count(*) AS n FROM verse_text").rows as ic loop
+						verses_written := ic.integer_value ("n")
 					end
 					l_db.detach ("src")
 					note_failure (l_db, "bible.db could not be detached")
@@ -118,7 +136,7 @@ feature -- Building
 
 feature -- Constants
 
-	Builder_name: STRING = "bible_build 0.1.0"
+	Builder_name: STRING = "bible_build 0.2.0"
 			-- The build row's builder.
 
 	Schema: ARRAY [STRING_8]
@@ -127,9 +145,19 @@ feature -- Constants
 			Result := <<
 				"CREATE TABLE source_provenance(provenance_key INTEGER PRIMARY KEY, source_key TEXT NOT NULL, edition TEXT NOT NULL, license_id TEXT NOT NULL, non_commercial INTEGER NOT NULL, share_alike INTEGER NOT NULL, restricted INTEGER NOT NULL, credit TEXT NOT NULL, caveat TEXT NOT NULL)",
 				"CREATE TABLE build_run(build_id TEXT PRIMARY KEY, built_at TEXT NOT NULL, builder TEXT NOT NULL)",
-				"CREATE TABLE book_catalog(book_id INTEGER PRIMARY KEY, code TEXT NOT NULL, name TEXT NOT NULL, is_deuterocanonical INTEGER NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key))"
+				"CREATE TABLE book_catalog(book_id INTEGER PRIMARY KEY, code TEXT NOT NULL, name TEXT NOT NULL, is_deuterocanonical INTEGER NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key))",
+				"CREATE TABLE version_info(version_code TEXT PRIMARY KEY, name TEXT NOT NULL, language TEXT NOT NULL, direction TEXT NOT NULL, versification TEXT NOT NULL, caveat TEXT NOT NULL, sort_order INTEGER NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key))",
+				"CREATE TABLE verse_text(version_code TEXT NOT NULL, book_id INTEGER NOT NULL, chapter INTEGER NOT NULL, verse INTEGER NOT NULL, text TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key), PRIMARY KEY (version_code, book_id, chapter, verse)) WITHOUT ROWID"
 				>>
 		end
+
+	Versions_provenance_sql: STRING_8 = "INSERT INTO source_provenance SELECT 100 + v.id, 'bible.db bible_versions ' || v.abbreviation, v.name, coalesce(nullif(v.license, ''), 'unknown'), CASE WHEN coalesce(v.caveat, '') LIKE '%%BY-NC%%' THEN 1 ELSE 0 END, CASE WHEN coalesce(v.license, '') LIKE '%%SA%%' THEN 1 ELSE 0 END, CASE WHEN coalesce(v.license, '') LIKE 'personal%%' THEN 1 ELSE 0 END, v.name, coalesce(v.caveat, '') FROM src.bible_versions v ORDER BY v.id"
+			-- One source row per version (keys 100 and up): the vault's licence and caveat as given
+			-- (its licence column is not authoritative; the caveat says so), restricted when personal only.
+
+	Version_info_sql: STRING_8 = "INSERT INTO version_info SELECT v.abbreviation, CASE v.abbreviation WHEN 'KJV' THEN 'King James Version (1769)' WHEN 'BSB' THEN 'Berean Standard Bible' WHEN 'ASV' THEN 'American Standard Version (1901)' WHEN 'YLT' THEN 'Young''s Literal Translation (1898)' WHEN 'WLC' THEN 'Hebrew: Westminster Leningrad Codex' WHEN 'MapM' THEN 'Hebrew: Miqra according to the Masorah' WHEN 'SP' THEN 'Samaritan Pentateuch' WHEN 'TR' THEN 'Greek NT: Textus Receptus (Scrivener)' WHEN 'Byz' THEN 'Greek NT: Byzantine (Robinson-Pierpont)' WHEN 'Peshitta' THEN 'Syriac NT: Peshitta' WHEN 'LXX' THEN 'Greek OT: Septuagint (Rahlfs)' WHEN 'TgO' THEN 'Aramaic: Targum Onkelos' WHEN 'TgJ' THEN 'Aramaic: Targum Jonathan' WHEN 'TgW' THEN 'Aramaic: Targum to the Writings' WHEN 'TgN' THEN 'Aramaic: Targum Neofiti' WHEN 'WH' THEN 'Greek NT: Westcott-Hort (1881)' WHEN 'Tyn' THEN 'Tyndale (1526 and 1530)' WHEN 'Wyc' THEN 'Wycliffe (about 1395, NT)' WHEN 'Vul' THEN 'Latin: Clementine Vulgate (NT)' WHEN 'NWT2013' THEN 'New World Translation (2013)' WHEN 'NWT1984' THEN 'New World Translation (1984)' ELSE v.name END, CASE WHEN v.abbreviation IN ('WLC', 'MapM', 'SP') THEN 'hbo' WHEN v.abbreviation IN ('TgO', 'TgJ', 'TgW', 'TgN') THEN 'arc' WHEN v.abbreviation = 'Peshitta' THEN 'syc' WHEN v.abbreviation IN ('LXX', 'TR', 'Byz', 'WH') THEN 'grc' WHEN v.abbreviation = 'Vul' THEN 'lat' ELSE 'eng' END, CASE WHEN v.abbreviation IN ('WLC', 'MapM', 'SP', 'TgO', 'TgJ', 'TgW', 'TgN', 'Peshitta') THEN 'rtl' ELSE 'ltr' END, CASE WHEN v.abbreviation IN ('WLC', 'MapM', 'SP', 'TgO', 'TgJ', 'TgW', 'TgN') THEN 'hebrew' WHEN v.abbreviation = 'LXX' THEN 'lxx' WHEN v.abbreviation IN ('Vul', 'Wyc') THEN 'vulgate' ELSE 'kjv' END, trim(CASE WHEN instr(coalesce(v.caveat, ''), '|| LICENSE COLUMN IS NOT AUTHORITATIVE') > 0 THEN substr(v.caveat, 1, instr(v.caveat, '|| LICENSE COLUMN IS NOT AUTHORITATIVE') - 1) ELSE coalesce(v.caveat, '') END), v.id, 100 + v.id FROM src.bible_versions v ORDER BY v.id"
+			-- Each version's reader-facing name, language, direction and numbering, from its vault code;
+			-- the caveat without the vault's own bookkeeping clause (the source row keeps it whole).
 
 feature {NONE} -- Implementation
 

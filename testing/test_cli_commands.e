@@ -89,7 +89,10 @@ feature -- Tests
 			assert_strings_equal ("transliterations joined", "b-bara", l_choices.first.detail)
 			assert_true ("opens the word, not the prefix", l_choices.first.lemma_id = {CONC_FIXTURE}.Create_lemma)
 			assert_true ("verse note", l_lookup.note_text.has_substring ("Genesis 1:1 in the Hebrew Bible"))
+			assert_true ("the verse named", attached l_lookup.last_verse as al_v and then (al_v.book = 1 and al_v.chapter = 1 and al_v.verse = 1))
+			assert_integers_equal ("the same words by number (a verse clicked in S1)", 2, l_lookup.verse_choices (1, 1, 1).count)
 			assert_integers_equal ("strongs", 1, l_lookup.choices_for ("H1254").count)
+			assert_true ("no verse named", l_lookup.last_verse = Void)
 			assert_true ("empty", l_lookup.choices_for ("  ").is_empty and not l_lookup.note_text.is_empty)
 			assert_true ("nothing", l_lookup.choices_for ("zzz").is_empty and l_lookup.note_text.has_substring ("Nothing found"))
 			finish

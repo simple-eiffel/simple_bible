@@ -137,12 +137,12 @@ feature -- Commands
 
 feature -- Constants
 
-	Content_schema_version: INTEGER = 1
+	Content_schema_version: INTEGER = 2
 
 	Required_tables: ARRAY [STRING_8]
 			-- content.db v1's tables (research/18); the pipeline adds to them as engines read more.
 		once
-			Result := <<"source_provenance", "build_run", "book_catalog">>
+			Result := <<"source_provenance", "build_run", "book_catalog", "version_info", "verse_text">>
 		end
 
 	Provenance_exempt: ARRAY [STRING_8]
