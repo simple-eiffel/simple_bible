@@ -23,8 +23,8 @@ feature -- Tests
 		local
 			l_set: BIB_SOURCE_SET
 		do
-			make_database (Main_file)
-			make_database (Pack_file)
+			fixture.build_main (Main_file)
+			fixture.build_main (Pack_file)
 			create l_set.make
 			l_set.open_core (Main_file)
 			assert_true ("open", l_set.is_open)
@@ -47,8 +47,8 @@ feature -- Tests
 			l_set.close
 			assert_false ("closed", l_set.is_open)
 			assert_true ("connection released", l_set.database = Void)
-			delete_file (Main_file)
-			delete_file (Pack_file)
+			fixture.delete_file (Main_file)
+			fixture.delete_file (Pack_file)
 		end
 
 	test_open_core_missing_file_reports
@@ -56,7 +56,7 @@ feature -- Tests
 		local
 			l_set: BIB_SOURCE_SET
 		do
-			delete_file (Missing_file)
+			fixture.delete_file (Missing_file)
 			create l_set.make
 			l_set.open_core (Missing_file)
 			assert_false ("not open", l_set.is_open)
@@ -76,7 +76,7 @@ feature -- Tests
 			l_set.open_core (Garbage_file)
 			assert_false ("not open", l_set.is_open)
 			assert_true ("reported with SQLite's words", attached l_set.last_error as al_error and then al_error.code = {BIB_ERROR}.Database_problem and then al_error.details.has_substring ("not a database"))
-			delete_file (Garbage_file)
+			fixture.delete_file (Garbage_file)
 		end
 
 	test_open_core_folder_reports
@@ -102,13 +102,13 @@ feature -- Tests
 		local
 			l_set: BIB_SOURCE_SET
 		do
-			make_database (Main_file)
+			fixture.build_main (Main_file)
 			create l_set.make
 			l_set.open_core (Main_file)
 			l_set.close
 			assert_true ("path cleared", l_set.core_path.is_empty)
 			assert_true ("version cleared", l_set.sqlite_version.is_empty)
-			delete_file (Main_file)
+			fixture.delete_file (Main_file)
 		end
 
 	test_attach_missing_pack_reports_sqlite_message
@@ -116,8 +116,8 @@ feature -- Tests
 		local
 			l_set: BIB_SOURCE_SET
 		do
-			make_database (Main_file)
-			delete_file (Missing_file)
+			fixture.build_main (Main_file)
+			fixture.delete_file (Missing_file)
 			create l_set.make
 			l_set.open_core (Main_file)
 			l_set.attach ("pk", Missing_file)
@@ -125,7 +125,7 @@ feature -- Tests
 			assert_integers_equal ("nothing attached", 0, l_set.attached_count)
 			assert_false ("not created", (create {RAW_FILE}.make_with_name (Missing_file)).exists)
 			l_set.close
-			delete_file (Main_file)
+			fixture.delete_file (Main_file)
 		end
 
 	test_detach_refused_while_a_cursor_is_open
@@ -135,8 +135,8 @@ feature -- Tests
 			l_set: BIB_SOURCE_SET
 			l_cursor: SIMPLE_SQL_CURSOR
 		do
-			make_database (Main_file)
-			make_database (Pack_file)
+			fixture.build_main (Main_file)
+			fixture.build_main (Pack_file)
 			create l_set.make
 			l_set.open_core (Main_file)
 			l_set.attach ("pk", Pack_file)
@@ -155,8 +155,8 @@ feature -- Tests
 				assert_true ("connection when open", False)
 			end
 			l_set.close
-			delete_file (Main_file)
-			delete_file (Pack_file)
+			fixture.delete_file (Main_file)
+			fixture.delete_file (Pack_file)
 		end
 
 feature {NONE} -- Fixture
@@ -167,27 +167,10 @@ feature {NONE} -- Fixture
 	Garbage_file: STRING = "srcset_garbage.db"
 	Folder_path: STRING = "srcset_folder.db"
 
-	make_database (a_name: STRING)
-			-- Database file `a_name' with table t holding one row.
-		local
-			l_db: SIMPLE_SQL_DATABASE
-		do
-			delete_file (a_name)
-			create l_db.make (a_name)
-			l_db.execute ("CREATE TABLE t (id INTEGER PRIMARY KEY)")
-			l_db.execute ("INSERT INTO t (id) VALUES (1)")
-			l_db.close
-		end
-
-	delete_file (a_name: STRING)
-			-- Delete file `a_name' if present.
-		local
-			l_file: RAW_FILE
-		do
-			create l_file.make_with_name (a_name)
-			if l_file.exists then
-				l_file.delete
-			end
+	fixture: CONC_FIXTURE
+			-- The test-file helpers shared with TEST_CONCORDANCE (design scan 27).
+		once
+			create Result
 		end
 
 end

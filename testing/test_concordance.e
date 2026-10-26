@@ -234,6 +234,54 @@ feature -- Tests
 			close_and_clean (l_set, l_fixture)
 		end
 
+	test_same_path_reattach_needs_a_new_check
+			-- A pack rebuilt at the same path and attached again is a different pack: the
+			-- reader is unavailable until it checks it (design scan 27; scan 25 compared paths only).
+		local
+			l_fixture: CONC_FIXTURE
+			l_set: BIB_SOURCE_SET
+			l_pack: BIB_CONC_PACK
+		do
+			create l_fixture
+			l_set := attached_set (l_fixture, Pack_file, {CONC_FIXTURE}.Pack_version, "")
+			create l_pack.make (l_set)
+			l_pack.check_pack
+			assert_true ("first accepted", l_pack.is_available)
+			l_set.detach ({BIB_CONC_PACK}.Pack_alias)
+			l_fixture.build_variant (Pack_file, 0, "")
+			l_set.attach ({BIB_CONC_PACK}.Pack_alias, Pack_file)
+			assert_true ("same path attached", l_set.last_error = Void and l_pack.is_attached)
+			assert_false ("not available until checked", l_pack.is_available)
+			l_pack.check_pack
+			assert_false ("the rebuilt pack is refused", l_pack.is_available)
+			close_and_clean (l_set, l_fixture)
+		end
+
+	test_pack_refuses_unreadable_facts
+			-- A pack whose facts cannot be read (the corpus table lacks its code column) is
+			-- refused, never accepted with an empty corpus list (design scan 27).
+		local
+			l_fixture: CONC_FIXTURE
+			l_set: BIB_SOURCE_SET
+			l_pack: BIB_CONC_PACK
+			l_db: SIMPLE_SQL_DATABASE
+		do
+			create l_fixture
+			l_fixture.build_main (Main_file)
+			l_fixture.build (Pack_file)
+			create l_db.make (Pack_file)
+			l_db.execute ("ALTER TABLE corpus RENAME COLUMN code TO corpus_code")
+			l_db.close
+			create l_set.make
+			l_set.open_core (Main_file)
+			l_set.attach ({BIB_CONC_PACK}.Pack_alias, Pack_file)
+			create l_pack.make (l_set)
+			l_pack.check_pack
+			assert_false ("refused", l_pack.is_available)
+			assert_true ("reason given", attached l_pack.pack_error as al_error and then al_error.code = {BIB_ERROR}.Database_problem)
+			close_and_clean (l_set, l_fixture)
+		end
+
 	test_verse_word_takes_real_hebrew_rows
 			-- A verse word and a place row build from conc.db's real Hebrew shape: an empty
 			-- surface and no transliteration (6,435 such tokens, WLC-MACULA), basis kind

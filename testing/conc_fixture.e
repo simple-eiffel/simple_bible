@@ -55,7 +55,7 @@ feature -- Building
 		end
 
 	build_main (a_path: STRING)
-			-- Write a stand-in content.db (one table) to `a_path', for a source set to open.
+			-- Write a stand-in content.db (table t holding one row) to `a_path', for a source set to open.
 		require
 			path_not_empty: not a_path.is_empty
 		local
@@ -64,6 +64,7 @@ feature -- Building
 			delete_file (a_path)
 			create l_db.make (a_path)
 			l_db.execute ("CREATE TABLE t (id INTEGER PRIMARY KEY)")
+			l_db.execute ("INSERT INTO t (id) VALUES (1)")
 			l_db.close
 		end
 
