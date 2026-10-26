@@ -5,8 +5,10 @@ note
 			bible english <word>
 			bible verse <book> <chapter> <verse> [--corpus CODE]
 			bible strongs <H1234 or G3056>
-		--content names content.db (default %LOCALAPPDATA%\simple_bible\content.db);
-		--conc names the concordance pack (default the SIMPLE_BIBLE_CONC variable).
+		--content names content.db and --conc the concordance pack. Without them, bible
+		looks in the data folder beside itself (where the installer puts both), then in
+		%LOCALAPPDATA%\simple_bible (where bible_build writes content.db); for the pack it
+		also reads the SIMPLE_BIBLE_CONC variable.
 		The first line printed is the pack's own edition label (FR-157).
 	]"
 	author: "Larry Rix"
@@ -135,22 +137,53 @@ feature {NONE} -- Commands
 feature {NONE} -- Defaults
 
 	default_content: STRING
-			-- %LOCALAPPDATA%\simple_bible\content.db, where bible_build writes it.
+			-- content.db in the data folder beside this program (the installer's place), else in
+			-- %LOCALAPPDATA%\simple_bible (where bible_build writes it).
 		do
-			if attached (create {SIMPLE_ENV}).item ("LOCALAPPDATA") as al_folder then
-				Result := al_folder.to_string_8 + "\simple_bible\content.db"
-			else
-				Result := "content.db"
+			Result := first_file (<<installed_data ("content.db"), local_data ("content.db")>>)
+			if Result.is_empty then
+				Result := local_data ("content.db")
 			end
 		end
 
 	default_conc: STRING
-			-- The SIMPLE_BIBLE_CONC variable, or nothing.
+			-- conc.db in the data folder beside this program, else the SIMPLE_BIBLE_CONC variable,
+			-- else conc.db in %LOCALAPPDATA%\simple_bible; empty when none exists.
+		local
+			l_variable: STRING
 		do
 			if attached (create {SIMPLE_ENV}).item ("SIMPLE_BIBLE_CONC") as al_path then
-				Result := al_path.to_string_8
+				l_variable := al_path.to_string_8
 			else
-				Result := ""
+				create l_variable.make_empty
+			end
+			Result := first_file (<<installed_data ("conc.db"), l_variable, local_data ("conc.db")>>)
+		end
+
+	installed_data (a_name: STRING): STRING
+			-- `a_name' in the data folder beside this program.
+		do
+			Result := (create {SIMPLE_ENV}).executable_folder.to_string_8 + "\data\" + a_name
+		end
+
+	local_data (a_name: STRING): STRING
+			-- `a_name' in %LOCALAPPDATA%\simple_bible, or beside the current folder when that is unset.
+		do
+			if attached (create {SIMPLE_ENV}).item ("LOCALAPPDATA") as al_folder then
+				Result := al_folder.to_string_8 + "\simple_bible\" + a_name
+			else
+				Result := a_name.twin
+			end
+		end
+
+	first_file (a_paths: ARRAY [STRING]): STRING
+			-- The first of `a_paths' that names an existing file, or empty.
+		do
+			create Result.make_empty
+			across a_paths as ic until not Result.is_empty loop
+				if not ic.is_empty and then (create {SIMPLE_FILE}.make (ic)).is_file then
+					Result := ic
+				end
 			end
 		end
 

@@ -29,3 +29,6 @@ exception_trace.log
 
 # Design debates in progress: committed through their own pull request when gated
 .eiffel-workflow/debate/
+
+# The personal installer carries the personal edition (conc.db): never commit or publish it
+installer/output/
