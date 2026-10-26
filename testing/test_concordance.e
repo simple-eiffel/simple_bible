@@ -77,7 +77,7 @@ feature -- Tests
 			create l_fixture
 			create l_lookup.make (checked_pack (l_fixture))
 			create l_ref.make (1, 1, 1, create {BIB_VERSIFICATION_SYSTEM}.make_kjv)
-			assert_integers_equal ("hebrew", 2, l_lookup.words (l_ref, "WLC-MACULA").count)
+			assert_integers_equal ("hebrew", 3, l_lookup.words (l_ref, "WLC-MACULA").count)
 			assert_integers_equal ("greek", 1, l_lookup.words (l_ref, "LXX-RAHLFS").count)
 			assert_integers_equal ("english", 1, l_lookup.words (l_ref, "ENG-BSB").count)
 			assert_true ("doors", l_lookup.words (l_ref, "WLC-MACULA").item (1).has_door)
@@ -143,6 +143,7 @@ feature -- Tests
 			l_schema: SIMPLE_SQL_SCHEMA
 		do
 			create l_fixture
+			close_leftovers
 			l_fixture.build_main (Main_file)
 			l_fixture.build (Pack_file)
 			l_fixture.build_variant (Old_pack_file, 0, "lemma_english")
@@ -252,6 +253,7 @@ feature -- Tests
 			l_file: PLAIN_TEXT_FILE
 		do
 			create l_fixture
+			close_leftovers
 			l_fixture.build_main (Main_file)
 			create l_file.make_create_read_write (Pack_file)
 			l_file.put_string ("This is not a SQLite database, only text long enough to fill a page header.")
@@ -327,6 +329,7 @@ feature -- Tests
 			l_db: SIMPLE_SQL_DATABASE
 		do
 			create l_fixture
+			close_leftovers
 			l_fixture.build_main (Main_file)
 			l_fixture.build (Pack_file)
 			create l_db.make (Pack_file)
@@ -462,9 +465,10 @@ feature -- Tests
 			l_pack := checked_pack (l_fixture)
 			create l_ref.make (1, 1, 1, create {BIB_VERSIFICATION_SYSTEM}.make_kjv)
 			l_words := l_pack.verse_words (l_ref, "WLC-MACULA")
-			assert_true ("two hebrew words", l_words.is_success and then l_words.count = 2)
+			assert_true ("three hebrew tokens, a prefix sharing its word's position", l_words.is_success and then l_words.count = 3)
+			assert_true ("shared position", l_words.item (1).position = 1 and l_words.item (2).position = 1)
 			assert_strings_equal ("basis kind", "tagged", l_words.item (1).lemma_basis)
-			assert_true ("empty surface", l_words.item (2).surface.is_empty and l_words.item (2).has_door)
+			assert_true ("empty surface", l_words.item (3).surface.is_empty and l_words.item (3).has_door)
 			l_words := l_pack.verse_words (l_ref, "ENG-BSB")
 			assert_true ("one english word", l_words.is_success and then l_words.count = 1)
 			assert_strings_equal ("computed", "computed", l_words.item (1).lemma_basis)
@@ -497,6 +501,7 @@ feature -- Tests
 			l_db: SIMPLE_SQL_DATABASE
 		do
 			create l_fixture
+			close_leftovers
 			l_fixture.build (Pack_file)
 			create l_db.make (Pack_file)
 			l_db.execute ("UPDATE lemma SET language = 'eng' WHERE lemma_id = 1")
@@ -585,11 +590,32 @@ feature {NONE} -- Fixture
 			accepted: Result.is_available
 		end
 
+	opened_sets: ARRAYED_LIST [BIB_SOURCE_SET]
+			-- Every set these tests opened, so a test that fails before closing its set does not
+			-- leave the fixture files locked for the next ones.
+		once
+			create Result.make (4)
+		end
+
+	close_leftovers
+			-- Close any set a failed test left open.
+		do
+			across opened_sets as ic loop
+				if ic.is_open then
+					ic.close
+				end
+			end
+			opened_sets.wipe_out
+		ensure
+			none_left: opened_sets.is_empty
+		end
+
 	attached_set_on_built (a_fixture: CONC_FIXTURE; a_pack: STRING): BIB_SOURCE_SET
 			-- An open source set with the already built pack `a_pack' attached as "conc".
 		do
 			a_fixture.build_main (Main_file)
 			create Result.make
+			opened_sets.extend (Result)
 			Result.open_core (Main_file)
 			Result.attach ({BIB_CONC_PACK}.Pack_alias, a_pack)
 		end
@@ -597,9 +623,11 @@ feature {NONE} -- Fixture
 	attached_set (a_fixture: CONC_FIXTURE; a_pack: STRING; a_version: INTEGER; a_omitted_table: STRING): BIB_SOURCE_SET
 			-- An open source set with a fixture pack built from the arguments attached as "conc".
 		do
+			close_leftovers
 			a_fixture.build_main (Main_file)
 			a_fixture.build_variant (a_pack, a_version, a_omitted_table)
 			create Result.make
+			opened_sets.extend (Result)
 			Result.open_core (Main_file)
 			Result.attach ({BIB_CONC_PACK}.Pack_alias, a_pack)
 		end
@@ -610,6 +638,7 @@ feature {NONE} -- Fixture
 			if a_set.is_open then
 				a_set.close
 			end
+			close_leftovers
 			a_fixture.delete_file (Main_file)
 			a_fixture.delete_file (Pack_file)
 			a_fixture.delete_file (Old_pack_file)

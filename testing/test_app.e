@@ -399,7 +399,17 @@ feature {NONE} -- Runner
 				passed := passed + 1
 			end
 		rescue
-			print ("  FAIL: " + a_name + "%N")
+				-- Say why: the exception's class and description (assert tag, contract tag).
+			print ("  FAIL: " + a_name)
+			if attached (create {EXCEPTION_MANAGER}).last_exception as al_exception then
+				print (" [" + al_exception.generating_type.name)
+				if attached al_exception.description as al_description then
+					print (": ")
+					print (al_description)
+				end
+				print ("]")
+			end
+			print ("%N")
 			failed := failed + 1
 			l_retried := True
 			retry

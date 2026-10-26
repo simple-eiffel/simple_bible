@@ -56,6 +56,8 @@ feature {NONE} -- Initialization
 feature -- Access
 
 	position: INTEGER
+			-- The word's place in the verse; the morphemes of one word share it (a Hebrew prefix
+			-- and its word: MACULA splits them).
 	language: STRING_8
 		-- "eng", "hbo", "arc" or "grc".
 	surface: STRING_32
