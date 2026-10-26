@@ -371,6 +371,7 @@ feature {NONE} -- Suites
 			run_test (agent t.test_pack_folder_scan_skips_the_concordance, "test_pack_folder_scan_skips_the_concordance")
 			run_test (agent t.test_pack_folder_scan_compares_files_not_spellings, "test_pack_folder_scan_compares_files_not_spellings")
 			run_test (agent t.test_generic_pack_waits_for_task_7b, "test_generic_pack_waits_for_task_7b")
+			run_test (agent t.test_book_catalog_reads_content_db, "test_book_catalog_reads_content_db")
 			run_test (agent t.test_edition_swap_needs_no_code, "test_edition_swap_needs_no_code")
 		end
 
@@ -400,6 +401,8 @@ feature {NONE} -- Suites
 			run_test (agent t.test_pack_refuses_unreadable_facts, "test_pack_refuses_unreadable_facts")
 			run_test (agent t.test_word_entry_reads_the_heading, "test_word_entry_reads_the_heading")
 			run_test (agent t.test_headwords_for_strongs_go_through_xref, "test_headwords_for_strongs_go_through_xref")
+			run_test (agent t.test_headwords_for_typed_text, "test_headwords_for_typed_text")
+			run_test (agent t.test_english_glance_holds_back_function_words, "test_english_glance_holds_back_function_words")
 			run_test (agent t.test_strongs_key_text, "test_strongs_key_text")
 			run_test (agent t.test_places_page_by_offset_and_by_keyset, "test_places_page_by_offset_and_by_keyset")
 			run_test (agent t.test_english_rows_bible_by_bible, "test_english_rows_bible_by_bible")

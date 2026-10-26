@@ -6,7 +6,8 @@
 
 | Item | Definition | Why |
 |---|---|---|
-| `PRAGMA user_version = 1` | set by the builder after the last step | FR-165; `BIB_CONC_PACK.Expected_user_version`; the engine refuses any other value (FR-164, verdict condition 3) |
+| `lemma.translit_ascii` (v2, 2026-10-26) | `TEXT`: the transliteration in plain letters (no diacritics or breathings; š → sh, ṣ → ts, ḥ → h, ṭ → t), indexed | A reader types "bara" or "shamayim" into the lookup box; `BIB_CONC_PACK.headwords_for_text` |
+| `PRAGMA user_version = 2` | set by the builder after the last step (1 before `translit_ascii`) | FR-165; `BIB_CONC_PACK.Expected_user_version`; the engine refuses any other value (FR-164, verdict condition 3) |
 | `token.translit` | `TEXT`: whole-word transliteration of `surface` | FR-155, FR-162; empty when the surface is empty (6,435 Hebrew tokens) and for English |
 | `lemma_corpus_count` | `(lemma_id INTEGER, corpus_id INTEGER, n INTEGER, PRIMARY KEY(lemma_id, corpus_id))` | FR-162: "how often", per corpus, without counting tokens at view time (NFR-019) |
 | `work_book` | `(work_id INTEGER PRIMARY KEY, book_id INTEGER NOT NULL)`; `book_id` is the engine's book id (bible.db `bible_books.id`, FR-105) | conc.db's work ids are not the engine's book ids (Matthew is work 56 in conc.db, book 40 in bible.db); the builder matches them once, so the engine joins by key, never by book name (FR-024) |

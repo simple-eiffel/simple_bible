@@ -184,6 +184,27 @@ feature -- Tests
 			remove_test_files
 		end
 
+	test_book_catalog_reads_content_db
+			-- The catalog reads content.db's book_catalog: a name, a code and a prefix find their book;
+			-- an unknown name finds none (research/18; the verse box's books).
+		local
+			l_bible: SIMPLE_BIBLE
+		do
+			close_leftovers
+			fixture.build_content (Content_file, {CONC_FIXTURE}.Content_version, False)
+			l_bible := bible ("", "")
+			l_bible.open
+			assert_integers_equal ("books", 3, l_bible.books.book_count)
+			assert_strings_equal ("name", "Matthew", l_bible.books.book (40).name)
+			assert_true ("by name", l_bible.books.candidates_for_name ("Genesis").count = 1 and then l_bible.books.candidates_for_name ("Genesis").first = 1)
+			assert_true ("by code", l_bible.books.candidates_for_name ("mat").first = 40)
+			assert_true ("by prefix", l_bible.books.candidates_for_name ("Exo").first = 2)
+			assert_true ("dotted abbreviation", l_bible.books.candidates_for_name ("Gen.").first = 1)
+			assert_true ("unknown", l_bible.books.candidates_for_name ("Zzz").is_empty)
+			l_bible.close
+			remove_test_files
+		end
+
 	test_edition_swap_needs_no_code
 			-- FR-158, V-54: the same engine reads either pack by `conc_path' alone; the edition shown
 			-- is the pack's own label, so no engine code tests the edition.
