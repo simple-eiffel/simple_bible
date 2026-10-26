@@ -44,6 +44,24 @@ feature -- Access
 	last_verse: detachable TUPLE [book, chapter, verse: INTEGER]
 			-- The verse the last `choices_for' named ("Gen 1:1"); Void when it named none.
 
+	english_corpus_for_version (a_version: READABLE_STRING_8): STRING_8
+			-- The concordance's per-word English corpus that is version `a_version' ("ENG-KJV" for
+			-- "KJV"), so a word clicked in its text finds the original behind it; empty when none is.
+		do
+			if a_version.same_string ("KJV") then
+				Result := "ENG-KJV"
+			elseif a_version.same_string ("BSB") then
+				Result := "ENG-BSB"
+			else
+				create Result.make_empty
+			end
+			if not Result.is_empty and then not bible.conc_pack.has_corpus (Result) then
+				create Result.make_empty
+			end
+		ensure
+			known_or_empty: not Result.is_empty implies bible.conc_pack.has_corpus (Result)
+		end
+
 	corpus_for_book (a_book: INTEGER): STRING_8
 			-- The corpus a verse of book `a_book' is read in: the Hebrew Bible for books 1 to 39,
 			-- the Greek New Testament after (one rule for every face, design scan 32).
@@ -304,25 +322,14 @@ feature {NONE} -- Implementation
 		end
 
 	verse_parts (a_text: READABLE_STRING_32): detachable TUPLE [book, chapter, verse: INTEGER]
-			-- The book, chapter and verse of "<book> <chapter>:<verse>"; Void when it is not one.
-		local
-			l_space, l_colon: INTEGER
-			l_book, l_chapter, l_verse: STRING_32
-			l_candidates: ARRAYED_LIST [INTEGER]
+			-- The book, chapter and verse a text names; Void when it names no verse (a whole chapter
+			-- is not one). One parser for both boxes (design scan 34: three had drifted apart).
 		do
-			l_space := a_text.last_index_of (' ', a_text.count)
-			l_colon := a_text.last_index_of (':', a_text.count)
-			if l_space > 1 and l_colon > l_space + 1 and l_colon < a_text.count then
-				l_book := a_text.substring (1, l_space - 1)
-				l_chapter := a_text.substring (l_space + 1, l_colon - 1)
-				l_verse := a_text.substring (l_colon + 1, a_text.count)
-				if l_chapter.is_integer and then l_verse.is_integer and then l_chapter.to_integer > 0 and then l_verse.to_integer > 0 then
-					l_candidates := bible.books.candidates_for_name (l_book)
-					if not l_candidates.is_empty then
-						Result := [l_candidates.first, l_chapter.to_integer, l_verse.to_integer]
-					end
-				end
+			if attached place_named (a_text) as al_place and then al_place.verse > 0 then
+				Result := al_place
 			end
+		ensure
+			a_verse: attached Result implies Result.verse > 0
 		end
 
 	joined_words (a_words: LIST [STRING_32]; a_count: INTEGER): STRING_32

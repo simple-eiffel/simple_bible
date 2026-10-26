@@ -739,18 +739,99 @@ feature {NONE} -- Reading (S1, P01)
 		end
 
 	on_verse_click (a_row, a_column: INTEGER)
-			-- S4: the verse clicked is selected; S2 follows it, and its original words fill P07.
+			-- S4: the verse clicked is selected and S2 follows it. A word clicked in a version with
+			-- per-word links (KJV, BSB) opens its original in S3 (GW-08); otherwise the verse's
+			-- original words fill P07.
 		local
 			l_lookup: BIB_LOOKUP
+			l_word: STRING_32
+			l_occurrence: INTEGER
+			l_corpus: STRING_8
+			l_found: BIB_LIST_RESULT [BIB_WORD_ENTRY]
+			l_entries: ARRAYED_LIST [BIB_WORD_ENTRY]
+			i: INTEGER
 		do
 			if a_row >= 1 and a_row <= reading_verses.count then
+				l_word := clicked_word (a_row)
+				l_occurrence := last_word_occurrence
 				go_to (reading_book, reading_chapter, reading_verses.i_th (a_row).verse)
 				if bible.conc_pack.is_available and then bible.books.has_book (reading_book) then
 					create l_lookup.make (bible)
-					choices := l_lookup.verse_choices (reading_book, reading_chapter, reading_verse)
-					results_grid.set_rows (choices)
-					results_note.set_text (l_lookup.note_text)
-					show_results
+					l_corpus := l_lookup.english_corpus_for_version (reading_version)
+					create l_entries.make (0)
+					if not l_word.is_empty and not l_corpus.is_empty then
+						l_found := bible.conc_pack.headwords_behind_word (l_corpus,
+							create {BIB_REF}.make (reading_book, reading_chapter, reading_verse, create {BIB_VERSIFICATION_SYSTEM}.make_kjv), l_word, l_occurrence)
+						from i := 1 until i > l_found.count loop
+							l_entries.extend (l_found.item (i))
+							i := i + 1
+						end
+					end
+					if l_entries.count >= 1 then
+						open_study (l_entries.first.lemma_id)
+						hide_results
+					else
+						choices := l_lookup.verse_choices (reading_book, reading_chapter, reading_verse)
+						results_grid.set_rows (choices)
+						results_note.set_text (l_lookup.note_text)
+						show_results
+					end
+				end
+			end
+		end
+
+	last_word_occurrence: INTEGER
+			-- Which occurrence of its word in the verse the last `clicked_word' was (1 for the first).
+
+	clicked_word (a_row: INTEGER): STRING_32
+			-- The word under the pointer in row `a_row' of S1 (the view tracks the character under
+			-- the pointer), and its occurrence in `last_word_occurrence'; empty when none is.
+		local
+			l_item, l_character, l_from: INTEGER
+			l_range: TUPLE [lo, hi: INTEGER]
+			l_text: READABLE_STRING_32
+		do
+			create Result.make_empty
+			last_word_occurrence := 0
+			l_item := reading_view.hover_item
+			l_character := reading_view.hover_character
+			if l_item > 0 and l_character > 0 and then reading_view.unit_block (l_item) = a_row then
+				l_text := reading_view.text_of (l_item)
+				l_range := reading_view.word_at (l_item, l_character)
+				if l_range.hi > l_range.lo and l_range.hi <= l_text.count then
+					Result := l_text.substring (l_range.lo + 1, l_range.hi).to_string_32
+					last_word_occurrence := 1
+					from l_from := 1 until l_from > l_range.lo loop
+						l_from := whole_word_after (l_text, Result, l_from)
+						if l_from > 0 and l_from <= l_range.lo then
+							last_word_occurrence := last_word_occurrence + 1
+							l_from := l_from + Result.count
+						else
+							l_from := l_range.lo + 1
+						end
+					end
+				end
+			end
+		ensure
+			counted: not Result.is_empty implies last_word_occurrence >= 1
+		end
+
+	whole_word_after (a_text: READABLE_STRING_32; a_word: STRING_32; a_from: INTEGER): INTEGER
+			-- Where `a_word' next stands in `a_text' as a whole word, at or after `a_from'; 0 when not.
+		local
+			l_at: INTEGER
+		do
+			from
+				l_at := a_text.substring_index (a_word, a_from)
+			until
+				l_at = 0 or Result > 0
+			loop
+				if (l_at = 1 or else not a_text.item (l_at - 1).is_alpha_numeric)
+					and then (l_at + a_word.count > a_text.count or else not a_text.item (l_at + a_word.count).is_alpha_numeric)
+				then
+					Result := l_at
+				else
+					l_at := a_text.substring_index (a_word, l_at + 1)
 				end
 			end
 		end
@@ -1014,12 +1095,28 @@ feature {NONE} -- Search results (P07)
 			-- Dock P07 west.
 		do
 			dock.show_panel (results_panel)
+			keep_verse_in_view
 		end
 
 	hide_results
 			-- Collapse P07: an empty zone takes no room (C16).
 		do
 			dock.hide_panel (results_panel)
+			keep_verse_in_view
+		end
+
+	keep_verse_in_view
+			-- S1 changed width, so its rows reflow: bring the selected verse back into view once they
+			-- are laid out again (seen in a scripted check: docking P07 pushed John 3:16 out of sight).
+		local
+			i: INTEGER
+		do
+			from i := 1 until i > reading_verses.count or i > reading_view.row_count loop
+				if reading_verses.i_th (i).verse = reading_verse and reading_verse > 0 then
+					reading_view.scroll_to_row (i)
+				end
+				i := i + 1
+			end
 		end
 
 	on_choice (a_model: INTEGER)
@@ -1113,7 +1210,7 @@ feature {NONE} -- Design pills
 			window.add_reference_mark (dark_switch, "C9", "Dark / Light: your choice; until you switch, Windows decides.", window.Corner_top_right)
 			window.add_reference_mark (dock, "C16", "Dock host: centre plus west, east, south; an empty zone collapses (P07 here).", window.Corner_top_right)
 			window.add_reference_mark (reading_caption, "S1", "P01 Bible Text, centre: verse per line. Previous and Next step chapters.", window.Corner_top_left)
-			window.add_reference_mark (reading_view, "S4", "Selected verse: click one; S2 follows and its words open in P07.", window.Corner_top_right)
+			window.add_reference_mark (reading_view, "S4", "Selected verse and word: click a word (KJV, BSB) and S3 follows it; S2 follows the verse.", window.Corner_top_right)
 			window.add_reference_mark (commentary_title, "S2", "P04 Commentary, east: follows the verse. Cross-refs live (OpenBible votes).", window.Corner_top_left)
 			window.add_reference_mark (lexicon_heading, "S3", "P05 Lexicon, south: follows the word. Renderings first, then lexicon entries.", window.Corner_top_left)
 			window.add_reference_mark (renderings_grid, "P05.4", "Range before ruling: every rendering with its count, before any lexicon's verdict.", window.Corner_top_left)

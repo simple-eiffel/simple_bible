@@ -72,6 +72,26 @@ feature -- Tests
 			finish
 		end
 
+	test_a_clicked_word_finds_its_original
+			-- S4 (GW-08): the word "created" clicked in Genesis 1:1 of the BSB finds bara through the
+			-- BSB's per-word link; a second "created" or an unlinked word finds nothing.
+		local
+			l_lookup: BIB_LOOKUP
+			l_ref: BIB_REF
+			l_found: BIB_LIST_RESULT [BIB_WORD_ENTRY]
+		do
+			create l_lookup.make (bible)
+			assert_strings_equal ("the BSB's English corpus", "ENG-BSB", l_lookup.english_corpus_for_version ("BSB"))
+			assert_true ("no English corpus for the Hebrew", l_lookup.english_corpus_for_version ("WLC").is_empty)
+			create l_ref.make (1, 1, 1, create {BIB_VERSIFICATION_SYSTEM}.make_kjv)
+			l_found := bible.conc_pack.headwords_behind_word ("ENG-BSB", l_ref, "created", 1)
+			assert_true ("found", l_found.is_success and l_found.count = 1)
+			assert_true ("bara", l_found.item (1).lemma_id = {CONC_FIXTURE}.Create_lemma)
+			assert_integers_equal ("no second created", 0, bible.conc_pack.headwords_behind_word ("ENG-BSB", l_ref, "created", 2).count)
+			assert_integers_equal ("an unlinked word", 0, bible.conc_pack.headwords_behind_word ("ENG-BSB", l_ref, "zzz", 1).count)
+			finish
+		end
+
 	test_place_rows_know_their_verse
 			-- A place opens in the reading pane: it carries its book, chapter and verse as numbers.
 		local

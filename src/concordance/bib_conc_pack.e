@@ -255,6 +255,38 @@ feature -- Access
 			fact_closure: Result.is_fact_closed
 		end
 
+	headwords_behind_word (a_corpus_code: READABLE_STRING_8; a_ref: BIB_REF; a_word: READABLE_STRING_GENERAL; a_occurrence: INTEGER): BIB_LIST_RESULT [BIB_WORD_ENTRY]
+			-- The original-language headwords behind the `a_occurrence'th `a_word' of verse `a_ref' in
+			-- English corpus `a_corpus_code', through its per-word translation links: the word a reader
+			-- clicked in the Bible text (S4, GW-08). Empty when that word carries no link.
+		require
+			available: is_available
+			corpus_known: has_corpus (a_corpus_code)
+			word_not_empty: not a_word.is_empty
+			occurrence_positive: a_occurrence >= 1
+		local
+			l_token: INTEGER_64
+			l_seen: INTEGER
+			l_scope: STRING_32
+		do
+			l_scope := verse_scope (a_ref).to_string_32 + {STRING_32} ", word " + a_word.to_string_32 + {STRING_32} " #" + a_occurrence.out
+			run_query (Verse_word_tokens_sql, {ARRAY [detachable ANY]} <<corpus_id (a_corpus_code), a_ref.book_id, a_ref.chapter.out, a_ref.verse.out, a_word.to_string_32>>)
+			if attached last_rows as al_rows then
+				across al_rows.rows as ic until l_token > 0 loop
+					l_seen := l_seen + 1
+					if l_seen = a_occurrence then
+						l_token := ic.integer_64_value ("token_id")
+					end
+				end
+				run_query (Linked_headwords_sql, {ARRAY [detachable ANY]} <<l_token, "translation:" + a_corpus_code.to_string_8>>)
+				Result := entries_result ("headwords_behind_word", Linked_headwords_sql, l_scope)
+			else
+				create Result.make_failure (method ("headwords_behind_word", Verse_word_tokens_sql, a_corpus_code, l_scope, 0), query_error)
+			end
+		ensure
+			method_recorded: Result.method.engine_feature.same_string_general ("headwords_behind_word")
+		end
+
 	headwords_for_text (a_text: READABLE_STRING_GENERAL): BIB_LIST_RESULT [BIB_WORD_ENTRY]
 			-- Headwords written or transliterated as `a_text', commonest first: Hebrew matched
 			-- without its points (as `lemma.search'), Greek as written or without accents, and
@@ -748,6 +780,12 @@ feature {NONE} -- Implementation
 
 	fallback_provenance: detachable BIB_PROVENANCE
 			-- `first_provenance' when the pack lists no corpus; cleared by `check_pack'.
+
+	Verse_word_tokens_sql: STRING_8 = "SELECT t.token_id FROM conc.token t JOIN conc.unit u ON u.unit_id = t.unit_id JOIN conc.work_book wb ON wb.work_id = u.work_id WHERE t.corpus_id = ? AND wb.book_id = ? AND u.div1 = ? AND u.div2 = ? AND u.recension = '' AND t.surface = ? ORDER BY t.pos, t.token_id"
+			-- One English word's tokens in a verse, in reading order.
+
+	Linked_headwords_sql: STRING_8 = "SELECT DISTINCT l.lemma_id, l.language, l.headword, l.translit, l.pron, l.n_tokens, (SELECT c.corpus_id FROM conc.lemma_corpus_count c WHERE c.lemma_id = l.lemma_id ORDER BY c.n DESC, c.corpus_id LIMIT 1) AS top_corpus FROM conc.link k JOIN conc.token o ON o.token_id = k.from_token JOIN conc.lemma l ON l.lemma_id = o.lemma_id WHERE k.to_token = ? AND k.kind = ? AND l.language IN ('hbo', 'arc', 'grc') ORDER BY l.n_tokens DESC, l.lemma_id"
+			-- The headwords an English token translates (the columns of `Entry_columns').
 
 	Entry_columns: STRING_8 = "l.lemma_id, l.language, l.headword, l.translit, l.pron, l.n_tokens, (SELECT c.corpus_id FROM conc.lemma_corpus_count c WHERE c.lemma_id = l.lemma_id ORDER BY c.n DESC, c.corpus_id LIMIT 1) AS top_corpus"
 			-- A headword's columns over `conc.lemma l', with the corpus where it occurs most: its
