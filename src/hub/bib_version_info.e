@@ -15,6 +15,11 @@ class
 inherit
 	BIB_SOURCED
 
+	BIB_LANGUAGE_CODES
+		export
+			{NONE} all
+		end
+
 create
 	make
 
@@ -48,7 +53,7 @@ feature {NONE} -- Initialization
 			is_septuagint := a_septuagint
 			is_swete := a_swete
 			has_morphology := a_morphology
-			is_right_to_left := language.same_string ("hbo") or language.same_string ("arc")
+			is_right_to_left := is_hebrew_script (language)
 			create book_ids.make (80)
 			across a_book_ids as b loop
 				book_ids.extend (b)

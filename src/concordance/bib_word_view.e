@@ -36,6 +36,7 @@ feature {NONE} -- Initialization
 			entry_set: entry = a_entry
 			total_set: place_total = a_place_total
 			places_set: first_places = a_first_places
+			order_kept: is_in_approved_order
 		end
 
 	make_failure (a_method: BIB_METHOD; a_error: BIB_ERROR)
@@ -155,6 +156,5 @@ invariant
 	success_has_entry: is_success = (entry /= Void)
 	success_has_total: is_success = (place_total /= Void)
 	success_has_places: is_success = (first_places /= Void)
-	order_kept: is_success implies is_in_approved_order
 
 end

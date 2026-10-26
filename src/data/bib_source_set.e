@@ -75,6 +75,14 @@ feature -- Status
 			model_agrees: Result = attached_model.domain [a_alias.to_string_8]
 		end
 
+	attached_path (a_alias: READABLE_STRING_8): detachable STRING_32
+			-- Path attached as `a_alias', or Void when none (no SQL: the alias table).
+		do
+			Result := attached_paths.item (a_alias.to_string_8)
+		ensure
+			void_when_absent: (Result = Void) = not is_attached_alias (a_alias)
+		end
+
 feature -- Model
 
 	attached_model: MML_MAP [STRING_8, STRING_32]

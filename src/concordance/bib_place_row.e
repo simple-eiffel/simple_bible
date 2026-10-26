@@ -15,6 +15,8 @@ class
 inherit
 	BIB_SOURCED
 
+	BIB_LANGUAGE_CODES
+
 create
 	make
 
@@ -25,7 +27,7 @@ feature {NONE} -- Initialization
 			-- `a_surface' may be empty for a real Hebrew token (Phase 2 review, ruling 1.2).
 		require
 			id_positive: a_token_id > 0
-			language_known: a_language.same_string ("eng") or a_language.same_string ("hbo") or a_language.same_string ("arc") or a_language.same_string ("grc")
+			language_known: is_concordance_language (a_language)
 			reference_not_empty: not a_reference_text.is_empty
 			translit_when_written: (is_original (a_language) and not a_surface.is_empty) implies not a_translit.is_empty
 		do

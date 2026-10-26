@@ -72,6 +72,30 @@ feature -- Tests
 			assert ("not available", not l_pack.is_available)
 		end
 
+	test_language_codes
+			-- One table of language codes (design scan 25): Hebrew and Aramaic are Hebrew
+			-- script, the three originals are original, English is held but not original.
+		local
+			l_codes: BIB_LANGUAGE_CODES
+		do
+			create l_codes
+			assert ("hbo hebrew script", l_codes.is_hebrew_script ("hbo"))
+			assert ("arc hebrew script", l_codes.is_hebrew_script ("arc"))
+			assert ("grc not hebrew script", not l_codes.is_hebrew_script ("grc"))
+			assert ("grc original", l_codes.is_original ("grc"))
+			assert ("eng not original", not l_codes.is_original ("eng"))
+			assert ("eng held", l_codes.is_concordance_language ("eng"))
+			assert ("lat not held", not l_codes.is_concordance_language ("lat"))
+		end
+
+	test_reattached_pack_needs_a_new_check
+			-- Skeletal (Phase 4, Task 3; design scan 25): after `check_pack' accepts a pack,
+			-- detaching it through the shared source set and attaching another file under
+			-- "conc" leaves the reader unavailable until `check_pack' runs again. Needs the
+			-- real `attach' (Task 1), so it cannot run on the skeleton.
+		do
+		end
+
 	test_verse_word_takes_real_hebrew_rows
 			-- Skeletal (Phase 4, Phase 2 review rulings 1.1 and 1.2): a verse word builds
 			-- from conc.db's real shapes: a Hebrew token with an empty surface and no

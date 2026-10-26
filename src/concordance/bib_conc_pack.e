@@ -40,13 +40,22 @@ feature -- Status
 	is_pack_valid: BOOLEAN
 			-- Did `check_pack' accept the attached pack (FR-164: `user_version' and required tables)?
 
+	validated_path: detachable STRING_32
+			-- The file `check_pack' accepted. The source set is shared, so the pack can be
+			-- detached and another file attached under `Pack_alias' behind this reader's back;
+			-- that file is not available until it is checked (design scan 25).
+
 	is_available: BOOLEAN
-			-- Is a valid pack attached as `Pack_alias'? No SQL here: every lookup
-			-- evaluates this, so the check runs once, in `check_pack' (ruling 3.3).
+			-- Is the pack `check_pack' accepted still the one attached as `Pack_alias'?
+			-- No SQL here: every lookup evaluates this, so the check runs once, in
+			-- `check_pack' (ruling 3.3).
 		do
-			Result := is_attached and is_pack_valid
+			Result := is_pack_valid and then attached validated_path as al_checked
+				and then attached sources.attached_path (Pack_alias) as al_now
+				and then al_now.same_string (al_checked)
 		ensure
-			definition: Result = (sources.is_attached_alias (Pack_alias) and is_pack_valid)
+			needs_attachment: Result implies is_attached
+			needs_check: Result implies is_pack_valid
 		end
 
 	has_corpus (a_code: READABLE_STRING_8): BOOLEAN
@@ -79,8 +88,10 @@ feature -- Commands
 			-- check the required tables, then set `is_pack_valid'. Until then a pack is
 			-- never valid. conc.db reports user_version 0 until FR-165's builder stamp lands.
 			is_pack_valid := False
+			validated_path := Void
 		ensure
 			valid_only_when_attached: is_pack_valid implies is_attached
+			path_recorded: is_pack_valid implies (attached validated_path as al_checked and then attached sources.attached_path (Pack_alias) as al_now and then al_now.same_string (al_checked))
 		end
 
 feature -- Access
