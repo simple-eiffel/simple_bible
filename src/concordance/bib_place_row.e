@@ -29,7 +29,7 @@ feature {NONE} -- Initialization
 			id_positive: a_token_id > 0
 			language_known: is_concordance_language (a_language)
 			reference_not_empty: not a_reference_text.is_empty
-			translit_when_written: (is_original (a_language) and not a_surface.is_empty) implies not a_translit.is_empty
+			translit_when_written: is_translit_complete (a_language, a_surface, a_translit)
 		do
 			token_id := a_token_id
 			language := a_language.to_string_8
@@ -98,6 +98,6 @@ feature {NONE} -- Implementation
 
 invariant
 	id_positive: token_id > 0
-	translit_when_written: (is_original (language) and not surface.is_empty) implies not translit.is_empty
+	translit_when_written: is_translit_complete (language, surface, translit)
 
 end

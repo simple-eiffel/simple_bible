@@ -336,6 +336,8 @@ feature {NONE} -- Suites
 			run_test (agent t.test_places_page_by_offset_and_by_keyset, "test_places_page_by_offset_and_by_keyset")
 			run_test (agent t.test_english_rows_bible_by_bible, "test_english_rows_bible_by_bible")
 			run_test (agent t.test_verse_words_every_corpus, "test_verse_words_every_corpus")
+			run_test (agent t.test_place_total_is_void_when_the_count_cannot_be_read, "test_place_total_is_void_when_the_count_cannot_be_read")
+			run_test (agent t.test_english_rows_refuse_a_non_original_headword, "test_english_rows_refuse_a_non_original_headword")
 			run_test (agent t.test_verse_word_takes_real_hebrew_rows, "test_verse_word_takes_real_hebrew_rows")
 			run_test (agent t.test_verse_word_takes_english_computed_rows, "test_verse_word_takes_english_computed_rows")
 			run_test (agent t.test_value_creators_pin_every_field, "test_value_creators_pin_every_field")

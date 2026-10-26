@@ -350,7 +350,8 @@ feature -- Tests
 		do
 			create l_fixture
 			l_pack := checked_pack (l_fixture)
-			assert_integers_equal ("total", {CONC_FIXTURE}.Article_places, l_pack.place_total ({CONC_FIXTURE}.Article_lemma, "LXX-RAHLFS").value.to_integer_32)
+			assert_true ("total", attached l_pack.place_total ({CONC_FIXTURE}.Article_lemma, "LXX-RAHLFS") as al_total and then al_total.value = {CONC_FIXTURE}.Article_places)
+			assert_true ("no row is zero", attached l_pack.place_total ({CONC_FIXTURE}.Article_lemma, "WLC-MACULA") as al_none and then al_none.value = 0)
 			l_first := l_pack.place_page ({CONC_FIXTURE}.Article_lemma, "LXX-RAHLFS", 0, 200)
 			assert_true ("first page", l_first.is_success and then l_first.count = 200)
 			assert_true ("first place", l_first.item (1).token_id = 4)
@@ -407,6 +408,43 @@ feature -- Tests
 			l_words := l_pack.verse_words (l_ref, "ENG-BSB")
 			assert_true ("one english word", l_words.is_success and then l_words.count = 1)
 			assert_strings_equal ("computed", "computed", l_words.item (1).lemma_basis)
+			close_and_clean (last_pack_set, l_fixture)
+		end
+
+	test_place_total_is_void_when_the_count_cannot_be_read
+			-- A total the pack cannot read is no total, never a "fact" of 0 (design scan 28).
+			-- The pack's count table loses its column behind the reader's back.
+		local
+			l_fixture: CONC_FIXTURE
+			l_pack: BIB_CONC_PACK
+			l_db: SIMPLE_SQL_DATABASE
+		do
+			create l_fixture
+			l_pack := checked_pack (l_fixture)
+			create l_db.make (Pack_file)
+			l_db.execute ("ALTER TABLE lemma_corpus_count RENAME COLUMN n TO places")
+			l_db.close
+			assert_true ("no total", l_pack.place_total ({CONC_FIXTURE}.Article_lemma, "LXX-RAHLFS") = Void)
+			close_and_clean (last_pack_set, l_fixture)
+		end
+
+	test_english_rows_refuse_a_non_original_headword
+			-- An English link that leads to a headword that is not Hebrew, Aramaic or Greek fails
+			-- the answer, as every other query does with a row that breaks the rules (scan 28).
+		local
+			l_fixture: CONC_FIXTURE
+			l_pack: BIB_CONC_PACK
+			l_db: SIMPLE_SQL_DATABASE
+		do
+			create l_fixture
+			l_fixture.build (Pack_file)
+			create l_db.make (Pack_file)
+			l_db.execute ("UPDATE lemma SET language = 'eng' WHERE lemma_id = 1")
+			l_db.close
+			last_pack_set := attached_set_on_built (l_fixture, Pack_file)
+			create l_pack.make (last_pack_set)
+			l_pack.check_pack
+			assert_false ("refused", l_pack.english_rows ("created").is_success)
 			close_and_clean (last_pack_set, l_fixture)
 		end
 
@@ -491,6 +529,15 @@ feature {NONE} -- Fixture
 			Result.check_pack
 		ensure
 			accepted: Result.is_available
+		end
+
+	attached_set_on_built (a_fixture: CONC_FIXTURE; a_pack: STRING): BIB_SOURCE_SET
+			-- An open source set with the already built pack `a_pack' attached as "conc".
+		do
+			a_fixture.build_main (Main_file)
+			create Result.make
+			Result.open_core (Main_file)
+			Result.attach ({BIB_CONC_PACK}.Pack_alias, a_pack)
 		end
 
 	attached_set (a_fixture: CONC_FIXTURE; a_pack: STRING; a_version: INTEGER; a_omitted_table: STRING): BIB_SOURCE_SET
