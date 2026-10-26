@@ -22,6 +22,8 @@ feature {NONE} -- Initialization
 	make (a_sources: BIB_SOURCE_SET)
 		do
 			sources := a_sources
+			create corpus_codes.make (0)
+			create edition_label_cache.make_empty
 		ensure
 			sources_set: sources = a_sources
 			not_validated: not is_pack_valid
@@ -59,20 +61,33 @@ feature -- Status
 		end
 
 	has_corpus (a_code: READABLE_STRING_8): BOOLEAN
-			-- Does the pack list corpus `a_code'?
+			-- Does the pack list corpus `a_code'? No SQL: the codes are read once, by `check_pack'
+			-- (this is a precondition of every page query).
 		require
 			available: is_available
 		do
-			-- Phase 4
+			Result := across corpus_codes as ic some ic.same_string (a_code) end
 		end
 
 	has_layer (a_layer: READABLE_STRING_8): BOOLEAN
 			-- Does the pack carry layer `a_layer' ("lxx", "bsb", "dictionaries")? conc_dist.db may not.
+			-- Read from the pack's own corpus list and meanings, never from an edition name (FR-158).
 		require
 			available: is_available
 		do
-			-- Phase 4
+			if a_layer.same_string ("lxx") then
+				Result := across corpus_codes as ic some ic.starts_with ("LXX-") end
+			elseif a_layer.same_string ("bsb") then
+				Result := has_corpus ("ENG-BSB")
+			elseif a_layer.same_string ("dictionaries") then
+				Result := has_meanings
+			end
+		ensure
+			unknown_layer_absent: not (a_layer.same_string ("lxx") or a_layer.same_string ("bsb") or a_layer.same_string ("dictionaries")) implies not Result
 		end
+
+	pack_error: detachable BIB_ERROR
+			-- Why `check_pack' refused the attached pack; Void when it accepted it or has not run.
 
 feature -- Commands
 
@@ -81,17 +96,41 @@ feature -- Commands
 			-- the answer in `is_pack_valid' (FR-164).
 		require
 			pack_attached: is_attached
+		local
+			l_schema: SIMPLE_SQL_SCHEMA
+			l_version: INTEGER
 		do
-			-- Phase 4 (2026-10-26): ask the sources' schema for `user_version_of (Pack_alias)'
-			-- (simple_sql, ruling 3.3: PRAGMA conc.user_version, never the unqualified
-			-- pragma, which reads the main database), compare it with `Expected_user_version',
-			-- check the required tables, then set `is_pack_valid'. Until then a pack is
-			-- never valid. conc.db reports user_version 0 until FR-165's builder stamp lands.
 			is_pack_valid := False
 			validated_path := Void
+			pack_error := Void
+			corpus_codes.wipe_out
+			has_meanings := False
+			create edition_label_cache.make_empty
+			if attached sources.database as al_db then
+				create l_schema.make (al_db)
+					-- PRAGMA conc.user_version, never the unqualified pragma, which reads main (ruling 3.3).
+				l_version := l_schema.user_version_of (Pack_alias)
+				if al_db.has_error then
+					create pack_error.make_with_details ({BIB_ERROR}.Database_problem, "The concordance pack cannot be read.", database_message (al_db))
+				elseif l_version /= Expected_user_version then
+					create pack_error.make_with_details ({BIB_ERROR}.Schema_mismatch, "The concordance pack is version " + l_version.out + "; this engine reads version " + Expected_user_version.out + ".", pack_path)
+				elseif attached first_missing_table (l_schema) as al_missing then
+					create pack_error.make_with_details ({BIB_ERROR}.Schema_mismatch, "The concordance pack has no table " + al_missing + ".", pack_path)
+				else
+					read_pack_facts (al_db)
+					if edition_label_cache.is_empty then
+						create pack_error.make_with_details ({BIB_ERROR}.Schema_mismatch, "The concordance pack does not name its edition (meta edition_label).", pack_path)
+					else
+						is_pack_valid := True
+						validated_path := sources.attached_path (Pack_alias)
+					end
+				end
+			end
 		ensure
 			valid_only_when_attached: is_pack_valid implies is_attached
 			path_recorded: is_pack_valid implies (attached validated_path as al_checked and then attached sources.attached_path (Pack_alias) as al_now and then al_now.same_string (al_checked))
+			reason_when_refused: not is_pack_valid implies pack_error /= Void
+			no_reason_when_accepted: is_pack_valid implies pack_error = Void
 		end
 
 feature -- Access
@@ -101,7 +140,7 @@ feature -- Access
 		require
 			available: is_available
 		do
-			check implemented_in_phase_4: False then end
+			Result := edition_label_cache.twin
 		ensure
 			not_empty: not Result.is_empty
 		end
@@ -220,7 +259,64 @@ feature -- Constants
 	Expected_user_version: INTEGER = 1
 			-- The `user_version' a valid pack carries (FR-164); FR-165's builder stamps it.
 
+	Required_tables: ARRAY [STRING_8]
+			-- Tables of pack schema v1 (research/17); `check_pack' refuses a pack missing one.
+		once
+			Result := <<"corpus", "work", "unit", "lemma", "token", "link", "lemma_xref", "meaning_source", "lex_sense", "lemma_corpus_count", "lemma_english", "meta">>
+		end
+
 feature {NONE} -- Implementation
+
+	corpus_codes: ARRAYED_LIST [STRING_8]
+			-- The pack's corpus codes, read once by `check_pack'.
+
+	has_meanings: BOOLEAN
+			-- Does the pack hold dictionary meanings (`lex_sense' rows)? Read once by `check_pack'.
+
+	edition_label_cache: STRING_32
+			-- The pack's `meta' edition_label, read once by `check_pack'.
+
+	first_missing_table (a_schema: SIMPLE_SQL_SCHEMA): detachable STRING_8
+			-- The first of `Required_tables' the pack lacks; Void when it has them all.
+		do
+			across Required_tables as ic until Result /= Void loop
+				if not a_schema.table_exists_in (Pack_alias, ic) then
+					Result := ic
+				end
+			end
+		end
+
+	read_pack_facts (a_db: SIMPLE_SQL_DATABASE)
+			-- Read the corpus codes, whether meanings exist and the edition label, once.
+		do
+			across a_db.query ("SELECT code FROM " + Pack_alias + ".corpus ORDER BY corpus_id").rows as ic loop
+				corpus_codes.extend (ic.string_value ("code").to_string_8)
+			end
+			has_meanings := not a_db.query ("SELECT 1 FROM " + Pack_alias + ".lex_sense LIMIT 1").rows.is_empty
+			across a_db.query ("SELECT value FROM " + Pack_alias + ".meta WHERE key = 'edition_label'").rows as ic loop
+				edition_label_cache := ic.string_value ("value")
+			end
+		end
+
+	pack_path: STRING_32
+			-- The attached pack's file, for error details.
+		do
+			if attached sources.attached_path (Pack_alias) as al_path then
+				Result := al_path
+			else
+				Result := {STRING_32} "(no pack attached)"
+			end
+		end
+
+	database_message (a_db: SIMPLE_SQL_DATABASE): STRING_32
+			-- SQLite's own words for the last failure on `a_db', or the pack's path when it gave none.
+		do
+			if attached a_db.last_error_message as al_message and then not al_message.is_empty then
+				Result := al_message.twin
+			else
+				Result := pack_path
+			end
+		end
 
 	sources: BIB_SOURCE_SET
 

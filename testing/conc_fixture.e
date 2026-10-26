@@ -98,6 +98,9 @@ feature -- Facts the tests check against
 	Article_places: INTEGER = 251
 			-- Places of `Article_lemma': token 4, then tokens 1001 to 1250.
 
+	Edition_label: STRING = "TEST FIXTURE - not for distribution"
+			-- The fixture's `meta' edition_label (pack v1).
+
 feature {NONE} -- Tables (conc.db's own definitions, plus pack v1)
 
 	schema: ARRAYED_LIST [TUPLE [table: STRING; sql: STRING]]
@@ -115,6 +118,7 @@ feature {NONE} -- Tables (conc.db's own definitions, plus pack v1)
 			Result.extend (["lex_sense", "CREATE TABLE lex_sense(sense_id INTEGER PRIMARY KEY, lemma_id INTEGER NOT NULL, source TEXT NOT NULL, entry TEXT, seq INTEGER, label TEXT, depth INTEGER, gloss TEXT, text TEXT, page TEXT, basis TEXT, code TEXT, domain TEXT, forms TEXT, note TEXT, period TEXT)"])
 			Result.extend (["lemma_corpus_count", "CREATE TABLE lemma_corpus_count(lemma_id INTEGER, corpus_id INTEGER, n INTEGER, PRIMARY KEY(lemma_id, corpus_id))"])
 			Result.extend (["lemma_english", "CREATE TABLE lemma_english(lemma_id INTEGER, corpus_id INTEGER, english TEXT, n INTEGER, PRIMARY KEY(lemma_id, corpus_id, english))"])
+			Result.extend (["meta", "CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT)"])
 		end
 
 	rows: ARRAYED_LIST [TUPLE [table: STRING; sql: STRING]]
@@ -134,6 +138,7 @@ feature {NONE} -- Tables (conc.db's own definitions, plus pack v1)
 			Result.extend (["lex_sense", "INSERT INTO lex_sense(sense_id, lemma_id, source, entry, seq, label, depth, gloss, text) VALUES (1, 1, 'SDBH', 'bara', 1, '1', 0, 'create', 'to bring into being')"])
 			Result.extend (["lemma_corpus_count", "INSERT INTO lemma_corpus_count(lemma_id, corpus_id, n) VALUES (1, 1, 1), (4, 1, 1), (2, 4, 251), (3, 5, 1)"])
 			Result.extend (["lemma_english", "INSERT INTO lemma_english(lemma_id, corpus_id, english, n) VALUES (1, 5, 'created', 1)"])
+			Result.extend (["meta", "INSERT INTO meta(key, value) VALUES ('edition_label', '" + Edition_label + "'), ('builder', 'testing/conc_fixture.e')"])
 		end
 
 end

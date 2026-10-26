@@ -68,10 +68,10 @@ Task 0's schema note (soft).
 **Features:** `check_pack`, `is_attached`, `is_available`, `has_corpus`, `has_layer`, `edition_label`
 
 ### Acceptance Criteria
-- [ ] `check_pack` reads `SIMPLE_SQL_SCHEMA.user_version_of (Pack_alias)` and `table_exists_in (Pack_alias, ...)` (simple_sql 09cb860) and sets `is_pack_valid` (FR-164, ruling 3.3)
-- [ ] The fixture opens; the `user_version` 0 variant and the missing-table variant are refused with a reason
-- [ ] `is_available` runs no SQL (it reads the cached `is_pack_valid`)
-- [ ] `edition_label` comes from the pack, never from engine code (FR-158)
+- [x] `check_pack` reads `SIMPLE_SQL_SCHEMA.user_version_of (Pack_alias)` and `table_exists_in (Pack_alias, ...)` (simple_sql 09cb860) and sets `is_pack_valid` (FR-164, ruling 3.3)
+- [x] The fixture opens; the `user_version` 0 variant and the missing-table variant are refused with a reason
+- [x] `is_available` runs no SQL (it reads the cached `is_pack_valid`)
+- [x] `edition_label` comes from the pack, never from engine code (FR-158)
 
 ### Dependencies
 Tasks 1 and 2.
