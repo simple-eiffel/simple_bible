@@ -22,6 +22,11 @@ inherit
 			{NONE} all
 		end
 
+	BIB_LEMMA_BASIS
+		export
+			{NONE} all
+		end
+
 create
 	make
 
@@ -165,12 +170,12 @@ feature -- Access
 
 	word_entry (a_lemma_id: INTEGER_64): detachable BIB_WORD_ENTRY
 			-- Heading of `a_lemma_id'; Void when unknown, and for an English lemma, which is a
-			-- rendering, not a headword (ruling 1.2).
+			-- rendering, not a headword (ruling 1.2). A query SQLite refuses also answers Void.
 		require
 			available: is_available
 			id_positive: a_lemma_id > 0
 		do
-			run_query ("SELECT lemma_id, language, headword, translit, pron, n_tokens FROM conc.lemma WHERE lemma_id = ?", {ARRAY [detachable ANY]} <<a_lemma_id>>)
+			run_query ("SELECT " + Entry_columns + " FROM conc.lemma l WHERE l.lemma_id = ?", {ARRAY [detachable ANY]} <<a_lemma_id>>)
 			if attached last_rows as al_rows and then not al_rows.rows.is_empty and then attached al_rows.rows.first as al_row then
 				Result := entry_from_row (al_row)
 			end
@@ -186,22 +191,29 @@ feature -- Access
 			l_sql: STRING_8
 			l_entries: ARRAYED_LIST [BIB_WORD_ENTRY]
 			l_citations: ARRAYED_LIST [BIB_PROVENANCE]
+			l_bad: detachable STRING_8
 		do
-			l_sql := "SELECT l.lemma_id, l.language, l.headword, l.translit, l.pron, l.n_tokens FROM conc.lemma_xref x JOIN conc.lemma l ON l.lemma_id = x.lemma_id WHERE x.scheme = 'strongs' AND x.value = ? ORDER BY l.n_tokens DESC, l.lemma_id"
+			l_sql := "SELECT " + Entry_columns + " FROM conc.lemma_xref x JOIN conc.lemma l ON l.lemma_id = x.lemma_id WHERE x.scheme = 'strongs' AND x.value = ? ORDER BY l.n_tokens DESC, l.lemma_id"
 			run_query (l_sql, {ARRAY [detachable ANY]} <<a_key.text>>)
 			if attached last_rows as al_rows then
 				create l_entries.make (al_rows.rows.count)
 				create l_citations.make (2)
-				across al_rows.rows as ic loop
+				across al_rows.rows as ic until l_bad /= Void loop
 					if attached entry_from_row (ic) as al_entry then
 						l_entries.extend (al_entry)
 						cite (l_citations, al_entry.provenance)
+					else
+						l_bad := "Headword " + ic.integer_64_value ("lemma_id").out + " behind this Strong's number is not a Hebrew, Aramaic or Greek headword with a transliteration."
 					end
 				end
-				if l_citations.is_empty then
-					cite (l_citations, first_provenance)
+				if attached l_bad as al_bad then
+					create Result.make_failure (method ("headwords_for_strongs", l_sql, "", a_key.text, 0), create {BIB_ERROR}.make ({BIB_ERROR}.Schema_mismatch, al_bad))
+				else
+					if l_citations.is_empty then
+						cite (l_citations, first_provenance)
+					end
+					create Result.make_success (method ("headwords_for_strongs", l_sql, "", a_key.text, l_entries.count), l_citations, l_entries)
 				end
-				create Result.make_success (method ("headwords_for_strongs", l_sql, "", a_key.text, l_entries.count), l_citations, l_entries)
 			else
 				create Result.make_failure (method ("headwords_for_strongs", l_sql, "", a_key.text, 0), query_error)
 			end
@@ -210,8 +222,10 @@ feature -- Access
 			fact_closure: Result.is_fact_closed
 		end
 
-	place_total (a_lemma_id: INTEGER_64; a_corpus_code: READABLE_STRING_8): BIB_FACT [INTEGER_64]
-			-- Places of `a_lemma_id' in corpus `a_corpus_code'.
+	place_total (a_lemma_id: INTEGER_64; a_corpus_code: READABLE_STRING_8): detachable BIB_FACT [INTEGER_64]
+			-- Places of `a_lemma_id' in corpus `a_corpus_code', from the builder's per-corpus count
+			-- (FR-162): 0 when the pack has no count row (the word is not in that corpus); Void when
+			-- the count cannot be read, never a made-up 0 (design scan 28).
 		require
 			available: is_available
 			id_positive: a_lemma_id > 0
@@ -221,12 +235,14 @@ feature -- Access
 		do
 				-- The builder's per-corpus count (FR-162): no token is counted at view time (NFR-019).
 			run_query ("SELECT n FROM conc.lemma_corpus_count WHERE lemma_id = ? AND corpus_id = ?", {ARRAY [detachable ANY]} <<a_lemma_id, corpus_id (a_corpus_code)>>)
-			if attached last_rows as al_rows and then not al_rows.rows.is_empty and then attached al_rows.rows.first as al_row then
-				l_total := al_row.integer_64_value ("n").max (0)
+			if attached last_rows as al_rows then
+				if not al_rows.rows.is_empty and then attached al_rows.rows.first as al_row then
+					l_total := al_row.integer_64_value ("n").max (0)
+				end
+				create Result.make (l_total, provenance_of (a_corpus_code))
 			end
-			create Result.make (l_total, provenance_of (a_corpus_code))
 		ensure
-			non_negative: Result.value >= 0
+			non_negative: attached Result as r implies r.value >= 0
 		end
 
 	place_page (a_lemma_id: INTEGER_64; a_corpus_code: READABLE_STRING_8; a_offset, a_limit: INTEGER): BIB_LIST_RESULT [BIB_PLACE_ROW]
@@ -247,7 +263,9 @@ feature -- Access
 			method_recorded: Result.method.engine_feature.same_string_general ("place_page")
 			bounded: Result.count <= a_limit
 			ascending: across 1 |..| (Result.count - 1) as l_i all Result.item (l_i).token_id < Result.item (l_i + 1).token_id end
-			page_size_right: Result.is_success implies Result.count = (place_total (a_lemma_id, a_corpus_code).value - a_offset).max (0).min (a_limit)
+				-- No postcondition ties the page to `place_total': that count is the builder's, a fact
+				-- about the pack's data, and a pack whose counts disagree must not stop the engine
+				-- (design scan 28). The fixture tests check it; Task 0's acceptance checks the builder.
 			fact_closure: Result.is_fact_closed
 		end
 
@@ -291,15 +309,15 @@ feature -- Access
 			l_bad: detachable STRING_8
 			l_provenance: BIB_PROVENANCE
 		do
-			l_sql := "SELECT e.corpus_id AS bible_id, o.lemma_id, l.headword, l.translit, wb.book_id, count(*) AS n FROM conc.token e JOIN conc.link k ON k.to_token = e.token_id AND k.kind LIKE 'translation:ENG-%%' JOIN conc.token o ON o.token_id = k.from_token JOIN conc.lemma l ON l.lemma_id = o.lemma_id JOIN conc.unit u ON u.unit_id = o.unit_id JOIN conc.work_book wb ON wb.work_id = u.work_id WHERE e.search = ? GROUP BY e.corpus_id, o.lemma_id, wb.book_id ORDER BY e.corpus_id, n DESC, o.lemma_id, wb.book_id"
+			l_sql := "SELECT e.corpus_id AS bible_id, o.lemma_id, l.language AS headword_language, l.headword, l.translit, wb.book_id, count(*) AS n FROM conc.token e JOIN conc.link k ON k.to_token = e.token_id AND k.kind LIKE 'translation:ENG-%%' JOIN conc.token o ON o.token_id = k.from_token JOIN conc.lemma l ON l.lemma_id = o.lemma_id JOIN conc.unit u ON u.unit_id = o.unit_id JOIN conc.work_book wb ON wb.work_id = u.work_id WHERE e.search = ? GROUP BY e.corpus_id, o.lemma_id, wb.book_id ORDER BY e.corpus_id, n DESC, o.lemma_id, wb.book_id"
 			run_query (l_sql, {ARRAY [detachable ANY]} <<a_english.to_string_32.as_lower>>)
 			if attached last_rows as al_rows then
 				create l_rows.make (al_rows.rows.count)
 				create l_citations.make (2)
 				across al_rows.rows as ic until l_bad /= Void loop
 					l_bible_id := ic.integer_64_value ("bible_id")
-					if ic.string_value ("translit").is_empty or ic.integer_value ("book_id") <= 0 or ic.integer_64_value ("lemma_id") <= 0 then
-						l_bad := "An English link in the concordance pack has no headword transliteration or book (lemma " + ic.integer_64_value ("lemma_id").out + ")."
+					if ic.string_value ("translit").is_empty or ic.integer_value ("book_id") <= 0 or ic.integer_64_value ("lemma_id") <= 0 or not is_original (ic.string_value ("headword_language").to_string_8) then
+						l_bad := "An English link in the concordance pack leads to no Hebrew, Aramaic or Greek headword with a transliteration and a book (lemma " + ic.integer_64_value ("lemma_id").out + ")."
 					else
 						l_provenance := provenance_of_id (l_bible_id)
 						l_rows.extend (create {BIB_ENGLISH_ROW}.make (a_english, corpus_code_of_id (l_bible_id), ic.integer_64_value ("lemma_id"), ic.string_value ("headword"), ic.string_value ("translit"), ic.integer_value ("book_id"), ic.integer_64_value ("n"), l_provenance))
@@ -361,7 +379,7 @@ feature -- Access
 						l_kind := basis_kind (ic.string_value ("lemma_basis").to_string_8)
 					end
 					if l_position < 1 or l_position <= l_previous or not is_concordance_language (l_language)
-						or ((is_original (l_language) and not l_surface.is_empty) and l_translit.is_empty)
+						or not is_translit_complete (l_language, l_surface, l_translit)
 						or not is_known_basis (l_kind) or (l_kind.same_string ("none") and l_lemma /= 0)
 					then
 						l_bad := "A word of the verse breaks the pack's rules (position " + l_position.out + ")."
@@ -523,19 +541,15 @@ feature {NONE} -- Implementation
 			end
 		end
 
-	lemma_provenance (a_lemma_id: INTEGER_64): BIB_PROVENANCE
-			-- Provenance of a headword: the corpus where it occurs most (its tagging is that corpus's).
-		do
-			Result := first_provenance
-			run_query ("SELECT corpus_id FROM conc.lemma_corpus_count WHERE lemma_id = ? ORDER BY n DESC, corpus_id LIMIT 1", {ARRAY [detachable ANY]} <<a_lemma_id>>)
-			if attached last_rows as al_rows and then not al_rows.rows.is_empty and then attached al_rows.rows.first as al_row then
-				Result := provenance_of_id (al_row.integer_64_value ("corpus_id"))
-			end
-		end
+	Entry_columns: STRING_8 = "l.lemma_id, l.language, l.headword, l.translit, l.pron, l.n_tokens, (SELECT c.corpus_id FROM conc.lemma_corpus_count c WHERE c.lemma_id = l.lemma_id ORDER BY c.n DESC, c.corpus_id LIMIT 1) AS top_corpus"
+			-- A headword's columns over `conc.lemma l', with the corpus where it occurs most: its
+			-- tagging is that corpus's, so that corpus is its provenance. In the same statement, so
+			-- the method record holds every query an answer ran (NFR-006; design scan 28).
 
 	entry_from_row (a_row: SIMPLE_SQL_ROW): detachable BIB_WORD_ENTRY
-			-- The heading `a_row' holds; Void unless it is an original-language headword with a
-			-- headword and a transliteration (BIB_WORD_ENTRY's creator requires both).
+			-- The heading `a_row' (selected with `Entry_columns') holds; Void unless it is an
+			-- original-language headword with a headword and a transliteration (BIB_WORD_ENTRY's
+			-- creator requires both). Pure: no SQL.
 		local
 			l_id: INTEGER_64
 			l_language: STRING_8
@@ -543,7 +557,7 @@ feature {NONE} -- Implementation
 			l_id := a_row.integer_64_value ("lemma_id")
 			l_language := a_row.string_value ("language").to_string_8
 			if l_id > 0 and is_original (l_language) and not a_row.string_value ("headword").is_empty and not a_row.string_value ("translit").is_empty then
-				create Result.make (l_id, l_language, a_row.string_value ("headword"), a_row.string_value ("translit"), a_row.string_value ("pron"), a_row.integer_64_value ("n_tokens").max (0), lemma_provenance (l_id))
+				create Result.make (l_id, l_language, a_row.string_value ("headword"), a_row.string_value ("translit"), a_row.string_value ("pron"), a_row.integer_64_value ("n_tokens").max (0), provenance_of_id (a_row.integer_64_value ("top_corpus")))
 			end
 		ensure
 			same_id: attached Result as r implies r.lemma_id = a_row.integer_64_value ("lemma_id")
@@ -569,7 +583,7 @@ feature {NONE} -- Implementation
 					l_language := ic.string_value ("language").to_string_8
 					l_surface := ic.string_value ("surface")
 					l_translit := ic.string_value ("translit")
-					if ic.integer_64_value ("token_id") <= 0 or not is_concordance_language (l_language) or ((is_original (l_language) and not l_surface.is_empty) and l_translit.is_empty) then
+					if ic.integer_64_value ("token_id") <= 0 or not is_concordance_language (l_language) or not is_translit_complete (l_language, l_surface, l_translit) then
 						l_bad := "Token " + ic.integer_64_value ("token_id").out + " in the concordance pack has no transliteration or a language the engine does not know."
 					else
 						l_rows.extend (create {BIB_PLACE_ROW}.make (ic.integer_64_value ("token_id"), l_language, reference_text (ic), l_surface, l_translit, l_provenance))
@@ -602,22 +616,6 @@ feature {NONE} -- Implementation
 			-- The method's scope line for a verse lookup.
 		do
 			Result := "book " + a_ref.book_id.out + ", chapter " + a_ref.chapter.out + ", verse " + a_ref.verse.out
-		end
-
-	basis_kind (a_stored: STRING_8): STRING_8
-			-- The kind in a stored `<kind>:<source>' basis: the text before the colon (ruling 1.1).
-		do
-			if a_stored.has (':') then
-				Result := a_stored.substring (1, a_stored.index_of (':', 1) - 1)
-			else
-				Result := a_stored.twin
-			end
-		end
-
-	is_known_basis (a_kind: STRING_8): BOOLEAN
-			-- Is `a_kind' in BIB_VERSE_WORD's basis vocabulary?
-		do
-			Result := across <<"tagged", "computed", "aligned", "xref", "none">> as ic some a_kind.same_string (ic) end
 		end
 
 	cite (a_citations: ARRAYED_LIST [BIB_PROVENANCE]; a_provenance: BIB_PROVENANCE)

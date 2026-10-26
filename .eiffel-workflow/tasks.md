@@ -116,7 +116,7 @@ Tasks 3 and 4.
 
 ## Task 6: the three lookups and the word view
 
-*Open from Task 5: place rows carry no context yet (meaning, stem, BSB/KJV/STEP), and `verse_words` reads the default recension only.*
+*Open from Task 5: place rows carry no context yet (meaning, stem, BSB/KJV/STEP), and `verse_words` reads the default recension only. The word view checks that the first page fits the total before `make_success` (`total_covers_page`) and fails with Schema_mismatch otherwise (design scan 28).*
 
 **Files:** `src/concordance/bib_word_lookup.e`, `bib_english_index.e`, `bib_verse_words.e`, `bib_word_view.e`
 **Features:** `view`, `rows`, `words`; BIB_WORD_VIEW `section_count`, `section_name`, `is_present`, `facts_model`

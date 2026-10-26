@@ -20,6 +20,8 @@ inherit
 
 	BIB_LANGUAGE_CODES
 
+	BIB_LEMMA_BASIS
+
 create
 	make
 
@@ -30,8 +32,8 @@ feature {NONE} -- Initialization
 		require
 			position_positive: a_position >= 1
 			language_known: is_concordance_language (a_language)
-			translit_when_written: (is_original (a_language) and not a_surface.is_empty) implies not a_translit.is_empty
-			basis_known: across <<"tagged", "computed", "aligned", "xref", "none">> as b some a_lemma_basis.same_string (b) end
+			translit_when_written: is_translit_complete (a_language, a_surface, a_translit)
+			basis_known: is_known_basis (a_lemma_basis)
 			none_means_no_lemma: a_lemma_basis.same_string ("none") = (a_lemma_id = 0)
 		do
 			position := a_position
@@ -74,7 +76,7 @@ feature -- Access
 
 invariant
 	position_positive: position >= 1
-	translit_when_written: (is_original (language) and not surface.is_empty) implies not translit.is_empty
+	translit_when_written: is_translit_complete (language, surface, translit)
 	none_means_no_lemma: lemma_basis.same_string ("none") = (lemma_id = 0)
 
 end

@@ -33,6 +33,17 @@ feature -- Status
 			english_is_not: a_language.same_string ("eng") implies not Result
 		end
 
+	is_translit_complete (a_language: READABLE_STRING_8; a_surface, a_translit: READABLE_STRING_GENERAL): BOOLEAN
+			-- Does a word in `a_language' written `a_surface' carry the transliteration every written
+			-- original-language word needs (FR-155)? An empty surface and English need none (ruling 1.2).
+			-- One home for the rule (design scan 28: it was written eight times).
+		do
+			Result := not (is_original (a_language) and not a_surface.is_empty) or else not a_translit.is_empty
+		ensure
+			english_always: not is_original (a_language) implies Result
+			unwritten_always: a_surface.is_empty implies Result
+		end
+
 	is_concordance_language (a_language: READABLE_STRING_8): BOOLEAN
 			-- Is `a_language' one the concordance holds (an original or English)?
 		do
