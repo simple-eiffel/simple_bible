@@ -337,6 +337,7 @@ feature {NONE} -- Suites
 			run_test (agent t.test_versions_and_a_chapter, "test_versions_and_a_chapter")
 			run_test (agent t.test_cross_references_most_voted_first, "test_cross_references_most_voted_first")
 			run_test (agent t.test_lexicon_entries_and_gloss, "test_lexicon_entries_and_gloss")
+			run_test (agent t.test_a_clicked_word_finds_its_original, "test_a_clicked_word_finds_its_original")
 			run_test (agent t.test_place_rows_know_their_verse, "test_place_rows_know_their_verse")
 			run_test (agent t.test_a_failing_chapter_query_says_why, "test_a_failing_chapter_query_says_why")
 		end

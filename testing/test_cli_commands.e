@@ -99,6 +99,9 @@ feature -- Tests
 			assert_true ("Gen 1 1", attached l_lookup.place_named (" Gen 1 1 ") as al_p and then al_p.verse = 1)
 			assert_true ("Exodus 2", attached l_lookup.place_named ("Exodus 2") as al_p and then al_p.book = 2)
 			assert_true ("not a place", l_lookup.place_named ("bara") = Void and l_lookup.place_named ("Zzz 3") = Void)
+				-- Design scan 34: the search box reads verses with the reference box's parser.
+			assert_true ("Gen 1 1 is a verse in the search box too", l_lookup.is_verse_text ("Gen 1 1"))
+			assert_false ("a whole chapter is no verse", l_lookup.is_verse_text ("Genesis 1"))
 			assert_true ("empty", l_lookup.choices_for ("  ").is_empty and not l_lookup.note_text.is_empty)
 			assert_true ("nothing", l_lookup.choices_for ("zzz").is_empty and l_lookup.note_text.has_substring ("Nothing found"))
 			finish
