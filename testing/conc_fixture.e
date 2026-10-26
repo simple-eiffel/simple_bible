@@ -68,6 +68,39 @@ feature -- Building
 			l_db.close
 		end
 
+	build_content (a_path: STRING; a_version: INTEGER; a_without_provenance: BOOLEAN)
+			-- content.db v1 (research/18) at `a_path', stamped `a_version'; with `a_without_provenance'
+			-- the book catalog lacks its provenance column (the K7-A refusal).
+		require
+			path_not_empty: not a_path.is_empty
+		local
+			l_db: SIMPLE_SQL_DATABASE
+		do
+			delete_file (a_path)
+			create l_db.make (a_path)
+			l_db.execute ("CREATE TABLE source_provenance(provenance_key INTEGER PRIMARY KEY, source_key TEXT NOT NULL, edition TEXT NOT NULL, license_id TEXT NOT NULL, non_commercial INTEGER NOT NULL, share_alike INTEGER NOT NULL, restricted INTEGER NOT NULL, credit TEXT NOT NULL, caveat TEXT NOT NULL)")
+			l_db.execute ("CREATE TABLE build_run(build_id TEXT PRIMARY KEY, built_at TEXT NOT NULL, builder TEXT NOT NULL)")
+			if a_without_provenance then
+				l_db.execute ("CREATE TABLE book_catalog(book_id INTEGER PRIMARY KEY, code TEXT NOT NULL, name TEXT NOT NULL, is_deuterocanonical INTEGER NOT NULL)")
+				l_db.execute ("INSERT INTO book_catalog VALUES (1, 'GEN', 'Genesis', 0)")
+			else
+				l_db.execute ("CREATE TABLE book_catalog(book_id INTEGER PRIMARY KEY, code TEXT NOT NULL, name TEXT NOT NULL, is_deuterocanonical INTEGER NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key))")
+				l_db.execute ("INSERT INTO book_catalog VALUES (1, 'GEN', 'Genesis', 0, 1)")
+			end
+			l_db.execute ("INSERT INTO source_provenance VALUES (1, 'test-books', 'fixture', 'CC0', 0, 0, 0, 'test fixture', '')")
+			l_db.execute ("INSERT INTO build_run VALUES ('test-build-0', '2026-10-25T09:00:00', 'testing/conc_fixture.e'), ('" + Content_edition + "', '2026-10-26T12:00:00', 'testing/conc_fixture.e')")
+			l_db.execute ("PRAGMA user_version = " + a_version.out)
+			l_db.close
+		ensure
+			file_written: (create {SIMPLE_FILE}.make (a_path)).is_file
+		end
+
+	Content_version: INTEGER = 1
+			-- content.db v1 (BIB_CONTENT_SOURCE.Content_schema_version).
+
+	Content_edition: STRING = "test-build-1"
+			-- The fixture content.db's latest build: its edition.
+
 	delete_file (a_path: STRING)
 			-- Delete `a_path' if present.
 		local

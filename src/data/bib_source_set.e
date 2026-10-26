@@ -122,7 +122,7 @@ feature -- Commands
 		do
 				-- No foreign-key pragma: main is read-only, so nothing here can write a row.
 			last_error := Void
-			if not (create {RAW_FILE}.make_with_name (a_path)).exists then
+			if not (create {SIMPLE_FILE}.make (a_path)).exists then
 				create last_error.make_with_details ({BIB_ERROR}.Source_unavailable, "The content database was not found.", a_path)
 			elseif attached read_only_connection (a_path) as al_db then
 				l_db := al_db
@@ -237,7 +237,7 @@ feature {NONE} -- Implementation
 			-- and an open that fails is an answer here, never control flow (design scan 26).
 		require
 			path_not_empty: not a_path.is_empty
-			file_exists: (create {RAW_FILE}.make_with_name (a_path)).exists
+			file_exists: (create {SIMPLE_FILE}.make (a_path)).exists
 		local
 			l_failed: BOOLEAN
 		do

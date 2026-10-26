@@ -140,9 +140,11 @@ Task 5.
 **Features:** `open` (concordance part), `pack_count`, `conc_error`, `conc_pack`, `word_lookup`, `english_index`, `verse_word_lookup`
 
 ### Acceptance Criteria
-- [ ] `conc_path` attaches the pack; the pack-folder scan never attaches conc.db (FR-166)
-- [ ] A missing or refused conc.db leaves the Bible open, `conc_pack.is_available` False and the reason in `conc_error` (Larry's policy, 2026-10-26)
-- [ ] More than `Max_generic_packs` generic packs fail `open` with a reported reason (ruling 2.4)
+- [x] `conc_path` attaches the pack; the pack-folder scan never attaches conc.db (FR-166)
+- [x] A missing or refused conc.db leaves the Bible open, `conc_pack.is_available` False and the reason in `conc_error` (Larry's policy, 2026-10-26)
+- [x] More than `Max_generic_packs` generic packs fail `open` with a reported reason (ruling 2.4); until 7b any generic pack fails `open` with a named reason
+- [x] 7a done 2026-10-26: content.db v1 check (research/18), the concordance half of `open`, the edition swap test (FR-158) runs
+- [ ] 7b: generic packs through BIB_PRIVATE_SOURCE
 
 ### Dependencies
 Tasks 3 and 6.
