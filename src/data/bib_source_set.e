@@ -20,6 +20,9 @@ note
 class
 	BIB_SOURCE_SET
 
+inherit
+	BIB_SQLITE_REPORTING
+
 create
 	make
 
@@ -29,6 +32,7 @@ feature {NONE} -- Initialization
 			-- Create a closed source set.
 		do
 			create attached_paths.make (Max_attached)
+			create attach_serials.make (Max_attached)
 			create core_path.make_empty
 			create sqlite_version.make_empty
 		ensure
@@ -81,6 +85,17 @@ feature -- Status
 			Result := attached_paths.item (a_alias.to_string_8)
 		ensure
 			void_when_absent: (Result = Void) = not is_attached_alias (a_alias)
+		end
+
+	attachment_serial (a_alias: READABLE_STRING_8): INTEGER_64
+			-- Which attach put the current database under `a_alias': unique for this source set's
+			-- life and never reused, even when the same path is attached again; 0 when none.
+			-- A reader that checked a pack compares this, so a rebuilt file is checked again
+			-- (design scan 27). No SQL.
+		do
+			Result := attach_serials.item (a_alias.to_string_8)
+		ensure
+			zero_when_absent: (Result = 0) = not is_attached_alias (a_alias)
 		end
 
 feature -- Model
@@ -149,6 +164,8 @@ feature -- Commands
 					create last_error.make_with_details ({BIB_ERROR}.Source_unavailable, "A pack could not be attached as " + a_alias + ".", sqlite_message (al_db, a_path))
 				else
 					attached_paths.force (a_path.to_string_32, a_alias.twin)
+					last_attach_serial := last_attach_serial + 1
+					attach_serials.force (last_attach_serial, a_alias.twin)
 				end
 			end
 		ensure
@@ -172,6 +189,7 @@ feature -- Commands
 					create last_error.make_with_details ({BIB_ERROR}.Database_problem, "A pack could not be detached: " + a_alias + ".", sqlite_message (al_db, a_alias))
 				else
 					attached_paths.remove (a_alias)
+					attach_serials.remove (a_alias)
 				end
 			end
 		ensure
@@ -189,6 +207,7 @@ feature -- Commands
 			end
 			database := Void
 			attached_paths.wipe_out
+			attach_serials.wipe_out
 			is_open := False
 			create core_path.make_empty
 			create sqlite_version.make_empty
@@ -230,25 +249,20 @@ feature {NONE} -- Implementation
 			retry
 		end
 
-	sqlite_message (a_db: SIMPLE_SQL_DATABASE; a_fallback: READABLE_STRING_GENERAL): STRING_32
-			-- SQLite's own message for the last failure on `a_db' (FR-138), or `a_fallback' when it gave none.
-		do
-			if attached a_db.last_error_message as al_message and then not al_message.is_empty then
-				Result := al_message.twin
-			else
-				Result := a_fallback.to_string_32
-			end
-		ensure
-			not_empty: not a_fallback.is_empty implies not Result.is_empty
-		end
-
 feature {NONE} -- Representation
 
 	attached_paths: HASH_TABLE [STRING_32, STRING_8]
 			-- Path by alias.
 
+	attach_serials: HASH_TABLE [INTEGER_64, STRING_8]
+			-- `attachment_serial' by alias.
+
+	last_attach_serial: INTEGER_64
+			-- The serial of the latest successful attach; never reset, not even by `close'.
+
 invariant
 	within_limit: attached_count >= 0 and attached_count <= Max_attached
+	serials_match_aliases: attach_serials.count = attached_paths.count
 	nothing_attached_when_closed: not is_open implies attached_count = 0
 	connection_when_open: is_open implies database /= Void
 

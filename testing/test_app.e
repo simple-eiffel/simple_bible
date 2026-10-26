@@ -328,6 +328,8 @@ feature {NONE} -- Suites
 			run_test (agent t.test_pack_refuses_a_missing_table, "test_pack_refuses_a_missing_table")
 			run_test (agent t.test_pack_refuses_a_file_that_is_not_a_database, "test_pack_refuses_a_file_that_is_not_a_database")
 			run_test (agent t.test_reattached_pack_needs_a_new_check, "test_reattached_pack_needs_a_new_check")
+			run_test (agent t.test_same_path_reattach_needs_a_new_check, "test_same_path_reattach_needs_a_new_check")
+			run_test (agent t.test_pack_refuses_unreadable_facts, "test_pack_refuses_unreadable_facts")
 			run_test (agent t.test_verse_word_takes_real_hebrew_rows, "test_verse_word_takes_real_hebrew_rows")
 			run_test (agent t.test_verse_word_takes_english_computed_rows, "test_verse_word_takes_english_computed_rows")
 			run_test (agent t.test_value_creators_pin_every_field, "test_value_creators_pin_every_field")

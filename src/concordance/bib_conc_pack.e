@@ -14,6 +14,9 @@ note
 class
 	BIB_CONC_PACK
 
+inherit
+	BIB_SQLITE_REPORTING
+
 create
 	make
 
@@ -42,19 +45,19 @@ feature -- Status
 	is_pack_valid: BOOLEAN
 			-- Did `check_pack' accept the attached pack (FR-164: `user_version' and required tables)?
 
-	validated_path: detachable STRING_32
-			-- The file `check_pack' accepted. The source set is shared, so the pack can be
-			-- detached and another file attached under `Pack_alias' behind this reader's back;
-			-- that file is not available until it is checked (design scan 25).
+	validated_serial: INTEGER_64
+			-- The `attachment_serial' of the pack `check_pack' accepted; 0 when none. The source
+			-- set is shared, so the pack can be detached and another file, or the same path
+			-- rebuilt, attached under `Pack_alias' behind this reader's back; that pack is not
+			-- available until it is checked (design scans 25 and 27).
 
 	is_available: BOOLEAN
 			-- Is the pack `check_pack' accepted still the one attached as `Pack_alias'?
 			-- No SQL here: every lookup evaluates this, so the check runs once, in
 			-- `check_pack' (ruling 3.3).
 		do
-			Result := is_pack_valid and then attached validated_path as al_checked
-				and then attached sources.attached_path (Pack_alias) as al_now
-				and then al_now.same_string (al_checked)
+			Result := is_pack_valid and then validated_serial > 0
+				and then sources.attachment_serial (Pack_alias) = validated_serial
 		ensure
 			needs_attachment: Result implies is_attached
 			needs_check: Result implies is_pack_valid
@@ -101,7 +104,7 @@ feature -- Commands
 			l_version: INTEGER
 		do
 			is_pack_valid := False
-			validated_path := Void
+			validated_serial := 0
 			pack_error := Void
 			corpus_codes.wipe_out
 			has_meanings := False
@@ -111,24 +114,26 @@ feature -- Commands
 					-- PRAGMA conc.user_version, never the unqualified pragma, which reads main (ruling 3.3).
 				l_version := l_schema.user_version_of (Pack_alias)
 				if al_db.has_error then
-					create pack_error.make_with_details ({BIB_ERROR}.Database_problem, "The concordance pack cannot be read.", database_message (al_db))
+					create pack_error.make_with_details ({BIB_ERROR}.Database_problem, "The concordance pack cannot be read.", sqlite_message (al_db, pack_path))
 				elseif l_version /= Expected_user_version then
 					create pack_error.make_with_details ({BIB_ERROR}.Schema_mismatch, "The concordance pack is version " + l_version.out + "; this engine reads version " + Expected_user_version.out + ".", pack_path)
 				elseif attached first_missing_table (l_schema) as al_missing then
 					create pack_error.make_with_details ({BIB_ERROR}.Schema_mismatch, "The concordance pack has no table " + al_missing + ".", pack_path)
 				else
 					read_pack_facts (al_db)
-					if edition_label_cache.is_empty then
+					if pack_error /= Void then
+							-- `read_pack_facts' reported a query SQLite refused.
+					elseif edition_label_cache.is_empty then
 						create pack_error.make_with_details ({BIB_ERROR}.Schema_mismatch, "The concordance pack does not name its edition (meta edition_label).", pack_path)
 					else
 						is_pack_valid := True
-						validated_path := sources.attached_path (Pack_alias)
+						validated_serial := sources.attachment_serial (Pack_alias)
 					end
 				end
 			end
 		ensure
 			valid_only_when_attached: is_pack_valid implies is_attached
-			path_recorded: is_pack_valid implies (attached validated_path as al_checked and then attached sources.attached_path (Pack_alias) as al_now and then al_now.same_string (al_checked))
+			serial_recorded: is_pack_valid implies validated_serial = sources.attachment_serial (Pack_alias)
 			reason_when_refused: not is_pack_valid implies pack_error /= Void
 			no_reason_when_accepted: is_pack_valid implies pack_error = Void
 		end
@@ -287,15 +292,29 @@ feature {NONE} -- Implementation
 		end
 
 	read_pack_facts (a_db: SIMPLE_SQL_DATABASE)
-			-- Read the corpus codes, whether meanings exist and the edition label, once.
+			-- Read the corpus codes, whether meanings exist and the edition label, once. A query
+			-- SQLite refuses sets `pack_error', so the pack is never accepted with empty facts.
 		do
 			across a_db.query ("SELECT code FROM " + Pack_alias + ".corpus ORDER BY corpus_id").rows as ic loop
 				corpus_codes.extend (ic.string_value ("code").to_string_8)
 			end
+			note_failure (a_db)
 			has_meanings := not a_db.query ("SELECT 1 FROM " + Pack_alias + ".lex_sense LIMIT 1").rows.is_empty
+			note_failure (a_db)
 			across a_db.query ("SELECT value FROM " + Pack_alias + ".meta WHERE key = 'edition_label'").rows as ic loop
 				edition_label_cache := ic.string_value ("value")
 			end
+			note_failure (a_db)
+		end
+
+	note_failure (a_db: SIMPLE_SQL_DATABASE)
+			-- Keep the first refused query of `check_pack' as `pack_error'.
+		do
+			if a_db.has_error and pack_error = Void then
+				create pack_error.make_with_details ({BIB_ERROR}.Database_problem, "The concordance pack cannot be read.", sqlite_message (a_db, pack_path))
+			end
+		ensure
+			first_kept: old pack_error /= Void implies pack_error = old pack_error
 		end
 
 	pack_path: STRING_32
@@ -305,16 +324,6 @@ feature {NONE} -- Implementation
 				Result := al_path
 			else
 				Result := {STRING_32} "(no pack attached)"
-			end
-		end
-
-	database_message (a_db: SIMPLE_SQL_DATABASE): STRING_32
-			-- SQLite's own words for the last failure on `a_db', or the pack's path when it gave none.
-		do
-			if attached a_db.last_error_message as al_message and then not al_message.is_empty then
-				Result := al_message.twin
-			else
-				Result := pack_path
 			end
 		end
 
