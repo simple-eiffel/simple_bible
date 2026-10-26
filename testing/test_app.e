@@ -323,6 +323,7 @@ feature {NONE} -- Suites
 			run_test (agent t.test_verse_command, "test_verse_command")
 			run_test (agent t.test_strongs_command, "test_strongs_command")
 			run_test (agent t.test_lookup_choices, "test_lookup_choices")
+			run_test (agent t.test_lookup_reports_a_broken_pack, "test_lookup_reports_a_broken_pack")
 			run_test (agent t.test_corpus_names_and_headword_corpus, "test_corpus_names_and_headword_corpus")
 		end
 

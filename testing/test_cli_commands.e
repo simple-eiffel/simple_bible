@@ -42,7 +42,9 @@ feature -- Tests
 			l_text: STRING_32
 		do
 			l_text := commands.english ("created")
-			assert_true ("bible and headword", l_text.has_substring ("ENG-BSB  bara - BRA  x1"))
+				-- Design scan 32: the Bible by name, never its code (FR-156), as the window shows it.
+			assert_true ("bible and headword", l_text.has_substring ("Berean Standard Bible  bara - BRA  x1"))
+			assert_false ("no corpus code", l_text.has_substring ("ENG-BSB"))
 			assert_true ("unknown word", commands.english ("zzz").has_substring ("No original word"))
 			finish
 		end
@@ -56,6 +58,8 @@ feature -- Tests
 			assert_true ("prefix first", l_text.starts_with ("1  B  b  [word 5]"))
 			assert_true ("door to bara", l_text.has_substring ("[word 1]"))
 			assert_true ("unknown corpus", commands.verse (1, 1, 1, "XYZ").has_substring ("no corpus XYZ"))
+				-- Design scan 32: no corpus given, the book chooses it (the window's rule), not a fixed Hebrew default.
+			assert_true ("corpus from the book", commands.verse (1, 1, 1, "").starts_with ("1  B  b  [word 5]"))
 			finish
 		end
 
@@ -101,6 +105,44 @@ feature -- Tests
 			else
 				assert_true ("entry", False)
 			end
+			finish
+		end
+
+	test_lookup_reports_a_broken_pack
+			-- Design scan 32: a query that fails reads as the database's own words, not as
+			-- "Nothing found" or "0 headwords". Before: the window's note said "Strong's H1254:
+			-- 0 headwords" while the command line printed the error; after: both print the error.
+		local
+			l_fixture: CONC_FIXTURE
+			l_db: SIMPLE_SQL_DATABASE
+			l_config: BIB_CONFIG
+			l_bible: SIMPLE_BIBLE
+			l_lookup: BIB_LOOKUP
+			l_cli: BIB_CLI_COMMANDS
+			l_memory: MEMORY
+		do
+			create l_fixture
+			l_fixture.build_content (Content_file, {CONC_FIXTURE}.Content_version, False)
+			l_fixture.build (Pack_file)
+				-- The table is still there, so the pack opens; its column is not, so the query fails.
+			create l_db.make (Pack_file)
+			l_db.execute ("ALTER TABLE lemma_xref RENAME COLUMN value TO value_gone")
+			l_db.close
+			create l_config.make_with_core (Content_file)
+			l_config := l_config.set_conc_path (Pack_file)
+			create l_bible.make (l_config)
+			l_bible.open
+			assert_true ("the pack opened", l_bible.is_open and then l_bible.conc_pack.is_available)
+			create l_lookup.make (l_bible)
+			create l_cli.make (l_bible)
+			assert_true ("no choices", l_lookup.choices_for ("H1254").is_empty)
+			assert_false ("not read as zero headwords", l_lookup.note_text.has_substring ("0 headwords"))
+			assert_true ("the window says what the command line says", l_cli.strongs ("H1254").has_substring (l_lookup.note_text))
+			assert_true ("the error is kept", l_lookup.last_error /= Void)
+			l_bible.close
+				-- SQLite lets go of a file when its last statement is collected (close_v2).
+			create l_memory
+			l_memory.full_collect
 			finish
 		end
 
