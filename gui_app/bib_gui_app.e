@@ -41,20 +41,22 @@ feature {NONE} -- Initialization
 			create window.make (window_title, 60, 40, 1320, 880, l_light)
 			window.follow_system_theme (l_light, l_dark)
 			window.enable_shaped_text
-				-- Every attached attribute before any agent on Current (VEVI).
+				-- Every attached attribute before any agent on Current (VEVI). Grid heights are minimums: a
+				-- column never shrinks a child below its preferred height, so a tall grid overflowed its pane
+				-- (Larry's first screenshot, 2026-10-26); small minimums grow to fill.
 			create lookup_box.make_lookup
 			create look_button.make_primary ("Look up", Void)
 			create centre_title.make_ui ("ORIGINAL LANGUAGE")
 			create centre_note.make_ui ("")
-			create results_grid.make (320.0)
+			create results_grid.make (120.0)
 			create study_title.make_ui ("WORD STUDY")
 			create heading_label.make ("", {SW_PAINTER}.Role_ui, 24.0, True)
 			create pron_label.make_ui ("")
 			create often_label.make_ui ("")
 			create renderings_title.make_ui ("HOW THE BIBLES RENDER IT")
-			create renderings_grid.make (200.0)
+			create renderings_grid.make (100.0)
 			create places_title.make_ui ("EVERY PLACE")
-			create places_grid.make (260.0)
+			create places_grid.make (160.0)
 			create status_label.make_ui ("")
 			create choices.make (0)
 			create renderings.make (0)
