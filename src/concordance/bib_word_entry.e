@@ -30,12 +30,19 @@ feature {NONE} -- Initialization
 			translit_not_empty: not a_translit.is_empty
 			total_non_negative: a_token_total >= 0
 		do
-			check implemented_in_phase_4: False then end
+			lemma_id := a_lemma_id
+			language := a_language.to_string_8
+			headword := a_headword.to_string_32
+			translit := a_translit.to_string_32
+			pron := a_pron.to_string_32
+			token_total := a_token_total
+			provenance := a_provenance
 		ensure
 			id_set: lemma_id = a_lemma_id
 			language_set: language.same_string (a_language)
 			headword_set: headword.same_string_general (a_headword)
 			translit_set: translit.same_string_general (a_translit)
+			pron_set: pron.same_string_general (a_pron)
 			total_set: token_total = a_token_total
 			provenance_set: provenance = a_provenance
 		end

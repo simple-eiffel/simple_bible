@@ -84,9 +84,9 @@ Tasks 1 and 2.
 **Features:** `make` on each, `set_context` (BIB_PLACE_ROW), `has_door` (BIB_VERSE_WORD)
 
 ### Acceptance Criteria
-- [ ] Every field pinned by the postconditions (rulings 1.2, 1.3) holds on fixture rows
-- [ ] `test_verse_word_takes_real_hebrew_rows` and `test_verse_word_takes_english_computed_rows` move from skeletal to run, and pass
-- [ ] Provenance from `corpus.license` / `ship_class` and `meaning_source` on every value (NFR-007)
+- [x] Every field pinned by the postconditions (rulings 1.2, 1.3) holds on fixture rows
+- [x] `test_verse_word_takes_real_hebrew_rows` and `test_verse_word_takes_english_computed_rows` move from skeletal to run, and pass
+- [ ] Provenance from `corpus.license` / `ship_class` and `meaning_source` on every value (NFR-007): built where the pack makes the values, so checked in Task 5
 
 ### Dependencies
 Task 2.
