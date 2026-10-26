@@ -18,6 +18,8 @@ class
 inherit
 	BIB_SOURCED
 
+	BIB_LANGUAGE_CODES
+
 create
 	make
 
@@ -27,7 +29,7 @@ feature {NONE} -- Initialization
 			-- Word `a_position' of the verse in language `a_language'; `a_lemma_id' is 0 when none.
 		require
 			position_positive: a_position >= 1
-			language_known: a_language.same_string ("eng") or a_language.same_string ("hbo") or a_language.same_string ("arc") or a_language.same_string ("grc")
+			language_known: is_concordance_language (a_language)
 			translit_when_written: (is_original (a_language) and not a_surface.is_empty) implies not a_translit.is_empty
 			basis_known: across <<"tagged", "computed", "aligned", "xref", "none">> as b some a_lemma_basis.same_string (b) end
 			none_means_no_lemma: a_lemma_basis.same_string ("none") = (a_lemma_id = 0)

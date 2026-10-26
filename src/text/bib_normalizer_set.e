@@ -7,6 +7,12 @@ note
 class
 	BIB_NORMALIZER_SET
 
+inherit
+	BIB_LANGUAGE_CODES
+		export
+			{NONE} all
+		end
+
 create
 	make
 
@@ -33,7 +39,7 @@ feature -- Access
 		require
 			language_not_empty: not a_language.is_empty
 		do
-			if a_language.same_string ("hbo") or a_language.same_string ("arc") then
+			if is_hebrew_script (a_language) then
 				Result := hebrew
 			elseif a_language.same_string ("grc") then
 				Result := greek
@@ -41,7 +47,7 @@ feature -- Access
 				Result := english
 			end
 		ensure
-			hebrew_script: (a_language.same_string ("hbo") or a_language.same_string ("arc")) implies Result = hebrew
+			hebrew_script: is_hebrew_script (a_language) implies Result = hebrew
 			greek_script: a_language.same_string ("grc") implies Result = greek
 		end
 

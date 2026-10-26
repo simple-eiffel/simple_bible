@@ -7,6 +7,12 @@ note
 class
 	BIB_TRANSLITERATOR
 
+inherit
+	BIB_LANGUAGE_CODES
+		export
+			{NONE} all
+		end
+
 feature -- Conversion
 
 	transliteration (a_text: READABLE_STRING_32; a_language: READABLE_STRING_8): STRING_32
@@ -34,8 +40,11 @@ feature -- Conversion
 feature -- Status
 
 	is_supported_language (a_language: READABLE_STRING_8): BOOLEAN
+			-- Can `a_language' be transliterated (the originals: Hebrew, Aramaic, Greek)?
 		do
-			Result := a_language.same_string ("hbo") or a_language.same_string ("arc") or a_language.same_string ("grc")
+			Result := is_original (a_language)
+		ensure
+			originals_only: Result = is_original (a_language)
 		end
 
 end

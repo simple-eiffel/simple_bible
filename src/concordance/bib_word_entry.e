@@ -14,6 +14,8 @@ class
 inherit
 	BIB_SOURCED
 
+	BIB_LANGUAGE_CODES
+
 create
 	make
 
@@ -23,7 +25,7 @@ feature {NONE} -- Initialization
 			-- Heading of lemma `a_lemma_id'.
 		require
 			id_positive: a_lemma_id > 0
-			language_known: a_language.same_string ("hbo") or a_language.same_string ("arc") or a_language.same_string ("grc")
+			language_known: is_original (a_language)
 			headword_not_empty: not a_headword.is_empty
 			translit_not_empty: not a_translit.is_empty
 			total_non_negative: a_token_total >= 0
