@@ -4,7 +4,7 @@
 
 > **Widget vocabulary: simple_widgets 0.8.1 (`SW_*` classes)**, not simple_vision. This deliberately departs from the eiffel-gui-ux skill's "windows" platform (D-006: native simple_widgets with simple_shaping, simple_cairo and simple_shell; no WebView2). Every missing capability is a **gap work item** for the owning library (§9). None is papered over in application code.
 
-**What was checked in the toolkit (2026-10-06):** README, CHANGELOG (0.8.0, 0.8.1) and the public features of the classes used (`D:\prod\simple_widgets\src`). Claims about capabilities below cite the class. Where a capability is absent, the note says so and points at its GW item.
+**What was checked in the toolkit (2026-10-06):** README, CHANGELOG (0.8.0, 0.8.1) and the public features of the classes used (`$SIMPLE_EIFFEL\simple_widgets\src`). Claims about capabilities below cite the class. Where a capability is absent, the note says so and points at its GW item.
 
 ---
 

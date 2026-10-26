@@ -2,7 +2,7 @@
 
 *Found while running /eiffel.intent on simple_bible, 2026-10-06. For the skill owner to review after this workflow.*
 
-## eiffel-intent (`C:\Users\LJR19\.claude\skills\eiffel-intent\SKILL.md`)
+## eiffel-intent (`~/.claude/skills/eiffel-intent\SKILL.md`)
 
 1. **Hard-coded model name.** Step 4 and the step 8 evidence template say "Claude Opus 4.6". Use a model-neutral line ("Review engine: Claude (self-review), model as run") so the evidence stays true when the model changes.
 2. **No pending status for delegated runs.** The step 8 template has only `# Status: APPROVED`. When a subagent runs the phase, it must not approve on the user's behalf. Add `User approved: PENDING` and `# Status: AWAITING APPROVAL` as the documented state before step 7, with the flip to APPROVED done by whoever hears the user's approval.
@@ -15,7 +15,7 @@
 9. **Line endings.** Fleet repositories use CRLF on disk. Add a closing step: normalize the new .md and .txt files to the folder's line endings.
 10. **Deferred items from the spec.** When the spec defers items to intent (here, seven innovation sparks), step 4 should require a placement and a reason for each, alongside the probing questions.
 
-## eiffel-contracts (`C:\Users\LJR19\.claude\skills\eiffel-contracts\SKILL.md`), found 2026-10-06 (engine library)
+## eiffel-contracts (`~/.claude/skills/eiffel-contracts\SKILL.md`), found 2026-10-06 (engine library)
 
 1. **Stale build line.** Steps 6 and 6b say `ec.sh -batch -config ... -c_compile`; ec.sh blocks raw flags. Use `ec.sh check -config X.ecf -target T` then `ec.sh test -config X.ecf -target T`, both from the project folder.
 2. **Never trust the ec.sh summary.** `run_ec` pipes ec.exe into `tee` and reads `$?` (tee's status), so ec.sh prints "passed" and exits 0 with syntax and type errors in the log. The skill should require grepping the log for `Error code`, `Syntax error` and `Warning:` (obsolete calls appear as "Error code: Obsolete Call" with a "Warning:" line, so `Warning code` alone misses them). Fleet fix filed as GAP-EC-01 in phase1-compile.txt.

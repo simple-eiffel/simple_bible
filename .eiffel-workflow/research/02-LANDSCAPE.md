@@ -271,7 +271,7 @@ URL: https://jrsoftware.org/isinfo.php. Free; supports Windows 11/10, x64 and Ar
 
 ## Eiffel Ecosystem Check
 
-*Verified by listing `D:\prod` and reading each README on 2026-10-06.*
+*Verified by listing the fleet root and reading each README on 2026-10-06.*
 
 ### ISE Libraries
 - **EiffelBase / WEL**: always used; WEL for Win32 calls where simple_* has no wrapper.
@@ -314,13 +314,13 @@ URL: https://jrsoftware.org/isinfo.php. Free; supports Windows 11/10, x64 and Ar
 | simple_setup | Deprecated (superseded by simple_pkg) | Not used |
 
 ### Gobo Libraries
-- Gobo (https://github.com/gobo-eiffel/gobo, MIT; supports ISE Eiffel 25.12 and Gobo compiler 26.09.03; `D:\prod\gobo-26.06` present): Regexp (via simple_regex), XML/XPath (via simple_xml, for OSIS and TEI imports), Kernel/Structure/String utilities. No direct Gobo dependency is planned beyond what simple_* wraps.
+- Gobo (https://github.com/gobo-eiffel/gobo, MIT; supports ISE Eiffel 25.12 and Gobo compiler 26.09.03; `$SIMPLE_EIFFEL\gobo-26.06` present): Regexp (via simple_regex), XML/XPath (via simple_xml, for OSIS and TEI imports), Kernel/Structure/String utilities. No direct Gobo dependency is planned beyond what simple_* wraps.
 
 ### Key Findings From the Ecosystem Check
 1. **The SQLite actually compiled is 3.31.1.** `eiffel_sqlite_2025/Clib/sqlite3.h` and the compiled `spec/msvc/win64/lib/sqlite_2025.lib` both carry source id `2020-01-27 19:55:54 3bfa9cc9...` (3.31.1). The README and CHANGELOG claim 3.51.1. Compile options embedded in the library: FTS5, JSON1, RTREE, GEOPOLY, COLUMN_METADATA, OMIT_LOAD_EXTENSION. The math-functions flag has no effect below 3.35.0. This is a fleet-level drift, not a simple_bible defect, but simple_bible depends on it.
 2. **The "no text-shaping library exists" premise is out of date.** `simple_shaping` exists at 0.1.0 pre-release with real DirectWrite bidi and shaping. The MVP still uses WebView2; the native path is now "pending release", not "blocked on nonexistence".
 3. **`simple_http` cannot be the network client in a shipped app** (libcurl dependency); `simple_winhttp` exists for exactly this.
-4. **simple_scholar** (`D:\prod\simple_scholar`) has seven targets including `bible_htmx` (WebView2) and `bible_repl`, ships a February `data/bible.db` (161 MB, pre-split, no MACULA, no Westcott-Hort), and carries Larry-specific lenses (`SCHOLAR_FRAME_*`, `KACC_VALIDATOR`). Harvest decisions: `08-HARVEST-LEDGER.md`.
+4. **simple_scholar** (`$SIMPLE_EIFFEL\simple_scholar`) has seven targets including `bible_htmx` (WebView2) and `bible_repl`, ships a February `data/bible.db` (161 MB, pre-split, no MACULA, no Westcott-Hort), and carries Larry-specific lenses (`SCHOLAR_FRAME_*`, `KACC_VALIDATOR`). Harvest decisions: `08-HARVEST-LEDGER.md`.
 
 ### Gap Analysis
 Not available in Eiffel (or anywhere free): a deterministic Bible-study engine with pre-registered censuses, controls, near-miss reporting and versification-safe cross-version pairing. Not available in the Eiffel fleet: a vector index inside SQLite (only brute-force `SIMPLE_SQL_VECTOR_STORE`), a WordPiece/BPE tokenizer beyond SentencePiece unigram, a current SQLite build.

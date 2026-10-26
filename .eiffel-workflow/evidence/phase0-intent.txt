@@ -1,5 +1,5 @@
 # Phase 0 Intent Evidence
-# Project: D:\prod\simple_bible
+# Project: simple_bible
 # Date: 2026-10-06
 
 Intent document: .eiffel-workflow/intent-v2.md (initial: .eiffel-workflow/intent.md)
@@ -12,7 +12,7 @@ Acceptance criteria: Release 1a 57 (4 conditional), Release 1b 10
 Questions generated: 12 (RQ-01..RQ-12) + 7 spark placements (Q-16: S10, S3, S4, S7, S8, S13, S15)
 Questions answered: 12 of 12 with recommended answers; 7 of 7 sparks with a recommended placement (all pending Larry)
 Refinements recorded: 10 (R-01..R-10)
-Dependency audit: complete (31 entries checked in D:\prod; direct ISE use = base only; Gobo/ISE only via simple_* wrappers)
+Dependency audit: complete (31 entries checked in the fleet root; direct ISE use = base only; Gobo/ISE only via simple_* wrappers)
 Gaps identified: FT-01/FT-02; LG-01 (widened); LG-03; LG-04 (optional); LG-05; LG-06; LG-07..LG-12 (new); GW items as filed
 MML decision: YES-Required
 User approved: yes (Larry, 2026-10-06: "approve as recommended")

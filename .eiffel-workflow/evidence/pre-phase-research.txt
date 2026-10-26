@@ -1,5 +1,5 @@
 # Pre-Phase Research Evidence
-# Project: D:\prod\simple_bible
+# Project: simple_bible
 # Date: 2026-10-06T14:15:42-04:00
 
 Research completed: yes

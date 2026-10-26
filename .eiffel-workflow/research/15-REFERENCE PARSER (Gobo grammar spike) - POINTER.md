@@ -28,8 +28,8 @@
 
 ## Where it lives
 
-- Report: `D:\prod\_gobo-work\06 - simple_bible grammar parsers.md`
-- Spike: `D:\prod\_gobo-work\06-grammar-spike\` (grammar, src, src/generated, oracle, testing, corpus, tools, `regenerate.sh`, `docs/GELEX_GEYACC_PATTERN.md`)
-- Fleet how-to copy (uncommitted): `D:\prod\reference_docs\language\gelex_geyacc_pattern.md`
+- Report: `$SIMPLE_EIFFEL\_gobo-work\06 - simple_bible grammar parsers.md`
+- Spike: `$SIMPLE_EIFFEL\_gobo-work\06-grammar-spike\` (grammar, src, src/generated, oracle, testing, corpus, tools, `regenerate.sh`, `docs/GELEX_GEYACC_PATTERN.md`)
+- Fleet how-to copy (uncommitted): `$SIMPLE_EIFFEL\reference_docs\language\gelex_geyacc_pattern.md`
 
 **Fold into:** the one spec fold (with the four verdicts and the concordance), as input to FR-020, the reference grammar, and D-020's detector port.

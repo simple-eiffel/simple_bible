@@ -79,8 +79,8 @@ Build `simple_bible` as a clean Eiffel project: a deterministic engine over a fr
 | Inno Setup | Installer | NO (free) |
 
 ## Next Steps
-1. Run `/eiffel.spec D:\prod\simple_bible` to transform this research into a specification.
-2. Then `/eiffel.intent D:\prod\simple_bible` to capture refined intent.
+1. Run `/eiffel.spec simple_bible` to transform this research into a specification.
+2. Then `/eiffel.intent simple_bible` to capture refined intent.
 3. Continue with the Eiffel Spec Kit workflow (contracts, review, tasks, implement, verify, harden, ship), one Spec Kit pass per build phase.
 4. In parallel (fleet task): upgrade `eiffel_sqlite_2025` to the current SQLite and correct its README (D-007).
 5. Before Phase 1 imports: finish `08-HARVEST-LEDGER.md` and the one-day spike.

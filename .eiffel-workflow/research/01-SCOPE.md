@@ -1,6 +1,6 @@
 # SCOPE: simple_bible
 
-*Pre-phase research, /eiffel.research, 2026-10-06. Step 0 input: `Rix/Upcoming Projects/Bible Study Workbench - Design (2026-10-06).md` (the design doc). Companion file in this folder: `08-HARVEST-LEDGER.md` (written separately; it records what simple_bible takes from `D:\prod\simple_scholar` before that project is retired).*
+*Pre-phase research, /eiffel.research, 2026-10-06. Step 0 input: `Rix/Upcoming Projects/Bible Study Workbench - Design (2026-10-06).md` (the design doc). Companion file in this folder: `08-HARVEST-LEDGER.md` (written separately; it records what simple_bible takes from `$SIMPLE_EIFFEL\simple_scholar` before that project is retired).*
 
 ## Step 0: The Idea
 

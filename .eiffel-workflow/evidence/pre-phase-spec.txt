@@ -1,5 +1,5 @@
 # Pre-Phase Specification Evidence
-# Project: D:\prod\simple_bible
+# Project: simple_bible
 # Date: 2026-10-06T18:45:00-04:00
 
 Specification completed: yes
@@ -15,13 +15,13 @@ Risks addressed: 19 (incl. RISK-018..022 found during R01-R03)
 Inputs read: research 01-12, REFERENCES, 11-timeline-pilot.csv, 13-USER-VOICE (arrived during R03; folded in as A-021..A-030),
              gui/00-GUI-SPEC, spec_windows.json, design notes, state diagram, README; design doc;
              build_rix_db.py, validate_rix_db.py, shape_db.py, scripture_detect.py; fleet memory notes;
-             ecosystem ECFs/READMEs in D:\prod (all dependencies confirmed present)
+             ecosystem ECFs/READMEs in the fleet root (all dependencies confirmed present)
 
 Key design-changing findings (R03):
   - eiffel_sqlite_2025 c_sqlite3_step is not `blocking` (sqlite_externals.e:491) -> FT-02 + chunked jobs + GC-probe test
   - GUI notes' "poll the job" is a SCOOP error -> separate BIB_JOB_MAILBOX and BIB_CANCEL_TOKEN
   - No NFD/NFC or Mn category in the fleet -> LG-01 (simple_encoding)
-  - SB_ prefix used by Gobo storable -> BIB_ (unused in D:\prod, Gobo, ISE 25.02); C prefix sbib_ (zero C planned)
+  - SB_ prefix used by Gobo storable -> BIB_ (unused in the fleet root, Gobo, ISE 25.02); C prefix sbib_ (zero C planned)
   - rix.db verse_refs key on vault book ids -> pinned canonical book table
   - Swete is uncollated OCR where most NT quotations land -> repair state, OCR note on verdicts
   - User voice: notes store seam, append-only user data + backup, settings survive migration, follow-only panes,

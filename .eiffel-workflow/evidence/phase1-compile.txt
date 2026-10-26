@@ -1,17 +1,17 @@
 # Phase 1 Compilation Evidence (/eiffel.contracts) - ENGINE LIBRARY ONLY
-# Project: D:\prod\simple_bible
+# Project: simple_bible
 # Date: 2026-10-06
 # Scope: Release 1a engine library, simple_bible.ecf (RQ-01: engine, build, app are separate ECFs;
 #        bible_build.ecf and simple_bible_app.ecf follow and compile against this target)
-# Compiler: EiffelStudio 25.02.9.8732 win64, through D:/prod/ec.sh modes only (no raw flags)
-# Working directory for every command: /d/prod/simple_bible (EIFGENs land here)
+# Compiler: EiffelStudio 25.02.9.8732 win64, through ec.sh modes only (no raw flags)
+# Working directory for every command: simple_bible (EIFGENs land here)
 
 ## Commands run (final pass, after CRLF normalization)
 
-cd /d/prod/simple_bible && /d/prod/ec.sh check -config simple_bible.ecf -target simple_bible        > /tmp/final_lib_check.log
-cd /d/prod/simple_bible && /d/prod/ec.sh check -config simple_bible.ecf -target simple_bible_tests  > /tmp/final_tests_check.log
-cd /d/prod/simple_bible && /d/prod/ec.sh test  -config simple_bible.ecf -target simple_bible_tests  > /tmp/final_tests_test.log
-cd /d/prod/simple_bible && ./EIFGENs/simple_bible_tests/F_code/simple_bible.exe                     > /tmp/final_run.log
+cd simple_bible && ec.sh check -config simple_bible.ecf -target simple_bible        > /tmp/final_lib_check.log
+cd simple_bible && ec.sh check -config simple_bible.ecf -target simple_bible_tests  > /tmp/final_tests_check.log
+cd simple_bible && ec.sh test  -config simple_bible.ecf -target simple_bible_tests  > /tmp/final_tests_test.log
+cd simple_bible && ./EIFGENs/simple_bible_tests/F_code/simple_bible.exe                     > /tmp/final_run.log
 
 The library target `simple_bible' has root all_classes="true", so its check type-checks every
 engine class, reachable or not. The tests target roots at TEST_APP.
@@ -63,7 +63,7 @@ Degree -3: Generating Optimized Code
 System Recompiled.
 Preparing C compilation using Microsoft Visual Studio 2022 VC++ (17.0)...
 -STACK:5000000 -NODEFAULTLIB:libc -STACK:5000000 -NODEFAULTLIB:libc -SUBSYSTEM:CONSOLE -OUT:simple_bible.exe
-"...mtfinalized.lib" "D:\prod\eiffel_sqlite_2025\Clib\sqlite3.obj" "D:\prod\eiffel_sqlite_2025\Clib\esqlite.obj"
+"...mtfinalized.lib" "$SIMPLE_EIFFEL\eiffel_sqlite_2025\Clib\sqlite3.obj" "$SIMPLE_EIFFEL\eiffel_sqlite_2025\Clib\esqlite.obj"
 "...library\net\spec\msc_vc140\win64\lib\mtnet.lib" Mswsock.lib
 C compilation completed
 Built: EIFGENs/simple_bible_tests/F_code/simple_bible.exe (2s ago)
@@ -104,7 +104,7 @@ grep -E '\$ISE_LIBRARY|\$GOBO|gobo' simple_bible.ecf:
 ECF Dependency Audit:
 - ISE allowed: base (library target); testing (tests target only, EQA for TEST_SET_BASE). time arrives
   only transitively through simple_datetime.
-- simple_* used (each verified present in D:\prod, each referenced by a skeleton):
+- simple_* used (each verified present in the fleet root, each referenced by a skeleton):
     simple_mml       - MML_SEQUENCE / MML_SET / MML_MAP model queries on every collection attribute
     simple_sql       - SIMPLE_SQL_DATABASE in BIB_SOURCE_SET (the one connection per processor)
                        (brings eiffel_sqlite_2025, simple_json, simple_encoding, simple_sorter,
@@ -124,9 +124,9 @@ ECF Dependency Audit:
 
 ## What was created
 
-D:\prod\simple_bible\simple_bible.ecf   targets: simple_bible (library, all_classes), simple_bible_tests
-D:\prod\simple_bible\src\               150 classes (16 deferred), CRLF
-D:\prod\simple_bible\testing\           21 classes (TEST_APP, LIB_TESTS, 17 TEST_* suites, TEST_FIXTURES,
+simple_bible\simple_bible.ecf   targets: simple_bible (library, all_classes), simple_bible_tests
+simple_bible\src\               150 classes (16 deferred), CRLF
+simple_bible\testing\           21 classes (TEST_APP, LIB_TESTS, 17 TEST_* suites, TEST_FIXTURES,
                                         SOURCE_SCAN), 116 test features (69 real, 47 skeletal)
 
 Classes by cluster:

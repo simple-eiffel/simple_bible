@@ -3,8 +3,8 @@
 **Date:** 2026-10-06
 **For:** Larry Rix
 **Status:** OPEN. simple_scholar may be retired and archived only when every box in §6 is ticked.
-**Decision this serves:** D-001 (04-DECISIONS.md). Start a clean `simple_bible`; retire, then archive, `D:\prod\simple_scholar` once simple_bible has everything it needs from it. This ledger turns "has everything it needs" into a checkable list.
-**Inputs read:** `Rix/Upcoming Projects/Bible Study Workbench - Design (2026-10-06).md` (§3, §4, §7); `Rix/Data/_Text Credits (paste-ready).md`; 04-DECISIONS.md D-001, D-005, D-008, D-014 to D-020 in this folder; the simple_scholar tree, ECF and git history; the installed BibleREPL footprint; `D:\prod\bible_pwa`.
+**Decision this serves:** D-001 (04-DECISIONS.md). Start a clean `simple_bible`; retire, then archive, `$SIMPLE_EIFFEL\simple_scholar` once simple_bible has everything it needs from it. This ledger turns "has everything it needs" into a checkable list.
+**Inputs read:** `Rix/Upcoming Projects/Bible Study Workbench - Design (2026-10-06).md` (§3, §4, §7); `Rix/Data/_Text Credits (paste-ready).md`; 04-DECISIONS.md D-001, D-005, D-008, D-014 to D-020 in this folder; the simple_scholar tree, ECF and git history; the installed BibleREPL footprint; `$SIMPLE_EIFFEL\bible_pwa`.
 **Method:** Read-only. Nothing in simple_scholar was modified, built or run. No windows were opened. Databases were opened with SQLite `mode=ro`. EIFGENs contents were skipped.
 
 **Classes used (each item gets exactly one):**
@@ -44,7 +44,7 @@
 
 Facts from memory (verified 2026-08-28) and from the design doc, re-checked today. Where they differ, this ledger uses today's reading.
 
-1. **`S05-VERDICTS.md` is not in simple_scholar.** It is `D:\prod\simple_widgets\specs\S05-VERDICTS.md`. simple_scholar has no `specs/` folder; its specification lives in `.eiffel-workflow/spec/` (9 files).
+1. **`S05-VERDICTS.md` is not in simple_scholar.** It is `$SIMPLE_EIFFEL\simple_widgets\specs\S05-VERDICTS.md`. simple_scholar has no `specs/` folder; its specification lives in `.eiffel-workflow/spec/` (9 files).
 2. **Several "core" classes are stubs.** Their bodies are comments ("-- Implementation: ..."), and their tests pass vacuously. `RANK_FUSION` returns an empty list. `KACC_VALIDATOR` returns a neutral result. `SCHOLAR_BERT_EMBEDDER` returns a zero vector. `SCHOLAR_EMBEDDER`, `SCHOLAR_INFERENCE_TIER`, `SEARCH_AGGREGATOR` and the three web-search workers are stubs. The design doc's "keep the search, ranking and fusion classes" and "the ONNX/embedding plumbing" therefore keep ideas, not working code.
 3. **There is no working embedding code.** `SCHOLAR_ONNX_ENGINE` is a working ONNX engine, but for Opus-MT machine translation (Hebrew/Greek → English), not embeddings. Ollama appears only in `BIBLE_REPL` (translation fallback and the `/research` agent), through `SIMPLE_AI_QUICK`.
 4. **`bible_gui` is not a stub.** The 207-line figure was the root class only. The `gui/` cluster is 14 classes and 5,432 lines of Vision2. It is archived because Vision2 cannot shape right-to-left text, not because it is empty.
@@ -97,7 +97,7 @@ abf6211 Initial commit: simple_scholar with complete Traced dataset (16 episodes
 | `scripts/*.json` (9 files) and `scripts/_*_candidates.txt`, `_candidates_dump.txt` | 14.2 MB | Intermediate dumps and candidate lists from the enrichment runs | ARCHIVE-ONLY |
 | `scripts/sources/dionysius_works.pdf`, `fbe.txt`, `fbe.txt.gz`, `pseudepigrapha_charles.txt`, `texts/download_grimoires.py` | see §3.9 | Downloaded source texts and one untracked downloader | ARCHIVE-ONLY |
 | `nakedbiblepodcast.db` | 38.6 MB | Podcast corpus DB (already migrated into scholars.db) | ARCHIVE-ONLY |
-| `%LOCALAPPDATA%\BibleREPL\data\bible.db` (= `D:\prod\bible_pwa\bible.db`, byte-identical) | 213 MB | **The only built copy of the February enrichment** (§3.8 row D-03) | ARCHIVE-ONLY |
+| `%LOCALAPPDATA%\BibleREPL\data\bible.db` (= `$SIMPLE_EIFFEL\bible_pwa\bible.db`, byte-identical) | 213 MB | **The only built copy of the February enrichment** (§3.8 row D-03) | ARCHIVE-ONLY |
 
 ---
 
@@ -273,7 +273,7 @@ License column per `Rix/Data/_Text Credits (paste-ready).md` and design §7. "Re
 |---|---|---:|---|---|---|---|
 | D-01 | `data/bible.db` | 161 MB | February fork (Feb 11): 15 versions / 263,347 verses, word_strongs, strongs 14,298, peshitta_words, ane_glosses 134, **NBP corpus (corpus_units with full transcript text, assertions 13,393)**, research_corpus (2 rows) | Mixed. Versions span PD / CC0 / CC BY / CC BY-NC (TgO) / unknown (SP, Byz, TgN, TgW). `bible_versions.license` says "MIT" for all (wrong). NBP content copyrighted. | DROP: superseded by the vault and by the D-005 distribution build | — |
 | D-02 | `bin/data/bible.db` (+ `-shm`, `-wal`) | 161 MB | Byte-identical copy of D-01 | as D-01 | DROP | — |
-| D-03 | `%LOCALAPPDATA%\BibleREPL\data\bible.db` = `D:\prod\bible_pwa\bible.db` | 213 MB | The enriched February DB (Feb 17). Holds data the vault never received: `proper_names` 4,248 / `proper_name_refs` 31,062 / `proper_name_relations` 11,754 (STEPBible TIPNR); `strongs` 19,671 with `gloss`/`morphology`/`meaning` columns (5,373 extended entries, STEPBible TBESH/TBESG); `ane_glosses` 2,670 (2,536 with no source); `entity_verses` 8,799; `entity_strongs` 377; `traced_*` (533/192/50); `prehistory_*` (45/17/7); `enrichment_log` 974 (AI-written descriptions, e.g. "claude-opus-local") | Same mix as D-01, plus DDD (Brill, copyrighted), AI-generated DSS and enrichment rows | ARCHIVE-ONLY: Keep one copy in the archive. Its shippable content (TIPNR, TBESH/TBESG) is rebuilt from upstream (SC-01, SC-02, SC-03), not copied | — |
+| D-03 | `%LOCALAPPDATA%\BibleREPL\data\bible.db` = `$SIMPLE_EIFFEL\bible_pwa\bible.db` | 213 MB | The enriched February DB (Feb 17). Holds data the vault never received: `proper_names` 4,248 / `proper_name_refs` 31,062 / `proper_name_relations` 11,754 (STEPBible TIPNR); `strongs` 19,671 with `gloss`/`morphology`/`meaning` columns (5,373 extended entries, STEPBible TBESH/TBESG); `ane_glosses` 2,670 (2,536 with no source); `entity_verses` 8,799; `entity_strongs` 377; `traced_*` (533/192/50); `prehistory_*` (45/17/7); `enrichment_log` 974 (AI-written descriptions, e.g. "claude-opus-local") | Same mix as D-01, plus DDD (Brill, copyrighted), AI-generated DSS and enrichment rows | ARCHIVE-ONLY: Keep one copy in the archive. Its shippable content (TIPNR, TBESH/TBESG) is rebuilt from upstream (SC-01, SC-02, SC-03), not copied | — |
 | D-04 | `C:\Program Files\BibleREPL\data\bible.db` | 208 MB | Older installed variant (Feb 14); a subset of D-03 | as D-03 | DROP (goes with uninstall, R-8) | — |
 | D-05 | `nakedbiblepodcast.db` | 38.6 MB | episodes 479, assertions 13,393, entities 140, source_references 11,074 | Copyrighted (Heiser / NBP). Already in scholars.db `nbp_*` (copy-verified 2026-08-14) | ARCHIVE-ONLY (never publish) | — |
 | D-06 | `data/transcripts/` | 213 MB, 471 PDF | NBP transcript PDFs | Copyrighted | ARCHIVE-ONLY (text already in scholars.db `nbp_units`) | — |
@@ -420,7 +420,7 @@ License column per `Rix/Data/_Text Credits (paste-ready).md` and design §7. "Re
 |---|---|---:|---|---|---|
 | I-01 | `installer/bible_repl.iss` | 16 KB | Inno Setup: normal vs portable install, `bible.toml` written and preserved across upgrades, `%LOCALAPPDATA%` data dir, user-PATH add, ONNX component, font install | HARVEST-REWRITE: base for D-018 (two editions, WebView2 bootstrap, `user.db` kept on uninstall) | [ ] |
 | I-02 | `dist/BibleREPL-Setup.exe` | 550 MB | Built installer. Bundles D-01-era bible.db with NBP content. Never published (repo private, no releases) | DROP: rebuildable from the archive tag; must not be distributed | — |
-| I-03 | `pwa/` (5 files, 39 KB) | 39 KB | Early sql.js PWA | DROP: superseded by the later `D:\prod\bible_pwa` (all five files differ; app.js 26 KB → 49 KB) | — |
+| I-03 | `pwa/` (5 files, 39 KB) | 39 KB | Early sql.js PWA | DROP: superseded by the later `$SIMPLE_EIFFEL\bible_pwa` (all five files differ; app.js 26 KB → 49 KB) | — |
 | I-04 | `bin/bible_tui.exe`, `bin/bible_tui_dbc.exe` | 3.8 + 16.1 MB | Built TUI | DROP | — |
 | I-05 | `bin/onnxruntime.dll`, `WebView2Loader.dll`, `webview.dll`, `cairo.dll` | 13.6 MB | Runtime DLLs | DROP: supplied by simple_onnx / simple_browser at build | — |
 | I-06 | `bin/*.log` (`task_manager.log` 29 MB, `tui_demo.log`, `bible_tui.log`), `bin/exception_trace.log` | 29.4 MB | Logs | DROP | — |
@@ -442,9 +442,9 @@ License column per `Rix/Data/_Text Credits (paste-ready).md` and design §7. "Re
 |---|---|---|---|
 | O-01 | `C:\Program Files\BibleREPL\` | Installed bible.exe v1.7.0 (Feb 15), onnxruntime.dll, guide, fonts, models, D-04, uninstaller | DROP after R-6 and R-8 |
 | O-02 | `%LOCALAPPDATA%\BibleREPL\` | `bible.toml` (v1.7.0, normal install), `data\bible.db` (D-03), `output\`, `versions\` | ARCHIVE-ONLY (D-03 copied into the keep-set before uninstall) |
-| O-03 | `C:\Users\LJR19\OneDrive\Documents\BibleREPL\` | 144 REPL output captures (Feb 13 – Sep 1) | ARCHIVE-ONLY (Larry's call whether to keep in place) |
+| O-03 | `%USERPROFILE%\OneDrive\Documents\BibleREPL\` | 144 REPL output captures (Feb 13 – Sep 1) | ARCHIVE-ONLY (Larry's call whether to keep in place) |
 | O-04 | User PATH entries `C:\Program Files\BibleREPL` and stale `%LOCALAPPDATA%\Programs\BibleREPL` | | DROP (uninstall removes the first; remove the second by hand) |
-| O-05 | `D:\prod\bible_pwa\` | Later PWA (Feb 17): app.js, index.html, sw.js, local sql-wasm, `serve.py`, **213 MB bible.db (D-03) including NBP, DDD and AI-generated rows**. **Not under git.** | Decision L-2 (§9). Not counted in §0 |
+| O-05 | `$SIMPLE_EIFFEL\bible_pwa\` | Later PWA (Feb 17): app.js, index.html, sw.js, local sql-wasm, `serve.py`, **213 MB bible.db (D-03) including NBP, DDD and AI-generated rows**. **Not under git.** | Decision L-2 (§9). Not counted in §0 |
 
 ---
 
@@ -480,7 +480,7 @@ Everything credited, always. What simple_bible's core.db may take from this harv
 - [ ] **R-6** simple_chat is retargeted and its tests pass: `src/participants/bible_tool_participant.e` (executable, `Allowed_commands`, `closed: Result.count = 18`, `Tool_description`, class note), `src/participants/tool_participant.e` comments at l. 243 and 680, `testing/participants_assault.e`, and the fixtures `testing/config_scratch/full.toml` and `testing/config_load_assault.e` (`engine = "bible_repl.exe"`). Larry's downstream-dependents rule applies.
 - [ ] **R-7** The simple_bible installer (D-018) builds, installs and uninstalls cleanly **on a non-live identity** (standing rule: Never verify installers on the live identity). It supersedes `installer/bible_repl.iss`.
 - [ ] **R-8** The installed BibleREPL v1.7.0 is uninstalled **only after** D-03 is in the keep-set (§8 step 4). Both PATH entries are gone. Larry has decided where the 144 outputs in `OneDrive\Documents\BibleREPL` live.
-- [ ] **R-9** The PWA decision (L-2) is made and carried out. Either bible_pwa is rebuilt on core.db and put under git, or it is retired. In both cases the 213 MB private-content bible.db leaves any served folder, and `bible_pwa/serve.py` (l. 24–25, which tells the user to symlink `D:\prod\simple_scholar\bin\data\bible.db`) is updated or retired.
+- [ ] **R-9** The PWA decision (L-2) is made and carried out. Either bible_pwa is rebuilt on core.db and put under git, or it is retired. In both cases the 213 MB private-content bible.db leaves any served folder, and `bible_pwa/serve.py` (l. 24–25, which tells the user to symlink `$SIMPLE_EIFFEL\simple_scholar\bin\data\bible.db`) is updated or retired.
 
 **Record kept:**
 
@@ -494,7 +494,7 @@ Everything credited, always. What simple_bible's core.db may take from this harv
 
 ## 7. Downstream dependents
 
-Search: every file under `D:\prod` except `simple_scholar\`, `EIFGENs\`, `.git\`, `node_modules\`, `__pycache__\`, binaries, databases, logs and files over 8 MB, for `simple_scholar | bible.exe | bible_repl | BibleREPL | scholar_cli | bible_htmx | bible_tui` (case-insensitive). Also searched: the vault's `_Tools\` (no hits).
+Search: every file under the fleet root except `simple_scholar\`, `EIFGENs\`, `.git\`, `node_modules\`, `__pycache__\`, binaries, databases, logs and files over 8 MB, for `simple_scholar | bible.exe | bible_repl | BibleREPL | scholar_cli | bible_htmx | bible_tui` (case-insensitive). Also searched: the vault's `_Tools\` (no hits).
 
 **Code that runs (must change before retirement):**
 
@@ -514,27 +514,27 @@ Search: every file under `D:\prod` except `simple_scholar\`, `EIFGENs\`, `.git\`
 | simple_bible | `.eiffel-workflow/research/01–04, 06, 07, REFERENCES` (this project's own research; expected) |
 | simple_shaping | `.eiffel-workflow/research/02-LANDSCAPE.md`, `REFERENCES.md` (cites simple_scholar's Hebrew problem) |
 | simple_graphify | `docs/cookbook.html` l. 49 (uses `SIMPLE_SCHOLAR` as an example class name; update the example when the class is gone) |
-| graphify-out | `GRAPH_REPORT.md`, `graph.dot`, `graph.html`, `graph.json` (generated graph of D:\prod; regenerate after archive) |
+| graphify-out | `GRAPH_REPORT.md`, `graph.dot`, `graph.html`, `graph.json` (generated graph of the fleet root; regenerate after archive) |
 | whisper_cpp_build | `build_cuda/CMakeFiles/CMakeConfigureLog.yaml` (PATH echo containing `BibleREPL`; harmless, clears when PATH is fixed) |
 
-**No ECF in D:\prod references `simple_scholar.ecf`.** No other library depends on simple_scholar as a library. Its only run-time consumer is simple_chat, through bible.exe.
+**No ECF in the fleet root references `simple_scholar.ecf`.** No other library depends on simple_scholar as a library. Its only run-time consumer is simple_chat, through bible.exe.
 
-**Outside D:\prod:** the installed `C:\Program Files\BibleREPL\bible.exe` is on the user PATH, so any script or person typing `bible` reaches it (O-01, O-04).
+**Outside the fleet root:** the installed `C:\Program Files\BibleREPL\bible.exe` is on the user PATH, so any script or person typing `bible` reaches it (O-01, O-04).
 
 ---
 
 ## 8. Archive procedure (proposal for Larry; not executed)
 
-1. **Freeze.** Confirm the working tree is clean (it is today) and nothing is running from `D:\prod\simple_scholar\bin`.
+1. **Freeze.** Confirm the working tree is clean (it is today) and nothing is running from `$SIMPLE_EIFFEL\simple_scholar\bin`.
 2. **Bring master up to date.** `wip/uncommitted-2026-09-02` is a straight descendant of master, so this is a fast-forward:
-   `git -C D:/prod/simple_scholar checkout master`
-   `git -C D:/prod/simple_scholar merge --ff-only wip/uncommitted-2026-09-02`
-   `git -C D:/prod/simple_scholar push origin master`
+   `git -C $SIMPLE_EIFFEL/simple_scholar checkout master`
+   `git -C $SIMPLE_EIFFEL/simple_scholar merge --ff-only wip/uncommitted-2026-09-02`
+   `git -C $SIMPLE_EIFFEL/simple_scholar push origin master`
    Keep the wip branch until step 6, then delete it locally and on origin. The `refs/original` backup can be dropped (`git update-ref -d refs/original/refs/heads/master`); its tip tree equals master's.
-3. **README notice.** Add `README.md` (the repo has none today): "RETIRED 2026-xx-xx. Superseded by `simple_bible` (D:\prod\simple_bible). Harvest record: `simple_bible/.eiffel-workflow/research/08-HARVEST-LEDGER.md`. This repository is kept read-only for history. Do not install BibleREPL from this source; its database contains copyrighted material." Commit, then tag `archive/2026-xx-xx` (annotated) and push the tag.
-4. **Keep-set for untracked files.** Copy the items listed in R-11 to `D:\_archive\simple_scholar\` with a `MANIFEST.tsv` (path, bytes, SHA-256). D: is not in OneDrive backup, so make a second copy. Options for Larry: (a) a zipped keep-set as a release asset on the private, archived GitHub repo (private storage, not distribution); (b) an external drive. The keep-set is about 270 MB before compression (D-03 213 MB, D-05 39 MB, the rest small). Data that is re-fetchable upstream (D-08 to D-13) and NBP transcripts already in scholars.db (D-06, D-07) are not copied unless Larry wants them.
+3. **README notice.** Add `README.md` (the repo has none today): "RETIRED 2026-xx-xx. Superseded by `simple_bible` (simple_bible). Harvest record: `simple_bible/.eiffel-workflow/research/08-HARVEST-LEDGER.md`. This repository is kept read-only for history. Do not install BibleREPL from this source; its database contains copyrighted material." Commit, then tag `archive/2026-xx-xx` (annotated) and push the tag.
+4. **Keep-set for untracked files.** Copy the items listed in R-11 to `$ARCHIVE\simple_scholar\` with a `MANIFEST.tsv` (path, bytes, SHA-256). The fleet drive is not in OneDrive backup, so make a second copy. Options for Larry: (a) a zipped keep-set as a release asset on the private, archived GitHub repo (private storage, not distribution); (b) an external drive. The keep-set is about 270 MB before compression (D-03 213 MB, D-05 39 MB, the rest small). Data that is re-fetchable upstream (D-08 to D-13) and NBP transcripts already in scholars.db (D-06, D-07) are not copied unless Larry wants them.
 5. **Archive on GitHub.** `gh repo archive simple-eiffel/simple_scholar` (read-only). Keep it **private**: The scripts embed generated and scraped data, and the git history describes copyrighted sources.
-6. **Retire locally.** After R-1 to R-13 are ticked and Larry signs R-14, move `D:\prod\simple_scholar` out of `D:\prod` (for example to `D:\_archive\simple_scholar\repo\`), so fleet sweeps and graphify stop seeing it. Leave a breadcrumb `D:\prod\simple_scholar_MOVED.md` naming the new location, the tag and this ledger (the vault's breadcrumb convention).
+6. **Retire locally.** After R-1 to R-13 are ticked and Larry signs R-14, move `$SIMPLE_EIFFEL\simple_scholar` out of the fleet root (for example to `$ARCHIVE\simple_scholar\repo\`), so fleet sweeps and graphify stop seeing it. Leave a breadcrumb `$SIMPLE_EIFFEL\simple_scholar_MOVED.md` naming the new location, the tag and this ledger (the vault's breadcrumb convention).
 7. **Uninstall BibleREPL** (R-8), then remove the stale PATH entry by hand.
 8. **Record.** Update memory `project_simple_scholar_revival.md` → RETIRED, with the tag, archive path and keep-set manifest location.
 
@@ -543,7 +543,7 @@ Search: every file under `D:\prod` except `simple_scholar\`, `EIFGENs\`, `.git\`
 ## 9. Decisions for Larry
 
 - **L-1** Approve the classifications in §3, especially the DROP of C-02 (AI translation) and the ARCHIVE-ONLY of the GUI.
-- **L-2** `D:\prod\bible_pwa`: Rebuild on core.db and put it under git, or retire it? The design (§3 L4) keeps a zero-install PWA. Today it is unversioned and serves a database with NBP, DDD and AI-generated rows.
+- **L-2** `$SIMPLE_EIFFEL\bible_pwa`: Rebuild on core.db and put it under git, or retire it? The design (§3 L4) keeps a zero-install PWA. Today it is unversioned and serves a database with NBP, DDD and AI-generated rows.
 - **L-3** Keep a TUI face in simple_bible? Design §4 keeps the multi-front-end layout; D-006 names only WebView2 and the CLI. U-01 to U-04 and T-06 depend on this.
 - **L-4** D-019 ships rix.db with the frameworks. Should KACC scoring (S-03 to S-05, C-14, X-09) also ship, or stay private? This ledger keeps it private, per design §4.
 - **L-5** Web search (S-01, S-32 to S-37, S-40; the `web` command): Drop, or lift into a fleet library (for example `simple_web_search`) rather than simple_bible? All of it is stubbed today.

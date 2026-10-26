@@ -49,8 +49,8 @@ Class prefix: `BIB_`. Entry class: `SIMPLE_BIBLE`. No C code.
 
 ```bash
 cd simple_bible
-/d/prod/ec.sh check -config simple_bible.ecf -target simple_bible_tests
-/d/prod/ec.sh test  -config simple_bible.ecf -target simple_bible_tests
+ec.sh check -config simple_bible.ecf -target simple_bible_tests
+ec.sh test  -config simple_bible.ecf -target simple_bible_tests
 ```
 
 Read the build log, not just the summary line.

@@ -58,20 +58,20 @@
 - https://www.accordancebible.com/accordance-14/ : Accordance 14 (403 to the fetcher; features taken from the help file above).
 
 ## Local Sources (Eiffel ecosystem and vault)
-- `D:\prod\simple_sql\README.md` : FTS5, JSON1, BLOB, vector store, migrations.
-- `D:\prod\eiffel_sqlite_2025\README.md`, `COMPILE_FLAGS.md`, `Clib\sqlite3.h`, `spec\msvc\win64\lib\sqlite_2025.lib` : README claims 3.51.1; header and compiled library are 3.31.1 (source id 2020-01-27); OMIT_LOAD_EXTENSION.
-- `D:\prod\simple_browser\README.md` : WebView2 backend, development status.
-- `D:\prod\simple_onnx\README.md`, `src\onnx_tokenizer.e`, `lib\onnxruntime\` : ONNX Runtime 1.17.3; SentencePiece unigram tokenizer.
-- `D:\prod\simple_shaping\README.md` : 0.1.0 pre-release, Phase 4, DirectWrite bidi and shaping real.
-- `D:\prod\simple_winhttp\README.md` : Why libcurl-based simple_http cannot ship.
-- `D:\prod\simple_rixqwen\README.md` : Hidden llama-server spawn, OpenAI-compatible chat.
-- `D:\prod\simple_ai_client\README.md`, `simple_web`, `simple_htmx`, `simple_alpine`, `simple_cli`, `simple_json`, `simple_process`, `simple_testing`, and others listed in 02-LANDSCAPE.
-- `D:\prod\simple_scholar\` : seven ECF targets; `data\bible.db` (161 MB, 2026-02-14); `src\` lens and validator classes; previous research in `.eiffel-workflow\research\`.
+- `$SIMPLE_EIFFEL\simple_sql\README.md` : FTS5, JSON1, BLOB, vector store, migrations.
+- `$SIMPLE_EIFFEL\eiffel_sqlite_2025\README.md`, `COMPILE_FLAGS.md`, `Clib\sqlite3.h`, `spec\msvc\win64\lib\sqlite_2025.lib` : README claims 3.51.1; header and compiled library are 3.31.1 (source id 2020-01-27); OMIT_LOAD_EXTENSION.
+- `$SIMPLE_EIFFEL\simple_browser\README.md` : WebView2 backend, development status.
+- `$SIMPLE_EIFFEL\simple_onnx\README.md`, `src\onnx_tokenizer.e`, `lib\onnxruntime\` : ONNX Runtime 1.17.3; SentencePiece unigram tokenizer.
+- `$SIMPLE_EIFFEL\simple_shaping\README.md` : 0.1.0 pre-release, Phase 4, DirectWrite bidi and shaping real.
+- `$SIMPLE_EIFFEL\simple_winhttp\README.md` : Why libcurl-based simple_http cannot ship.
+- `$SIMPLE_EIFFEL\simple_rixqwen\README.md` : Hidden llama-server spawn, OpenAI-compatible chat.
+- `$SIMPLE_EIFFEL\simple_ai_client\README.md`, `simple_web`, `simple_htmx`, `simple_alpine`, `simple_cli`, `simple_json`, `simple_process`, `simple_testing`, and others listed in 02-LANDSCAPE.
+- `$SIMPLE_EIFFEL\simple_scholar\` : seven ECF targets; `data\bible.db` (161 MB, 2026-02-14); `src\` lens and validator classes; previous research in `.eiffel-workflow\research\`.
 - Vault: `Rix/Upcoming Projects/Bible Study Workbench - Design (2026-10-06).md` (Step 0 input).
 - Vault: `Rix/Data/_Text Credits (paste-ready).md` (licensing).
 - Vault: `Rix/Data/_bible.db Defect Register.md` (data caveats, classes A to E).
 - Vault: `Rix/Data/_Small Model Survey (2026-10-06).md` : **pending** (not present when this research ran).
-- `D:\prod\simple_bible\.eiffel-workflow\research\08-HARVEST-LEDGER.md` : harvest ledger (written separately).
+- `simple_bible\.eiffel-workflow\research\08-HARVEST-LEDGER.md` : harvest ledger (written separately).
 
 ## Articles/Papers
 - https://etcbc.nl/uncategorized/integrating-bhsa-data-with-wider-biblical-resources-on-desktop-and-mobile-platforms/ (search result): ETCBC on integrating BHSA into desktop and mobile resources.

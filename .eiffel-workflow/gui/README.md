@@ -21,14 +21,14 @@
 Run headless, with output captured (it writes files only and opens no window):
 
 ```bash
-cd /d/prod/simple_spec_viz/bin
-./simple_spec_viz.exe visualize "D:\prod\simple_bible\.eiffel-workflow\gui\spec_windows.json" \
-    -o "D:\prod\simple_bible\.eiffel-workflow\gui\output" > viz.log 2>&1
+cd $SIMPLE_EIFFEL/simple_spec_viz/bin
+./simple_spec_viz.exe visualize "simple_bible\.eiffel-workflow\gui\spec_windows.json" \
+    -o "simple_bible\.eiffel-workflow\gui\output" > viz.log 2>&1
 ```
 
 **Schema notes for whoever edits the JSON:**
 
-- simple_spec_viz reads only the root `name`, `version`, `states` (`id`, `name`, `description`, `is_initial`, `is_final`, `screen`, `entry_actions`, `exit_actions`), `transitions` (`id`, `event`, `from`, `to`, `label`, `requirements`), `screens` (`id`, `name`, `description`, `widgets` with `type`, `id`, `label`, `x`, `y`, `width`, `height`; `requirements`) and `traceability` (`requirements_to_states`, `states_to_screens`). Everything else follows the reference examples (`D:\prod\reference_docs\gui\examples\`) and is ignored by the tool.
+- simple_spec_viz reads only the root `name`, `version`, `states` (`id`, `name`, `description`, `is_initial`, `is_final`, `screen`, `entry_actions`, `exit_actions`), `transitions` (`id`, `event`, `from`, `to`, `label`, `requirements`), `screens` (`id`, `name`, `description`, `widgets` with `type`, `id`, `label`, `x`, `y`, `width`, `height`; `requirements`) and `traceability` (`requirements_to_states`, `states_to_screens`). Everything else follows the reference examples (`$SIMPLE_EIFFEL\reference_docs\gui\examples\`) and is ignored by the tool.
 - State `name`s must be unique (the GraphViz builder refuses duplicates). State ids start `S-`, transition ids `T-` (the traceability report sorts by those prefixes).
 - **Mockup labels must avoid `|`, `<`, `>`, `{`, `}`, `"` and `\`.** The mockup generator builds GraphViz record labels, and the first run (2026-10-06) failed on SCR-13 with `Error: bad label format {P11 Navigator|Books \\| Bookmarks ...}`. The labels were changed to use `/` and `-`; the second run produced all 25 screens.
 - Mockup rows group widgets by `y` in 20-pixel bands.

@@ -1,7 +1,7 @@
 {
   "name": "simple_bible GUI",
   "version": "0.1.0",
-  "spec_note": "Widget vocabulary is simple_widgets 0.8.1 (SW_* classes), a deliberate deviation from the eiffel-gui-ux skill's windows platform (simple_vision). D-006: native simple_widgets, no WebView2; gaps are library work items (gap_work_items), never workarounds. Root keys name/version/states/transitions/screens/traceability are read by simple_spec_viz; app/windows/state_machines follow the reference examples in D:/prod/reference_docs/gui/examples. Hebrew and Greek appear in transliteration only in this file.",
+  "spec_note": "Widget vocabulary is simple_widgets 0.8.1 (SW_* classes), a deliberate deviation from the eiffel-gui-ux skill's windows platform (simple_vision). D-006: native simple_widgets, no WebView2; gaps are library work items (gap_work_items), never workarounds. Root keys name/version/states/transitions/screens/traceability are read by simple_spec_viz; app/windows/state_machines follow the reference examples in the fleet reference_docs/gui/examples. Hebrew and Greek appear in transliteration only in this file.",
   "source_spec": "00-GUI-SPEC.md",
   "app": {
     "name": "simple_bible",

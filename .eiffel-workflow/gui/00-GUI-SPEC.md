@@ -4,7 +4,7 @@
 
 > **Widget vocabulary: simple_widgets 0.8.1 (`SW_*` classes).** This is a deliberate deviation from the eiffel-gui-ux skill, whose "windows" platform assumes simple_vision (the legacy Vision2 wrapper). simple_bible's face is native simple_widgets with simple_shaping, simple_cairo and simple_shell (D-006, decided by Larry 2026-10-06: "we FILL GAPS"; no WebView2). Where simple_widgets lacks a capability, this spec names a **gap work item (GW-nn)** for the owning library. It never specifies a workaround or a fallback. The gap list is in `spec_windows_design_notes.md` §9.
 
-**Inputs read:** `research/09-FEATURE-PARITY - e-Sword and Logos.md` (feature IDs A01-H08 are used throughout), `10-INNOVATIONS FROM PRACTICE.md` (I-P01-I-P17), `11-HISTORY-TIMELINE.md`, `04-DECISIONS.md` (D-001-D-020), `03-REQUIREMENTS.md` (FR-/NFR- IDs), `12-SEPTUAGINT-SOURCE.md`, the design doc `Bible Study Workbench - Design (2026-10-06).md`, and simple_widgets' README, CHANGELOG and class headers (`D:\prod\simple_widgets\src`, 114 classes).
+**Inputs read:** `research/09-FEATURE-PARITY - e-Sword and Logos.md` (feature IDs A01-H08 are used throughout), `10-INNOVATIONS FROM PRACTICE.md` (I-P01-I-P17), `11-HISTORY-TIMELINE.md`, `04-DECISIONS.md` (D-001-D-020), `03-REQUIREMENTS.md` (FR-/NFR- IDs), `12-SEPTUAGINT-SOURCE.md`, the design doc `Bible Study Workbench - Design (2026-10-06).md`, and simple_widgets' README, CHANGELOG and class headers (`$SIMPLE_EIFFEL\simple_widgets\src`, 114 classes).
 
 ---
 

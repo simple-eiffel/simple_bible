@@ -5,12 +5,12 @@
 ## Decision Log
 
 ### D-001: Clean new project; simple_scholar retired after harvest (LARRY, DECIDED)
-**Question:** Revive `D:\prod\simple_scholar` in place, or start a clean `simple_bible`?
+**Question:** Revive `$SIMPLE_EIFFEL\simple_scholar` in place, or start a clean `simple_bible`?
 **Options:**
 1. Revive simple_scholar: keeps working code; but it carries Larry-specific lenses (`SCHOLAR_FRAME_WALTON/RILLERA/DNP/PODCAST/ANCIENT`, `KACC_VALIDATOR`), a February `data/bible.db` fork (161 MB, pre-split, no MACULA, no Westcott-Hort), web-search workers, and six months of dormancy with unverified compilation.
 2. Clean simple_bible: a public-facing design from the first line, with simple_scholar's proven parts harvested deliberately.
 
-**Decision:** Option 2. `simple_bible` is a clean new project. `D:\prod\simple_scholar` is retired, and archived only after simple_bible has harvested everything it needs.
+**Decision:** Option 2. `simple_bible` is a clean new project. `$SIMPLE_EIFFEL\simple_scholar` is retired, and archived only after simple_bible has harvested everything it needs.
 **Rationale:** The target user is not Larry; the generic tool should not carry one person's frameworks (design doc §4).
 **Implications:** Harvest is tracked item by item in `08-HARVEST-LEDGER.md` (same folder, written by a separate agent). Archive of simple_scholar is gated on that ledger being closed. Candidate harvest items noted in this research: multi-front-end layout (`bible_repl`, `bible_tui`, `bible_htmx`), `RANK_FUSION`, `SCHOLAR_SEARCH`/`SCHOLAR_INDEX`, `SCHOLAR_ONNX_ENGINE`/`SCHOLAR_BERT_EMBEDDER`, `SPARSE_VECTOR`, the `pwa/` and `installer/bible_repl.iss`; the ledger is authoritative.
 **Reversible:** NO (by decision), though harvested code can always be consulted until archival.

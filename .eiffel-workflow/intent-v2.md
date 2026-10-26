@@ -298,7 +298,7 @@ Twelve probing questions across the ten attack angles, followed by the seven def
 
 ## 7. Dependency audit (simple_* first)
 
-Checked in `D:\prod` on 2026-10-06 by reading each ECF's library list and the relevant README or source. **Direct ISE use by simple_bible: `base` only.** Gobo and ISE libraries reach simple_bible only transitively through simple_* wrappers, which C-002 allows: Gobo xml, kernel and structure (simple_xml); Gobo regexp, kernel, string, structure and utility (simple_regex); ISE json contrib, ISE logging and Gobo regexp (simple_json); ISE time (simple_datetime); ISE logging (simple_logger); ISE net (simple_winhttp). Every library's ECF also names ISE `testing` for its own tests.
+Checked in the fleet root on 2026-10-06 by reading each ECF's library list and the relevant README or source. **Direct ISE use by simple_bible: `base` only.** Gobo and ISE libraries reach simple_bible only transitively through simple_* wrappers, which C-002 allows: Gobo xml, kernel and structure (simple_xml); Gobo regexp, kernel, string, structure and utility (simple_regex); ISE json contrib, ISE logging and Gobo regexp (simple_json); ISE time (simple_datetime); ISE logging (simple_logger); ISE net (simple_winhttp). Every library's ECF also names ISE `testing` for its own tests.
 
 | Library | Present | What was verified | Verdict |
 |---|---|---|---|
@@ -325,7 +325,7 @@ Checked in `D:\prod` on 2026-10-06 by reading each ECF's library list and the re
 | simple_yaml | yes | "Full YAML 1.2 parser" | Added for note front matter only (RQ-06) |
 | simple_markdown | yes | Markdown to HTML (CommonMark plus GFM); no AST or event API | Not needed in 1a; LG-12 if GW-13 renders Markdown natively in 1b |
 | simple_http | yes | libcurl | Not used (C-009) |
-| simple_mcp | **no** | No `*mcp*` project in `D:\prod` | LG-06, v1.5 |
+| simple_mcp | **no** | No `*mcp*` project in the fleet root | LG-06, v1.5 |
 | simple_speech | yes | Speech-to-text, not text-to-speech | Not relevant; read-aloud (v2) would need a new library |
 | Inno Setup | external tool | Build-time packaging, not a library | OK (ledger I-01) |
 
