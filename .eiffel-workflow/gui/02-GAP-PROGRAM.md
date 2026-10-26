@@ -73,7 +73,7 @@
 | 26 | **GW-23** deterministic layered diagram layout | simple_widgets | Done 0.37.0, scan 0.37.2 |
 | 27 | **GW-22** floating panels in a second window | simple_widgets + simple_shell | **Done locally 2026-10-25** (widgets 0.39.0, shell 1.23.0) |
 | 28 | **GW-20** print preview, print, print to PDF | simple_widgets + simple_cairo + simple_shell | **Done locally 2026-10-25** (widgets 0.40.0, shell 1.24.0, cairo 1.6.0) |
-| 29 | **GW-25** audio playback (MP3) | simple_widgets + audio stack | Windows Media Foundation through inline C |
+| 29 | **GW-25** audio playback (MP3) | simple_widgets + audio stack | **Done locally 2026-10-25** (simple_audio 1.1.0; Media Foundation through inline C) |
 
 ## Status
 
@@ -118,6 +118,7 @@
 | Scan 19 | simple_shell + simple_widgets `refactor/scan-19` | **Merged locally 2026-10-25** (shell 1.23.1, widgets 0.39.1). 4 HIGH fixed with before/after tests: accelerators ran twice from a floating window, closing leaked its cairo frame, a floating panel could be re-shown in a zone, a panel destroyed with its owner answered open. 54 shell and 547 widget tests pass. |
 | GW-20 | simple_cairo `feature/printing-surface`, simple_shell `feature/gw20-printer`, simple_widgets `feature/gw20-printing` | **Merged locally 2026-10-25** (cairo 1.6.0, shell 1.24.0, widgets 0.40.0). SW_PRINT_JOB lays any widget out at the paper's width and ends pages between lines; SW_PAGE_SETUP (Letter/A4, landscape, margins, header, page numbers); SW_PRINT_PREVIEW; print through SHELL_PRINTER with no dialog (tested through Microsoft Print to PDF). FOUND: the shipped cairo.dll cannot write PDF (first page fails, out of memory, likely its zlib) - write_pdf falls back to the Windows PDF printer; a rebuilt cairo.dll is Larry's call. 55 shell, 90 cairo, 552 widget tests pass. Evidence gw20_page_light, gw20_preview_light. |
 | Scan 20 | simple_shell + simple_widgets `refactor/scan-20` | **Merged locally 2026-10-25** (shell 1.24.1, widgets 0.40.1). 5 HIGH fixed with before/after tests: the preview drew screen inks on paper (dark screens), printing left a shown widget at paper size, print_to had no rescue and gave no reasons, a printer could abort another's document. 56 shell and 555 widget tests pass. |
+| GW-25 | simple_audio `feature/gw25-mp3` | **Merged locally 2026-10-25** (simple_audio 1.1.0). AUDIO_DECODER reads MP3/AAC/WMA through Media Foundation's source reader a chunk at a time (an hour never sits decoded); AUDIO_FILE_PLAYER streams it into an AUDIO_SINK (AUDIO_STREAM_SINK for the device) with play, pause, seek, volume, position, on_finished - the playback an application binds SW_MEDIA_TRANSPORT to (the transport stays codec-agnostic, so simple_widgets gains no audio dependency). Tests decode a 440 Hz MP3 fixture and stream it into a test sink (no sound). 19 pass. Noted: simple_audio still depends on ISE wel. |
 | Other gaps | - | Not started |
 
 **Clients to rebuild `-clean` before their next build** (simple_widgets 0.9-0.30, simple_shaping 0.2-0.6.2, simple_shell 1.16-1.22): simple_chat, simple_narrate, simple_ocr_capture, simple_prompter, simple_taskman and anything else on simple_widgets. Apps that attach a shaping kit now shape ALL their text through the painter.
