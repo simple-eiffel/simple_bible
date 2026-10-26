@@ -41,6 +41,9 @@ feature -- Access
 			-- Why the last lookup's engine query failed; Void when none did. A failure is told as
 			-- the database's own words, never as "Nothing found" (design scan 32).
 
+	last_verse: detachable TUPLE [book, chapter, verse: INTEGER]
+			-- The verse the last `choices_for' named ("Gen 1:1"); Void when it named none.
+
 	corpus_for_book (a_book: INTEGER): STRING_8
 			-- The corpus a verse of book `a_book' is read in: the Hebrew Bible for books 1 to 39,
 			-- the Greek New Testament after (one rule for every face, design scan 32).
@@ -68,6 +71,7 @@ feature -- Lookup
 		do
 			create Result.make (20)
 			last_error := Void
+			last_verse := Void
 			l_text := a_text.to_string_32
 			l_text.left_adjust
 			l_text.right_adjust
@@ -81,6 +85,22 @@ feature -- Lookup
 			else
 				add_word (l_text, Result)
 			end
+		ensure
+			reason_when_empty: Result.is_empty implies not note_text.is_empty
+		end
+
+	verse_choices (a_book, a_chapter, a_verse: INTEGER): ARRAYED_LIST [BIB_LOOKUP_CHOICE]
+			-- Every word of verse `a_book' `a_chapter':`a_verse' in its book's corpus, a prefix
+			-- joined to its word; the reason in `note_text' (the reading pane's verse click).
+		require
+			available: bible.conc_pack.is_available
+			book_known: bible.books.has_book (a_book)
+			chapter_positive: a_chapter > 0
+			verse_positive: a_verse > 0
+		do
+			create Result.make (20)
+			last_error := Void
+			add_verse_words (a_book, a_chapter, a_verse, Result)
 		ensure
 			reason_when_empty: Result.is_empty implies not note_text.is_empty
 		end
@@ -113,6 +133,15 @@ feature {NONE} -- Kinds of lookup
 		end
 
 	add_verse (a_text: STRING_32; a_choices: ARRAYED_LIST [BIB_LOOKUP_CHOICE])
+			-- Every word of the verse `a_text' names.
+		do
+			if attached verse_parts (a_text) as al_parts then
+				last_verse := [al_parts.book, al_parts.chapter, al_parts.verse]
+				add_verse_words (al_parts.book, al_parts.chapter, al_parts.verse, a_choices)
+			end
+		end
+
+	add_verse_words (a_book, a_chapter, a_verse: INTEGER; a_choices: ARRAYED_LIST [BIB_LOOKUP_CHOICE])
 			-- Every word of the verse, in the Hebrew Bible (books 1 to 39) or the Greek New Testament.
 		local
 			l_words: detachable BIB_LIST_RESULT [BIB_VERSE_WORD]
@@ -121,39 +150,37 @@ feature {NONE} -- Kinds of lookup
 			l_lemma: INTEGER_64
 			i, l_position: INTEGER
 		do
-			if attached verse_parts (a_text) as al_parts then
-				l_corpus := corpus_for_book (al_parts.book)
-				if not bible.conc_pack.has_corpus (l_corpus) then
-					note_text := {STRING_32} "The concordance has no corpus for that book."
-				else
-					l_words := bible.verse_word_lookup.words (create {BIB_REF}.make (al_parts.book, al_parts.chapter, al_parts.verse, create {BIB_VERSIFICATION_SYSTEM}.make_kjv), l_corpus)
-					note_failure (l_words)
-				end
-				if l_words /= Void and then last_error = Void then
-						-- A word's morphemes share its position: join them into one choice that opens the word.
-					from i := 1 until i > l_words.count loop
-						l_position := l_words.item (i).position
-						create l_surface.make_empty
-						create l_translit.make_empty
-						l_lemma := 0
-						from until i > l_words.count or else l_words.item (i).position /= l_position loop
-							l_surface.append (l_words.item (i).surface)
-							if not l_translit.is_empty then
-								l_translit.append_character ('-')
-							end
-							l_translit.append (l_words.item (i).translit)
-							if l_words.item (i).has_door then
-								l_lemma := l_words.item (i).lemma_id
-							end
-							i := i + 1
+			l_corpus := corpus_for_book (a_book)
+			if not bible.conc_pack.has_corpus (l_corpus) then
+				note_text := {STRING_32} "The concordance has no corpus for that book."
+			else
+				l_words := bible.verse_word_lookup.words (create {BIB_REF}.make (a_book, a_chapter, a_verse, create {BIB_VERSIFICATION_SYSTEM}.make_kjv), l_corpus)
+				note_failure (l_words)
+			end
+			if l_words /= Void and then last_error = Void then
+					-- A word's morphemes share its position: join them into one choice that opens the word.
+				from i := 1 until i > l_words.count loop
+					l_position := l_words.item (i).position
+					create l_surface.make_empty
+					create l_translit.make_empty
+					l_lemma := 0
+					from until i > l_words.count or else l_words.item (i).position /= l_position loop
+						l_surface.append (l_words.item (i).surface)
+						if not l_translit.is_empty then
+							l_translit.append_character ('-')
 						end
-						if l_surface.is_empty then
-							l_surface := {STRING_32} "(not written)"
+						l_translit.append (l_words.item (i).translit)
+						if l_words.item (i).has_door then
+							l_lemma := l_words.item (i).lemma_id
 						end
-						a_choices.extend (create {BIB_LOOKUP_CHOICE}.make (l_surface, l_translit, l_lemma))
+						i := i + 1
 					end
-					note_text := bible.books.book (al_parts.book).name + {STRING_32} " " + al_parts.chapter.out + {STRING_32} ":" + al_parts.verse.out + {STRING_32} " in the " + bible.conc_pack.corpus_name (l_corpus) + {STRING_32} ": " + count_words (a_choices.count, "word")
+					if l_surface.is_empty then
+						l_surface := {STRING_32} "(not written)"
+					end
+					a_choices.extend (create {BIB_LOOKUP_CHOICE}.make (l_surface, l_translit, l_lemma))
 				end
+				note_text := bible.books.book (a_book).name + {STRING_32} " " + a_chapter.out + {STRING_32} ":" + a_verse.out + {STRING_32} " in the " + bible.conc_pack.corpus_name (l_corpus) + {STRING_32} ": " + count_words (a_choices.count, "word")
 			end
 		end
 

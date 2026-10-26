@@ -90,7 +90,12 @@ feature -- Building
 				l_db.execute ("CREATE TABLE book_catalog(book_id INTEGER PRIMARY KEY, code TEXT NOT NULL, name TEXT NOT NULL, is_deuterocanonical INTEGER NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key))")
 				l_db.execute ("INSERT INTO book_catalog VALUES (1, 'GEN', 'Genesis', 0, 1), (2, 'EXO', 'Exodus', 0, 1), (40, 'MAT', 'Matthew', 0, 1)")
 			end
-			l_db.execute ("INSERT INTO source_provenance VALUES (1, 'test-books', 'fixture', 'CC0', 0, 0, 0, 'test fixture', '')")
+			l_db.execute ("INSERT INTO source_provenance VALUES (1, 'test-books', 'fixture', 'CC0', 0, 0, 0, 'test fixture', ''), (2, 'test-kjv', 'King James Version', 'public domain', 0, 0, 0, 'KJV', ''), (3, 'test-wlc', 'Westminster Leningrad Codex', 'CC BY 4.0', 0, 0, 0, 'WLC', 'HEBREW versification')")
+				-- v2: two versions and a few verses, one omitted (research/18).
+			l_db.execute ("CREATE TABLE version_info(version_code TEXT PRIMARY KEY, name TEXT NOT NULL, language TEXT NOT NULL, direction TEXT NOT NULL, versification TEXT NOT NULL, caveat TEXT NOT NULL, sort_order INTEGER NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key))")
+			l_db.execute ("CREATE TABLE verse_text(version_code TEXT NOT NULL, book_id INTEGER NOT NULL, chapter INTEGER NOT NULL, verse INTEGER NOT NULL, text TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key), PRIMARY KEY (version_code, book_id, chapter, verse)) WITHOUT ROWID")
+			l_db.execute ("INSERT INTO version_info VALUES ('KJV', 'King James Version', 'eng', 'ltr', 'kjv', '', 12, 2), ('WLC', 'Westminster Leningrad Codex', 'hbo', 'rtl', 'hebrew', 'HEBREW versification', 16, 3)")
+			l_db.execute ("INSERT INTO verse_text VALUES ('KJV', 1, 1, 1, 'In the beginning God created the heaven and the earth.', 2), ('KJV', 1, 1, 2, 'And the earth was without form, and void.', 2), ('KJV', 1, 1, 3, '', 2), ('KJV', 1, 2, 1, 'Thus the heavens and the earth were finished.', 2), ('WLC', 1, 1, 1, 'BRASYT BRA ALHYM', 3)")
 			l_db.execute ("INSERT INTO build_run VALUES ('test-build-0', '2026-10-25T09:00:00', 'testing/conc_fixture.e'), ('" + Content_edition + "', '2026-10-26T12:00:00', 'testing/conc_fixture.e')")
 			l_db.execute ("PRAGMA user_version = " + a_version.out)
 			l_db.close
@@ -98,8 +103,8 @@ feature -- Building
 			file_written: (create {SIMPLE_FILE}.make (a_path)).is_file
 		end
 
-	Content_version: INTEGER = 1
-			-- content.db v1 (BIB_CONTENT_SOURCE.Content_schema_version).
+	Content_version: INTEGER = 2
+			-- content.db v2 (BIB_CONTENT_SOURCE.Content_schema_version).
 
 	Content_edition: STRING = "test-build-1"
 			-- The fixture content.db's latest build: its edition.

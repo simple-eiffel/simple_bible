@@ -253,6 +253,14 @@ feature -- Engines (one per instance)
 			create Result.make (sources)
 		end
 
+	text_reader: BIB_TEXT_READER
+			-- Bible text for reading: versions and chapters (content.db v2, fold 2026-10-26).
+		require
+			open: is_open
+		once ("OBJECT")
+			create Result.make (sources, database_edition)
+		end
+
 	conc_pack: BIB_CONC_PACK
 			-- The concordance pack reader (debate 05b): conc.db or conc_dist.db,
 			-- attached read-only under `{BIB_CONC_PACK}.Pack_alias'.
