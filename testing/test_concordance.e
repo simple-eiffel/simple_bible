@@ -72,6 +72,46 @@ feature -- Tests
 			assert ("not available", not l_pack.is_available)
 		end
 
+	test_fixture_has_the_reviewed_shapes
+			-- The fixture pack (Task 2) attaches read-only and holds what the Phase 2
+			-- review named: version 1, every v1 table, an empty Hebrew surface, an
+			-- English computed basis, a Strong's row and more than a page of places.
+			-- The refusal variant really lacks its table and its version.
+		local
+			l_fixture: CONC_FIXTURE
+			l_set: BIB_SOURCE_SET
+			l_schema: SIMPLE_SQL_SCHEMA
+		do
+			create l_fixture
+			l_fixture.build_main (Main_file)
+			l_fixture.build (Pack_file)
+			l_fixture.build_variant (Old_pack_file, 0, "lemma_english")
+			create l_set.make
+			l_set.open_core (Main_file)
+			l_set.attach ("conc", Pack_file)
+			l_set.attach ("old", Old_pack_file)
+			assert_true ("both attached", l_set.last_error = Void and l_set.attached_count = 2)
+			if attached l_set.database as al_db then
+				create l_schema.make (al_db)
+				assert_integers_equal ("version", {CONC_FIXTURE}.Pack_version, l_schema.user_version_of ("conc"))
+				assert_true ("v1 table", l_schema.table_exists_in ("conc", "lemma_english"))
+				assert_integers_equal ("old version", 0, l_schema.user_version_of ("old"))
+				assert_false ("old lacks table", l_schema.table_exists_in ("old", "lemma_english"))
+				assert_integers_equal ("empty hebrew surface", 1, count_of (al_db, "SELECT count(*) AS n FROM conc.token WHERE language = 'hbo' AND surface = ''"))
+				assert_integers_equal ("english computed", 1, count_of (al_db, "SELECT count(*) AS n FROM conc.token WHERE language = 'eng' AND lemma_basis LIKE 'computed:%%'"))
+				assert_integers_equal ("strongs row", 1, count_of (al_db, "SELECT count(*) AS n FROM conc.lemma_xref WHERE scheme = 'strongs' AND value = 'H1254'"))
+				assert_integers_equal ("article places", {CONC_FIXTURE}.Article_places, count_of (al_db, "SELECT count(*) AS n FROM conc.token WHERE lemma_id = 2"))
+				assert_true ("more than a page", {CONC_FIXTURE}.Article_places > {BIB_CONC_PACK}.Max_page_size)
+				assert_integers_equal ("counts table agrees", {CONC_FIXTURE}.Article_places, count_of (al_db, "SELECT n FROM conc.lemma_corpus_count WHERE lemma_id = 2"))
+			else
+				assert_true ("connection when open", False)
+			end
+			l_set.close
+			l_fixture.delete_file (Main_file)
+			l_fixture.delete_file (Pack_file)
+			l_fixture.delete_file (Old_pack_file)
+		end
+
 	test_language_codes
 			-- One table of language codes (design scan 25): Hebrew and Aramaic are Hebrew
 			-- script, the three originals are original, English is held but not original.
@@ -116,6 +156,23 @@ feature -- Tests
 			-- Skeletal (Phase 5, FR-158, V-54): the same executable reads conc.db and
 			-- conc_dist.db by `conc_path' alone; no engine code tests the edition.
 		do
+		end
+
+feature {NONE} -- Fixture
+
+	Main_file: STRING = "conc_test_main.db"
+	Pack_file: STRING = "conc_test_pack.db"
+	Old_pack_file: STRING = "conc_test_old_pack.db"
+
+	count_of (a_db: SIMPLE_SQL_DATABASE; a_sql: STRING): INTEGER
+			-- The single integer `a_sql' returns (its column is named n).
+		local
+			l_result: SIMPLE_SQL_RESULT
+		do
+			l_result := a_db.query (a_sql)
+			if not l_result.rows.is_empty and then attached l_result.rows.first as al_row then
+				Result := al_row.integer_value ("n")
+			end
 		end
 
 end

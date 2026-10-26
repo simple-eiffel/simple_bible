@@ -7,6 +7,7 @@
 ## Task 0: conc.db builder items (vault tooling, Python, private)
 
 **Where:** the vault's `_Tools` (Python is allowed while it builds only the private pack: FR-162). Not in this repository.
+**Schema note:** written in this repository as `research/17-CONC-PACK-SCHEMA-v1.md` (Task 2, 2026-10-26); the builder follows it.
 **Items:** FR-165 `PRAGMA user_version = 1` (the pack's `Expected_user_version`); FR-162 `token.translit` (precomputed whole-word transliteration); per-corpus counts per headword and the English-at-a-glance summary per headword (two small tables); a one-page schema note (`conc pack v1`: tables, columns, keys) that Task 2's fixture copies.
 
 ### Acceptance Criteria
@@ -49,9 +50,9 @@ None.
 **Features:** `build (a_path)`: writes a small conc-shaped database with simple_sql and stamps `user_version` 1
 
 ### Acceptance Criteria
-- [ ] Holds the shapes the verdict names: a Hebrew token with an empty surface (A1), an English token with basis `computed:spacy-lemma`, Greek and Hebrew tokens with basis `tagged:<source>`, a `lemma_xref` Strong's row, two corpora with `license` and `ship_class`, a lemma with more than 200 places (paging)
-- [ ] Generated at test time into a temporary file and deleted after; **no conc.db data is committed** (the personal data never enters the public repository)
-- [ ] A variant with `user_version` 0 and one missing a required table (refusal tests)
+- [x] Holds the shapes the verdict names: a Hebrew token with an empty surface (A1), an English token with basis `computed:spacy-lemma`, Greek and Hebrew tokens with basis `tagged:<source>`, a `lemma_xref` Strong's row, two corpora with `license` and `ship_class`, a lemma with more than 200 places (paging)
+- [x] Generated at test time into a temporary file and deleted after; **no conc.db data is committed** (the personal data never enters the public repository)
+- [x] A variant with `user_version` 0 and one missing a required table (refusal tests)
 
 ### Implementation Notes
 Table and column names copy Task 0's schema note; where Task 0 is not done yet, copy today's conc.db schema (spike R2's column lists) plus the two planned tables, and reconcile when Task 0 lands.

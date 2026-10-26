@@ -319,6 +319,7 @@ feature {NONE} -- Suites
 			run_skeletal (agent t.test_word_view_lists_every_fact, "test_word_view_lists_every_fact", "RQ-02")
 			run_skeletal (agent t.test_edition_swap_needs_no_code, "test_edition_swap_needs_no_code", "FR-158")
 			run_test (agent t.test_pack_not_valid_until_checked, "test_pack_not_valid_until_checked")
+			run_test (agent t.test_fixture_has_the_reviewed_shapes, "test_fixture_has_the_reviewed_shapes")
 			run_test (agent t.test_language_codes, "test_language_codes")
 			run_skeletal (agent t.test_reattached_pack_needs_a_new_check, "test_reattached_pack_needs_a_new_check", "FR-164")
 			run_skeletal (agent t.test_verse_word_takes_real_hebrew_rows, "test_verse_word_takes_real_hebrew_rows", "FR-152")
