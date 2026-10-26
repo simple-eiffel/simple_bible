@@ -1,5 +1,5 @@
 # Design scan since 1398860 (to 0538abb), simple_bible, 2026-10-26
-Read-only; nothing compiled. Stub bodies not reported. Paths under D:\prod\simple_bible.
+Read-only; nothing compiled. Stub bodies not reported. Paths are relative to the simple_bible project folder.
 
 ## HIGH
 **H1. SOURCE_SCAN.Clusters not updated; purity and layering tests skip the new code.**
