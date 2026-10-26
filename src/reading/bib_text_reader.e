@@ -15,7 +15,10 @@ class
 	BIB_TEXT_READER
 
 inherit
-	BIB_SQLITE_REPORTING
+	BIB_SQLITE_QUERYING
+		redefine
+			method_versions
+		end
 
 create
 	make
@@ -149,62 +152,21 @@ feature {NONE} -- Implementation
 			not_empty: not Result.is_empty
 		end
 
-	last_rows: detachable SIMPLE_SQL_RESULT
-			-- Rows of the latest `run_query'; Void when it failed.
+	query_failed_message: STRING_8 = "A Bible text query failed."
+	not_open_message: STRING_8 = "content.db is not open."
+			-- The reader's words around SQLite's own (BIB_SQLITE_QUERYING).
 
-	last_query_error: detachable BIB_ERROR
-			-- Why the latest `run_query' failed.
-
-	run_query (a_sql: STRING_8; a_args: ARRAY [detachable ANY])
-			-- Run `a_sql' with `a_args' on content.db: rows to `last_rows', a refusal to
-			-- `last_query_error' with SQLite's own words.
-		require
-			sql_not_empty: not a_sql.is_empty
+	method_edition: STRING_32
+			-- content.db's build, for the method records.
 		do
-			last_rows := Void
-			last_query_error := Void
-			if attached sources.database as al_db then
-				last_rows := al_db.query_with_args (a_sql, a_args)
-				if al_db.has_error then
-					last_rows := Void
-					create last_query_error.make_with_details ({BIB_ERROR}.Database_problem, "A Bible text query failed.", sqlite_message (al_db, a_sql))
-				end
-			else
-				create last_query_error.make ({BIB_ERROR}.Source_unavailable, "content.db is not open.")
-			end
-		ensure
-			rows_or_reason: (last_rows = Void) = (last_query_error /= Void)
+			Result := edition
 		end
 
-	query_error: BIB_ERROR
-			-- `last_query_error', or a general one when there is none.
+	method_versions (a_version: READABLE_STRING_8): ARRAYED_LIST [STRING_32]
+			-- A reading query names the one version it read.
 		do
-			if attached last_query_error as al_error then
-				Result := al_error
-			else
-				create Result.make ({BIB_ERROR}.Database_problem, "A Bible text query failed.")
-			end
-		end
-
-	method (a_feature, a_sql: STRING_8; a_version: READABLE_STRING_8; a_scope: READABLE_STRING_GENERAL; a_count: INTEGER_64): BIB_METHOD
-			-- The method record of one reading query (NFR-006).
-		require
-			scope_not_empty: not a_scope.is_empty
-		do
-			create Result.make (a_feature, a_sql, a_version, a_scope, <<a_version.to_string_32>>, create {ARRAYED_LIST [STRING_32]}.make (0),
-				{ARRAY [INTEGER_64]} <<a_count>>, {BIB_RELEASE}.Engine_version, edition, sqlite_version_or_unknown)
-		ensure
-			named: Result.engine_feature.same_string_general (a_feature)
-		end
-
-	sqlite_version_or_unknown: STRING_32
-			-- SQLite's version for the method record.
-		do
-			if sources.sqlite_version.is_empty then
-				Result := {STRING_32} "unknown"
-			else
-				Result := sources.sqlite_version
-			end
+			create Result.make (1)
+			Result.extend (a_version.to_string_32)
 		end
 
 feature {NONE} -- SQL

@@ -336,6 +336,7 @@ feature {NONE} -- Suites
 			create t
 			run_test (agent t.test_versions_and_a_chapter, "test_versions_and_a_chapter")
 			run_test (agent t.test_place_rows_know_their_verse, "test_place_rows_know_their_verse")
+			run_test (agent t.test_a_failing_chapter_query_says_why, "test_a_failing_chapter_query_says_why")
 		end
 
 	run_content_builder_tests

@@ -53,6 +53,37 @@ feature -- Tests
 			finish
 		end
 
+	test_a_failing_chapter_query_says_why
+			-- Design scan 33: the reader's queries go through the shared BIB_SQLITE_QUERYING, so a
+			-- broken table is a failure with the reader's message and SQLite's own words.
+		local
+			l_db: SIMPLE_SQL_DATABASE
+			l_chapter: BIB_LIST_RESULT [BIB_READING_VERSE]
+			l_config: BIB_CONFIG
+			l_reopened: SIMPLE_BIBLE
+			l_memory: MEMORY
+		do
+			l_chapter := bible.text_reader.chapter ("KJV", 1, 1)
+			assert_true ("reads before", l_chapter.is_success)
+			bible.close
+			create l_memory
+			l_memory.full_collect
+			create l_db.make (Content_file)
+			l_db.execute ("ALTER TABLE verse_text RENAME COLUMN text TO text_gone")
+			l_db.close
+			create l_config.make_with_core (Content_file)
+			l_config := l_config.set_conc_path (Pack_file)
+			create l_reopened.make (l_config)
+			l_reopened.open
+			assert_true ("opens: the table is there", l_reopened.is_open)
+			l_chapter := l_reopened.text_reader.chapter ("KJV", 1, 1)
+			assert_false ("fails", l_chapter.is_success)
+			assert_true ("the reader's words", attached l_chapter.error as al_e and then al_e.message.has_substring ("Bible text query failed"))
+			assert_true ("the method is recorded", l_chapter.method.engine_feature.same_string_general ("chapter"))
+			l_reopened.close
+			finish
+		end
+
 feature {NONE} -- Fixture
 
 	Content_file: STRING = "reading_test_content.db"

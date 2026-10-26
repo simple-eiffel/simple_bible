@@ -15,7 +15,7 @@ class
 	BIB_CONC_PACK
 
 inherit
-	BIB_SQLITE_REPORTING
+	BIB_SQLITE_QUERYING
 
 	BIB_LANGUAGE_CODES
 		export
@@ -807,16 +807,6 @@ feature {NONE} -- Implementation
 			Result := "book " + a_ref.book_id.out + ", chapter " + a_ref.chapter.out + ", verse " + a_ref.verse.out
 		end
 
-	method (a_feature, a_sql: STRING_8; a_corpus_code: READABLE_STRING_8; a_scope: READABLE_STRING_GENERAL; a_count: INTEGER_64): BIB_METHOD
-			-- The method record of one pack query (NFR-006): its SQL, scope and count.
-		require
-			scope_not_empty: not a_scope.is_empty
-		do
-			create Result.make (a_feature, a_sql, a_corpus_code, a_scope, create {ARRAYED_LIST [STRING_32]}.make (0), create {ARRAYED_LIST [STRING_32]}.make (0), {ARRAY [INTEGER_64]} <<a_count>>, {BIB_RELEASE}.Engine_version, edition_or_pack, sqlite_version_or_unknown)
-		ensure
-			named: Result.engine_feature.same_string_general (a_feature)
-		end
-
 	edition_or_pack: STRING_32
 			-- The pack's edition label for the method record, or "concordance pack" before one is read.
 		do
@@ -827,51 +817,14 @@ feature {NONE} -- Implementation
 			end
 		end
 
-	sqlite_version_or_unknown: STRING_32
-			-- SQLite's version for the method record.
+	query_failed_message: STRING_8 = "A concordance query failed."
+	not_open_message: STRING_8 = "The concordance pack is not open."
+			-- The pack's words around SQLite's own (BIB_SQLITE_QUERYING).
+
+	method_edition: STRING_32
+			-- The pack's edition for its method records.
 		do
-			if sources.sqlite_version.is_empty then
-				Result := {STRING_32} "unknown"
-			else
-				Result := sources.sqlite_version
-			end
-		end
-
-	last_rows: detachable SIMPLE_SQL_RESULT
-			-- Rows of the latest `run_query'; Void when it failed.
-
-	last_query_error: detachable BIB_ERROR
-			-- Why the latest `run_query' failed.
-
-	run_query (a_sql: STRING_8; a_args: ARRAY [detachable ANY])
-			-- Run `a_sql' with `a_args' on the pack's connection: the rows go to `last_rows', a
-			-- refusal to `last_query_error' with SQLite's own words.
-		require
-			sql_not_empty: not a_sql.is_empty
-		do
-			last_rows := Void
-			last_query_error := Void
-			if attached sources.database as al_db then
-				last_rows := al_db.query_with_args (a_sql, a_args)
-				if al_db.has_error then
-					last_rows := Void
-					create last_query_error.make_with_details ({BIB_ERROR}.Database_problem, "A concordance query failed.", sqlite_message (al_db, a_sql))
-				end
-			else
-				create last_query_error.make ({BIB_ERROR}.Source_unavailable, "The concordance pack is not open.")
-			end
-		ensure
-			rows_xor_error: (last_rows /= Void) xor (last_query_error /= Void)
-		end
-
-	query_error: BIB_ERROR
-			-- `last_query_error', or a general one when there is none.
-		do
-			if attached last_query_error as al_error then
-				Result := al_error
-			else
-				create Result.make ({BIB_ERROR}.Database_problem, "A concordance query failed.")
-			end
+			Result := edition_or_pack
 		end
 
 	pack_path: STRING_32
