@@ -488,6 +488,7 @@ feature -- Tests
 			l_words := l_pack.verse_words (l_ref, "WLC-MACULA")
 			assert_true ("three hebrew tokens, a prefix sharing its word's position", l_words.is_success and then l_words.count = 3)
 			assert_true ("shared position", l_words.item (1).position = 1 and l_words.item (2).position = 1)
+			assert_true ("prefix first, by token order", l_words.item (1).lemma_id = 5 and l_words.item (2).lemma_id = {CONC_FIXTURE}.Create_lemma)
 			assert_strings_equal ("basis kind", "tagged", l_words.item (1).lemma_basis)
 			assert_true ("empty surface", l_words.item (3).surface.is_empty and l_words.item (3).has_door)
 			l_words := l_pack.verse_words (l_ref, "ENG-BSB")
