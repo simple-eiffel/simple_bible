@@ -1,6 +1,6 @@
 note
 	description: "[
-		rix.db, Larry's author library (D-019): search, documents citing a
+		Larry's author library (D-019), shipped inside content.db (debate 01): search, documents citing a
 		passage, reader. No document reaches a face without its status;
 		withdrawn documents are excluded from search by default and returned,
 		with their banner, when "Include withdrawn" is on (Q-09, AC-1a-34).
@@ -94,7 +94,7 @@ feature -- Commands
 
 	open_on (a_set: BIB_SOURCE_SET)
 		do
-			-- Phase 4: attach rix.db read-only; check the R15 schema (docs, verse_refs, docs_fts).
+			-- Phase 4: read the author library's tables in content.db; check the R15 schema (docs, verse_refs, docs_fts).
 		end
 
 	close

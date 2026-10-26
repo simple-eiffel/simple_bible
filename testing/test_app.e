@@ -36,7 +36,7 @@ feature {NONE} -- Initialization
 			run_user_store_tests
 			run_jobs_scoop_tests
 			run_ai_seam_tests
-			run_plugin_purity_tests
+			run_pack_purity_tests
 			run_layering_tests
 			run_scoop_consumer
 			print ("%N========================%N")
@@ -275,15 +275,14 @@ feature {NONE} -- Suites
 			run_test (agent t.test_facade_binds_null_adapter, "test_facade_binds_null_adapter")
 		end
 
-	run_plugin_purity_tests
+	run_pack_purity_tests
 		local
-			t: TEST_PLUGIN_PURITY
+			t: TEST_PACK_PURITY
 		do
-			print ("TEST_PLUGIN_PURITY%N")
+			print ("TEST_PACK_PURITY%N")
 			create t
-			run_test (agent t.test_public_registry_is_empty, "test_public_registry_is_empty")
-			run_test (agent t.test_registry_seals, "test_registry_seals")
-			run_test (agent t.test_no_effective_lens_or_private_source, "test_no_effective_lens_or_private_source")
+			run_test (agent t.test_no_plugin_classes, "test_no_plugin_classes")
+			run_test (agent t.test_private_source_is_one_generic_class, "test_private_source_is_one_generic_class")
 			run_test (agent t.test_no_private_names_in_sources, "test_no_private_names_in_sources")
 			run_skeletal (agent t.test_public_executable_has_no_private_strings, "test_public_executable_has_no_private_strings", "AC-1a-57")
 		end

@@ -75,7 +75,7 @@ feature -- Access
 			-- simple_bible engine version.
 
 	database_edition: STRING_32
-			-- Build id of core.db.
+			-- Build id of content.db.
 
 	sqlite_version: STRING_32
 			-- SQLite library version (FR-NEW-008).

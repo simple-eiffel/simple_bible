@@ -1,5 +1,5 @@
 note
-	description: "A document in the author library (rix.db). Status and its banner travel with it everywhere (D-019, AC-1a-34)."
+	description: "A document in the author library (inside content.db). Status and its banner travel with it everywhere (D-019, AC-1a-34)."
 	author: "Larry Rix"
 	date: "$Date$"
 	revision: "$Revision$"
@@ -63,7 +63,7 @@ feature -- Status
 feature -- Model
 
 	cited_model: MML_SET [INTEGER_64]
-			-- Verses this document cites (rix.db `verse_refs').
+			-- Verses this document cites (the author library's `verse_refs').
 		do
 			create Result
 			across cited_hub_ids as h loop

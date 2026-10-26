@@ -36,12 +36,12 @@ feature -- Tests
 	test_user_store_is_the_only_writer
 		local
 			u: BIB_USER_STORE
-			c: BIB_CORE_SOURCE
+			c: BIB_CONTENT_SOURCE
 		do
 			create u.make ("user.db")
-			create c.make ("core.db")
+			create c.make ("content.db")
 			assert ("user store writes", not u.is_read_only)
-			assert ("core read-only", c.is_read_only)
+			assert ("content read-only", c.is_read_only)
 		end
 
 	test_highlight_shows_in_every_version

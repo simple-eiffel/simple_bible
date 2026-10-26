@@ -16,7 +16,7 @@ deferred class
 feature -- Access
 
 	alias_name: STRING_8
-			-- Attach alias ("main" for core.db).
+			-- Attach alias ("main" for content.db).
 		deferred
 		ensure
 			not_empty: not Result.is_empty

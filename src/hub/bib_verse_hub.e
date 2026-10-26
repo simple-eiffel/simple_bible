@@ -18,7 +18,7 @@ create
 feature {NONE} -- Initialization
 
 	make (a_sources: BIB_SOURCE_SET; a_versification: BIB_VERSIFICATION_MAP)
-			-- Create the hub (version infos loaded from core.db in Phase 4).
+			-- Create the hub (version infos loaded from content.db in Phase 4).
 		do
 			sources := a_sources
 			versification := a_versification

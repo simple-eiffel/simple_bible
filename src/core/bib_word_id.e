@@ -1,5 +1,5 @@
 note
-	description: "An immutable token id in core.db `word'."
+	description: "An immutable token id in content.db `word'."
 	author: "Larry Rix"
 	date: "$Date$"
 	revision: "$Revision$"

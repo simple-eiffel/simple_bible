@@ -17,7 +17,7 @@ create
 feature {NONE} -- Initialization
 
 	make (a_sources: BIB_SOURCE_SET)
-			-- Create a catalog over `a_sources' (loaded from core.db `book_catalog' in Phase 4).
+			-- Create a catalog over `a_sources' (loaded from content.db `book_catalog' in Phase 4).
 		do
 			sources := a_sources
 			create books.make (90)
@@ -66,7 +66,7 @@ feature -- Access
 		require
 			known: has_book (a_book_id)
 		do
-			-- Phase 4: from core.db `versification_system' rows.
+			-- Phase 4: from content.db `versification_system' rows.
 		ensure
 			non_negative: Result >= 0
 		end

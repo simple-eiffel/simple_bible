@@ -23,7 +23,7 @@ feature {NONE} -- Initialization
 	make (a_code: READABLE_STRING_8; a_display_label, a_edition: READABLE_STRING_GENERAL; a_language: READABLE_STRING_8;
 			a_system: BIB_VERSIFICATION_SYSTEM; a_provenance: BIB_PROVENANCE; a_verse_count: INTEGER; a_seal: READABLE_STRING_8;
 			a_caveat, a_quality_caveat: READABLE_STRING_GENERAL; a_septuagint, a_swete, a_morphology: BOOLEAN; a_book_ids: ITERABLE [INTEGER])
-			-- Describe version `a_code' (read from core.db `version').
+			-- Describe version `a_code' (read from content.db `version').
 		require
 			code_not_empty: not a_code.is_empty
 			language_not_empty: not a_language.is_empty
