@@ -65,11 +65,8 @@ feature -- Commands
 			if attached bible.conc_pack.word_entry (a_lemma_id) as al_entry then
 				l_corpus := a_corpus.to_string_8
 				if l_corpus.is_empty then
-						-- The headword's provenance is the corpus where it occurs most (BIB_CONC_PACK).
-					l_corpus := al_entry.provenance.source_key.to_string_8
-					if l_corpus.starts_with ("conc:") then
-						l_corpus := l_corpus.substring (6, l_corpus.count)
-					end
+						-- The corpus where the headword occurs most (its provenance).
+					l_corpus := bible.conc_pack.corpus_of (al_entry.provenance)
 				end
 				if not bible.conc_pack.has_corpus (l_corpus) then
 					Result.append_string_general ("The concordance has no corpus " + l_corpus + ".")
