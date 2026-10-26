@@ -22,6 +22,8 @@ feature {NONE} -- Initialization
 		local
 			l_cli: SIMPLE_CLI
 			l_builder: BIB_CONTENT_BUILDER
+			l_build_id: STRING
+			l_failed: BOOLEAN
 		do
 			create l_cli.make
 			l_cli.set_app_info ("bible_build", "Writes content.db v1 from the vault's bible.db.", {BIB_CONTENT_BUILDER}.Builder_name)
@@ -34,20 +36,32 @@ feature {NONE} -- Initialization
 				across l_cli.errors as ic loop
 					print (ic + "%N")
 				end
-				(create {EXCEPTIONS}).die (1)
-			elseif attached l_cli.value_of ("bible") as al_bible and then attached l_cli.value_of ("out") as al_out then
+				l_failed := True
+			elseif attached l_cli.value_of ("bible") as al_bible and then not al_bible.is_empty
+				and then attached l_cli.value_of ("out") as al_out and then not al_out.is_empty
+			then
 				create l_builder.make
-				l_builder.set_build_id (l_cli.option_value_or_default ("build-id", "content-v1"))
+				l_build_id := l_cli.option_value_or_default ("build-id", "content-v1")
+				if not l_build_id.is_empty then
+					l_builder.set_build_id (l_build_id)
+				end
 				l_builder.set_built_at (l_cli.option_value_or_default ("built-at", ""))
 				l_builder.build (al_bible, al_out)
 				if attached l_builder.last_error as al_error then
 					print ("bible_build failed: ")
 					print (al_error)
 					print ("%N")
-					(create {EXCEPTIONS}).die (1)
+					l_failed := True
 				else
 					print ("bible_build: wrote " + al_out + " (" + l_builder.books_written.out + " books, build " + l_builder.build_id.to_string_8 + ")%N")
 				end
+			else
+				print ("bible_build: --bible and --out each need a path.%N")
+				l_failed := True
+			end
+				-- One exit point, after everything is closed (design scan 31).
+			if l_failed then
+				(create {EXCEPTIONS}).die (1)
 			end
 		end
 

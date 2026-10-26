@@ -66,6 +66,10 @@ feature {NONE} -- Initialization
 					end
 				end
 			end
+				-- One exit point, after the engine is closed (design scan 31).
+			if failed then
+				(create {EXCEPTIONS}).die (1)
+			end
 		end
 
 feature {NONE} -- Commands
@@ -83,7 +87,7 @@ feature {NONE} -- Commands
 				fail
 			elseif l_command.same_string ("word") and a_args.count = 2 and then a_args.i_th (2).is_integer_64 and then a_args.i_th (2).to_integer_64 > 0 then
 				print (a_commands.word (a_args.i_th (2).to_integer_64, a_corpus))
-			elseif l_command.same_string ("english") and a_args.count >= 2 then
+			elseif l_command.same_string ("english") and a_args.count >= 2 and then not joined (a_args).is_empty then
 				print (a_commands.english (joined (a_args)))
 			elseif l_command.same_string ("verse") and a_args.count = 4 and then is_positive (a_args.i_th (2)) and then is_positive (a_args.i_th (3)) and then is_positive (a_args.i_th (4)) then
 				print (a_commands.verse (a_args.i_th (2).to_integer, a_args.i_th (3).to_integer, a_args.i_th (4).to_integer, if a_corpus.is_empty then "WLC-MACULA" else a_corpus end))
@@ -117,10 +121,15 @@ feature {NONE} -- Commands
 			Result := a_text.is_integer and then a_text.to_integer > 0
 		end
 
+	failed: BOOLEAN
+			-- Did a step fail? `make' exits with code 1, once, at its end.
+
 	fail
-			-- Stop with exit code 1.
+			-- Record a failure; the program closes what it opened and exits with code 1 at the end.
 		do
-			(create {EXCEPTIONS}).die (1)
+			failed := True
+		ensure
+			recorded: failed
 		end
 
 feature {NONE} -- Defaults

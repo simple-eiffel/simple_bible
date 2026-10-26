@@ -183,12 +183,34 @@ feature {NONE} -- Implementation
 		end
 
 	replace (a_temp: STRING_32; a_out: READABLE_STRING_GENERAL)
-			-- Put the checked file at `a_out'.
+			-- Put the checked file at `a_out'. The previous content.db is set aside first and put
+			-- back if the move fails, and the temporary file never stays behind (design scan 31:
+			-- the old file was deleted before a move that could fail).
+		local
+			l_old: STRING_32
+			l_set_aside, l_restored: BOOLEAN
 		do
-			delete (a_out)
-			if not (create {SIMPLE_FILE}.make (a_temp)).move_to (a_out) then
-				last_error := {STRING_32} "The built file could not be moved to " + a_out.to_string_32
+			l_old := a_out.to_string_32 + {STRING_32} ".old"
+			delete (l_old)
+			if (create {SIMPLE_FILE}.make (a_out)).is_file then
+				l_set_aside := (create {SIMPLE_FILE}.make (a_out)).move_to (l_old)
+				if not l_set_aside then
+					last_error := {STRING_32} "The previous content.db could not be set aside: " + a_out.to_string_32
+				end
 			end
+			if last_error = Void then
+				if (create {SIMPLE_FILE}.make (a_temp)).move_to (a_out) then
+					delete (l_old)
+				else
+					last_error := {STRING_32} "The built file could not be moved to " + a_out.to_string_32
+					if l_set_aside then
+						l_restored := (create {SIMPLE_FILE}.make (l_old)).move_to (a_out)
+					end
+				end
+			end
+			delete (a_temp)
+		ensure
+			no_temporary_file: not (create {SIMPLE_FILE}.make (a_temp)).is_file
 		end
 
 	delete (a_path: READABLE_STRING_GENERAL)

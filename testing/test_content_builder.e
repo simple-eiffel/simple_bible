@@ -87,7 +87,27 @@ feature -- Tests
 			remove_test_files
 		end
 
+	test_failed_move_leaves_no_temporary_file
+			-- When the built file cannot be moved into place (here the output names a folder), the
+			-- reason is given and the temporary file is gone (design scan 31: it leaked).
+		local
+			l_builder: BIB_CONTENT_BUILDER
+			l_ok: BOOLEAN
+		do
+			remove_test_files
+			make_bible_db (Bible_file, True)
+			l_ok := (create {SIMPLE_FILE}.make (Folder_out)).create_directory
+			create l_builder.make
+			l_builder.build (Bible_file, Folder_out)
+			assert_true ("reported", l_builder.last_error /= Void)
+			assert_false ("no temporary file", (create {SIMPLE_FILE}.make (Folder_out + ".tmp")).exists)
+			l_ok := (create {SIMPLE_FILE}.make (Folder_out)).delete_directory
+			remove_test_files
+		end
+
 feature {NONE} -- Fixture
+
+	Folder_out: STRING = "builder_test_out_folder"
 
 	Bible_file: STRING = "builder_test_bible.db"
 	Out_file: STRING = "builder_test_content.db"
@@ -122,6 +142,7 @@ feature {NONE} -- Fixture
 			fixture.delete_file (Out_file)
 			fixture.delete_file (Out_file + ".tmp")
 			fixture.delete_file (Pack_file)
+			fixture.delete_file (Folder_out + ".tmp")
 		end
 
 end

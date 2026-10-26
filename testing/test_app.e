@@ -334,6 +334,7 @@ feature {NONE} -- Suites
 			run_test (agent t.test_rebuild_is_byte_identical, "test_rebuild_is_byte_identical")
 			run_test (agent t.test_missing_bible_is_reported, "test_missing_bible_is_reported")
 			run_test (agent t.test_failed_build_leaves_nothing_behind, "test_failed_build_leaves_nothing_behind")
+			run_test (agent t.test_failed_move_leaves_no_temporary_file, "test_failed_move_leaves_no_temporary_file")
 		end
 
 	run_conc_timing_tests
@@ -417,6 +418,8 @@ feature {NONE} -- Suites
 			print ("TEST_LAYERING%N")
 			create t
 			run_test (agent t.test_engine_ecf_has_no_face_or_build_dependency, "test_engine_ecf_has_no_face_or_build_dependency")
+			run_test (agent t.test_engine_names_no_build_or_face_class, "test_engine_names_no_build_or_face_class")
+			run_test (agent t.test_command_line_cluster_is_a_face, "test_command_line_cluster_is_a_face")
 			run_test (agent t.test_no_banned_accessor, "test_no_banned_accessor")
 			run_test (agent t.test_only_the_map_creates_mapped_refs, "test_only_the_map_creates_mapped_refs")
 			run_test (agent t.test_no_engine_cluster_names_user_types, "test_no_engine_cluster_names_user_types")
