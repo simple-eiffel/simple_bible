@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<system xmlns="http://www.eiffel.com/developers/xml/configuration-1-23-0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.eiffel.com/developers/xml/configuration-1-23-0 http://www.eiffel.com/developers/xml/configuration-1-23-0.xsd" name="bible" uuid="796004B0-387F-4FE1-B326-65A722DD0BA5">
+	<description>simple_bible FACES (RQ-01: engine, build and app are separate ECFs). bible: the command line (FR-061): word view, English, verse and Strong's lookups over the engine. Depends on the engine library; the engine depends on no face library.</description>
+	<target name="bible">
+		<root class="BIB_CLI_APP" feature="make"/>
+		<file_rule>
+			<exclude>/EIFGENs$</exclude>
+			<exclude>/\..*$</exclude>
+		</file_rule>
+		<option warning="warning">
+			<assertions precondition="true" postcondition="true" check="true" invariant="true" loop="true" supplier_precondition="true"/>
+		</option>
+		<setting name="console_application" value="true"/>
+		<setting name="dead_code_removal" value="feature"/>
+		<capability>
+			<concurrency support="scoop" use="scoop"/>
+			<void_safety support="all" use="all"/>
+		</capability>
+		<library name="base" location="$ISE_LIBRARY\library\base\base.ecf"/>
+		<library name="simple_bible" location="simple_bible.ecf"/>
+		<library name="simple_cli" location="$SIMPLE_EIFFEL/simple_cli/simple_cli.ecf"/>
+		<library name="simple_env" location="$SIMPLE_EIFFEL/simple_env/simple_env.ecf"/>
+		<cluster name="cli" location=".\cli\" recursive="true"/>
+		<cluster name="cli_app" location=".\cli_app\" recursive="true"/>
+	</target>
+</system>
