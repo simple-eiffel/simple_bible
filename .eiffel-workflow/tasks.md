@@ -134,6 +134,8 @@ Task 5.
 
 ## Task 7: SIMPLE_BIBLE opens the concordance
 
+*7b deferred (2026-10-26): debate 03 settled that private material arrives as versioned packs "in the published schema", but that schema (voice column, tables, provenance rows) has not been designed; it is a public format third parties may build, so it gets its own design note when the first pack is exported. Until then a generic pack in the folder makes `open` refuse with a named reason; an empty or unset pack folder is the personal edition's case.*
+
 *Found 2026-10-26 while starting it: `open`'s contract also needs two subsystems nobody has built. (1) The content.db check: `core_schema_valid` must hold when open, but content.db's pipeline is unbuilt and the spec does not yet say where its edition lives (`build_run` columns). (2) Generic private packs: `packs_attached` needs the pack-folder scan and BIB_PRIVATE_SOURCE's attach and voice check. Decision (orchestrator): split. **7a**: a content check against a declared minimal content.db v1 (version stamp, the tables the concordance needs, `source_provenance`, a `build_run` row giving the edition), written down as research/18 before code, plus the concordance half of `open`. **7b**: generic packs through BIB_PRIVATE_SOURCE (an empty or unset pack folder counts as zero). **Task 10 (new)**: a small content.db v1 builder (Eiffel) so the personal edition has a real main database before the GUI.*
 
 **Files:** `src/simple_bible.e`, `src/bib_config.e`
@@ -171,8 +173,8 @@ Tasks 0 and 7.
 **What:** writes a content.db that passes research/18's v1 check from bible.db (book catalog with the vault ids, FR-105), `source_provenance`, and a `build_run` row; grows with the content pipeline (FR-130) later.
 
 ### Acceptance Criteria
-- [ ] The built file passes BIB_CONTENT_SOURCE's check; two builds from one input are byte-identical (FR-130's direction)
-- [ ] The personal edition opens with it and the real conc.db (after Task 0)
+- [x] The built file passes BIB_CONTENT_SOURCE's check; two builds from one input are byte-identical (FR-130's direction; `--built-at` fixes the time)
+- [x] Built 2026-10-26 from the vault's bible.db: 66 books, build `content-v1-2026-10-26`, written to `%LOCALAPPDATA%\simple_bible\content.db`; the personal edition opens with it and the real conc.db
 
 ### Dependencies
 Task 7a.
