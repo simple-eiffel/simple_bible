@@ -1,0 +1,54 @@
+note
+	description: "[
+		bible_build: writes content.db v1 from the vault's bible.db (Phase 4,
+		Task 10). Usage:
+			bible_build --bible <bible.db> --out <content.db> [--build-id <id>] [--built-at <ISO time>]
+		Exit code 0 on success, 1 on failure (the reason is printed).
+	]"
+	author: "Larry Rix"
+	date: "$Date$"
+	revision: "$Revision$"
+
+class
+	BIB_BUILD_APP
+
+create
+	make
+
+feature {NONE} -- Initialization
+
+	make
+			-- Parse the arguments and build.
+		local
+			l_cli: SIMPLE_CLI
+			l_builder: BIB_CONTENT_BUILDER
+		do
+			create l_cli.make
+			l_cli.set_app_info ("bible_build", "Writes content.db v1 from the vault's bible.db.", {BIB_CONTENT_BUILDER}.Builder_name)
+			l_cli.add_required_option ("b|bible", "The vault's bible.db", "path")
+			l_cli.add_required_option ("o|out", "The content.db to write", "path")
+			l_cli.add_option_with_default ("i|build-id", "The build id (the edition)", "id", "content-v1")
+			l_cli.add_option_with_default ("t|built-at", "The build time, for a byte-identical rebuild (empty: now)", "ISO time", "")
+			l_cli.parse
+			if l_cli.has_errors then
+				across l_cli.errors as ic loop
+					print (ic + "%N")
+				end
+				(create {EXCEPTIONS}).die (1)
+			elseif attached l_cli.value_of ("bible") as al_bible and then attached l_cli.value_of ("out") as al_out then
+				create l_builder.make
+				l_builder.set_build_id (l_cli.option_value_or_default ("build-id", "content-v1"))
+				l_builder.set_built_at (l_cli.option_value_or_default ("built-at", ""))
+				l_builder.build (al_bible, al_out)
+				if attached l_builder.last_error as al_error then
+					print ("bible_build failed: ")
+					print (al_error)
+					print ("%N")
+					(create {EXCEPTIONS}).die (1)
+				else
+					print ("bible_build: wrote " + al_out + " (" + l_builder.books_written.out + " books, build " + l_builder.build_id.to_string_8 + ")%N")
+				end
+			end
+		end
+
+end

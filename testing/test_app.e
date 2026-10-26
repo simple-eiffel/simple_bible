@@ -40,6 +40,7 @@ feature {NONE} -- Initialization
 			run_source_set_tests
 			run_concordance_tests
 			run_facade_open_tests
+			run_content_builder_tests
 			run_conc_timing_tests
 			run_layering_tests
 			run_scoop_consumer
@@ -307,6 +308,18 @@ feature {NONE} -- Suites
 			run_test (agent t.test_close_forgets_the_connection, "test_close_forgets_the_connection")
 			run_test (agent t.test_attach_missing_pack_reports_sqlite_message, "test_attach_missing_pack_reports_sqlite_message")
 			run_test (agent t.test_detach_refused_while_a_cursor_is_open, "test_detach_refused_while_a_cursor_is_open")
+		end
+
+	run_content_builder_tests
+		local
+			t: TEST_CONTENT_BUILDER
+		do
+			print ("TEST_CONTENT_BUILDER%N")
+			create t
+			run_test (agent t.test_builds_a_content_db_the_engine_opens, "test_builds_a_content_db_the_engine_opens")
+			run_test (agent t.test_rebuild_is_byte_identical, "test_rebuild_is_byte_identical")
+			run_test (agent t.test_missing_bible_is_reported, "test_missing_bible_is_reported")
+			run_test (agent t.test_failed_build_leaves_nothing_behind, "test_failed_build_leaves_nothing_behind")
 		end
 
 	run_conc_timing_tests
