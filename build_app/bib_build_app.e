@@ -53,7 +53,7 @@ feature {NONE} -- Initialization
 					print ("%N")
 					l_failed := True
 				else
-					print ("bible_build: wrote " + al_out + " (" + l_builder.books_written.out + " books, " + l_builder.versions_written.out + " versions, " + l_builder.verses_written.out + " verses, build " + l_builder.build_id.to_string_8 + ")%N")
+					print ("bible_build: wrote " + al_out + " (" + l_builder.books_written.out + " books, " + l_builder.versions_written.out + " versions, " + l_builder.verses_written.out + " verses, " + l_builder.cross_references_written.out + " cross-references, build " + l_builder.build_id.to_string_8 + ")%N")
 				end
 			else
 				print ("bible_build: --bible and --out each need a path.%N")

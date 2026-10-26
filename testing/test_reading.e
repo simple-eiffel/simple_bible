@@ -41,6 +41,37 @@ feature -- Tests
 			finish
 		end
 
+	test_cross_references_most_voted_first
+			-- P04's Cross-refs tab: the targets of a verse, most voted first, a range told as one,
+			-- negative votes kept; a verse with none answers empty.
+		local
+			l_refs: BIB_LIST_RESULT [BIB_READING_CROSS_REF]
+		do
+			assert_true ("carried", bible.text_reader.has_cross_references)
+			l_refs := bible.text_reader.cross_references (1, 1, 1)
+			assert_true ("succeeded", l_refs.is_success)
+			assert_integers_equal ("three", 3, l_refs.count)
+			assert_true ("most voted first: John 1:1-3", l_refs.item (1).to_book = 43 and l_refs.item (1).votes = 950 and l_refs.item (1).is_range)
+			assert_strings_equal ("range text", "1-3", l_refs.item (1).verses_text)
+			assert_integers_equal ("negative votes kept", -3, l_refs.item (3).votes)
+			assert_integers_equal ("none from Genesis 1:2", 0, bible.text_reader.cross_references (1, 1, 2).count)
+			finish
+		end
+
+	test_lexicon_entries_and_gloss
+			-- P05.5: every dictionary meaning, each source in its own words; and a one-line gloss.
+		local
+			l_entries: BIB_LIST_RESULT [BIB_LIBRARY_ENTRY]
+		do
+			l_entries := bible.conc_pack.lexicon_entries ({CONC_FIXTURE}.Create_lemma)
+			assert_true ("succeeded", l_entries.is_success)
+			assert_true ("one entry or more", l_entries.count >= 1)
+			assert_false ("titles never empty", across 1 |..| l_entries.count as i some l_entries.item (i).title.is_empty end)
+			assert_true ("an unknown headword: empty, not failed", bible.conc_pack.lexicon_entries (999).is_success)
+			assert_true ("gloss never fails", bible.conc_pack.short_gloss (999).is_empty)
+			finish
+		end
+
 	test_place_rows_know_their_verse
 			-- A place opens in the reading pane: it carries its book, chapter and verse as numbers.
 		local

@@ -93,6 +93,12 @@ feature -- Tests
 			assert_integers_equal ("the same words by number (a verse clicked in S1)", 2, l_lookup.verse_choices (1, 1, 1).count)
 			assert_integers_equal ("strongs", 1, l_lookup.choices_for ("H1254").count)
 			assert_true ("no verse named", l_lookup.last_verse = Void)
+				-- The reference box (C4): a verse, a chapter, numbers without a colon, a two-word book.
+			assert_true ("Gen 1:1", attached l_lookup.place_named ("Gen 1:1") as al_p and then (al_p.book = 1 and al_p.chapter = 1 and al_p.verse = 1))
+			assert_true ("Genesis 1, the whole chapter", attached l_lookup.place_named ("Genesis 1") as al_p and then (al_p.book = 1 and al_p.chapter = 1 and al_p.verse = 0))
+			assert_true ("Gen 1 1", attached l_lookup.place_named (" Gen 1 1 ") as al_p and then al_p.verse = 1)
+			assert_true ("Exodus 2", attached l_lookup.place_named ("Exodus 2") as al_p and then al_p.book = 2)
+			assert_true ("not a place", l_lookup.place_named ("bara") = Void and l_lookup.place_named ("Zzz 3") = Void)
 			assert_true ("empty", l_lookup.choices_for ("  ").is_empty and not l_lookup.note_text.is_empty)
 			assert_true ("nothing", l_lookup.choices_for ("zzz").is_empty and l_lookup.note_text.has_substring ("Nothing found"))
 			finish
@@ -103,6 +109,7 @@ feature -- Tests
 		do
 			assert_strings_equal ("name", "Hebrew Bible", commands.bible.conc_pack.corpus_name ("WLC-MACULA"))
 			assert_strings_equal ("unknown code shown as is", "XYZ", commands.bible.conc_pack.corpus_name ("XYZ"))
+			assert_strings_equal ("a short name has nothing to cut", "Hebrew Bible", commands.bible.conc_pack.corpus_short_name ("WLC-MACULA"))
 			if attached commands.bible.conc_pack.word_entry ({CONC_FIXTURE}.Create_lemma) as al_entry then
 				assert_strings_equal ("top corpus", "WLC-MACULA", commands.bible.conc_pack.corpus_of (al_entry.provenance))
 			else

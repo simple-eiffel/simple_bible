@@ -45,6 +45,9 @@ feature -- Access
 	verses_written: INTEGER
 			-- Verses the last `build' wrote, across every version.
 
+	cross_references_written: INTEGER
+			-- Cross-references the last `build' wrote.
+
 	last_error: detachable STRING_32
 			-- Why the last `build' failed.
 
@@ -83,6 +86,7 @@ feature -- Building
 			books_written := 0
 			versions_written := 0
 			verses_written := 0
+			cross_references_written := 0
 			if not (create {SIMPLE_FILE}.make (a_bible_db)).is_file then
 				last_error := {STRING_32} "bible.db was not found: " + a_bible_db.to_string_32
 			else
@@ -101,6 +105,9 @@ feature -- Building
 					-- v2: every version's text, each version its own source row (research/18).
 				run (l_db, Versions_provenance_sql)
 				run (l_db, Version_info_sql)
+				run (l_db, "INSERT INTO source_provenance VALUES (2, 'bible.db cross_references', 'OpenBible.info cross-references', 'CC BY', 0, 0, 0, 'Cross-reference data courtesy of OpenBible.info, CC BY.', 'Votes may be negative.')")
+				run (l_db, "INSERT INTO cross_reference SELECT from_book_id, from_chapter, from_verse, to_book_id, to_chapter, to_verse_start, coalesce(to_verse_end, to_verse_start), coalesce(votes, 0), 2 FROM src.cross_references WHERE from_book_id BETWEEN 1 AND 66 AND to_book_id BETWEEN 1 AND 66 AND from_chapter > 0 AND from_verse > 0 AND to_chapter > 0 AND to_verse_start > 0 ORDER BY from_book_id, from_chapter, from_verse, votes DESC, to_book_id, to_chapter, to_verse_start")
+				run (l_db, "CREATE INDEX cross_reference_from ON cross_reference(from_book, from_chapter, from_verse, votes)")
 				run (l_db, "INSERT INTO verse_text SELECT v.abbreviation, b.book_id, b.chapter, b.verse, coalesce(b.text, ''), 100 + v.id FROM src.bible_verses b JOIN src.bible_versions v ON v.id = b.version_id ORDER BY v.abbreviation, b.book_id, b.chapter, b.verse")
 				if last_error = Void then
 					across l_db.query ("SELECT count(*) AS n FROM book_catalog").rows as ic loop
@@ -111,6 +118,9 @@ feature -- Building
 					end
 					across l_db.query ("SELECT count(*) AS n FROM verse_text").rows as ic loop
 						verses_written := ic.integer_value ("n")
+					end
+					across l_db.query ("SELECT count(*) AS n FROM cross_reference").rows as ic loop
+						cross_references_written := ic.integer_value ("n")
 					end
 					l_db.detach ("src")
 					note_failure (l_db, "bible.db could not be detached")
@@ -147,6 +157,7 @@ feature -- Constants
 				"CREATE TABLE build_run(build_id TEXT PRIMARY KEY, built_at TEXT NOT NULL, builder TEXT NOT NULL)",
 				"CREATE TABLE book_catalog(book_id INTEGER PRIMARY KEY, code TEXT NOT NULL, name TEXT NOT NULL, is_deuterocanonical INTEGER NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key))",
 				"CREATE TABLE version_info(version_code TEXT PRIMARY KEY, name TEXT NOT NULL, language TEXT NOT NULL, direction TEXT NOT NULL, versification TEXT NOT NULL, caveat TEXT NOT NULL, sort_order INTEGER NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key))",
+				"CREATE TABLE cross_reference(from_book INTEGER NOT NULL, from_chapter INTEGER NOT NULL, from_verse INTEGER NOT NULL, to_book INTEGER NOT NULL, to_chapter INTEGER NOT NULL, to_verse_start INTEGER NOT NULL, to_verse_end INTEGER NOT NULL, votes INTEGER NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key))",
 				"CREATE TABLE verse_text(version_code TEXT NOT NULL, book_id INTEGER NOT NULL, chapter INTEGER NOT NULL, verse INTEGER NOT NULL, text TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key), PRIMARY KEY (version_code, book_id, chapter, verse)) WITHOUT ROWID"
 				>>
 		end

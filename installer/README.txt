@@ -1,4 +1,4 @@
-simple_bible 0.3.0 - PERSONAL EDITION - not for distribution
+simple_bible 0.4.0 - PERSONAL EDITION - not for distribution
 =============================================================
 
 This installs the simple_bible concordance on your own machine, with
@@ -18,23 +18,20 @@ installed files on your own machines; never publish them.
 
 The window
 ----------
-Open "simple_bible" from the Start menu. Type into the box at the top and
-press Enter:
+Open "simple_bible" from the Start menu. It follows the GUI guide's
+Simple layout: the Bible text in the middle, the commentary panel on the
+right (its Cross-refs tab: OpenBible links with votes), the dictionary
+and lexicon below, search results on the left while there are any.
 
-  bara  logos  love          a Hebrew, Greek or English word
-  Gen 1:1   John 3:16        a verse, word by word
-  H1254   G3056              a Strong's number
+  Reference box (top left)   John 3:16, Ps 23, Gen 1 1     Ctrl+L
+  Search box                 bara, logos, love, G25, H1254 Ctrl+F
+  Back and Forward           Alt+Left, Alt+Right
+  Text size                  A- A+, Ctrl + and Ctrl -
+  Dark                       the switch at the top right
 
-The Bible text sits in the middle: pick a version at the top right,
-step chapters with Previous and Next, click a verse to list its
-original words on the left. A verse you look up opens there.
-
-The left side lists what was found; choosing a row opens its word study
-below: the heading, how the Bibles render it, and every place (a long
-list keeps loading while you read). Click a place to read it.
-
-View > Show design pills (Ctrl+Shift+P) labels each part of the window
-with its code from the GUI guide.
+Click a verse: the commentary follows it and its original words open on
+the left; click a word there and the lexicon follows. View > Show design
+pills (Ctrl+Shift+P) labels each part with its code from the GUI guide.
 
 The command line
 ----------------
@@ -60,6 +57,6 @@ Installing on another machine without questions
 -----------------------------------------------
 From cmd or PowerShell (not Git Bash, which rewrites /FLAGS):
 
-  simple_bible-personal-0.3.0-Setup.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS="addtopath"
+  simple_bible-personal-0.4.0-Setup.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS="addtopath"
 
 Uninstalling removes the programs, both databases and the PATH entry.
