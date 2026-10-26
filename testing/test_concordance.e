@@ -60,6 +60,34 @@ feature -- Tests
 		do
 		end
 
+	test_pack_not_valid_until_checked
+			-- A new pack reader has validated nothing, so it is unavailable even before
+			-- anything is attached (Phase 2 review, ruling 3.3: `check_pack' runs once,
+			-- at attach; `is_available' runs no SQL).
+		local
+			l_pack: BIB_CONC_PACK
+		do
+			create l_pack.make (create {BIB_SOURCE_SET}.make)
+			assert ("not validated", not l_pack.is_pack_valid)
+			assert ("not available", not l_pack.is_available)
+		end
+
+	test_verse_word_takes_real_hebrew_rows
+			-- Skeletal (Phase 4, Phase 2 review rulings 1.1 and 1.2): a verse word builds
+			-- from conc.db's real shapes: a Hebrew token with an empty surface and no
+			-- transliteration (6,435 such tokens, WLC-MACULA), and the stored basis
+			-- "tagged:MACULA-Hebrew" mapped to the kind "tagged". The creators that came
+			-- before the review refused both.
+		do
+		end
+
+	test_verse_word_takes_english_computed_rows
+			-- Skeletal (Phase 4, rulings 1.1 and 1.2): an English token (language "eng",
+			-- basis "computed:spacy-lemma" mapped to "computed", no transliteration)
+			-- builds a verse word and a place row.
+		do
+		end
+
 	test_edition_swap_needs_no_code
 			-- Skeletal (Phase 5, FR-158, V-54): the same executable reads conc.db and
 			-- conc_dist.db by `conc_path' alone; no engine code tests the edition.

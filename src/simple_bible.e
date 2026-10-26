@@ -8,6 +8,11 @@ note
 		worker create their own (make_from_separate), each with its own source
 		set. The facade names no user-cluster type (RQ-01): faces create the
 		user store and the note store themselves.
+
+		Concordance policy (Larry, 2026-10-26, Phase 2 review gate): a missing or
+		refused conc.db leaves the Bible OPEN with the concordance unavailable
+		(`conc_pack.is_available' False) and the reason in `conc_error'; `open'
+		does not fail for it. Only content.db and the pack-count bound fail `open'.
 	]"
 	author: "Larry Rix"
 	date: "$Date$"
@@ -33,6 +38,7 @@ feature {NONE} -- Initialization
 			config_set: config = a_config
 			not_open: not is_open
 			no_error: last_error = Void
+			no_conc_error: conc_error = Void
 		end
 
 	make_from_separate (a_config: separate BIB_CONFIG)
@@ -45,6 +51,7 @@ feature {NONE} -- Initialization
 		ensure
 			not_open: not is_open
 			no_error: last_error = Void
+			no_conc_error: conc_error = Void
 		end
 
 feature -- Configuration
@@ -67,6 +74,8 @@ feature -- Lifecycle
 			core_checked: is_open implies core_schema_valid
 			optional_content_reflects_presence: is_open implies (has_ai_data = content_has_ai_rows and has_author_library = content_has_author_rows)
 			packs_attached: is_open implies (sources.attached_count >= pack_count or last_error /= Void)
+			too_many_packs: pack_count > Max_generic_packs implies last_error /= Void
+			conc_attached_or_reported: (is_open and not config.conc_path.is_empty) implies (conc_pack.is_available or conc_error /= Void)
 			no_history_in_release_1: not has_history
 		end
 
@@ -106,13 +115,13 @@ feature -- Status
 		end
 
 	pack_count: INTEGER
-			-- Generic private packs found in the pack folder (the concordance pack,
-			-- when `conc_path' names one, takes one of the same slots: scan 23).
+			-- Generic private packs FOUND in the pack folder, unclamped: a count above
+			-- `Max_generic_packs' is reported by `open' (FR-138), never trimmed here
+			-- (a clamp would make that report vacuous; ruling 2.4).
 		do
 			-- Phase 4: scan `config.pack_folder'.
 		ensure
 			non_negative: Result >= 0
-			within_slots: Result + (if config.conc_path.is_empty then 0 else 1 end) <= sources.Max_attached
 		end
 
 	has_history: BOOLEAN
@@ -127,6 +136,12 @@ feature -- Status
 
 	last_error: detachable BIB_ERROR
 			-- Why `open' failed.
+
+	conc_error: detachable BIB_ERROR
+			-- Why the concordance pack is unavailable, when `conc_path' names one that
+			-- is missing, refused (FR-164: wrong `user_version', missing tables) or
+			-- failed to attach. Void when no pack is configured or it attached and
+			-- validated. Policy (Larry, 2026-10-26): this never closes the Bible.
 
 feature -- Engines (one per instance)
 
@@ -346,6 +361,12 @@ feature -- Convenience
 			not_empty: not Result.is_empty
 		end
 
+feature -- Constants
+
+	Max_generic_packs: INTEGER = 9
+			-- Generic private packs that fit: `{BIB_SOURCE_SET}.Max_attached' less the
+			-- one slot always reserved for the concordance pack (ruling 2.4).
+
 feature {NONE} -- Implementation
 
 	sources: BIB_SOURCE_SET
@@ -363,6 +384,7 @@ feature {NONE} -- Implementation
 
 invariant
 	error_only_when_closed: last_error /= Void implies not is_open
+	conc_slot_reserved: Max_generic_packs = sources.Max_attached - 1
 	no_history: not has_history
 	author_library_when_flagged: has_author_library implies author_source /= Void
 

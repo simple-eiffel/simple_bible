@@ -20,24 +20,31 @@ create
 
 feature {NONE} -- Initialization
 
-	make (a_token_id: INTEGER_64; a_reference_text, a_surface, a_translit: READABLE_STRING_GENERAL; a_provenance: BIB_PROVENANCE)
-			-- Row for token `a_token_id'; optional columns are set with `set_context'.
+	make (a_token_id: INTEGER_64; a_language: READABLE_STRING_8; a_reference_text, a_surface, a_translit: READABLE_STRING_GENERAL; a_provenance: BIB_PROVENANCE)
+			-- Row for token `a_token_id' in language `a_language'; optional columns are set with `set_context'.
+			-- `a_surface' may be empty for a real Hebrew token (Phase 2 review, ruling 1.2).
 		require
 			id_positive: a_token_id > 0
+			language_known: a_language.same_string ("eng") or a_language.same_string ("hbo") or a_language.same_string ("arc") or a_language.same_string ("grc")
 			reference_not_empty: not a_reference_text.is_empty
-			surface_not_empty: not a_surface.is_empty
-			translit_not_empty: not a_translit.is_empty
+			translit_when_written: (is_original (a_language) and not a_surface.is_empty) implies not a_translit.is_empty
 		do
 			check implemented_in_phase_4: False then end
 		ensure
 			id_set: token_id = a_token_id
+			language_set: language.same_string (a_language)
 			reference_set: reference_text.same_string_general (a_reference_text)
+			surface_set: surface.same_string_general (a_surface)
+			translit_set: translit.same_string_general (a_translit)
 			provenance_set: provenance = a_provenance
+			context_absent: meaning = Void and stem = Void and bsb = Void and kjv = Void and step = Void
 		end
 
 feature -- Access
 
 	token_id: INTEGER_64
+	language: STRING_8
+		-- "eng", "hbo", "arc" or "grc".
 	reference_text: STRING_32
 	surface: STRING_32
 	translit: STRING_32
@@ -59,6 +66,8 @@ feature -- Element change
 		do
 			check implemented_in_phase_4: False then end
 		ensure
+			meaning_set: (a_meaning = Void) = (meaning = Void)
+			stem_set: (a_stem = Void) = (stem = Void)
 			bsb_set: (a_bsb = Void) = (bsb = Void)
 			kjv_set: (a_kjv = Void) = (kjv = Void)
 			step_set: (a_step = Void) = (step = Void)
@@ -66,6 +75,6 @@ feature -- Element change
 
 invariant
 	id_positive: token_id > 0
-	translit_not_empty: not translit.is_empty
+	translit_when_written: (is_original (language) and not surface.is_empty) implies not translit.is_empty
 
 end

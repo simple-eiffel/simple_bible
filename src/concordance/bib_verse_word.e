@@ -3,7 +3,10 @@ note
 		One word of a verse in the verse lookup: position, the written form, its
 		transliteration, and the headword it is a door to (Void when the lemma
 		basis is "none"). `lemma_basis' says how the lemma was reached (tagged,
-		aligned, xref, none): a candidate, never "the best".
+		computed, aligned, xref, none): a candidate, never "the best". The basis is
+		the KIND only; the pack stores `<kind>:<source>' and maps it (ruling 1.1).
+		`surface' may be empty for a real original-language token (6,435 Hebrew
+		tokens in conc.db, ruling 1.2); `translit' is then not required.
 	]"
 	author: "Larry Rix"
 	date: "$Date$"
@@ -20,18 +23,21 @@ create
 
 feature {NONE} -- Initialization
 
-	make (a_position: INTEGER; a_surface, a_translit: READABLE_STRING_GENERAL; a_lemma_id: INTEGER_64; a_lemma_basis: READABLE_STRING_8; a_provenance: BIB_PROVENANCE)
-			-- Word `a_position' of the verse; `a_lemma_id' is 0 when none.
+	make (a_position: INTEGER; a_language: READABLE_STRING_8; a_surface, a_translit: READABLE_STRING_GENERAL; a_lemma_id: INTEGER_64; a_lemma_basis: READABLE_STRING_8; a_provenance: BIB_PROVENANCE)
+			-- Word `a_position' of the verse in language `a_language'; `a_lemma_id' is 0 when none.
 		require
 			position_positive: a_position >= 1
-			surface_not_empty: not a_surface.is_empty
-			translit_not_empty: not a_translit.is_empty
-			basis_known: a_lemma_basis.same_string ("tagged") or a_lemma_basis.same_string ("aligned") or a_lemma_basis.same_string ("xref") or a_lemma_basis.same_string ("none")
+			language_known: a_language.same_string ("eng") or a_language.same_string ("hbo") or a_language.same_string ("arc") or a_language.same_string ("grc")
+			translit_when_written: (is_original (a_language) and not a_surface.is_empty) implies not a_translit.is_empty
+			basis_known: across <<"tagged", "computed", "aligned", "xref", "none">> as b some a_lemma_basis.same_string (b) end
 			none_means_no_lemma: a_lemma_basis.same_string ("none") = (a_lemma_id = 0)
 		do
 			check implemented_in_phase_4: False then end
 		ensure
 			position_set: position = a_position
+			language_set: language.same_string (a_language)
+			surface_set: surface.same_string_general (a_surface)
+			translit_set: translit.same_string_general (a_translit)
 			lemma_set: lemma_id = a_lemma_id
 			basis_set: lemma_basis.same_string (a_lemma_basis)
 			provenance_set: provenance = a_provenance
@@ -40,7 +46,10 @@ feature {NONE} -- Initialization
 feature -- Access
 
 	position: INTEGER
+	language: STRING_8
+		-- "eng", "hbo", "arc" or "grc".
 	surface: STRING_32
+		-- The written form; may be empty (see the class note).
 	translit: STRING_32
 	lemma_id: INTEGER_64
 			-- 0 when the word has no headword.
@@ -57,7 +66,7 @@ feature -- Access
 
 invariant
 	position_positive: position >= 1
-	translit_not_empty: not translit.is_empty
+	translit_when_written: (is_original (language) and not surface.is_empty) implies not translit.is_empty
 	none_means_no_lemma: lemma_basis.same_string ("none") = (lemma_id = 0)
 
 end
