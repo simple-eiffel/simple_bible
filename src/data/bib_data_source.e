@@ -64,24 +64,17 @@ feature -- Status
 		end
 
 	is_available: BOOLEAN
-			-- Is the file present?
+			-- Is the file present (a file, not a folder)?
 		do
-			-- Phase 4: simple_file existence check.
+			Result := not path.is_empty and then (create {SIMPLE_FILE}.make (path)).is_file
 		end
 
 	has_required_tables: BOOLEAN
-			-- Are the tables this engine reads present?
-		do
-			-- Phase 4: sqlite_master.
-		end
+			-- Are the tables this engine reads present? Recorded by `open_on'.
 
 	tables_without_provenance_column: INTEGER
 			-- Shipped tables lacking `provenance_key NOT NULL REFERENCES source_provenance' (RQ-02).
-		do
-			-- Phase 4: PRAGMA table_info / foreign_key_list over the shipped tables.
-		ensure
-			non_negative: Result >= 0
-		end
+			-- Recorded by `open_on'.
 
 	is_provenance_schema_valid: BOOLEAN
 			-- Does every shipped table declare its provenance column?
@@ -124,5 +117,6 @@ feature -- Commands
 invariant
 	open_implies_schema: is_open implies schema_version = expected_schema_version
 	error_only_when_closed: last_error /= Void implies not is_open
+	provenance_count_non_negative: tables_without_provenance_column >= 0
 
 end

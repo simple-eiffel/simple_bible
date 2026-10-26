@@ -39,6 +39,7 @@ feature {NONE} -- Initialization
 			run_pack_purity_tests
 			run_source_set_tests
 			run_concordance_tests
+			run_facade_open_tests
 			run_layering_tests
 			run_scoop_consumer
 			print ("%N========================%N")
@@ -307,6 +308,24 @@ feature {NONE} -- Suites
 			run_test (agent t.test_detach_refused_while_a_cursor_is_open, "test_detach_refused_while_a_cursor_is_open")
 		end
 
+	run_facade_open_tests
+		local
+			t: TEST_FACADE_OPEN
+		do
+			print ("TEST_FACADE_OPEN%N")
+			create t
+			run_test (agent t.test_open_with_content_and_concordance, "test_open_with_content_and_concordance")
+			run_test (agent t.test_open_without_a_concordance, "test_open_without_a_concordance")
+			run_test (agent t.test_missing_concordance_keeps_the_bible_open, "test_missing_concordance_keeps_the_bible_open")
+			run_test (agent t.test_refused_concordance_keeps_the_bible_open, "test_refused_concordance_keeps_the_bible_open")
+			run_test (agent t.test_content_at_another_version_is_refused, "test_content_at_another_version_is_refused")
+			run_test (agent t.test_content_without_provenance_is_refused, "test_content_without_provenance_is_refused")
+			run_test (agent t.test_missing_content_is_refused, "test_missing_content_is_refused")
+			run_test (agent t.test_pack_folder_scan_skips_the_concordance, "test_pack_folder_scan_skips_the_concordance")
+			run_test (agent t.test_generic_pack_waits_for_task_7b, "test_generic_pack_waits_for_task_7b")
+			run_test (agent t.test_edition_swap_needs_no_code, "test_edition_swap_needs_no_code")
+		end
+
 	run_concordance_tests
 		local
 			t: TEST_CONCORDANCE
@@ -320,7 +339,6 @@ feature {NONE} -- Suites
 			run_test (agent t.test_verse_lookup_every_corpus, "test_verse_lookup_every_corpus")
 			run_test (agent t.test_word_view_lists_every_fact, "test_word_view_lists_every_fact")
 			run_test (agent t.test_word_view_failures_are_answers, "test_word_view_failures_are_answers")
-			run_skeletal (agent t.test_edition_swap_needs_no_code, "test_edition_swap_needs_no_code", "FR-158")
 			run_test (agent t.test_pack_not_valid_until_checked, "test_pack_not_valid_until_checked")
 			run_test (agent t.test_fixture_has_the_reviewed_shapes, "test_fixture_has_the_reviewed_shapes")
 			run_test (agent t.test_language_codes, "test_language_codes")

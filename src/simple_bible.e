@@ -67,8 +67,45 @@ feature -- Lifecycle
 			-- debates 01, 03 and 05).
 		require
 			not_open: not is_open
+		local
+			l_content: BIB_CONTENT_SOURCE
 		do
-			-- Phase 4
+			last_error := Void
+			conc_error := Void
+			core_schema_valid := False
+			has_ai_data := False
+			has_author_library := False
+			author_source := Void
+			if not config.is_valid then
+				create last_error.make ({BIB_ERROR}.Source_unavailable, "The configuration names no content database.")
+			else
+				create l_content.make (config.core_path)
+				content := l_content
+				if not l_content.is_available then
+					create last_error.make_with_details ({BIB_ERROR}.Source_unavailable, "The content database was not found.", config.core_path)
+				else
+					l_content.open_on (sources)
+					if attached l_content.last_error as al_error then
+						last_error := al_error
+					elseif pack_count > Max_generic_packs then
+						create last_error.make_with_details ({BIB_ERROR}.Source_unavailable, "The pack folder holds " + pack_count.out + " packs; at most " + Max_generic_packs.out + " attach (FR-138).", config.pack_folder)
+						close_after_refusal (l_content)
+					elseif pack_count > 0 then
+							-- Phase 4, Task 7b (2026-10-26): generic packs attach through BIB_PRIVATE_SOURCE.
+						create last_error.make_with_details ({BIB_ERROR}.Source_unavailable, "Generic private packs are not read yet; the pack folder holds " + pack_count.out + ".", config.pack_folder)
+						close_after_refusal (l_content)
+					else
+						core_schema_valid := True
+						database_edition := l_content.database_edition.twin
+						has_ai_data := l_content.ai_row_count > 0
+						has_author_library := l_content.author_document_count > 0
+						if has_author_library then
+							create author_source.make (config.core_path)
+						end
+						open_concordance
+					end
+				end
+			end
 		ensure
 			open_or_error: is_open xor (last_error /= Void)
 			core_checked: is_open implies core_schema_valid
@@ -84,7 +121,11 @@ feature -- Lifecycle
 		require
 			open: is_open
 		do
-			-- Phase 4
+			sources.close
+			if attached content as al_content and then al_content.is_open then
+				al_content.close
+			end
+			core_schema_valid := False
 		ensure
 			closed: not is_open
 		end
@@ -105,21 +146,33 @@ feature -- Status
 	content_has_ai_rows: BOOLEAN
 			-- Does content.db carry AI-made rows? (Optional content ships as empty tables.)
 		do
-			-- Phase 4: content source's `ai_row_count' > 0.
+			Result := attached content as al_content and then al_content.is_open and then al_content.ai_row_count > 0
 		end
 
 	content_has_author_rows: BOOLEAN
 			-- Does content.db carry the author library's documents?
 		do
-			-- Phase 4: content source's `author_document_count' > 0.
+			Result := attached content as al_content and then al_content.is_open and then al_content.author_document_count > 0
 		end
 
 	pack_count: INTEGER
 			-- Generic private packs FOUND in the pack folder, unclamped: a count above
 			-- `Max_generic_packs' is reported by `open' (FR-138), never trimmed here
 			-- (a clamp would make that report vacuous; ruling 2.4).
+		local
+			l_folder: SIMPLE_FILE
 		do
-			-- Phase 4: scan `config.pack_folder'.
+			if not config.pack_folder.is_empty then
+				create l_folder.make (config.pack_folder)
+				if l_folder.is_directory then
+					across l_folder.files_with_extension (".db") as ic loop
+							-- conc.db is found by `conc_path', never by the folder scan (FR-166).
+						if not is_conc_file (ic) then
+							Result := Result + 1
+						end
+					end
+				end
+			end
 		ensure
 			non_negative: Result >= 0
 		end
@@ -368,6 +421,70 @@ feature -- Constants
 			-- one slot always reserved for the concordance pack (ruling 2.4).
 
 feature {NONE} -- Implementation
+
+	content: detachable BIB_CONTENT_SOURCE
+			-- content.db as the last `open' found it.
+
+	open_concordance
+			-- Attach and check the pack `conc_path' names. A missing or refused pack leaves the
+			-- Bible open with the reason in `conc_error' (Larry, 2026-10-26); a refused pack is
+			-- detached, so its slot is free.
+		require
+			open: is_open
+		do
+			if not config.conc_path.is_empty then
+				if not (create {SIMPLE_FILE}.make (config.conc_path)).is_file then
+					create conc_error.make_with_details ({BIB_ERROR}.Source_unavailable, "The concordance pack was not found.", config.conc_path)
+				else
+					sources.attach ({BIB_CONC_PACK}.Pack_alias, config.conc_path)
+					if attached sources.last_error as al_error then
+						conc_error := al_error
+					else
+						conc_pack.check_pack
+						if attached conc_pack.pack_error as al_refusal then
+							conc_error := al_refusal
+							sources.detach ({BIB_CONC_PACK}.Pack_alias)
+						end
+					end
+				end
+			end
+		ensure
+			still_open: is_open
+			attached_or_reported: not config.conc_path.is_empty implies (conc_pack.is_available or conc_error /= Void)
+		end
+
+	close_after_refusal (a_content: BIB_CONTENT_SOURCE)
+			-- Close what `open' opened before it refused (content.db stays closed).
+		require
+			refused: last_error /= Void
+		do
+			if sources.is_open then
+				sources.close
+			end
+			if a_content.is_open then
+				a_content.close
+			end
+		ensure
+			closed: not is_open
+		end
+
+	is_conc_file (a_name: READABLE_STRING_GENERAL): BOOLEAN
+			-- Is the pack-folder file `a_name' the concordance pack `conc_path' names?
+		local
+			l_path, l_conc: STRING_32
+		do
+			if not config.conc_path.is_empty then
+				l_path := config.pack_folder.twin
+				if not (l_path.ends_with ("\") or l_path.ends_with ("/")) then
+					l_path.append_character ('\')
+				end
+				l_path.append (a_name.to_string_32)
+				l_path.replace_substring_all ("/", "\")
+				l_conc := config.conc_path.twin
+				l_conc.replace_substring_all ("/", "\")
+				Result := l_path.is_case_insensitive_equal (l_conc)
+			end
+		end
 
 	sources: BIB_SOURCE_SET
 			-- This processor's single connection and its attachments.

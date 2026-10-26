@@ -562,12 +562,6 @@ feature -- Tests
 			assert_strings_equal ("headword not swapped", "BRA", l_english.headword)
 		end
 
-	test_edition_swap_needs_no_code
-			-- Skeletal (Phase 5, FR-158, V-54): the same executable reads conc.db and
-			-- conc_dist.db by `conc_path' alone; no engine code tests the edition.
-		do
-		end
-
 feature {NONE} -- Fixture
 
 	Main_file: STRING = "conc_test_main.db"
