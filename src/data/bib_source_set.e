@@ -101,8 +101,28 @@ feature -- Commands
 		require
 			not_open: not is_open
 			path_not_empty: not a_path.is_empty
+		local
+			l_db: SIMPLE_SQL_DATABASE
+			l_result: SIMPLE_SQL_RESULT
 		do
-			-- Phase 4: SIMPLE_SQL_DATABASE.make_read_only; record sqlite_version; foreign keys on.
+				-- No foreign-key pragma: main is read-only, so nothing here can write a row.
+			last_error := Void
+			if not (create {RAW_FILE}.make_with_name (a_path)).exists then
+				create last_error.make_with_details ({BIB_ERROR}.Source_unavailable, "The content database was not found.", a_path)
+			else
+				create l_db.make_read_only (a_path)
+					-- Reading sqlite_master makes a file that is not a database fail here, at open.
+				l_result := l_db.query ("SELECT sqlite_version() AS v, (SELECT count(*) FROM sqlite_master) AS n")
+				if not l_db.has_error and then not l_result.rows.is_empty and then attached l_result.rows.first as al_row then
+					sqlite_version := al_row.string_value ("v")
+					core_path := a_path.to_string_32
+					database := l_db
+					is_open := True
+				else
+					create last_error.make_with_details ({BIB_ERROR}.Database_problem, "The content database cannot be read.", sqlite_message (l_db, a_path))
+					l_db.close
+				end
+			end
 		ensure
 			open_or_error: is_open xor (last_error /= Void)
 			path_recorded: is_open implies core_path.same_string_general (a_path)
@@ -119,7 +139,16 @@ feature -- Commands
 			under_limit: attached_count < Max_attached
 			path_not_empty: not a_path.is_empty
 		do
-			-- Phase 4: database.attach_read_only (a_path, a_alias).
+			last_error := Void
+			if attached database as al_db then
+				al_db.attach_read_only (a_path, a_alias)
+				if al_db.has_error then
+						-- SQLite's own words (FR-138, ruling 3.1), never "Unknown error".
+					create last_error.make_with_details ({BIB_ERROR}.Source_unavailable, "A pack could not be attached as " + a_alias + ".", sqlite_message (al_db, a_path))
+				else
+					attached_paths.force (a_path.to_string_32, a_alias.twin)
+				end
+			end
 		ensure
 			attached_now: last_error = Void implies attached_model |=| old attached_model.updated (a_alias, a_path.to_string_32)
 			count_grown: last_error = Void implies attached_count = old attached_count + 1
@@ -133,9 +162,19 @@ feature -- Commands
 			open: is_open
 			is_attached: attached_model.domain [a_alias]
 		do
-			-- Phase 4: DETACH DATABASE.
+			last_error := Void
+			if attached database as al_db then
+				al_db.detach (a_alias)
+				if al_db.has_error then
+						-- SQLite refuses while a statement on the pack is still open (FR-159: close cursors).
+					create last_error.make_with_details ({BIB_ERROR}.Database_problem, "A pack could not be detached: " + a_alias + ".", sqlite_message (al_db, a_alias))
+				else
+					attached_paths.remove (a_alias)
+				end
+			end
 		ensure
-			removed: attached_model |=| old attached_model.removed (a_alias)
+			removed: last_error = Void implies attached_model |=| old attached_model.removed (a_alias)
+			kept_on_error: last_error /= Void implies attached_model |=| old attached_model
 		end
 
 	close
@@ -143,10 +182,16 @@ feature -- Commands
 		require
 			open: is_open
 		do
-			-- Phase 4
+			if attached database as al_db then
+				al_db.close
+			end
+			database := Void
+			attached_paths.wipe_out
+			is_open := False
 		ensure
 			closed: not is_open
 			none_attached: attached_count = 0
+			no_connection: database = Void
 		end
 
 feature -- Connection (engine-internal; faces never see a source set)
@@ -158,6 +203,20 @@ feature -- Constants
 
 	Max_attached: INTEGER = 10
 			-- SQLite attach limit (DR-020; attach #11 fails): pack slots only.
+
+feature {NONE} -- Implementation
+
+	sqlite_message (a_db: SIMPLE_SQL_DATABASE; a_fallback: READABLE_STRING_GENERAL): STRING_32
+			-- SQLite's own message for the last failure on `a_db' (FR-138), or `a_fallback' when it gave none.
+		do
+			if attached a_db.last_error_message as al_message and then not al_message.is_empty then
+				Result := al_message.twin
+			else
+				Result := a_fallback.to_string_32
+			end
+		ensure
+			not_empty: not a_fallback.is_empty implies not Result.is_empty
+		end
 
 feature {NONE} -- Representation
 

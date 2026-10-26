@@ -37,6 +37,7 @@ feature {NONE} -- Initialization
 			run_jobs_scoop_tests
 			run_ai_seam_tests
 			run_pack_purity_tests
+			run_source_set_tests
 			run_concordance_tests
 			run_layering_tests
 			run_scoop_consumer
@@ -289,6 +290,19 @@ feature {NONE} -- Suites
 			run_test (agent t.test_scan_sees_every_source_folder, "test_scan_sees_every_source_folder")
 			run_test (agent t.test_no_private_names_in_sources, "test_no_private_names_in_sources")
 			run_skeletal (agent t.test_public_executable_has_no_private_strings, "test_public_executable_has_no_private_strings", "AC-1a-57")
+		end
+
+	run_source_set_tests
+		local
+			t: TEST_SOURCE_SET
+		do
+			print ("TEST_SOURCE_SET%N")
+			create t
+			run_test (agent t.test_open_attach_detach_close, "test_open_attach_detach_close")
+			run_test (agent t.test_open_core_missing_file_reports, "test_open_core_missing_file_reports")
+			run_test (agent t.test_open_core_not_a_database_reports, "test_open_core_not_a_database_reports")
+			run_test (agent t.test_attach_missing_pack_reports_sqlite_message, "test_attach_missing_pack_reports_sqlite_message")
+			run_test (agent t.test_detach_refused_while_a_cursor_is_open, "test_detach_refused_while_a_cursor_is_open")
 		end
 
 	run_concordance_tests
