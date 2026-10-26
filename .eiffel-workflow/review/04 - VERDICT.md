@@ -87,3 +87,7 @@ Counts: SUSTAINED 9, NARROWED 4, OVERRULED 0 (seat positions overruled inside ru
 | 1 | *(proposal)* executed evidence counts as external confrontation: grade C2 with it, C3 without |
 | 2 | Policy default ruled here, yours to overturn: a missing or refused conc.db leaves the Bible open with the concordance unavailable and the reason reported (`conc_error`), following FR-164's "refuses a pack"; the alternative is that `open` fails |
 | 3 | Adopt this verdict and its five conditions |
+
+## 8. Gate
+
+Larry's gate (2026-10-26): APPROVED. His word: "Approve" (then "Go"). Verdict and its five conditions adopted; policy default kept (a missing or refused conc.db leaves the Bible open, concordance unavailable, reason in `conc_error`); the executed-evidence rule was already gated (Larry 2026-10-11, oracle rule "Executed runs count as external confrontation"), so the condition grade is C2.

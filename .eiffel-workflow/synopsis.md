@@ -1,6 +1,6 @@
 # Phase 2 Synopsis: concordance slice (2026-10-26)
 
-**STATUS: AWAITING LARRY'S GATE**
+**STATUS: APPROVED BY LARRY (2026-10-26)**
 
 Source of truth: `.eiffel-workflow/review/04 - VERDICT.md` (fresh adjudicator, General Research ROE v1.1, October 12, 2026). Ruled findings: `.eiffel-workflow/evidence/phase2-claude-response.md`. Thirteen findings were raised: SUSTAINED 9, NARROWED 4, OVERRULED 0. After ruling: HIGH 4, MEDIUM 6, LOW 1, INFO 2.
 
@@ -68,3 +68,7 @@ None. Every fix is a contract edit, an additive feature, a simple_sql variant or
 | 1 | *(proposal)* executed evidence counts as external confrontation: grade C2 with it, C3 without |
 | 2 | Policy default ruled here, yours to overturn: a missing or refused conc.db leaves the Bible open with the concordance unavailable and the reason reported (`conc_error`), following FR-164's "refuses a pack"; the alternative is that `open` fails |
 | 3 | Adopt this verdict and its five conditions |
+
+## Gate
+
+Larry's gate (2026-10-26): APPROVED. His word: "Approve" (then "Go"). Verdict and its five conditions adopted; policy default kept (a missing or refused conc.db leaves the Bible open, concordance unavailable, reason in `conc_error`); the executed-evidence rule was already gated (Larry 2026-10-11, oracle rule "Executed runs count as external confrontation"), so the condition grade is C2.
