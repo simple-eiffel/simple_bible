@@ -184,6 +184,12 @@ feature -- Access
 			model_agrees: Result ~ settings_model [a_key]
 		end
 
+	last_backup_path: STRING_32
+			-- The copy `open' made before upgrading user.db; empty when it made none.
+		attribute
+			create Result.make_empty
+		end
+
 	layout_count: INTEGER
 		do
 			-- Phase 4
@@ -310,6 +316,201 @@ feature -- Commands: annotations
 			restored: write_error = Void implies not is_deleted (a_id)
 		end
 
+feature -- Prayer (E06, schema 2)
+
+	add_prayer_item (a_prayer: BIB_PRAYER)
+			-- Keep `a_prayer' on the list.
+		require
+			open: is_open
+			not_stored: a_prayer.id = 0
+		local
+			l_at: STRING_8
+		do
+			write_error := Void
+			l_at := now_text
+			connection.execute_with_args ("INSERT INTO prayer(title, body, hub_id, created_at) VALUES (?, ?, ?, ?)", <<a_prayer.title, a_prayer.body, a_prayer.hub_id, l_at>>)
+			if connection.has_error then
+				create write_error.make ({BIB_ERROR}.Database_problem, failure_text (connection, "The prayer could not be saved."))
+			else
+				a_prayer.mark_stored (connection.last_insert_rowid, l_at)
+			end
+		ensure
+			stored: write_error = Void implies a_prayer.id > 0
+		end
+
+	set_prayer_answered (a_id: INTEGER_64; a_answer: READABLE_STRING_GENERAL)
+			-- Prayer `a_id' answered today, `a_answer' in the reader's words.
+		require
+			open: is_open
+			stored: a_id > 0
+		do
+			write_error := Void
+			connection.execute_with_args ("UPDATE prayer SET answered_at = ?, answer = ? WHERE prayer_id = ? AND deleted = 0", <<now_text, a_answer.to_string_32, a_id>>)
+			if connection.has_error then
+				create write_error.make ({BIB_ERROR}.Database_problem, failure_text (connection, "The prayer could not be changed."))
+			elseif connection.changes_count /= 1 then
+				create write_error.make ({BIB_ERROR}.Not_found, {STRING_32} "No such prayer: " + a_id.out)
+			end
+		end
+
+	set_prayer_deleted (a_id: INTEGER_64; a_deleted: BOOLEAN)
+			-- Prayer `a_id' removed (kept, restorable) or restored.
+		require
+			open: is_open
+			stored: a_id > 0
+		local
+			l_flag: INTEGER
+		do
+			write_error := Void
+			if a_deleted then
+				l_flag := 1
+			end
+			connection.execute_with_args ("UPDATE prayer SET deleted = ? WHERE prayer_id = ?", <<l_flag, a_id>>)
+			if connection.has_error then
+				create write_error.make ({BIB_ERROR}.Database_problem, failure_text (connection, "The prayer could not be changed."))
+			elseif connection.changes_count /= 1 then
+				create write_error.make ({BIB_ERROR}.Not_found, {STRING_32} "No such prayer: " + a_id.out)
+			end
+		end
+
+	prayers (a_answered: BOOLEAN): ARRAYED_LIST [BIB_PRAYER]
+			-- The live prayers still open (newest first), or answered (latest answer first).
+		require
+			open: is_open
+		local
+			l_prayer: BIB_PRAYER
+			l_sql: STRING_8
+		do
+			create Result.make (8)
+			if a_answered then
+				l_sql := "SELECT prayer_id, title, body, hub_id, created_at, answered_at, answer FROM prayer WHERE deleted = 0 AND answered_at <> '' AND title <> '' ORDER BY answered_at DESC, prayer_id DESC"
+			else
+				l_sql := "SELECT prayer_id, title, body, hub_id, created_at, answered_at, answer FROM prayer WHERE deleted = 0 AND answered_at = '' AND title <> '' ORDER BY prayer_id DESC"
+			end
+			across connection.query (l_sql).rows as ic loop
+				if ic.integer_64_value ("hub_id") >= 0 then
+					create l_prayer.make (ic.string_value ("title"), ic.string_value ("body"), ic.integer_64_value ("hub_id"))
+					l_prayer.mark_stored (ic.integer_64_value ("prayer_id"), ic.string_value ("created_at"))
+					if not ic.string_value ("answered_at").is_empty then
+						l_prayer.mark_answered (ic.string_value ("answered_at"), ic.string_value ("answer"))
+					end
+					Result.extend (l_prayer)
+				end
+			end
+		ensure
+			that_kind: across Result as ic all ic.is_answered = a_answered end
+		end
+
+feature -- Memory cards (E07, schema 2)
+
+	add_memory_card (a_card: BIB_MEMORY_CARD)
+			-- Keep `a_card' (a verse to learn).
+		require
+			open: is_open
+			not_stored: a_card.id = 0
+			one_card_a_verse: not has_memory_card (a_card.hub_id)
+		do
+			write_error := Void
+			connection.execute_with_args ("INSERT INTO memory_card(hub_id, created_at, due_on, interval_days, ease_percent, repetitions) VALUES (?, ?, ?, ?, ?, ?)",
+				<<a_card.hub_id, now_text, a_card.due_on, a_card.interval_days, a_card.ease_percent, a_card.repetitions>>)
+			if connection.has_error then
+				create write_error.make ({BIB_ERROR}.Database_problem, failure_text (connection, "The card could not be saved."))
+			else
+				a_card.mark_stored (connection.last_insert_rowid)
+			end
+		ensure
+			stored: write_error = Void implies a_card.id > 0
+		end
+
+	has_memory_card (a_hub_id: INTEGER_64): BOOLEAN
+			-- Is verse `a_hub_id' already a live card?
+		require
+			open: is_open
+		do
+			Result := first_integer (connection.query_with_args ("SELECT count(*) AS n FROM memory_card WHERE hub_id = ? AND deleted = 0", <<a_hub_id>>)) > 0
+		end
+
+	memory_cards (a_due_by: READABLE_STRING_GENERAL): ARRAYED_LIST [BIB_MEMORY_CARD]
+			-- The live cards due on or before `a_due_by' (ISO date), soonest first; every card when
+			-- `a_due_by' is empty.
+		require
+			open: is_open
+		local
+			l_card: BIB_MEMORY_CARD
+		do
+			create Result.make (8)
+			across connection.query_with_args ("SELECT card_id, hub_id, due_on, interval_days, ease_percent, repetitions FROM memory_card WHERE deleted = 0 AND hub_id > 0 AND (? = '' OR due_on <= ?) ORDER BY due_on, card_id",
+					<<a_due_by.to_string_32, a_due_by.to_string_32>>).rows as ic loop
+				if not ic.string_value ("due_on").is_empty and ic.integer_value ("ease_percent") >= {BIB_MEMORY_SCHEDULE}.Least_ease then
+					create l_card.make (ic.integer_64_value ("hub_id"), ic.string_value ("due_on"))
+					l_card.mark_stored (ic.integer_64_value ("card_id"))
+					l_card.set_state (ic.string_value ("due_on"), ic.integer_value ("interval_days").max (0), ic.integer_value ("ease_percent"), ic.integer_value ("repetitions").max (0))
+					Result.extend (l_card)
+				end
+			end
+		ensure
+			all_due: not a_due_by.is_empty implies across Result as ic all ic.is_due (a_due_by) end
+		end
+
+	record_review (a_card: BIB_MEMORY_CARD; a_grade: INTEGER; a_today: SIMPLE_DATE)
+			-- `a_card' reviewed on `a_today' with grade `a_grade' (0 to 5): its next date by
+			-- BIB_MEMORY_SCHEDULE, the review kept in memory_review.
+		require
+			open: is_open
+			stored: a_card.id > 0
+			grade_valid: a_grade >= 0 and a_grade <= 5
+		local
+			l_schedule: BIB_MEMORY_SCHEDULE
+			l_interval, l_ease, l_repetitions: INTEGER
+			l_due: STRING_8
+		do
+			write_error := Void
+			create l_schedule
+			l_interval := l_schedule.next_interval (a_card.repetitions, a_card.interval_days, a_card.ease_percent, a_grade)
+			l_ease := l_schedule.next_ease (a_card.ease_percent, a_grade)
+			l_repetitions := l_schedule.next_repetitions (a_card.repetitions, a_grade)
+			l_due := a_today.plus_days (l_interval).to_iso8601
+			connection.begin_transaction
+			connection.execute_with_args ("UPDATE memory_card SET due_on = ?, interval_days = ?, ease_percent = ?, repetitions = ? WHERE card_id = ? AND deleted = 0",
+				<<l_due, l_interval, l_ease, l_repetitions, a_card.id>>)
+			if not connection.has_error and then connection.changes_count = 1 then
+				connection.execute_with_args ("INSERT INTO memory_review(card_id, reviewed_on, grade, interval_days, ease_percent) VALUES (?, ?, ?, ?, ?)",
+					<<a_card.id, a_today.to_iso8601, a_grade, l_interval, l_ease>>)
+			end
+			if connection.has_error then
+				create write_error.make ({BIB_ERROR}.Database_problem, failure_text (connection, "The review could not be saved."))
+				connection.rollback
+			elseif connection.changes_count /= 1 then
+				create write_error.make ({BIB_ERROR}.Not_found, {STRING_32} "No such card: " + a_card.id.out)
+				connection.rollback
+			else
+				connection.commit
+				a_card.set_state (l_due, l_interval, l_ease, l_repetitions)
+			end
+		ensure
+			moved: write_error = Void implies a_card.repetitions = (create {BIB_MEMORY_SCHEDULE}).next_repetitions (old a_card.repetitions, a_grade)
+		end
+
+	set_memory_card_deleted (a_id: INTEGER_64; a_deleted: BOOLEAN)
+			-- Card `a_id' removed (kept, restorable) or restored.
+		require
+			open: is_open
+			stored: a_id > 0
+		local
+			l_flag: INTEGER
+		do
+			write_error := Void
+			if a_deleted then
+				l_flag := 1
+			end
+			connection.execute_with_args ("UPDATE memory_card SET deleted = ? WHERE card_id = ?", <<l_flag, a_id>>)
+			if connection.has_error then
+				create write_error.make ({BIB_ERROR}.Database_problem, failure_text (connection, "The card could not be changed."))
+			elseif connection.changes_count /= 1 then
+				create write_error.make ({BIB_ERROR}.Not_found, {STRING_32} "No such card: " + a_id.out)
+			end
+		end
+
 feature -- Commands: settings, layouts, census
 
 	set_setting (a_key: STRING_8; a_value: READABLE_STRING_GENERAL)
@@ -369,12 +570,18 @@ feature -- Commands: settings, layouts, census
 feature -- Commands: schema
 
 	migrate (a_from_version, a_to_version: INTEGER)
-			-- Upgrade a previous-schema user.db, preserving everything.
+			-- Upgrade a previous-schema user.db, preserving everything (`open' does this itself for a
+			-- version-1 file: a backup, then tables added, never a row changed).
 		require
 			open: is_open
 			forward: a_to_version > a_from_version
 		do
-			-- Phase 4: simple_sql migration runner.
+			if attached database as al_db and then a_from_version = 1 and then a_to_version = User_schema_version and then schema_version = 1 then
+				upgrade_from_1 (al_db)
+				if last_error = Void then
+					schema_version := first_integer (al_db.query ("PRAGMA user_version"))
+				end
+			end
 		ensure
 			settings_preserved: last_error = Void implies settings_model |=| old settings_model
 			layouts_preserved: last_error = Void implies layout_count = old layout_count
@@ -413,6 +620,10 @@ feature -- Commands: schema
 					l_version := first_integer (l_db.query ("PRAGMA user_version"))
 					if l_version = 0 then
 						create_schema (l_db)
+						l_version := first_integer (l_db.query ("PRAGMA user_version"))
+					elseif l_version = 1 then
+							-- Schema 2 (2026-10-27): prayer and memory cards. A backup first, then tables added.
+						upgrade_from_1 (l_db)
 						l_version := first_integer (l_db.query ("PRAGMA user_version"))
 					end
 					if last_error = Void and l_version /= User_schema_version then
@@ -542,6 +753,56 @@ feature {NONE} -- Schema
 	database: detachable SIMPLE_SQL_DATABASE
 			-- user.db while open.
 
+	upgrade_from_1 (a_db: SIMPLE_SQL_DATABASE)
+			-- Schema 1 to 2: copy the file first (SQLite's VACUUM INTO, a consistent copy beside it),
+			-- then add the prayer and memory tables in one transaction; a failure leaves version 1 as
+			-- it was. Nothing existing is changed (DR-024: user data is never lost by an upgrade).
+		local
+			l_backup: STRING_32
+			n: INTEGER
+		do
+			l_backup := path + {STRING_32} ".schema-1-backup.db"
+			from n := 2 until not (create {SIMPLE_FILE}.make (l_backup)).exists loop
+				l_backup := path + {STRING_32} ".schema-1-backup-" + n.out + {STRING_32} ".db"
+				n := n + 1
+			end
+			a_db.execute_with_args ("VACUUM INTO ?", {ARRAY [detachable ANY]} <<l_backup>>)
+			if a_db.has_error or else not (create {SIMPLE_FILE}.make (l_backup)).is_file then
+				create last_error.make ({BIB_ERROR}.Database_problem, failure_text (a_db, "user.db could not be backed up before its upgrade, so it was left as it is."))
+			else
+				last_backup_path := l_backup
+				a_db.begin_transaction
+				across Upgrade_2_statements as ic until last_error /= Void loop
+					a_db.execute (ic)
+					if a_db.has_error then
+						create last_error.make ({BIB_ERROR}.Database_problem, failure_text (a_db, "user.db could not be upgraded; it is as it was."))
+					end
+				end
+				if a_db.is_in_transaction then
+					if last_error = Void then
+						a_db.commit
+						if a_db.has_error then
+							create last_error.make ({BIB_ERROR}.Database_problem, failure_text (a_db, "user.db could not be upgraded; it is as it was."))
+						end
+					end
+					if a_db.is_in_transaction then
+						a_db.rollback
+					end
+				end
+			end
+		end
+
+	Upgrade_2_statements: ARRAY [STRING_8]
+			-- Schema 2's additions: a prayer list (answered or open) and memory cards with their reviews.
+		once
+			Result := <<
+				"CREATE TABLE prayer(prayer_id INTEGER PRIMARY KEY, title TEXT NOT NULL, body TEXT NOT NULL, hub_id INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, answered_at TEXT NOT NULL DEFAULT '', answer TEXT NOT NULL DEFAULT '', deleted INTEGER NOT NULL DEFAULT 0)",
+				"CREATE TABLE memory_card(card_id INTEGER PRIMARY KEY, hub_id INTEGER NOT NULL, created_at TEXT NOT NULL, due_on TEXT NOT NULL, interval_days INTEGER NOT NULL DEFAULT 0, ease_percent INTEGER NOT NULL DEFAULT 250, repetitions INTEGER NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0)",
+				"CREATE TABLE memory_review(card_id INTEGER NOT NULL REFERENCES memory_card(card_id), reviewed_on TEXT NOT NULL, grade INTEGER NOT NULL, interval_days INTEGER NOT NULL, ease_percent INTEGER NOT NULL)",
+				"CREATE INDEX ix_memory_due ON memory_card(deleted, due_on)",
+				"PRAGMA user_version = 2">>
+		end
+
 	create_schema (a_db: SIMPLE_SQL_DATABASE)
 			-- Schema version 1 (2026-10-27): notes with every version kept, the other user items,
 			-- and settings. Every row keyed to a verse carries its hub id (BIB_HUB_ID). One
@@ -552,6 +813,13 @@ feature {NONE} -- Schema
 		do
 			a_db.begin_transaction
 			across Schema_statements as ic until last_error /= Void loop
+				a_db.execute (ic)
+				if a_db.has_error then
+					create last_error.make ({BIB_ERROR}.Database_problem, failure_text (a_db, "user.db could not be set up."))
+				end
+			end
+				-- A new user.db is born at the current schema: version 1's tables, then 2's additions.
+			across Upgrade_2_statements as ic until last_error /= Void loop
 				a_db.execute (ic)
 				if a_db.has_error then
 					create last_error.make ({BIB_ERROR}.Database_problem, failure_text (a_db, "user.db could not be set up."))
@@ -603,7 +871,8 @@ feature -- Model
 
 feature -- Constants
 
-	User_schema_version: INTEGER = 1
+	User_schema_version: INTEGER = 2
+			-- 1: notes, user items, settings (2026-10-27); 2: prayer and memory cards (2026-10-27).
 
 	Kind_note: INTEGER = 1
 	Kind_highlight: INTEGER = 2

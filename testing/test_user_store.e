@@ -40,7 +40,7 @@ feature -- Tests
 			clean_user_file
 			create l_user.make (User_file)
 			l_user.open
-			assert_true ("created and open", l_user.is_open and l_user.schema_version = 1)
+			assert_true ("created and open", l_user.is_open and l_user.schema_version = {BIB_USER_STORE}.User_schema_version)
 			create l_notes.make (l_user)
 			assert_true ("writable", l_notes.is_writable)
 			l_hub := (create {BIB_HUB_ID}).hub_id (43, 3, 16)
@@ -277,6 +277,138 @@ feature -- Tests
 			assert_true ("Jude newest, at the verse opened last", l_places.first.hub_id = l_hub.hub_id (65, 1, 6))
 			assert_true ("John next", l_places.i_th (2).hub_id = l_hub.hub_id (43, 3, 16))
 			assert_integers_equal ("at most the limit", 1, l_user.recent_places (1).count)
+			l_user.close
+			clean_user_file
+		end
+
+	test_schema_1_is_upgraded_with_a_backup
+			-- user.db schema 2 (prayer, memory cards): a version-1 file is backed up, then upgraded by
+			-- adding tables only; every note version and setting survives. Before: version 1 was this
+			-- program's version and had no prayer table.
+		local
+			l_old: SIMPLE_SQL_DATABASE
+			l_user: BIB_USER_STORE
+			l_backup: SIMPLE_SQL_DATABASE
+		do
+			clean_user_file
+			create l_old.make (User_file)
+			across <<"CREATE TABLE note(note_id INTEGER PRIMARY KEY, hub_id INTEGER NOT NULL, title TEXT NOT NULL, created_at TEXT NOT NULL, changed_at TEXT NOT NULL, deleted INTEGER NOT NULL DEFAULT 0)",
+					"CREATE TABLE note_version(note_id INTEGER NOT NULL REFERENCES note(note_id), version INTEGER NOT NULL, body TEXT NOT NULL, written_at TEXT NOT NULL, PRIMARY KEY (note_id, version)) WITHOUT ROWID",
+					"CREATE INDEX ix_note_hub ON note(hub_id, deleted)",
+					"CREATE TABLE user_item(item_id INTEGER PRIMARY KEY, kind INTEGER NOT NULL, hub_id INTEGER NOT NULL, label TEXT NOT NULL, created_at TEXT NOT NULL, changed_at TEXT NOT NULL, deleted INTEGER NOT NULL DEFAULT 0)",
+					"CREATE INDEX ix_user_item_hub ON user_item(kind, hub_id, deleted)",
+					"CREATE TABLE setting(key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+					"INSERT INTO note VALUES (1, 65001006, '', '2026-10-27T12:00:00', '2026-10-27T12:00:00', 0)",
+					"INSERT INTO note_version VALUES (1, 1, 'The watchers kept not their estate.', '2026-10-27T12:00:00')",
+					"INSERT INTO setting VALUES ('layout', 'study')",
+					"PRAGMA user_version = 1">> as ic loop
+				l_old.execute (ic)
+			end
+			l_old.close
+			create l_user.make (User_file)
+			l_user.open
+			assert_true ("opened", l_user.is_open and l_user.last_error = Void)
+			assert_integers_equal ("upgraded", 2, l_user.schema_version)
+			assert_integers_equal ("the note's version kept", 1, l_user.total_note_versions)
+			assert_true ("the setting kept", l_user.has_setting ("layout") and then l_user.setting ("layout").same_string ("study"))
+			assert_true ("a backup named", not l_user.last_backup_path.is_empty and then (create {SIMPLE_FILE}.make (l_user.last_backup_path)).is_file)
+			l_user.close
+			create l_backup.make (l_user.last_backup_path)
+			assert_integers_equal ("the backup is the old version", 1, first_number (l_backup, "SELECT user_version AS n FROM pragma_user_version"))
+			assert_integers_equal ("the backup holds the note", 1, first_number (l_backup, "SELECT count(*) AS n FROM note_version"))
+			l_backup.close
+			create l_old.make (User_file)
+			assert_integers_equal ("the new tables are there", 0, first_number (l_old, "SELECT count(*) AS n FROM prayer") + first_number (l_old, "SELECT count(*) AS n FROM memory_card"))
+			l_old.close
+			assert_true ("the backup removed", (create {SIMPLE_FILE}.make (l_user.last_backup_path)).delete)
+			clean_user_file
+		end
+
+	first_number (a_db: SIMPLE_SQL_DATABASE; a_sql: STRING_8): INTEGER
+			-- Column n of the first row `a_sql' gives.
+		do
+			across a_db.query (a_sql).rows as ic loop
+				if Result = 0 then
+					Result := ic.integer_value ("n")
+				end
+			end
+		end
+
+	test_prayer_list_open_answered_removed
+			-- E06: a prayer is kept open, answered with the reader's words, removed and restored.
+		local
+			l_user: BIB_USER_STORE
+			l_prayer: BIB_PRAYER
+		do
+			clean_user_file
+			create l_user.make (User_file)
+			l_user.open
+			create l_prayer.make ("Daniel's health", "Strength for the surgery.", 0)
+			l_user.add_prayer_item (l_prayer)
+			assert_true ("kept", l_prayer.id > 0 and l_user.write_error = Void)
+			assert_integers_equal ("open", 1, l_user.prayers (False).count)
+			l_user.set_prayer_answered (l_prayer.id, "Home on Thursday.")
+			assert_integers_equal ("no longer open", 0, l_user.prayers (False).count)
+			assert_true ("answered, in his words", l_user.prayers (True).count = 1 and then l_user.prayers (True).first.answer.same_string ("Home on Thursday."))
+			l_user.set_prayer_deleted (l_prayer.id, True)
+			assert_integers_equal ("removed", 0, l_user.prayers (True).count)
+			l_user.set_prayer_deleted (l_prayer.id, False)
+			assert_integers_equal ("restored", 1, l_user.prayers (True).count)
+			l_user.set_prayer_answered (999, "x")
+			assert_true ("no such prayer said", attached l_user.write_error as al_e and then al_e.code = {BIB_ERROR}.Not_found)
+			l_user.close
+			clean_user_file
+		end
+
+	test_memory_schedule_is_supermemo_2
+			-- FR-118: the same grades give the same intervals. Good (4) three times: 1, 6, 15 days at
+			-- ease 250; a failure (2) starts again tomorrow and lowers the ease; the ease never sinks
+			-- below 130.
+		local
+			s: BIB_MEMORY_SCHEDULE
+		do
+			create s
+			assert_integers_equal ("first", 1, s.next_interval (0, 0, 250, 4))
+			assert_integers_equal ("second", 6, s.next_interval (1, 1, 250, 4))
+			assert_integers_equal ("third", 15, s.next_interval (2, 6, 250, 4))
+			assert_integers_equal ("good keeps the ease", 250, s.next_ease (250, 4))
+			assert_integers_equal ("easy raises it", 260, s.next_ease (250, 5))
+			assert_integers_equal ("a failure starts again", 1, s.next_interval (5, 40, 250, 2))
+			assert_integers_equal ("and resets the run", 0, s.next_repetitions (5, 2))
+			assert_integers_equal ("lowers the ease", 218, s.next_ease (250, 2))
+			assert_integers_equal ("never below 130", 130, s.next_ease (131, 0))
+		end
+
+	test_memory_cards_due_and_reviewed
+			-- E07: a card for a verse is due today, a good review moves it to tomorrow, then six days
+			-- on; every review is kept; a verse is one card.
+		local
+			l_user: BIB_USER_STORE
+			l_card: BIB_MEMORY_CARD
+			l_today: SIMPLE_DATE
+			l_hub: INTEGER_64
+			l_db: SIMPLE_SQL_DATABASE
+		do
+			clean_user_file
+			create l_user.make (User_file)
+			l_user.open
+			create l_today.make (2026, 10, 27)
+			l_hub := (create {BIB_HUB_ID}).hub_id (43, 3, 16)
+			create l_card.make (l_hub, l_today.to_iso8601)
+			l_user.add_memory_card (l_card)
+			assert_true ("kept", l_card.id > 0 and l_user.has_memory_card (l_hub))
+			assert_integers_equal ("due today", 1, l_user.memory_cards (l_today.to_iso8601).count)
+			l_user.record_review (l_card, 4, l_today)
+			assert_true ("tomorrow", l_card.due_on.same_string (l_today.plus_days (1).to_iso8601))
+			assert_integers_equal ("not due today any more", 0, l_user.memory_cards (l_today.to_iso8601).count)
+			l_user.record_review (l_card, 4, l_today.plus_days (1))
+			assert_true ("six days on", l_card.due_on.same_string (l_today.plus_days (7).to_iso8601) and l_card.repetitions = 2)
+			assert_integers_equal ("every card listed", 1, l_user.memory_cards ("").count)
+			create l_db.make (User_file)
+			assert_integers_equal ("every review kept", 2, first_number (l_db, "SELECT count(*) AS n FROM memory_review"))
+			l_db.close
+			l_user.set_memory_card_deleted (l_card.id, True)
+			assert_false ("removed", l_user.has_memory_card (l_hub))
 			l_user.close
 			clean_user_file
 		end
