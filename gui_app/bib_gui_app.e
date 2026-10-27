@@ -309,6 +309,9 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			elseif snapshot_tab.same_string ({STRING_32} "searchword") then
 				search_box.set_text ("grace")
 				on_search
+			elseif snapshot_tab.same_string ({STRING_32} "boolean") then
+				search_box.set_text ("G5485 AND G1515 NOT G2962")
+				on_search
 			elseif snapshot_tab.same_string ({STRING_32} "history") then
 				go_to (43, 3, 16)
 				go_to (65, 1, 6)
@@ -801,7 +804,7 @@ feature {NONE} -- Toolbar (C3-C9)
 					find_verses (search_box.text)
 					if choices.is_empty and not verse_hits.is_empty then
 							-- The lookup's "nothing found" is about headwords; the verses below say otherwise.
-						results_note.set_text ("No dictionary headword matches; the verses that hold the words are listed below.")
+						results_note.set_text ("No dictionary headword matches; the verses the search names are listed below.")
 					end
 				end
 				if choices.count = 1 and then choices.first.opens_a_word then
@@ -2992,38 +2995,64 @@ feature {NONE} -- Search results (P07)
 			-- The most verses P07 lists (the heading gives the full count).
 
 	find_verses (a_words: READABLE_STRING_GENERAL)
-			-- The verses of the version read holding `a_words' (a "quoted phrase" as written, word*
-			-- a prefix), listed under the word choices with their count.
+			-- The verses of the version read that `a_words' names (words, "phrases", word*, AND, OR,
+			-- NOT, parentheses, strongs:H1254 or G5485, lemma:), listed under the word choices with
+			-- their count (B02, B03).
 		local
 			l_found: BIB_LIST_RESULT [BIB_READING_VERSE]
+			l_query: BIB_QUERY
 			l_total: INTEGER
 		do
 			create verse_hits.make (0)
 			if reading_version.is_empty or else not bible.text_reader.has_version (reading_version) then
 				verses_heading.set_text ("")
-			elseif not bible.text_reader.has_verse_index then
-				verses_heading.set_text ("This content.db has no verse index: rebuild it with bible_build 0.3.0 to search the text.")
 			else
-				l_found := bible.text_reader.verses_matching (reading_version, a_words, Verse_hit_limit)
-				if l_found.is_success then
-					across 1 |..| l_found.count as i loop
-						verse_hits.extend (l_found.item (i))
-					end
-					l_total := bible.text_reader.matching_count (reading_version, a_words)
-					if l_total = 0 then
-						verses_heading.set_text ({STRING_32} "No verse in " + reading_version.to_string_32 + {STRING_32} " holds every word.")
-					elseif l_total > verse_hits.count then
-						verses_heading.set_text ({STRING_32} "Verses in " + reading_version.to_string_32 + {STRING_32} ": " + l_total.out + {STRING_32} " hold every word; the first " + verse_hits.count.out + {STRING_32} " in Bible order. Click one to read it.")
-					elseif l_total = 1 then
-						verses_heading.set_text ({STRING_32} "Verses in " + reading_version.to_string_32 + {STRING_32} ": 1 holds every word. Click it to read it.")
-					else
-						verses_heading.set_text ({STRING_32} "Verses in " + reading_version.to_string_32 + {STRING_32} ": " + l_total.out + {STRING_32} " hold every word, in Bible order. Click one to read it.")
-					end
+				l_query := bible.query_parser.parsed (a_words, create {BIB_SEARCH_SCOPE}.make ("verses", {ARRAY [STRING_8]} <<reading_version>>, 1, Last_book, "verses"))
+				if not l_query.is_valid then
+					verses_heading.set_text ({STRING_32} "The search cannot be read at character " + l_query.error_position.out + {STRING_32} ": " + l_query.error_message)
+				elseif l_query.has_text_clause and not bible.text_reader.has_verse_index then
+					verses_heading.set_text ("This content.db has no verse index: rebuild it with bible_build 0.3.0 to search the text.")
 				else
-					verses_heading.set_text ({STRING_32} "The verse search failed.")
+					bible.verse_search.find (l_query, reading_version)
+					if bible.verse_search.has_failed then
+						verses_heading.set_text (bible.verse_search.error_message)
+					else
+						l_found := bible.verse_search.verses (reading_version, 1, Verse_hit_limit)
+						if l_found.is_success then
+							across 1 |..| l_found.count as i loop
+								verse_hits.extend (l_found.item (i))
+							end
+						end
+						l_total := bible.verse_search.places.count
+						show_verse_count (l_total)
+					end
 				end
 			end
 			verses_grid.set_rows (verse_hits)
+		end
+
+	show_verse_count (a_total: INTEGER)
+			-- The heading over `verses_grid' for `a_total' verses found.
+		local
+			l_note: STRING_32
+		do
+			create l_note.make_empty
+			if bible.verse_search.has_hebrew_roots and a_total > 0 then
+				l_note := {STRING_32} " Hebrew roots stand in Hebrew verse numbers; a few English Bibles number those verses one off."
+			end
+			if bible.verse_search.has_greek_roots and a_total > 0 then
+					-- The Colossians 1:2 lesson: the KJV reads "Lord" where the critical text has none.
+				l_note.append ({STRING_32} " Greek roots are read in the Greek New Testament of the concordance (a critical text), whose wording can differ from the Textus Receptus behind the KJV.")
+			end
+			if a_total = 0 then
+				verses_heading.set_text ({STRING_32} "No verse in " + reading_version.to_string_32 + {STRING_32} " matches.")
+			elseif a_total > verse_hits.count then
+				verses_heading.set_text ({STRING_32} "Verses in " + reading_version.to_string_32 + {STRING_32} ": " + a_total.out + {STRING_32} " match; the first " + verse_hits.count.out + {STRING_32} " in Bible order. Click one to read it." + l_note)
+			elseif a_total = 1 then
+				verses_heading.set_text ({STRING_32} "Verses in " + reading_version.to_string_32 + {STRING_32} ": 1 matches. Click it to read it." + l_note)
+			else
+				verses_heading.set_text ({STRING_32} "Verses in " + reading_version.to_string_32 + {STRING_32} ": " + a_total.out + {STRING_32} " match, in Bible order. Click one to read it." + l_note)
+			end
 		end
 
 	clear_verse_hits
@@ -3165,7 +3194,7 @@ feature {NONE} -- Design pills
 			window.add_reference_mark (back_button, "C3", "Back and Forward: history, Alt+Left and Alt+Right.", window.Corner_top_left)
 			window.add_reference_mark (reference_box, "C4", "Reference box: 'John 3:16', 'Ps 23', 'Gen 1 1'. Anything else is searched. Ctrl+L.", window.Corner_top_left)
 			window.add_reference_mark (version_select, "C5", "Version picker: every version content.db holds. The text changes; the place stays.", window.Corner_top_right)
-			window.add_reference_mark (search_box, "C6", "Quick search: a word, verse or Strong's number, and every verse of the version read holding the words (a %"quoted phrase%" as written, word* a prefix); results open the results zone. Ctrl+F.", window.Corner_top_left)
+			window.add_reference_mark (search_box, "C6", "Quick search: a word, verse or Strong's number, and every verse it names: words, %"phrases%", word*, AND, OR, NOT, parentheses, strongs:H1254 or G5485, lemma:charis. Results open the results zone. Ctrl+F.", window.Corner_top_left)
 			window.add_reference_mark (smaller_button, "C8", {STRING_32} "Text size: all the window's text, " + (settings.Min_text_scale * 100.0).rounded.out + {STRING_32} " to "
 				+ (settings.Max_text_scale * 100.0).rounded.out + {STRING_32} " percent, kept for next time. Ctrl + and -.", window.Corner_top_left)
 			window.add_reference_mark (dark_switch, "C9", "Dark / Light: your choice; until you switch, Windows decides.", window.Corner_top_right)
@@ -3191,7 +3220,7 @@ feature {NONE} -- Design pills
 			window.add_reference_mark (renderings_grid, "P05.4", "Range before ruling: every rendering with its count, before any lexicon's verdict.", window.Corner_top_left)
 			window.add_reference_mark (entries_list, "P05.5", "Lexicon entries: each source in its own words (Abbott-Smith, BDB, LSJ, UBS, TBESH).", window.Corner_top_left)
 			window.add_reference_mark (search_word_button, "P05.7", "Actions: Every place of this word; Word Study comes later.", window.Corner_top_left)
-			window.add_reference_mark (verses_heading, "P07.2", "Verses of the version read holding every search word (a %"quoted phrase%" as written, word* a prefix), in Bible order with their count; click one to read it.", window.Corner_top_left)
+			window.add_reference_mark (verses_heading, "P07.2", "Verses of the version read that the search names, in Bible order with their count; click one to read it. Words, %"phrases%", word*, AND, OR, NOT, parentheses, and root words: strongs:H1254 or G5485, lemma:charis.", window.Corner_top_left)
 			window.add_reference_mark (results_note, "P07", "Search results: the dictionary words matching the search, then (P07.2) the verses holding it. Docked west only while there are results (Simple); Close collapses it.", window.Corner_top_left)
 		end
 

@@ -75,6 +75,22 @@ feature -- Access
 			model_agrees: Result = clauses_model.count
 		end
 
+	clause (a_index: INTEGER): BIB_QUERY_CLAUSE
+			-- The `a_index'th clause of the tree in pre-order.
+		require
+			in_range: a_index >= 1 and a_index <= clause_count
+		do
+			Result := clauses.i_th (a_index)
+		ensure
+			model_agrees: Result = clauses_model [a_index]
+		end
+
+	has_text_clause: BOOLEAN
+			-- Does a word or phrase clause need a verse index?
+		do
+			Result := across clauses as c some c.kind = {BIB_QUERY_CLAUSE}.Word or c.kind = {BIB_QUERY_CLAUSE}.Phrase end
+		end
+
 	key_clauses: ARRAYED_LIST [BIB_QUERY_CLAUSE]
 			-- The lemma, Strong's and morphology clauses, in order.
 		do

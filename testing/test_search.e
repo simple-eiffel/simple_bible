@@ -12,6 +12,54 @@ inherit
 
 feature -- Tests
 
+	test_query_parser_reads_boolean_and_keys
+			-- B02 and B03: words side by side are AND; OR binds loosest; NOT takes away; parentheses
+			-- group; strongs:, a bare Strong's number and lemma: become keys.
+		local
+			p: BIB_QUERY_PARSER
+			q: BIB_QUERY
+		do
+			create p.make
+			q := p.parsed ("grace peace", parser_scope)
+			assert_true ("implicit AND", q.is_valid and then q.clause_count = 3 and then q.clause (1).kind = {BIB_QUERY_CLAUSE}.And_clause)
+			q := p.parsed ("grace OR mercy AND peace", parser_scope)
+			assert_true ("OR loosest", q.is_valid and then q.clause (1).kind = {BIB_QUERY_CLAUSE}.Or_clause and then q.clause (3).kind = {BIB_QUERY_CLAUSE}.And_clause)
+			q := p.parsed ("grace NOT law", parser_scope)
+			assert_true ("NOT inside AND", q.is_valid and then q.clause (1).kind = {BIB_QUERY_CLAUSE}.And_clause and then q.clause (3).kind = {BIB_QUERY_CLAUSE}.Not_clause)
+			q := p.parsed ("(grace OR mercy) AND peace", parser_scope)
+			assert_true ("parentheses", q.is_valid and then q.clause (1).kind = {BIB_QUERY_CLAUSE}.And_clause and then q.clause (2).kind = {BIB_QUERY_CLAUSE}.Or_clause)
+			q := p.parsed ("%"in the beginning%"", parser_scope)
+			assert_true ("a phrase", q.is_valid and then q.clause_count = 1 and then q.clause (1).kind = {BIB_QUERY_CLAUSE}.Phrase)
+			q := p.parsed ("strongs:g5485", parser_scope)
+			assert_true ("strongs:, any case", q.is_valid and then q.clause (1).kind = {BIB_QUERY_CLAUSE}.Strongs and then q.clause (1).text.same_string ("G5485"))
+			q := p.parsed ("H7225 AND G746", parser_scope)
+			assert_true ("bare Strong's numbers", q.is_valid and then q.key_clauses.count = 2)
+			q := p.parsed ("lemma:charis", parser_scope)
+			assert_true ("lemma:", q.is_valid and then q.clause (1).kind = {BIB_QUERY_CLAUSE}.Lemma)
+			q := p.parsed ("and or not", parser_scope)
+			assert_true ("lowercase operators are words", q.is_valid and then q.clause_count = 4)
+		end
+
+	test_query_parser_locates_errors
+			-- VR-03..05: an error names its place.
+		local
+			p: BIB_QUERY_PARSER
+		do
+			create p.make
+			assert_integers_equal ("dangling AND", 10, p.parsed ("grace AND", parser_scope).error_position)
+			assert_integers_equal ("open parenthesis", 1, p.parsed ("(grace OR mercy", parser_scope).error_position)
+			assert_integers_equal ("stray close", 6, p.parsed ("grace) peace", parser_scope).error_position)
+			assert_integers_equal ("open quote", 7, p.parsed ("grace %"of God", parser_scope).error_position)
+			assert_false ("NOT alone", p.parsed ("NOT law", parser_scope).is_valid)
+			assert_false ("only NOTs", p.parsed ("NOT law NOT sin", parser_scope).is_valid)
+			assert_false ("NOT in an OR branch", p.parsed ("grace OR NOT law", parser_scope).is_valid)
+			assert_integers_equal ("operator first", 1, p.parsed ("AND grace", parser_scope).error_position)
+			assert_integers_equal ("regex later", 7, p.parsed ("grace /gr.ce/", parser_scope).error_position)
+			assert_true ("morph later", p.parsed ("morph:V-AAI-3S", parser_scope).error_message.has_substring ("later"))
+			assert_false ("strongs: needs a number", p.parsed ("strongs:X1", parser_scope).is_valid)
+			assert_false ("an empty phrase", p.parsed ("%"%"", parser_scope).is_valid)
+		end
+
 	test_query_states
 		local
 			q: BIB_QUERY
@@ -79,6 +127,14 @@ feature {NONE} -- Fixtures
 	nt_scope: BIB_SEARCH_SCOPE
 		do
 			create Result.make ("NT, SBLGNT, word tokens", <<"SBLGNT">>, 40, 66, "word tokens")
+		end
+
+feature {NONE} -- Parser scope
+
+	parser_scope: BIB_SEARCH_SCOPE
+			-- One version, every book.
+		once
+			create Result.make ("verses", <<"KJV">>, 1, 66, "verses")
 		end
 
 end

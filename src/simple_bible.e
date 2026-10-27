@@ -328,6 +328,20 @@ feature -- Engines (one per instance)
 			create Result.make (sources, database_edition, normalizers)
 		end
 
+	query_parser: BIB_QUERY_PARSER
+			-- Query text to a clause tree (B02, B03).
+		once ("OBJECT")
+			create Result.make
+		end
+
+	verse_search: BIB_VERSE_SEARCH
+			-- Every verse a query names: words, phrases, AND/OR/NOT, root words.
+		require
+			open: is_open
+		once ("OBJECT")
+			create Result.make (text_reader, conc_pack)
+		end
+
 	conc_pack: BIB_CONC_PACK
 			-- The concordance pack reader (debate 05b): conc.db or conc_dist.db,
 			-- attached read-only under `{BIB_CONC_PACK}.Pack_alias'.

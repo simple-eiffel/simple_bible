@@ -126,6 +126,55 @@ feature -- Tests
 			remove_test_files
 		end
 
+	test_boolean_and_root_word_search
+			-- B02 and B03 end to end: Strong's numbers and lemmas from the concordance, words from the
+			-- verse index, joined by AND, OR, NOT and parentheses, read in the KJV.
+		local
+			l_builder: BIB_CONTENT_BUILDER
+			l_config: BIB_CONFIG
+			l_bible: SIMPLE_BIBLE
+			l_db: SIMPLE_SQL_DATABASE
+		do
+			remove_test_files
+			make_bible_db (Bible_file, True)
+			create l_db.make (Bible_file)
+			l_db.execute ("INSERT INTO bible_verses (version_id, book_id, chapter, verse, text) VALUES (12, 1, 1, 3, 'And God said, Let there be light.')")
+			l_db.close
+			create l_builder.make
+			l_builder.set_build_id ("test-build")
+			l_builder.build (Bible_file, Out_file)
+			assert_true ("built", l_builder.last_error = Void)
+			fixture.build (Pack_file)
+			create l_config.make_with_core (Out_file)
+			l_config := l_config.set_conc_path (Pack_file)
+			create l_bible.make (l_config)
+			l_bible.open
+			assert_integers_equal ("a root: bara in Genesis 1:1", 1, found (l_bible, "H1254"))
+			assert_true ("Hebrew numbering told", l_bible.verse_search.has_hebrew_roots)
+			assert_true ("read in the KJV", l_bible.verse_search.verses ("KJV", 1, 10).item (1).text.same_string ("In the beginning"))
+			assert_integers_equal ("a root and a word", 1, found (l_bible, "strongs:H1254 AND beginning"))
+			assert_integers_equal ("a root or a word", 2, found (l_bible, "H1254 OR light"))
+			assert_integers_equal ("a word without another", 1, found (l_bible, "the NOT earth"))
+			assert_integers_equal ("grouped", 1, found (l_bible, "(light OR earth) AND the"))
+			assert_integers_equal ("a lemma by its plain letters", 1, found (l_bible, "lemma:bara"))
+			assert_integers_equal ("a root the pack has no corpus for", 0, found (l_bible, "G3588"))
+			assert_false ("no failure", l_bible.verse_search.has_failed)
+			assert_integers_equal ("a root nowhere with a word", 0, found (l_bible, "H1254 AND light"))
+			l_bible.close
+			remove_test_files
+		end
+
+	found (a_bible: SIMPLE_BIBLE; a_query: STRING_8): INTEGER
+			-- How many verses `a_query' names in the KJV.
+		local
+			l_query: BIB_QUERY
+		do
+			l_query := a_bible.query_parser.parsed (a_query, create {BIB_SEARCH_SCOPE}.make ("verses", <<"KJV">>, 1, 66, "verses"))
+			assert_true ({STRING_8} "valid: " + a_query, l_query.is_valid)
+			a_bible.verse_search.find (l_query, "KJV")
+			Result := a_bible.verse_search.places.count
+		end
+
 	test_rebuild_is_byte_identical
 			-- Two builds from the same inputs, build id and build time are the same bytes (FR-130's direction).
 		local

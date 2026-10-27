@@ -354,6 +354,59 @@ feature -- Access
 			method_recorded: Result.method.engine_feature.same_string_general ("headwords_behind_original_word")
 		end
 
+	key_places (a_key: BIB_KEY): ARRAYED_LIST [INTEGER_64]
+			-- Every verse where root `a_key' stands, packed by BIB_PLACE_PACKING, ascending, once each:
+			-- Hebrew and Aramaic roots in the Hebrew Bible (`Hebrew_root_corpus', Hebrew verse
+			-- numbers), Greek roots in the Greek New Testament (`Greek_root_corpus'). By key, never by
+			-- display string (FR-023, FR-024): a Strong's number through lemma_xref, a lemma through
+			-- its headword or plain letters. `last_places_were_hebrew' tells whether Hebrew places came.
+		require
+			available: is_available
+		local
+			l_hebrew, l_greek, l_greek_places: ARRAYED_LIST [INTEGER_64]
+			l_entries: detachable BIB_LIST_RESULT [BIB_WORD_ENTRY]
+			l_language: STRING_8
+		do
+			create l_hebrew.make (2)
+			create l_greek.make (2)
+			last_places_were_hebrew := False
+			last_places_were_greek := False
+			l_language := "any"
+			if attached {BIB_STRONGS_KEY} a_key as al_strongs then
+				l_entries := headwords_for_strongs (al_strongs)
+			elseif attached {BIB_LEMMA_KEY} a_key as al_lemma then
+				l_entries := headwords_for_text (al_lemma.lemma)
+				l_language := al_lemma.language
+			end
+			if attached l_entries as al_entries then
+				across 1 |..| al_entries.count as i loop
+					if (al_entries.item (i).language.same_string ("hbo") or al_entries.item (i).language.same_string ("arc")) and (l_language.same_string ("any") or l_language.same_string ("hbo")) then
+						l_hebrew.extend (al_entries.item (i).lemma_id)
+					elseif al_entries.item (i).language.same_string ("grc") and (l_language.same_string ("any") or l_language.same_string ("grc")) then
+						l_greek.extend (al_entries.item (i).lemma_id)
+					end
+				end
+			end
+			Result := lemma_places (l_hebrew, Hebrew_root_corpus)
+			last_places_were_hebrew := not Result.is_empty
+			l_greek_places := lemma_places (l_greek, Greek_root_corpus)
+			last_places_were_greek := not l_greek_places.is_empty
+			Result := merged_places (Result, l_greek_places)
+		ensure
+			ascending_once: across 2 |..| Result.count as i all Result.i_th (i - 1) < Result.i_th (i) end
+		end
+
+	last_places_were_hebrew: BOOLEAN
+			-- Did the last `key_places' find Hebrew places (in Hebrew verse numbers)?
+
+	last_places_were_greek: BOOLEAN
+			-- Did the last `key_places' find Greek places (in the critical text of `Greek_root_corpus',
+			-- whose wording can differ from the Textus Receptus behind the KJV)?
+
+	Hebrew_root_corpus: STRING_8 = "WLC-MACULA"
+	Greek_root_corpus: STRING_8 = "NT-MACULA"
+			-- Where `key_places' finds roots.
+
 	original_search_form (a_word: READABLE_STRING_GENERAL): STRING_32
 			-- `a_word' folded as the pack's `token.search' is (BIB_NORMALIZER_SET.pack_token_form: the
 			-- normalizers' one fold, Hebrew final letters kept, non-letters dropped).
@@ -895,6 +948,56 @@ feature {NONE} -- Implementation
 			end
 			create l_license.make (l_identifier, l_ship.has_substring ("_nc"), l_ship.has_substring ("share_alike"), l_ship.has_substring ("restricted") or l_ship.has_substring ("verify"), a_license)
 			create Result.make (a_id, {STRING_32} "conc:" + a_code, a_name, l_license, a_ship_class)
+		end
+
+	lemma_places (a_lemmas: ARRAYED_LIST [INTEGER_64]; a_corpus_code: READABLE_STRING_8): ARRAYED_LIST [INTEGER_64]
+			-- Every numbered verse of corpus `a_corpus_code' holding a token of `a_lemmas', packed,
+			-- ascending; empty when there is no lemma, no such corpus, or the query fails.
+		local
+			l_sql: STRING_8
+			i: INTEGER
+		do
+			create Result.make (0)
+			if not a_lemmas.is_empty and has_corpus (a_corpus_code) then
+				create l_sql.make (400)
+				l_sql.append ("SELECT DISTINCT wb.book_id * 1000000 + CAST(u.div1 AS INTEGER) * 1000 + CAST(u.div2 AS INTEGER) AS place FROM conc.token t JOIN conc.unit u ON u.unit_id = t.unit_id JOIN conc.work_book wb ON wb.work_id = u.work_id WHERE t.corpus_id = ? AND u.recension = '' AND CAST(u.div1 AS INTEGER) BETWEEN 1 AND 999 AND CAST(u.div2 AS INTEGER) BETWEEN 1 AND 999 AND wb.book_id BETWEEN 1 AND 999 AND t.lemma_id IN (")
+				from i := 1 until i > a_lemmas.count loop
+					if i > 1 then
+						l_sql.append (", ")
+					end
+					l_sql.append (a_lemmas.i_th (i).out)
+					i := i + 1
+				end
+				l_sql.append (") ORDER BY place")
+				run_query (l_sql, {ARRAY [detachable ANY]} <<corpus_id (a_corpus_code)>>)
+				if attached last_rows as al_rows then
+					create Result.make (al_rows.rows.count)
+					across al_rows.rows as ic loop
+						Result.extend (ic.integer_64_value ("place"))
+					end
+				end
+			end
+		end
+
+	merged_places (a, b: ARRAYED_LIST [INTEGER_64]): ARRAYED_LIST [INTEGER_64]
+			-- Every place of `a' or `b' (each ascending), ascending, once.
+		local
+			i, j: INTEGER
+		do
+			create Result.make (a.count + b.count)
+			from i := 1; j := 1 until i > a.count and j > b.count loop
+				if j > b.count or else (i <= a.count and then a.i_th (i) < b.i_th (j)) then
+					Result.extend (a.i_th (i))
+					i := i + 1
+				elseif i > a.count or else b.i_th (j) < a.i_th (i) then
+					Result.extend (b.i_th (j))
+					j := j + 1
+				else
+					Result.extend (a.i_th (i))
+					i := i + 1
+					j := j + 1
+				end
+			end
 		end
 
 	corpus_id (a_code: READABLE_STRING_8): INTEGER_64
