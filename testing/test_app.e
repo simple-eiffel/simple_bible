@@ -424,6 +424,8 @@ feature {NONE} -- Suites
 			run_test (agent t.test_headwords_for_strongs_go_through_xref, "test_headwords_for_strongs_go_through_xref")
 			run_test (agent t.test_headwords_for_typed_text, "test_headwords_for_typed_text")
 			run_test (agent t.test_typed_greek_folds_as_a_clicked_word, "test_typed_greek_folds_as_a_clicked_word")
+			run_test (agent t.test_interlinear_joins_a_words_morphemes, "test_interlinear_joins_a_words_morphemes")
+			run_test (agent t.test_morphology_in_words, "test_morphology_in_words")
 			run_test (agent t.test_english_glance_holds_back_function_words, "test_english_glance_holds_back_function_words")
 			run_test (agent t.test_strongs_key_text, "test_strongs_key_text")
 			run_test (agent t.test_places_page_by_offset_and_by_keyset, "test_places_page_by_offset_and_by_keyset")

@@ -104,6 +104,9 @@ feature {NONE} -- Initialization
 			create center_tabs.make
 			create bible_page.make
 			create parallel_view.make (200.0)
+			create interlinear_view.make (200.0)
+			create interlinear_note.make_ui ("")
+			create interlinear_words.make (0)
 			create results_holder.make
 			create results_tabs.make
 			create results_page.make
@@ -189,6 +192,7 @@ feature {NONE} -- Initialization
 			next_button.set_on_click (agent step_chapter (1))
 			reading_view.set_on_cell_click (agent on_verse_click)
 			parallel_view.set_on_cell_click (agent on_parallel_click)
+			interlinear_view.set_on_token_select (agent on_interlinear_word)
 			cross_refs_grid.set_on_select (agent on_cross_ref)
 			search_word_button.set_on_click (agent show_every_place)
 			results_grid.set_on_select (agent on_choice)
@@ -402,6 +406,7 @@ feature {NONE} -- Menus and keys (C2)
 			window.register_accelerator (Key_plus, True, False, False, agent change_text_size (1))
 			window.register_accelerator (Key_minus, True, False, False, agent change_text_size (-1))
 			window.register_accelerator (Key_m, True, False, False, agent toggle_mode)
+			window.register_accelerator (Key_i, True, False, False, agent show_interlinear)
 		end
 
 	file_menu: SW_MENU
@@ -464,8 +469,8 @@ feature {NONE} -- Menus and keys (C2)
 		do
 			create Result.make
 			Result.add_item ("Word Study", "", False, Void)
-			Result.add_item ("Parallel", "", False, Void)
-			Result.add_item ("Interlinear", "", False, Void)
+			Result.add_item ("Parallel", "", True, agent show_parallel)
+			Result.add_item ("Interlinear", "Ctrl+I", True, agent show_interlinear)
 			Result.add_item ("Guide", "", False, Void)
 		end
 
@@ -647,15 +652,18 @@ feature {NONE} -- Toolbar (C3-C9)
 		end
 
 	focus_reference
-			-- Ctrl+L.
+			-- Ctrl+L: the reference box, its text selected even when it already has the focus, as a
+			-- browser's address bar (2026-10-27: a second Ctrl+L typed into the middle of the place).
 		do
 			window.give_focus (reference_box)
+			reference_box.select_all
 		end
 
 	focus_search
-			-- Ctrl+F.
+			-- Ctrl+F: the search box, its text selected, as Ctrl+L.
 		do
 			window.give_focus (search_box)
+			search_box.select_all
 		end
 
 	copy_verse
@@ -797,6 +805,9 @@ feature {NONE} -- Reading (S1, P01)
 				status_bar.set_left (place_text (a_book, a_chapter, a_verse) + {STRING_32} " (" + reading_version.to_string_32 + {STRING_32} ")")
 				if is_study then
 					fill_parallel
+					if center_tabs.selected_index = Interlinear_tab then
+						fill_interlinear
+					end
 				end
 			end
 		end
@@ -1008,6 +1019,20 @@ feature {NONE} -- Two layouts (C7)
 	navigator_tree: SW_TREE [BIB_NAV_NODE]
 	parallel_view: SW_PARALLEL_TEXT
 
+	interlinear_view: SW_INTERLINEAR
+	interlinear_note: SW_LABEL
+			-- T3 Interlinear (P03): the chapter word by word, and what it is read from.
+
+	interlinear_words: ARRAYED_LIST [BIB_INTERLINEAR_WORD]
+			-- The words in `interlinear_view', in order (word k is cell k).
+
+	interlinear_book, interlinear_chapter: INTEGER
+			-- The chapter `interlinear_view' holds; 0 when none.
+
+	is_interlinear_click: BOOLEAN
+			-- Is a word clicked in the Interlinear moving the place read? Then the click's word stays
+			-- selected, not the verse's first.
+
 	parallel_codes: ARRAYED_LIST [STRING_8]
 			-- The versions in T3 Parallel's columns, left to right.
 		attribute
@@ -1095,12 +1120,18 @@ feature {NONE} -- Two layouts (C7)
 	build_study_parts
 			-- T3's tabs, T6's tabs and C10's tools, built once.
 		local
-			l_parallel_page: SW_COLUMN
+			l_parallel_page, l_interlinear_page: SW_COLUMN
 		do
 			create l_parallel_page.make
 			l_parallel_page.put (parallel_view.growing)
+			create l_interlinear_page.make
+			l_interlinear_page.put (interlinear_note)
+			l_interlinear_page.put (interlinear_view.growing)
+				-- No pronunciation of the written word in the pack yet (lemma.pron is the headword's).
+			interlinear_view.set_line_visible ({SW_INTERLINEAR_TOKEN}.Line_pronunciation, False)
 			center_tabs.add_page ("Bible", bible_page)
 			center_tabs.add_page ("Parallel", l_parallel_page)
+			center_tabs.add_page ("Interlinear", l_interlinear_page)
 			center_tabs.set_on_change (agent on_center_tab)
 			parallel_view.add_column ("").do_nothing
 			parallel_view.add_column ("").do_nothing
@@ -1113,7 +1144,7 @@ feature {NONE} -- Two layouts (C7)
 			results_tabs.add_page ("Study Ledger v1.5", create {SW_EMPTY_STATE}.make ("Study ledger is version 1.5", "Planned for version 1.5."))
 
 			tools_strip.add_tool ("Parallel", "Versions side by side (P02)", True, agent show_parallel)
-			tools_strip.add_tool ("Interlinear", "Word by word under the text (P03): comes later", False, Void)
+			tools_strip.add_tool ("Interlinear", "Word by word in the original (P03). Ctrl+I", True, agent show_interlinear)
 			tools_strip.add_tool ("Guide", "A guide on one subject (P08): comes later", False, Void)
 			tools_strip.add_tool ("Word Study", "The word study (P05 Word Study): comes later", False, Void)
 			tools_strip.add_tool ("Count", "Census and checks (P09): comes later", False, Void)
@@ -1199,10 +1230,114 @@ feature {NONE} -- Two layouts (C7)
 		end
 
 	on_center_tab (a_index: INTEGER)
-			-- T3: the Parallel tab follows the place read.
+			-- T3: the Parallel and Interlinear tabs follow the place read.
 		do
 			if a_index = 2 then
 				fill_parallel
+			elseif a_index = Interlinear_tab then
+				fill_interlinear
+			end
+		end
+
+	Interlinear_tab: INTEGER = 3
+			-- T3's Interlinear page.
+
+	show_interlinear
+			-- C10 Interlinear, Ctrl+I: the Interlinear tab (in Study; Simple has no tabs).
+		do
+			if not is_study then
+				arrange (True)
+			end
+			center_tabs.select_tab (Interlinear_tab)
+			fill_interlinear
+		end
+
+	fill_interlinear
+			-- T3 Interlinear (P03): the chapter read, word by word in the original (the Hebrew Bible,
+			-- right to left, or the Greek New Testament), with the verse read selected. The words are
+			-- read once per chapter; a new verse in it only moves the selection.
+		local
+			l_lookup: BIB_LOOKUP
+			l_corpus: STRING_8
+			l_words: BIB_LIST_RESULT [BIB_INTERLINEAR_WORD]
+			l_word: BIB_INTERLINEAR_WORD
+			l_note: STRING_32
+			i, k, l_previous_verse, l_select: INTEGER
+		do
+			if reading_book > 0 and then bible.is_open then
+				if reading_book /= interlinear_book or reading_chapter /= interlinear_chapter then
+					interlinear_view.wipe_out
+					interlinear_words.wipe_out
+					interlinear_book := reading_book
+					interlinear_chapter := reading_chapter
+					create l_lookup.make (bible)
+					l_corpus := l_lookup.corpus_for_book (reading_book)
+					if not bible.conc_pack.is_available then
+						l_note := {STRING_32} "The interlinear needs the concordance pack (conc.db), which is not open."
+					elseif not bible.conc_pack.has_corpus (l_corpus) then
+						l_note := {STRING_32} "The concordance has no tagged text for this book."
+					else
+						l_words := bible.conc_pack.interlinear_chapter (reading_book, reading_chapter, l_corpus)
+						interlinear_view.set_right_to_left (l_corpus.same_string ("WLC-MACULA"))
+						from i := 1 until i > l_words.count loop
+							l_word := l_words.item (i)
+							interlinear_words.extend (l_word)
+							if l_word.surface.is_empty then
+								k := interlinear_view.add_token ({STRING_32} "[" + l_word.lemma_text + {STRING_32} "]")
+							else
+								k := interlinear_view.add_token (l_word.surface)
+							end
+							interlinear_view.set_token_line (k, {SW_INTERLINEAR_TOKEN}.Line_transliteration, l_word.translit)
+							interlinear_view.set_token_line (k, {SW_INTERLINEAR_TOKEN}.Line_gloss, l_word.gloss)
+							interlinear_view.set_token_line (k, {SW_INTERLINEAR_TOKEN}.Line_lemma, l_word.lemma_text)
+							interlinear_view.set_token_line (k, {SW_INTERLINEAR_TOKEN}.Line_strongs, l_word.strongs)
+							interlinear_view.set_token_line (k, {SW_INTERLINEAR_TOKEN}.Line_morphology, l_word.morphology)
+							if l_word.verse /= l_previous_verse then
+								interlinear_view.set_verse_label (k, l_word.verse.out)
+								l_previous_verse := l_word.verse
+							end
+							i := i + 1
+						end
+						if attached l_words.error as al_error then
+							l_note := al_error.message.to_string_32
+						elseif l_words.count = 0 then
+							l_note := place_text (reading_book, reading_chapter, 0) + {STRING_32} " is not in the tagged text."
+						else
+							l_note := bible.conc_pack.corpus_name (l_corpus) + {STRING_32} ", word by word; English: STEPBible. Verses follow its own numbering."
+						end
+					end
+					interlinear_note.set_text (l_note)
+				end
+				if not is_interlinear_click then
+					from i := 1 until i > interlinear_words.count or l_select > 0 loop
+						if interlinear_words.i_th (i).verse = reading_verse then
+							l_select := i
+						end
+						i := i + 1
+					end
+					is_interlinear_click := True
+					interlinear_view.select_token (l_select)
+					is_interlinear_click := False
+				end
+			end
+		end
+
+	on_interlinear_word (a_token: INTEGER)
+			-- A word clicked (or stepped to) in the Interlinear: its verse becomes the place read, and
+			-- T4 follows its headword.
+		local
+			l_word: BIB_INTERLINEAR_WORD
+		do
+			if not is_interlinear_click and then a_token >= 1 and then a_token <= interlinear_words.count then
+				l_word := interlinear_words.i_th (a_token)
+				is_interlinear_click := True
+				if l_word.verse /= reading_verse then
+					go_to (reading_book, reading_chapter, l_word.verse)
+				end
+				is_interlinear_click := False
+				if l_word.has_door then
+					open_study (l_word.lemma_id)
+				end
 			end
 		end
 
@@ -1325,11 +1460,12 @@ feature {NONE} -- Two layouts (C7)
 			-- The Study board's codes: the chrome as on the Simple board, C10, and T1 to T6.
 		do
 			add_chrome_pills
-			window.add_reference_mark (tools_strip, "C10", "Study tools strip: Parallel works; Interlinear, Guide, Word Study, Count and Ledger come later.", window.Corner_top_left)
+			window.add_reference_mark (tools_strip, "C10", "Study tools strip: Parallel and Interlinear work; Guide, Word Study, Count and Ledger come later.", window.Corner_top_left)
 			window.add_reference_mark (mode_switch, "C7", "Mode switch, on Study: only the docking changes. Ctrl+M.", window.Corner_top_left)
 			window.add_reference_mark (navigator_tree, "T1", "P11 Navigator, west: books, chapter by chapter. Bookmarks come later.", window.Corner_top_left)
 			window.add_reference_mark (dock, "T2", "P06 Notes, west below T1: comes with the notes store.", window.Corner_bottom_left)
-			window.add_reference_mark (center_tabs, "T3", "Centre tabs: the Bible text and Parallel (P02). More Bible tabs come later.", window.Corner_top_left)
+			window.add_reference_mark (center_tabs, "T3", "Centre tabs: the Bible text, Parallel (P02) and Interlinear (P03, Ctrl+I). More Bible tabs come later.", window.Corner_top_left)
+			window.add_reference_mark (interlinear_note, "P03", "Interlinear: word by word in the original, right to left for Hebrew; click a word and T4 follows it.", window.Corner_top_left)
 			window.add_reference_mark (lexicon_heading, "T4", "P05 Lexicon, east: follows the clicked word.", window.Corner_top_left)
 			window.add_reference_mark (commentary_title, "T5", "P04 Commentary, east: here on Cross-refs, with OpenBible votes.", window.Corner_top_left)
 			window.add_reference_mark (results_tabs, "T6", "South results zone: Search Results; Guides, Census, Author Library and Ledger come later.", window.Corner_top_left)
@@ -1775,6 +1911,7 @@ feature {NONE} -- Constants
 	Key_l: INTEGER = 0x4C
 	Key_f: INTEGER = 0x46
 	Key_m: INTEGER = 0x4D
+	Key_i: INTEGER = 0x49
 	Key_left: INTEGER = 0x25
 	Key_right: INTEGER = 0x27
 	Key_plus: INTEGER = 0xBB
