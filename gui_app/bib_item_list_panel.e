@@ -1,7 +1,7 @@
 note
 	description: "[
-		A list of the reader's own items of one kind (highlights in T2, bookmarks
-		in T1) with its Remove and Restore buttons: a click opens the item's
+		A list of the reader's own rows of one kind (highlights, bookmarks and tagged
+		verses; prayers and memory cards too, design scan 54) with its Remove and Restore buttons: a click opens the item's
 		verse; Remove takes the chosen item away softly and Restore brings back
 		the last one removed; a failure is said, and the remembered item changes
 		only on success. Scan 43 (2026-10-27): the same logic had been written
@@ -14,7 +14,7 @@ note
 	revision: "$Revision$"
 
 class
-	BIB_ITEM_LIST_PANEL [G -> BIB_USER_ITEM]
+	BIB_ITEM_LIST_PANEL [G -> BIB_LISTED]
 
 create
 	make
@@ -25,7 +25,7 @@ feature {NONE} -- Initialization
 			-- A panel over `a_grid' for items of `a_kind' in `a_store', called `a_noun' in what it says;
 			-- `set_actions' gives it how to speak, redraw and read a verse.
 		require
-			kind_valid: a_store.is_valid_kind (a_kind) and a_kind /= {BIB_USER_STORE}.Kind_note
+			kind_valid: a_store.is_listed_kind (a_kind) and a_kind /= {BIB_USER_STORE}.Kind_note
 			named: not a_noun.is_empty
 		do
 			store := a_store
@@ -136,7 +136,7 @@ feature {NONE} -- Commands
 	restore
 			-- Bring back the item Remove took last.
 		do
-			if last_removed > 0 and then store.is_open and then store.is_deleted (last_removed) then
+			if last_removed > 0 and then store.is_open and then store.is_kind_deleted (kind, last_removed) then
 				store.restore_item (kind, last_removed)
 				if attached store.write_error as al_error then
 					tell (al_error.message)

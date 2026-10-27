@@ -350,9 +350,9 @@ feature -- Tests
 			l_user.set_prayer_answered (l_prayer.id, "Home on Thursday.")
 			assert_integers_equal ("no longer open", 0, l_user.prayers (False).count)
 			assert_true ("answered, in his words", l_user.prayers (True).count = 1 and then l_user.prayers (True).first.answer.same_string ("Home on Thursday."))
-			l_user.set_prayer_deleted (l_prayer.id, True)
+			l_user.remove_item ({BIB_USER_STORE}.Kind_prayer, l_prayer.id)
 			assert_integers_equal ("removed", 0, l_user.prayers (True).count)
-			l_user.set_prayer_deleted (l_prayer.id, False)
+			l_user.restore_item ({BIB_USER_STORE}.Kind_prayer, l_prayer.id)
 			assert_integers_equal ("restored", 1, l_user.prayers (True).count)
 			l_user.set_prayer_answered (999, "x")
 			assert_true ("no such prayer said", attached l_user.write_error as al_e and then al_e.code = {BIB_ERROR}.Not_found)
@@ -407,8 +407,32 @@ feature -- Tests
 			create l_db.make (User_file)
 			assert_integers_equal ("every review kept", 2, first_number (l_db, "SELECT count(*) AS n FROM memory_review"))
 			l_db.close
-			l_user.set_memory_card_deleted (l_card.id, True)
+			l_user.remove_item ({BIB_USER_STORE}.Kind_memory_card, l_card.id)
 			assert_false ("removed", l_user.has_memory_card (l_hub))
+			l_user.restore_item ({BIB_USER_STORE}.Kind_memory_card, l_card.id)
+			assert_true ("restored", l_user.has_memory_card (l_hub))
+			l_user.close
+			clean_user_file
+		end
+
+	test_one_rule_for_a_live_card
+			-- Scan 54: a card the list cannot show (a hand-made row with an ease below the floor) is no
+			-- live card for any query, so Add never says "already a card" for a card nobody can review.
+			-- Before: has_memory_card counted it while memory_cards left it out.
+		local
+			l_user: BIB_USER_STORE
+			l_other: SIMPLE_SQL_DATABASE
+			l_hub: INTEGER_64
+		do
+			clean_user_file
+			create l_user.make (User_file)
+			l_user.open
+			l_hub := (create {BIB_HUB_ID}).hub_id (19, 119, 11)
+			create l_other.make (User_file)
+			l_other.execute_with_args ("INSERT INTO memory_card(hub_id, created_at, due_on, interval_days, ease_percent, repetitions) VALUES (?, '2026-10-27T12:00:00', '2026-10-27', 0, 50, 0)", <<l_hub>>)
+			l_other.close
+			assert_integers_equal ("not listed", 0, l_user.memory_cards ("").count)
+			assert_false ("so not counted either", l_user.has_memory_card (l_hub))
 			l_user.close
 			clean_user_file
 		end

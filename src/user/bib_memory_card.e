@@ -12,6 +12,9 @@ note
 class
 	BIB_MEMORY_CARD
 
+inherit
+	BIB_LISTED
+
 create
 	make
 
@@ -21,7 +24,7 @@ feature {NONE} -- Initialization
 			-- A new card for verse `a_hub_id', first due on `a_due_on' (ISO date).
 		require
 			hub_positive: a_hub_id > 0
-			due_given: not a_due_on.is_empty
+			an_iso_date: a_due_on.count = Iso_date_length
 		do
 			hub_id := a_hub_id
 			due_on := a_due_on.to_string_32
@@ -61,7 +64,7 @@ feature {BIB_USER_STORE} -- Store bookkeeping
 
 	set_state (a_due_on: READABLE_STRING_GENERAL; a_interval, a_ease, a_repetitions: INTEGER)
 		require
-			due_given: not a_due_on.is_empty
+			an_iso_date: a_due_on.count = Iso_date_length
 			interval_not_negative: a_interval >= 0
 			ease_floor: a_ease >= {BIB_MEMORY_SCHEDULE}.Least_ease
 			repetitions_not_negative: a_repetitions >= 0
@@ -72,7 +75,13 @@ feature {BIB_USER_STORE} -- Store bookkeeping
 			repetitions := a_repetitions
 		end
 
+feature -- Constants
+
+	Iso_date_length: INTEGER = 10
+			-- "2026-10-27": dates compare as text only in this one form (design scan 54).
+
 invariant
+	an_iso_date: due_on.count = Iso_date_length
 	hub_positive: hub_id > 0
 	interval_not_negative: interval_days >= 0
 	ease_floor: ease_percent >= {BIB_MEMORY_SCHEDULE}.Least_ease

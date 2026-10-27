@@ -240,8 +240,32 @@ feature -- Status
 		end
 
 	is_valid_kind (a_kind: INTEGER): BOOLEAN
+			-- Is `a_kind' a kind of user_item row?
 		do
 			Result := a_kind >= Kind_note and a_kind <= Kind_visit
+		end
+
+	is_listed_kind (a_kind: INTEGER): BOOLEAN
+			-- Is `a_kind' a kind of row a list shows and Remove takes away softly (a user item, a
+			-- prayer, a memory card)?
+		do
+			Result := is_valid_kind (a_kind) or a_kind = Kind_prayer or a_kind = Kind_memory_card
+		end
+
+	is_kind_deleted (a_kind: INTEGER; a_id: INTEGER_64): BOOLEAN
+			-- Is row `a_id' of `a_kind' soft-deleted?
+		require
+			listed_kind: is_listed_kind (a_kind)
+		do
+			if attached database as al_db then
+				if a_kind = Kind_prayer then
+					Result := first_integer (al_db.query_with_args ("SELECT count(*) AS n FROM prayer WHERE prayer_id = ? AND deleted = 1", <<a_id>>)) = 1
+				elseif a_kind = Kind_memory_card then
+					Result := first_integer (al_db.query_with_args ("SELECT count(*) AS n FROM memory_card WHERE card_id = ? AND deleted = 1", <<a_id>>)) = 1
+				else
+					Result := is_deleted (a_id)
+				end
+			end
 		end
 
 feature -- Commands: annotations
@@ -297,23 +321,23 @@ feature -- Commands: annotations
 			-- Soft-delete item `a_id' (every kind: restorable).
 		require
 			open: is_open
-			kind_valid: is_valid_kind (a_kind) and a_kind /= Kind_note
+			kind_valid: is_listed_kind (a_kind) and a_kind /= Kind_note
 			stored: a_id > 0
 		do
 			set_item_deleted (a_kind, a_id, True)
 		ensure
-			soft_deleted: write_error = Void implies is_deleted (a_id)
+			soft_deleted: write_error = Void implies is_kind_deleted (a_kind, a_id)
 		end
 
 	restore_item (a_kind: INTEGER; a_id: INTEGER_64)
 		require
 			open: is_open
-			kind_valid: is_valid_kind (a_kind) and a_kind /= Kind_note
-			deleted: is_deleted (a_id)
+			kind_valid: is_listed_kind (a_kind) and a_kind /= Kind_note
+			deleted: is_kind_deleted (a_kind, a_id)
 		do
 			set_item_deleted (a_kind, a_id, False)
 		ensure
-			restored: write_error = Void implies not is_deleted (a_id)
+			restored: write_error = Void implies not is_kind_deleted (a_kind, a_id)
 		end
 
 feature -- Prayer (E06, schema 2)
@@ -353,26 +377,6 @@ feature -- Prayer (E06, schema 2)
 			end
 		end
 
-	set_prayer_deleted (a_id: INTEGER_64; a_deleted: BOOLEAN)
-			-- Prayer `a_id' removed (kept, restorable) or restored.
-		require
-			open: is_open
-			stored: a_id > 0
-		local
-			l_flag: INTEGER
-		do
-			write_error := Void
-			if a_deleted then
-				l_flag := 1
-			end
-			connection.execute_with_args ("UPDATE prayer SET deleted = ? WHERE prayer_id = ?", <<l_flag, a_id>>)
-			if connection.has_error then
-				create write_error.make ({BIB_ERROR}.Database_problem, failure_text (connection, "The prayer could not be changed."))
-			elseif connection.changes_count /= 1 then
-				create write_error.make ({BIB_ERROR}.Not_found, {STRING_32} "No such prayer: " + a_id.out)
-			end
-		end
-
 	prayers (a_answered: BOOLEAN): ARRAYED_LIST [BIB_PRAYER]
 			-- The live prayers still open (newest first), or answered (latest answer first).
 		require
@@ -383,19 +387,17 @@ feature -- Prayer (E06, schema 2)
 		do
 			create Result.make (8)
 			if a_answered then
-				l_sql := "SELECT prayer_id, title, body, hub_id, created_at, answered_at, answer FROM prayer WHERE deleted = 0 AND answered_at <> '' AND title <> '' ORDER BY answered_at DESC, prayer_id DESC"
+				l_sql := "SELECT prayer_id, title, body, hub_id, created_at, answered_at, answer FROM prayer WHERE " + Live_prayer_filter + " AND answered_at <> '' ORDER BY answered_at DESC, prayer_id DESC"
 			else
-				l_sql := "SELECT prayer_id, title, body, hub_id, created_at, answered_at, answer FROM prayer WHERE deleted = 0 AND answered_at = '' AND title <> '' ORDER BY prayer_id DESC"
+				l_sql := "SELECT prayer_id, title, body, hub_id, created_at, answered_at, answer FROM prayer WHERE " + Live_prayer_filter + " AND answered_at = '' ORDER BY prayer_id DESC"
 			end
 			across connection.query (l_sql).rows as ic loop
-				if ic.integer_64_value ("hub_id") >= 0 then
-					create l_prayer.make (ic.string_value ("title"), ic.string_value ("body"), ic.integer_64_value ("hub_id"))
-					l_prayer.mark_stored (ic.integer_64_value ("prayer_id"), ic.string_value ("created_at"))
-					if not ic.string_value ("answered_at").is_empty then
-						l_prayer.mark_answered (ic.string_value ("answered_at"), ic.string_value ("answer"))
-					end
-					Result.extend (l_prayer)
+				create l_prayer.make (ic.string_value ("title"), ic.string_value ("body"), ic.integer_64_value ("hub_id"))
+				l_prayer.mark_stored (ic.integer_64_value ("prayer_id"), ic.string_value ("created_at"))
+				if not ic.string_value ("answered_at").is_empty then
+					l_prayer.mark_answered (ic.string_value ("answered_at"), ic.string_value ("answer"))
 				end
+				Result.extend (l_prayer)
 			end
 		ensure
 			that_kind: across Result as ic all ic.is_answered = a_answered end
@@ -427,7 +429,7 @@ feature -- Memory cards (E07, schema 2)
 		require
 			open: is_open
 		do
-			Result := first_integer (connection.query_with_args ("SELECT count(*) AS n FROM memory_card WHERE hub_id = ? AND deleted = 0", <<a_hub_id>>)) > 0
+			Result := first_integer (connection.query_with_args ("SELECT count(*) AS n FROM memory_card WHERE hub_id = ? AND " + Live_card_filter, <<a_hub_id>>)) > 0
 		end
 
 	memory_cards (a_due_by: READABLE_STRING_GENERAL): ARRAYED_LIST [BIB_MEMORY_CARD]
@@ -439,14 +441,12 @@ feature -- Memory cards (E07, schema 2)
 			l_card: BIB_MEMORY_CARD
 		do
 			create Result.make (8)
-			across connection.query_with_args ("SELECT card_id, hub_id, due_on, interval_days, ease_percent, repetitions FROM memory_card WHERE deleted = 0 AND hub_id > 0 AND (? = '' OR due_on <= ?) ORDER BY due_on, card_id",
+			across connection.query_with_args ("SELECT card_id, hub_id, due_on, interval_days, ease_percent, repetitions FROM memory_card WHERE " + Live_card_filter + " AND (? = '' OR due_on <= ?) ORDER BY due_on, card_id",
 					<<a_due_by.to_string_32, a_due_by.to_string_32>>).rows as ic loop
-				if not ic.string_value ("due_on").is_empty and ic.integer_value ("ease_percent") >= {BIB_MEMORY_SCHEDULE}.Least_ease then
-					create l_card.make (ic.integer_64_value ("hub_id"), ic.string_value ("due_on"))
-					l_card.mark_stored (ic.integer_64_value ("card_id"))
-					l_card.set_state (ic.string_value ("due_on"), ic.integer_value ("interval_days").max (0), ic.integer_value ("ease_percent"), ic.integer_value ("repetitions").max (0))
-					Result.extend (l_card)
-				end
+				create l_card.make (ic.integer_64_value ("hub_id"), ic.string_value ("due_on"))
+				l_card.mark_stored (ic.integer_64_value ("card_id"))
+				l_card.set_state (ic.string_value ("due_on"), ic.integer_value ("interval_days").max (0), ic.integer_value ("ease_percent"), ic.integer_value ("repetitions").max (0))
+				Result.extend (l_card)
 			end
 		ensure
 			all_due: not a_due_by.is_empty implies across Result as ic all ic.is_due (a_due_by) end
@@ -458,10 +458,10 @@ feature -- Memory cards (E07, schema 2)
 		require
 			open: is_open
 			stored: a_card.id > 0
-			grade_valid: a_grade >= 0 and a_grade <= 5
+			grade_valid: (create {BIB_MEMORY_SCHEDULE}).is_valid_grade (a_grade)
 		local
 			l_schedule: BIB_MEMORY_SCHEDULE
-			l_interval, l_ease, l_repetitions: INTEGER
+			l_interval, l_ease, l_repetitions, l_changed: INTEGER
 			l_due: STRING_8
 		do
 			write_error := Void
@@ -473,14 +473,16 @@ feature -- Memory cards (E07, schema 2)
 			connection.begin_transaction
 			connection.execute_with_args ("UPDATE memory_card SET due_on = ?, interval_days = ?, ease_percent = ?, repetitions = ? WHERE card_id = ? AND deleted = 0",
 				<<l_due, l_interval, l_ease, l_repetitions, a_card.id>>)
-			if not connection.has_error and then connection.changes_count = 1 then
+				-- The card's own count, kept before the review row's (design scan 54).
+			l_changed := connection.changes_count
+			if not connection.has_error and then l_changed = 1 then
 				connection.execute_with_args ("INSERT INTO memory_review(card_id, reviewed_on, grade, interval_days, ease_percent) VALUES (?, ?, ?, ?, ?)",
 					<<a_card.id, a_today.to_iso8601, a_grade, l_interval, l_ease>>)
 			end
 			if connection.has_error then
 				create write_error.make ({BIB_ERROR}.Database_problem, failure_text (connection, "The review could not be saved."))
 				connection.rollback
-			elseif connection.changes_count /= 1 then
+			elseif l_changed /= 1 then
 				create write_error.make ({BIB_ERROR}.Not_found, {STRING_32} "No such card: " + a_card.id.out)
 				connection.rollback
 			else
@@ -489,26 +491,9 @@ feature -- Memory cards (E07, schema 2)
 			end
 		ensure
 			moved: write_error = Void implies a_card.repetitions = (create {BIB_MEMORY_SCHEDULE}).next_repetitions (old a_card.repetitions, a_grade)
-		end
-
-	set_memory_card_deleted (a_id: INTEGER_64; a_deleted: BOOLEAN)
-			-- Card `a_id' removed (kept, restorable) or restored.
-		require
-			open: is_open
-			stored: a_id > 0
-		local
-			l_flag: INTEGER
-		do
-			write_error := Void
-			if a_deleted then
-				l_flag := 1
-			end
-			connection.execute_with_args ("UPDATE memory_card SET deleted = ? WHERE card_id = ?", <<l_flag, a_id>>)
-			if connection.has_error then
-				create write_error.make ({BIB_ERROR}.Database_problem, failure_text (connection, "The card could not be changed."))
-			elseif connection.changes_count /= 1 then
-				create write_error.make ({BIB_ERROR}.Not_found, {STRING_32} "No such card: " + a_id.out)
-			end
+			spaced: write_error = Void implies a_card.interval_days = (create {BIB_MEMORY_SCHEDULE}).next_interval (old a_card.repetitions, old a_card.interval_days, old a_card.ease_percent, a_grade)
+			eased: write_error = Void implies a_card.ease_percent = (create {BIB_MEMORY_SCHEDULE}).next_ease (old a_card.ease_percent, a_grade)
+			dated: write_error = Void implies a_card.due_on.same_string_general (a_today.plus_days (a_card.interval_days).to_iso8601)
 		end
 
 feature -- Commands: settings, layouts, census
@@ -687,6 +672,17 @@ feature {BIB_NOTE_STORE} -- Connection
 feature {NONE} -- Items
 
 	Live_item_filter: STRING_8 = "deleted = 0 AND hub_id > 0 AND label <> ''"
+
+	Live_prayer_filter: STRING_8 = "deleted = 0 AND title <> '' AND hub_id >= 0"
+			-- What every prayer query means by a live prayer (design scan 54).
+
+	Live_card_filter: STRING_8
+			-- What every card query means by a live card: not deleted, on a verse, a date in the one
+			-- form, an ease the schedule can use (design scan 54: has_memory_card counted cards the
+			-- list could not show).
+		once
+			Result := "deleted = 0 AND hub_id > 0 AND length(due_on) = " + {BIB_MEMORY_CARD}.Iso_date_length.out + " AND ease_percent >= " + {BIB_MEMORY_SCHEDULE}.Least_ease.out
+		end
 			-- What every query means by a live item: not deleted, on a verse, labelled. Scan 44: six
 			-- spellings disagreed, so an unlabelled row was counted and not listed.
 
@@ -718,7 +714,14 @@ feature {NONE} -- Items
 			if a_deleted then
 				l_flag := 1
 			end
-			connection.execute_with_args ("UPDATE user_item SET deleted = ?, changed_at = ? WHERE item_id = ? AND kind = ?", <<l_flag, now_text, a_id, a_kind>>)
+				-- The one soft delete of every listed kind (design scan 54: it was written four ways).
+			if a_kind = Kind_prayer then
+				connection.execute_with_args ("UPDATE prayer SET deleted = ? WHERE prayer_id = ?", <<l_flag, a_id>>)
+			elseif a_kind = Kind_memory_card then
+				connection.execute_with_args ("UPDATE memory_card SET deleted = ? WHERE card_id = ?", <<l_flag, a_id>>)
+			else
+				connection.execute_with_args ("UPDATE user_item SET deleted = ?, changed_at = ? WHERE item_id = ? AND kind = ?", <<l_flag, now_text, a_id, a_kind>>)
+			end
 			if connection.has_error then
 				create write_error.make ({BIB_ERROR}.Database_problem, failure_text (connection, "The item could not be changed."))
 			elseif connection.changes_count /= 1 then
@@ -769,8 +772,10 @@ feature {NONE} -- Schema
 			a_db.execute_with_args ("VACUUM INTO ?", {ARRAY [detachable ANY]} <<l_backup>>)
 			if a_db.has_error or else not (create {SIMPLE_FILE}.make (l_backup)).is_file then
 				create last_error.make ({BIB_ERROR}.Database_problem, failure_text (a_db, "user.db could not be backed up before its upgrade, so it was left as it is."))
+					-- Design scan 54: a failed copy may leave part of a file behind.
+				if (create {SIMPLE_FILE}.make (l_backup)).exists and then (create {SIMPLE_FILE}.make (l_backup)).delete then
+				end
 			else
-				last_backup_path := l_backup
 				a_db.begin_transaction
 				across Upgrade_2_statements as ic until last_error /= Void loop
 					a_db.execute (ic)
@@ -788,6 +793,10 @@ feature {NONE} -- Schema
 					if a_db.is_in_transaction then
 						a_db.rollback
 					end
+				end
+				if last_error = Void then
+						-- Named only once the upgrade has held (design scan 54).
+					last_backup_path := l_backup
 				end
 			end
 		end
@@ -879,6 +888,9 @@ feature -- Constants
 	Kind_bookmark: INTEGER = 3
 	Kind_tag: INTEGER = 4
 	Kind_visit: INTEGER = 5
+	Kind_prayer: INTEGER = 6
+	Kind_memory_card: INTEGER = 7
+			-- Listed kinds outside user_item (their own tables, schema 2).
 
 	Max_recent_places: INTEGER = 1000
 			-- The most `recent_places' lists (its `one_per_chapter' check is quadratic: scan 46).

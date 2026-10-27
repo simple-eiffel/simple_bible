@@ -12,6 +12,9 @@ note
 deferred class
 	BIB_USER_ITEM
 
+inherit
+	BIB_LISTED
+
 feature -- Access
 
 	id: INTEGER_64

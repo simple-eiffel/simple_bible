@@ -12,6 +12,9 @@ note
 class
 	BIB_PRAYER
 
+inherit
+	BIB_LISTED
+
 create
 	make
 
@@ -53,8 +56,6 @@ feature -- Access
 
 	answer: STRING_32
 			-- How it was answered, in the reader's words.
-
-	is_deleted: BOOLEAN
 
 	is_answered: BOOLEAN
 			-- Has it been answered?

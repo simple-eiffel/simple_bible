@@ -257,6 +257,7 @@ feature {NONE} -- Suites
 			run_test (agent t.test_prayer_list_open_answered_removed, "test_prayer_list_open_answered_removed")
 			run_test (agent t.test_memory_schedule_is_supermemo_2, "test_memory_schedule_is_supermemo_2")
 			run_test (agent t.test_memory_cards_due_and_reviewed, "test_memory_cards_due_and_reviewed")
+			run_test (agent t.test_one_rule_for_a_live_card, "test_one_rule_for_a_live_card")
 			run_test (agent t.test_recent_places_one_per_chapter, "test_recent_places_one_per_chapter")
 			run_test (agent t.test_tags_count_and_list_their_verses, "test_tags_count_and_list_their_verses")
 			run_test (agent t.test_a_failed_item_write_is_reported, "test_a_failed_item_write_is_reported")
