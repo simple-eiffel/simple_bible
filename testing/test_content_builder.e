@@ -160,6 +160,15 @@ feature -- Tests
 			assert_integers_equal ("a root the pack has no corpus for", 0, found (l_bible, "G3588"))
 			assert_false ("no failure", l_bible.verse_search.has_failed)
 			assert_integers_equal ("a root nowhere with a word", 0, found (l_bible, "H1254 AND light"))
+				-- B05: give the fixture's bara a Hebrew morphology code (the pack is attached read-only).
+			create l_db.make (Pack_file)
+			l_db.execute ("UPDATE token SET morph = 'Vqp3ms' WHERE token_id = 5")
+			l_db.close
+			assert_integers_equal ("a grammar code", 1, found (l_bible, "morph:Vqp3ms"))
+			assert_integers_equal ("a grammar prefix", 1, found (l_bible, "morph:Vq*"))
+			assert_integers_equal ("another stem", 0, found (l_bible, "morph:Vn*"))
+			assert_integers_equal ("a code and a word", 1, found (l_bible, "morph:Vqp3ms AND beginning"))
+			assert_true ("a Hebrew code is told as Hebrew numbering", found (l_bible, "morph:Vq*") = 1 and then l_bible.verse_search.has_hebrew_roots)
 			l_bible.close
 			remove_test_files
 		end
