@@ -67,6 +67,14 @@ feature {NONE} -- Initialization
 			create navigator_tabs.make
 			create bookmarks_heading.make_ui ("")
 			create bookmarks_grid.make (100.0)
+			create tag_label.make_ui ("")
+			create tag_box.make_single_line ("")
+			create tag_button.make ("Tag", Void)
+			create tag_names_grid.make (80.0)
+			create tag_name_rows.make (0)
+			create tagged_heading.make_ui ("")
+			create tagged_grid.make (80.0)
+			create chosen_tag.make_empty
 			create light_theme.make_light
 			create dark_theme.make_dark
 				-- The text size the reader chose last time, for all the window's text (C8).
@@ -154,6 +162,8 @@ feature {NONE} -- Initialization
 				-- The item panels get agents on Current once both exist and every attribute is set (VEVI).
 			create highlights_panel.make (user_store, {BIB_USER_STORE}.Kind_highlight, highlights_grid, "Highlight")
 			create bookmarks_panel.make (user_store, {BIB_USER_STORE}.Kind_bookmark, bookmarks_grid, "Bookmark")
+			create tagged_panel.make (user_store, {BIB_USER_STORE}.Kind_tag, tagged_grid, "Tag")
+			tagged_panel.set_actions (agent say, agent fill_tags, agent go_to_hub)
 			highlights_panel.set_actions (agent say, agent reopen_reading, agent go_to_hub)
 			bookmarks_panel.set_actions (agent say, agent fill_bookmarks, agent go_to_hub)
 			build_columns
@@ -265,6 +275,12 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			elseif snapshot_tab.same_string ({STRING_32} "notes") then
 				new_note_box.set_text ("A sample note written by the snapshot run.")
 				add_note
+			elseif snapshot_tab.same_string ({STRING_32} "tags") then
+				tag_box.set_text ("Watchers")
+				tag_verse
+				if attached notes_tabs as al_tabs then
+					al_tabs.select_tab (Tags_tab)
+				end
 			elseif snapshot_tab.same_string ({STRING_32} "bookmarks") then
 				bookmark_verse
 				navigator_tabs.select_tab (Bookmarks_tab)
@@ -347,6 +363,8 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			notes_list.set_on_edit_commit (agent on_note_edited)
 			notes_list.set_on_select (agent on_note_selected)
 			add_note_button.set_on_click (agent add_note)
+			tag_button.set_on_click (agent tag_verse)
+			tag_names_grid.set_on_select (agent on_tag_name)
 			delete_note_button.set_on_click (agent delete_note)
 			restore_note_button.set_on_click (agent restore_note)
 			highlight_button.set_on_click (agent add_highlight)
@@ -531,6 +549,9 @@ feature {NONE} -- Window
 			cross_refs_grid.add_column ((create {SW_GRID_COLUMN [BIB_READING_CROSS_REF]}.make ("Reference", 180.0, agent cross_ref_text)).growing)
 			highlights_grid.add_column (create {SW_GRID_COLUMN [BIB_HIGHLIGHT]}.make ("Verse", 120.0, agent highlight_place))
 			bookmarks_grid.add_column ((create {SW_GRID_COLUMN [BIB_BOOKMARK]}.make ("Verse", 140.0, agent bookmark_place)).growing)
+			tag_names_grid.add_column ((create {SW_GRID_COLUMN [TUPLE [tag: STRING_32; verses: INTEGER]]}.make ("Tag", 160.0, agent tag_name_text)).growing)
+			tag_names_grid.add_column (create {SW_GRID_COLUMN [TUPLE [tag: STRING_32; verses: INTEGER]]}.make ("Verses", 70.0, agent tag_verses_text))
+			tagged_grid.add_column ((create {SW_GRID_COLUMN [BIB_TAG_ASSIGNMENT]}.make ("Verse", 140.0, agent tag_place)).growing)
 			highlights_grid.add_column ((create {SW_GRID_COLUMN [BIB_HIGHLIGHT]}.make ("Reason", 160.0, agent {BIB_HIGHLIGHT}.reason)).growing)
 			analysis_grid.add_column (create {SW_GRID_COLUMN [BIB_INTERLINEAR_WORD]}.make ("#", 40.0, agent analysis_position))
 			analysis_grid.add_column (create {SW_GRID_COLUMN [BIB_INTERLINEAR_WORD]}.make ("Word", 130.0, agent {BIB_INTERLINEAR_WORD}.surface))
@@ -1005,6 +1026,7 @@ feature {NONE} -- Reading (S1, P01)
 					fill_notes
 					fill_highlights
 					fill_bookmarks
+					fill_tags
 				end
 			end
 		end
@@ -1460,7 +1482,7 @@ feature {NONE} -- Two layouts (C7)
 			create l_tabs.make
 			l_tabs.add_page ("Verse notes", l_page)
 			l_tabs.add_page ("Journal", create {SW_EMPTY_STATE}.make ("Journal comes later", "Notebooks and topical notes (E04)."))
-			l_tabs.add_page ("Tags", create {SW_EMPTY_STATE}.make ("Tags come later", "Your tags and their verses (E05)."))
+			l_tabs.add_page ("Tags", tags_page)
 			l_tabs.add_page ("Highlights", highlights_page)
 			l_tabs.add_page ("Prayer", create {SW_EMPTY_STATE}.make ("Prayer list comes later", "Requests with dates (E06)."))
 			l_tabs.add_page ("Memory", create {SW_EMPTY_STATE}.make ("Memory cards come later", "Verses to learn, spaced (E07)."))
@@ -1615,6 +1637,132 @@ feature {NONE} -- Notes (T2, P06)
 
 	highlights_panel: BIB_ITEM_LIST_PANEL [BIB_HIGHLIGHT]
 			-- The highlights list, in Bible order, with Remove and Restore.
+
+	Tags_tab: INTEGER = 3
+			-- P06's Tags page.
+
+	tag_label, tagged_heading: SW_LABEL
+	tag_box: SW_TEXT_BOX
+	tag_button: SW_BUTTON
+	tag_names_grid: SW_DATA_GRID [TUPLE [tag: STRING_32; verses: INTEGER]]
+	tagged_grid: SW_DATA_GRID [BIB_TAG_ASSIGNMENT]
+			-- T2's Tags tab (E05): a tag for the verse read, every tag with its count, and the verses
+			-- of the tag chosen.
+
+	tag_name_rows: ARRAYED_LIST [TUPLE [tag: STRING_32; verses: INTEGER]]
+			-- The rows of `tag_names_grid'.
+
+	chosen_tag: STRING_32
+			-- The tag whose verses `tagged_panel' lists; empty for none.
+
+	tagged_panel: BIB_ITEM_LIST_PANEL [BIB_TAG_ASSIGNMENT]
+			-- The chosen tag's verses, with Remove and Restore.
+
+	tags_page: SW_COLUMN
+			-- The Tags tab.
+		local
+			l_row, l_buttons: SW_ROW
+		do
+			create Result.make
+			Result := Result.with_gap (6.0)
+			Result.put (tag_label)
+			create l_row.make
+			l_row.put (tag_box.growing)
+			l_row.put (tag_button)
+			Result.put (l_row)
+			Result.put (tag_names_grid.growing)
+				-- The chosen tag's heading and its Remove and Restore share a line: the panel is short.
+			create l_buttons.make
+			l_buttons.put (tagged_heading.growing)
+			l_buttons.put (tagged_panel.remove_button)
+			l_buttons.put (tagged_panel.restore_button)
+			Result.put (l_buttons)
+			Result.put (tagged_grid.growing)
+		end
+
+	fill_tags
+			-- The Tags tab follows the place read: every tag and its count, the chosen tag's verses, and
+			-- the box for tagging the verse read.
+		local
+			l_still: BOOLEAN
+		do
+			if user_store.is_open then
+				tag_name_rows := user_store.tag_counts
+			else
+				create tag_name_rows.make (0)
+			end
+			tag_names_grid.set_rows (tag_name_rows)
+			across tag_name_rows as ic loop
+				l_still := l_still or ic.tag.same_string (chosen_tag)
+			end
+			if not l_still then
+				chosen_tag := {STRING_32} ""
+			end
+			if chosen_tag.is_empty or not user_store.is_open then
+				tagged_panel.set_rows (create {ARRAYED_LIST [BIB_TAG_ASSIGNMENT]}.make (0))
+				if tag_name_rows.is_empty then
+					tagged_heading.set_text ("No tags yet: tag the verse read, then click a tag for its verses.")
+				else
+					tagged_heading.set_text ("Click a tag for its verses.")
+				end
+			else
+				tagged_panel.set_rows (user_store.assignments_tagged (chosen_tag))
+				tagged_heading.set_text ({STRING_32} "Verses tagged " + chosen_tag + {STRING_32} ":")
+			end
+			if reading_verse > 0 then
+				tag_label.set_text ({STRING_32} "Tag " + place_text (reading_book, reading_chapter, reading_verse) + {STRING_32} ":")
+			else
+				tag_label.set_text ("Click a verse to tag it.")
+			end
+			tag_button.set_enabled (user_store.is_open and reading_verse > 0)
+		end
+
+	tag_verse
+			-- The verse read gets the tag in the box.
+		local
+			l_tag: STRING_32
+		do
+			l_tag := tag_box.text.twin
+			l_tag.left_adjust
+			l_tag.right_adjust
+			if l_tag.is_empty then
+				say ("Name the tag first.")
+			elseif user_store.is_open and reading_verse > 0 then
+				user_store.tag_verse (create {BIB_TAG_ASSIGNMENT}.make ((create {BIB_HUB_ID}).hub_id (reading_book, reading_chapter, reading_verse), l_tag))
+				if attached user_store.write_error as al_error then
+					say (al_error.message)
+				else
+					tag_box.set_text ("")
+					chosen_tag := l_tag
+					fill_tags
+				end
+			end
+		end
+
+	on_tag_name (a_row: INTEGER)
+			-- A tag clicked: its verses listed.
+		do
+			if a_row >= 1 and a_row <= tag_name_rows.count then
+				chosen_tag := tag_name_rows.i_th (a_row).tag.twin
+				fill_tags
+			end
+		end
+
+	tag_name_text (a_row: TUPLE [tag: STRING_32; verses: INTEGER]): STRING_32
+		do
+			Result := a_row.tag
+		end
+
+	tag_verses_text (a_row: TUPLE [tag: STRING_32; verses: INTEGER]): STRING_32
+		do
+			Result := a_row.verses.out
+		end
+
+	tag_place (a_tag: BIB_TAG_ASSIGNMENT): STRING_32
+			-- "Jude 1:6".
+		do
+			Result := hub_place (a_tag.hub_id)
+		end
 
 	Highlights_tab: INTEGER = 4
 			-- P06's Highlights page.
@@ -2140,7 +2288,7 @@ feature {NONE} -- Notes (T2, P06)
 			window.add_reference_mark (tools_strip, "C10", "Study tools strip: Parallel and Interlinear work; Guide, Word Study, Count and Ledger come later.", window.Corner_top_left)
 			window.add_reference_mark (mode_switch, "C7", "Mode switch, on Study: only the docking changes. Ctrl+M.", window.Corner_top_left)
 			window.add_reference_mark (navigator_tabs, "T1", "P11 Navigator, west: Books (chapter by chapter) and Bookmarks (Ctrl+D bookmarks the verse read; click one to read it; Remove and Restore).", window.Corner_top_left)
-			window.add_reference_mark (notes_heading, "T2", "P06 Notes, west below T1: Verse notes on the chapter read (add on the verse read; double-click to edit, each edit keeps the old version; Delete and Restore) and Highlights (a reason, not a color; washed amber in the Bible and Parallel tabs; click one to read it; Remove and Restore). Journal, Tags, Prayer and Memory come later.", window.Corner_top_left)
+			window.add_reference_mark (notes_heading, "T2", "P06 Notes, west below T1: Verse notes on the chapter read (add on the verse read; double-click to edit, each edit keeps the old version; Delete and Restore) Tags (tag the verse read; click a tag for its verses), and Highlights (a reason, not a color; washed amber in the Bible and Parallel tabs). Lists: click to read; Remove and Restore. Journal, Prayer and Memory come later.", window.Corner_top_left)
 			window.add_reference_mark (center_tabs, "T3", "Centre tabs: the Bible text, Parallel (P02) and Interlinear (P03, Ctrl+I). More Bible tabs come later.", window.Corner_top_left)
 			window.add_reference_mark (analysis_title, "P03.2", "Verse analysis: the verse read, a row per word with its lemma, Strong's number, morphology, gloss, and how often its headword occurs in this testament. Click a row and T4 follows it.", window.Corner_top_left)
 			window.add_reference_mark (interlinear_note, "P03", "Interlinear: word by word in the original, right to left for Hebrew. A click makes the word's verse the place read and opens its headword in T4.", window.Corner_top_left)
