@@ -76,13 +76,14 @@ feature -- Searching
 			has_hebrew_roots := False
 			has_greek_roots := False
 			cursor := 1
-			places := evaluated (a_query, a_version, False)
+			places := within_scope (evaluated (a_query, a_version, False), a_query.scope)
 			if has_failed then
 				create places.make (0)
 			end
 		ensure
 			ascending_once: is_ascending (places)
 			empty_on_failure: has_failed implies places.is_empty
+			in_scope: across places as ic all keys.book_part (ic) >= a_query.scope.first_book and keys.book_part (ic) <= a_query.scope.last_book end
 		end
 
 	verses (a_version: READABLE_STRING_8; a_from, a_limit: INTEGER): BIB_LIST_RESULT [BIB_READING_VERSE]
@@ -106,6 +107,24 @@ feature -- Searching
 		end
 
 feature {NONE} -- Evaluation
+
+	keys: BIB_VERSE_KEY
+			-- Reads the book of a place.
+		once ("OBJECT")
+			create Result
+		end
+
+	within_scope (a_places: ARRAYED_LIST [INTEGER_64]; a_scope: BIB_SEARCH_SCOPE): ARRAYED_LIST [INTEGER_64]
+			-- The places of `a_places' whose book lies in `a_scope' (NEEDLE run 7's scope: a book, a
+			-- testament, the Gospels, Paul's letters; BIB_SEARCH_SCOPES names them).
+		do
+			create Result.make (a_places.count)
+			across a_places as ic loop
+				if keys.book_part (ic) >= a_scope.first_book and keys.book_part (ic) <= a_scope.last_book then
+					Result.extend (ic)
+				end
+			end
+		end
 
 	cursor: INTEGER
 			-- The next clause of the query being evaluated (pre-order).
