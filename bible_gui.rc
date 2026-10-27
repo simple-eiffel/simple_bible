@@ -1,5 +1,9 @@
 #include <windows.h>
 
+// The window and the exe show this icon: simple_shell loads icon 1 for its window class.
+// rc runs in EIFGENs/bible_gui/F_code, hence the path (drawn by tools/make_icons.py).
+1 ICON "../../../assets/icons/bible_gui.ico"
+
 STRINGTABLE
 BEGIN
 	1 "This Program was made using EiffelStudio using Visual Studio C++"
