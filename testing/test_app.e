@@ -340,6 +340,7 @@ feature {NONE} -- Suites
 			run_test (agent t.test_lexicon_entries_and_gloss, "test_lexicon_entries_and_gloss")
 			run_test (agent t.test_a_clicked_word_finds_its_original, "test_a_clicked_word_finds_its_original")
 			run_test (agent t.test_a_clicked_original_word_finds_its_headword, "test_a_clicked_original_word_finds_its_headword")
+			run_test (agent t.test_an_empty_chapter_says_why, "test_an_empty_chapter_says_why")
 			run_test (agent t.test_place_rows_know_their_verse, "test_place_rows_know_their_verse")
 			run_test (agent t.test_a_failing_chapter_query_says_why, "test_a_failing_chapter_query_says_why")
 		end
@@ -422,6 +423,7 @@ feature {NONE} -- Suites
 			run_test (agent t.test_word_entry_reads_the_heading, "test_word_entry_reads_the_heading")
 			run_test (agent t.test_headwords_for_strongs_go_through_xref, "test_headwords_for_strongs_go_through_xref")
 			run_test (agent t.test_headwords_for_typed_text, "test_headwords_for_typed_text")
+			run_test (agent t.test_typed_greek_folds_as_a_clicked_word, "test_typed_greek_folds_as_a_clicked_word")
 			run_test (agent t.test_english_glance_holds_back_function_words, "test_english_glance_holds_back_function_words")
 			run_test (agent t.test_strongs_key_text, "test_strongs_key_text")
 			run_test (agent t.test_places_page_by_offset_and_by_keyset, "test_places_page_by_offset_and_by_keyset")

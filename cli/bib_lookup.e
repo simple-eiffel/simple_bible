@@ -85,6 +85,24 @@ feature -- Access
 			known_or_empty: not Result.is_empty implies bible.conc_pack.has_corpus (Result)
 		end
 
+	empty_chapter_text (a_chapter: BIB_LIST_RESULT [BIB_READING_VERSE]; a_place: READABLE_STRING_GENERAL): STRING_32
+			-- Why `a_chapter' (chapter `a_place' read in one version) shows nothing: the reader's error,
+			-- or that the version lacks it; empty when it has verses. Scan 36 (2026-10-27): the Bible
+			-- tab said why, the Parallel tab's columns stayed blank.
+		do
+			if attached a_chapter.error as al_error then
+				create Result.make_from_string_general (al_error.message)
+			elseif a_chapter.count = 0 then
+				create Result.make_from_string_general (a_place)
+				Result.append ({STRING_32} " is not in this version.")
+			else
+				create Result.make_empty
+			end
+		ensure
+			empty_when_read: (a_chapter.is_success and a_chapter.count > 0) implies Result.is_empty
+			said_when_empty: a_chapter.count = 0 implies not Result.is_empty
+		end
+
 	corpus_for_book (a_book: INTEGER): STRING_8
 			-- The corpus a verse of book `a_book' is read in: the Hebrew Bible for books 1 to 39,
 			-- the Greek New Testament after (one rule for every face, design scan 32).

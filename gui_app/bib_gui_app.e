@@ -602,11 +602,26 @@ feature {NONE} -- Toolbar (C3-C9)
 			window.toast ({STRING_32} "Text size " + (l_scale * 100.0).rounded.out + {STRING_32} "%%", 1)
 		end
 
+	mark_selected_verse (a_view: SW_PARALLEL_TEXT; a_row, a_column: INTEGER; a_text: READABLE_STRING_32)
+			-- Wash the selected verse's text `a_text' in cell `a_row', `a_column' of `a_view': the one
+			-- mark the Bible and Parallel tabs both use (scan 36).
+		local
+			l_mark: SW_MARK
+		do
+			if not a_text.is_empty then
+				create l_mark.make ({SW_MARK}.Hue_blue)
+				a_view.cell_marks (a_row, a_column).mark_range_with (0, a_text.count, "selected verse", l_mark.with_wash).do_nothing
+			end
+		end
+
+	Original_script_scale: REAL_64 = 1.35
+			-- Hebrew and Aramaic read this much larger than the window's text, in every view.
+
 	apply_reading_scale
 			-- Hebrew and Aramaic read a little larger than the window's text.
 		do
 			if attached bible.text_reader.version (reading_version) as al_version and then al_version.is_right_to_left then
-				reading_view.set_column_scale (1, 1.35)
+				reading_view.set_column_scale (1, Original_script_scale)
 			else
 				reading_view.set_column_scale (1, 1.0)
 			end
@@ -735,7 +750,7 @@ feature {NONE} -- Reading (S1, P01)
 		local
 			l_chapter: BIB_LIST_RESULT [BIB_READING_VERSE]
 			l_row, l_selected_row, i: INTEGER
-			l_mark: SW_MARK
+			l_lookup: BIB_LOOKUP
 		do
 			if bible.text_reader.has_version (reading_version) then
 				reading_book := a_book
@@ -760,16 +775,12 @@ feature {NONE} -- Reading (S1, P01)
 					reading_view.set_cell (l_row, 1, ic.display_text)
 					if ic.verse = a_verse then
 						l_selected_row := l_row
-						create l_mark.make ({SW_MARK}.Hue_blue)
-						reading_view.cell_marks (l_row, 1).mark_range_with (0, ic.display_text.count, "selected verse", l_mark.with_wash).do_nothing
+						mark_selected_verse (reading_view, l_row, 1, ic.display_text)
 					end
 				end
+				create l_lookup.make (bible)
 				if l_chapter.count = 0 then
-					if attached l_chapter.error as al_error then
-						reading_view.add_note (al_error.message).do_nothing
-					else
-						reading_view.add_note (place_text (a_book, a_chapter, 0) + {STRING_32} " is not in this version.").do_nothing
-					end
+					reading_view.add_note (l_lookup.empty_chapter_text (l_chapter, place_text (a_book, a_chapter, 0))).do_nothing
 				end
 				if l_selected_row > 0 then
 					reading_view.scroll_to_row (l_selected_row)
@@ -1240,19 +1251,25 @@ feature {NONE} -- Two layouts (C7)
 			l_chapter: BIB_LIST_RESULT [BIB_READING_VERSE]
 			l_text: HASH_TABLE [STRING_32, INTEGER]
 			l_row, l_selected, i, c: INTEGER
-			l_mark: SW_MARK
+			l_lookup: BIB_LOOKUP
+			l_notes: ARRAYED_LIST [STRING_32]
+			l_name, l_note: STRING_32
 		do
 			if reading_book > 0 and then bible.is_open then
 				l_codes := parallel_versions
 				parallel_codes := l_codes
 				create l_chapters.make (l_codes.count)
+				create l_lookup.make (bible)
+				create l_notes.make (3)
 				from c := 1 until c > 3 loop
 					create l_text.make (40)
 					if c <= l_codes.count then
+						l_name := l_codes.i_th (c).to_string_32
 						if attached bible.text_reader.version (l_codes.i_th (c)) as al_version then
+							l_name := al_version.name
 							parallel_view.set_column_title (c, al_version.name)
 							if al_version.is_right_to_left then
-								parallel_view.set_column_scale (c, 1.35)
+								parallel_view.set_column_scale (c, Original_script_scale)
 							else
 								parallel_view.set_column_scale (c, 1.0)
 							end
@@ -1261,6 +1278,11 @@ feature {NONE} -- Two layouts (C7)
 						from i := 1 until i > l_chapter.count loop
 							l_text.force (l_chapter.item (i).display_text, l_chapter.item (i).verse)
 							i := i + 1
+						end
+							-- A column with nothing says why, as the Bible tab does (scan 36).
+						l_note := l_lookup.empty_chapter_text (l_chapter, place_text (reading_book, reading_chapter, 0))
+						if not l_note.is_empty then
+							l_notes.extend (l_name + {STRING_32} ": " + l_note)
 						end
 					else
 						parallel_view.set_column_title (c, "")
@@ -1275,9 +1297,8 @@ feature {NONE} -- Two layouts (C7)
 						if attached l_chapters.i_th (c).item (ic.verse) as al_cell then
 							parallel_view.set_cell (l_row, c, al_cell)
 								-- The selected verse is marked in every column, as in the Bible tab.
-							if ic.verse = reading_verse and then not al_cell.is_empty then
-								create l_mark.make ({SW_MARK}.Hue_blue)
-								parallel_view.cell_marks (l_row, c).mark_range_with (0, al_cell.count, "selected verse", l_mark.with_wash).do_nothing
+							if ic.verse = reading_verse then
+								mark_selected_verse (parallel_view, l_row, c, al_cell)
 							end
 						end
 						c := c + 1
@@ -1285,6 +1306,9 @@ feature {NONE} -- Two layouts (C7)
 					if ic.verse = reading_verse then
 						l_selected := l_row
 					end
+				end
+				across l_notes as ic loop
+					parallel_view.add_note (ic).do_nothing
 				end
 				if l_selected > 0 then
 					parallel_view.scroll_to_row (l_selected)
@@ -1300,27 +1324,15 @@ feature {NONE} -- Two layouts (C7)
 	add_study_pills
 			-- The Study board's codes: the chrome as on the Simple board, C10, and T1 to T6.
 		do
-			window.add_reference_mark (menu_bar, "C2", "Menu bar: the same in both layouts.", window.Corner_top_left)
-			window.add_reference_mark (menu_bar, "C1", "Title bar (above): app, chapter and version, edition.", window.Corner_top_right)
-			window.add_reference_mark (back_button, "C3", "Back and Forward: Alt+Left and Alt+Right.", window.Corner_top_left)
-			window.add_reference_mark (reference_box, "C4", "Reference box. Ctrl+L.", window.Corner_top_left)
-			window.add_reference_mark (version_select, "C5", "Version picker.", window.Corner_top_right)
-			window.add_reference_mark (search_box, "C6", "Quick search: results go to T6. Ctrl+F.", window.Corner_top_left)
+			add_chrome_pills
 			window.add_reference_mark (tools_strip, "C10", "Study tools strip: Parallel works; Interlinear, Guide, Word Study, Count and Ledger come later.", window.Corner_top_left)
 			window.add_reference_mark (mode_switch, "C7", "Mode switch, on Study: only the docking changes. Ctrl+M.", window.Corner_top_left)
-			window.add_reference_mark (smaller_button, "C8", "Text size for the whole window, kept for next time.", window.Corner_top_left)
-			window.add_reference_mark (dark_switch, "C9", "Dark / Light.", window.Corner_top_right)
 			window.add_reference_mark (navigator_tree, "T1", "P11 Navigator, west: books, chapter by chapter. Bookmarks come later.", window.Corner_top_left)
 			window.add_reference_mark (dock, "T2", "P06 Notes, west below T1: comes with the notes store.", window.Corner_bottom_left)
 			window.add_reference_mark (center_tabs, "T3", "Centre tabs: the Bible text and Parallel (P02). More Bible tabs come later.", window.Corner_top_left)
 			window.add_reference_mark (lexicon_heading, "T4", "P05 Lexicon, east: follows the clicked word.", window.Corner_top_left)
 			window.add_reference_mark (commentary_title, "T5", "P04 Commentary, east: here on Cross-refs, with OpenBible votes.", window.Corner_top_left)
 			window.add_reference_mark (results_tabs, "T6", "South results zone: Search Results; Guides, Census, Author Library and Ledger come later.", window.Corner_top_left)
-			window.add_reference_mark (link_label, "C12", "Link set: always A for now.", window.Corner_top_left)
-			window.add_reference_mark (numbering_label, "C13", "Versification.", window.Corner_top_left)
-			window.add_reference_mark (progress, "C14", "Job progress.", window.Corner_top_left)
-			window.add_reference_mark (editions_label, "C15", "Database editions.", window.Corner_top_right)
-			window.add_reference_mark (status_bar, "C11", "Status: the reference and version read.", window.Corner_top_left)
 		end
 
 feature {NONE} -- Commentary (S2, P04)
@@ -1689,34 +1701,42 @@ feature {NONE} -- Start and status (C1, C11-C15)
 
 feature {NONE} -- Design pills
 
-	add_pills
-			-- Each part of the window named with its code on the guide's Simple board (and P05/P07),
-			-- so a screenshot with the pills on can say "C5" or "S3" and be understood. View menu or
-			-- Ctrl+Shift+P shows them; each tip is the board's legend, cut short, plus what is here today.
+	add_chrome_pills
+			-- The chrome both boards share (C1 to C6, C8, C9, C11 to C15), named once so the two
+			-- layouts never tell two stories (scan 36: Simple's tips had gone stale beside Study's).
 		do
 			window.add_reference_mark (menu_bar, "C2", "Menu bar: the same in both layouts; every tool lives here (greyed: not built yet).", window.Corner_top_left)
 			window.add_reference_mark (menu_bar, "C1", "Title bar (above): app, chapter and version, and the PERSONAL EDITION label.", window.Corner_top_right)
 			window.add_reference_mark (back_button, "C3", "Back and Forward: history, Alt+Left and Alt+Right.", window.Corner_top_left)
 			window.add_reference_mark (reference_box, "C4", "Reference box: 'John 3:16', 'Ps 23', 'Gen 1 1'. Anything else is searched. Ctrl+L.", window.Corner_top_left)
-			window.add_reference_mark (version_select, "C5", "Version picker: every version content.db holds. S1 changes; the place stays.", window.Corner_top_right)
-			window.add_reference_mark (search_box, "C6", "Quick search: a word, verse or Strong's number; results open P07. Ctrl+F.", window.Corner_top_left)
-			window.add_reference_mark (mode_switch, "C7", "Simple | Study switch: layout only, never data. Study is the next step. Ctrl+M.", window.Corner_top_left)
-			window.add_reference_mark (smaller_button, "C8", "Text size: all the window's text, 80 to 200 percent, kept for next time. Ctrl + and -.", window.Corner_top_left)
+			window.add_reference_mark (version_select, "C5", "Version picker: every version content.db holds. The text changes; the place stays.", window.Corner_top_right)
+			window.add_reference_mark (search_box, "C6", "Quick search: a word, verse or Strong's number; results open the results zone. Ctrl+F.", window.Corner_top_left)
+			window.add_reference_mark (smaller_button, "C8", {STRING_32} "Text size: all the window's text, " + (settings.Min_text_scale * 100.0).rounded.out + {STRING_32} " to "
+				+ (settings.Max_text_scale * 100.0).rounded.out + {STRING_32} " percent, kept for next time. Ctrl + and -.", window.Corner_top_left)
 			window.add_reference_mark (dark_switch, "C9", "Dark / Light: your choice; until you switch, Windows decides.", window.Corner_top_right)
+			window.add_reference_mark (link_label, "C12", "Link set: always A for now.", window.Corner_top_left)
+			window.add_reference_mark (numbering_label, "C13", "Versification: which numbering the version uses.", window.Corner_top_left)
+			window.add_reference_mark (progress, "C14", "Job progress: a long every-place list loading.", window.Corner_top_left)
+			window.add_reference_mark (editions_label, "C15", "Database editions: which data files are loaded.", window.Corner_top_right)
+			window.add_reference_mark (status_bar, "C11", "Status: the reference and version read.", window.Corner_top_left)
+		end
+
+	add_pills
+			-- Each part of the window named with its code on the guide's Simple board (and P05/P07),
+			-- so a screenshot with the pills on can say "C5" or "S3" and be understood. View menu or
+			-- Ctrl+Shift+P shows them; each tip is the board's legend, cut short, plus what is here today.
+		do
+			add_chrome_pills
+			window.add_reference_mark (mode_switch, "C7", "Simple | Study switch: layout only, never data. Ctrl+M.", window.Corner_top_left)
 			window.add_reference_mark (dock, "C16", "Dock host: centre plus west, east, south; an empty zone collapses (P07 here).", window.Corner_top_right)
 			window.add_reference_mark (reading_caption, "S1", "P01 Bible Text, centre: verse per line. Previous and Next step chapters.", window.Corner_top_left)
-			window.add_reference_mark (reading_view, "S4", "Selected verse and word: click a word (KJV, BSB) and S3 follows it; S2 follows the verse.", window.Corner_top_right)
+			window.add_reference_mark (reading_view, "S4", "Selected verse and word: click a word (English, Hebrew or Greek) and S3 follows it; S2 follows the verse.", window.Corner_top_right)
 			window.add_reference_mark (commentary_title, "S2", "P04 Commentary, east: follows the verse. Cross-refs live (OpenBible votes).", window.Corner_top_left)
 			window.add_reference_mark (lexicon_heading, "S3", "P05 Lexicon, south: follows the word. Renderings first, then lexicon entries.", window.Corner_top_left)
 			window.add_reference_mark (renderings_grid, "P05.4", "Range before ruling: every rendering with its count, before any lexicon's verdict.", window.Corner_top_left)
 			window.add_reference_mark (entries_list, "P05.5", "Lexicon entries: each source in its own words (Abbott-Smith, BDB, LSJ, UBS, TBESH).", window.Corner_top_left)
 			window.add_reference_mark (search_word_button, "P05.7", "Actions: Every place of this word; Word Study comes later.", window.Corner_top_left)
 			window.add_reference_mark (results_note, "P07", "Search results, docked west only while there are results. Close collapses it.", window.Corner_top_left)
-			window.add_reference_mark (link_label, "C12", "Link set: always A in Simple.", window.Corner_top_left)
-			window.add_reference_mark (numbering_label, "C13", "Versification: which numbering the version uses.", window.Corner_top_left)
-			window.add_reference_mark (progress, "C14", "Job progress: a long every-place list loading.", window.Corner_top_left)
-			window.add_reference_mark (editions_label, "C15", "Database editions: which data files are loaded.", window.Corner_top_right)
-			window.add_reference_mark (status_bar, "C11", "Status: the reference and version read.", window.Corner_top_left)
 		end
 
 	toggle_pills
