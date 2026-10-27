@@ -258,6 +258,29 @@ feature -- Tests
 			clean_user_file
 		end
 
+	test_recent_places_one_per_chapter
+			-- History: the newest visit of each chapter, newest first, at most the limit asked.
+		local
+			l_user: BIB_USER_STORE
+			l_hub: BIB_HUB_ID
+			l_places: ARRAYED_LIST [BIB_VISIT]
+		do
+			clean_user_file
+			create l_user.make (User_file)
+			l_user.open
+			create l_hub
+			l_user.record_visit (create {BIB_VISIT}.make (l_hub.hub_id (65, 1, 1), "reading"))
+			l_user.record_visit (create {BIB_VISIT}.make (l_hub.hub_id (43, 3, 16), "reading"))
+			l_user.record_visit (create {BIB_VISIT}.make (l_hub.hub_id (65, 1, 6), "reading"))
+			l_places := l_user.recent_places (10)
+			assert_integers_equal ("one per chapter", 2, l_places.count)
+			assert_true ("Jude newest, at the verse opened last", l_places.first.hub_id = l_hub.hub_id (65, 1, 6))
+			assert_true ("John next", l_places.i_th (2).hub_id = l_hub.hub_id (43, 3, 16))
+			assert_integers_equal ("at most the limit", 1, l_user.recent_places (1).count)
+			l_user.close
+			clean_user_file
+		end
+
 	test_user_store_refuses_another_schema
 			-- A user.db of a schema this program does not read is refused and left as it is.
 		local
