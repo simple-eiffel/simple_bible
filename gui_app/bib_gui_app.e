@@ -266,7 +266,7 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 					-- The next verse read, so the highlighted one shows its own wash, not the selection's.
 				go_to (reading_book, reading_chapter, reading_verse + 1)
 				if attached notes_tabs as al_tabs then
-					al_tabs.select_tab (4)
+					al_tabs.select_tab (Highlights_tab)
 				end
 			end
 			window.request_render
@@ -773,15 +773,29 @@ feature {NONE} -- Toolbar (C3-C9)
 			window.toast ({STRING_32} "Text size " + (l_scale * 100.0).rounded.out + {STRING_32} "%%", 1)
 		end
 
-	mark_selected_verse (a_view: SW_PARALLEL_TEXT; a_row, a_column: INTEGER; a_text: READABLE_STRING_32)
-			-- Wash the selected verse's text `a_text' in cell `a_row', `a_column' of `a_view': the one
-			-- mark the Bible and Parallel tabs both use (scan 36).
+	mark_selected_verse (a_view: SW_PARALLEL_TEXT; a_row, a_column: INTEGER; a_text: READABLE_STRING_32; a_highlighted: BOOLEAN)
+			-- Mark the selected verse's text `a_text' in cell `a_row', `a_column' of `a_view': the one
+			-- mark the Bible and Parallel tabs both use (scan 36). Washed blue; outlined instead when
+			-- the verse is `a_highlighted', so its amber wash still shows (scan 42).
 		local
 			l_mark: SW_MARK
 		do
 			if not a_text.is_empty then
 				create l_mark.make ({SW_MARK}.Hue_blue)
-				a_view.cell_marks (a_row, a_column).mark_range_with (0, a_text.count, "selected verse", l_mark.with_wash).do_nothing
+				if a_highlighted then
+					a_view.cell_marks (a_row, a_column).mark_range_with (0, a_text.count, "selected verse", l_mark).do_nothing
+				else
+					a_view.cell_marks (a_row, a_column).mark_range_with (0, a_text.count, "selected verse", l_mark.with_wash).do_nothing
+				end
+			end
+		end
+
+	mark_highlighted_verse (a_view: SW_PARALLEL_TEXT; a_row, a_column: INTEGER; a_text: READABLE_STRING_32; a_reasons: READABLE_STRING_32)
+			-- Wash a highlighted verse amber, its reasons as the mark's label: the one highlight mark the
+			-- Bible and Parallel tabs both use (scan 42).
+		do
+			if not a_text.is_empty then
+				a_view.cell_marks (a_row, a_column).mark_range_with (0, a_text.count, a_reasons, (create {SW_MARK}.make ({SW_MARK}.Hue_amber)).with_wash).do_nothing
 			end
 		end
 
@@ -949,12 +963,12 @@ feature {NONE} -- Reading (S1, P01)
 				across reading_verses as ic loop
 					l_row := reading_view.add_row (ic.verse.out)
 					reading_view.set_cell (l_row, 1, ic.display_text)
-					if attached l_reasons.item (ic.verse) as al_reason and then not ic.display_text.is_empty then
-						reading_view.cell_marks (l_row, 1).mark_range_with (0, ic.display_text.count, al_reason, (create {SW_MARK}.make ({SW_MARK}.Hue_amber)).with_wash).do_nothing
+					if attached l_reasons.item (ic.verse) as al_reason then
+						mark_highlighted_verse (reading_view, l_row, 1, ic.display_text, al_reason)
 					end
 					if ic.verse = a_verse then
 						l_selected_row := l_row
-						mark_selected_verse (reading_view, l_row, 1, ic.display_text)
+						mark_selected_verse (reading_view, l_row, 1, ic.display_text, l_reasons.has (ic.verse))
 					end
 				end
 				create l_lookup.make (bible)
@@ -1533,6 +1547,9 @@ feature {NONE} -- Notes (T2, P06)
 	last_removed_highlight: INTEGER_64
 			-- The highlight Remove took away last; Restore brings it back (0: none).
 
+	Highlights_tab: INTEGER = 4
+			-- P06's Highlights page.
+
 	highlights_page: SW_COLUMN
 			-- The Highlights tab: a reason and Highlight for the verse read, then every highlight.
 		local
@@ -1611,8 +1628,12 @@ feature {NONE} -- Notes (T2, P06)
 				window.toast ("Say why first: a highlight is a reason.", 1)
 			elseif user_store.is_open and reading_verse > 0 then
 				user_store.add_highlight (create {BIB_HIGHLIGHT}.make ((create {BIB_HUB_ID}).hub_id (reading_book, reading_chapter, reading_verse), l_reason))
-				highlight_reason_box.set_text ("")
-				open_reading (reading_book, reading_chapter, reading_verse)
+				if attached user_store.write_error as al_error then
+					window.toast (al_error.message, 1)
+				else
+					highlight_reason_box.set_text ("")
+					open_reading (reading_book, reading_chapter, reading_verse)
+				end
 			end
 		end
 
@@ -1636,9 +1657,15 @@ feature {NONE} -- Notes (T2, P06)
 			-- Take the selected highlight away (Restore brings it back).
 		do
 			if attached highlights_grid.selected_object as al_highlight and then al_highlight.is_stored and then user_store.is_open then
-				last_removed_highlight := al_highlight.id
-				user_store.remove_item ({BIB_USER_STORE}.Kind_highlight, last_removed_highlight)
-				open_reading (reading_book, reading_chapter, reading_verse)
+				user_store.remove_item ({BIB_USER_STORE}.Kind_highlight, al_highlight.id)
+				if attached user_store.write_error as al_error then
+					window.toast (al_error.message, 1)
+				else
+						-- Kept only once removed (scan 42: as Delete and Restore do for notes).
+					last_removed_highlight := al_highlight.id
+					open_reading (reading_book, reading_chapter, reading_verse)
+					window.toast ("Highlight removed. Restore brings it back.", 1)
+				end
 			end
 		end
 
@@ -1647,8 +1674,12 @@ feature {NONE} -- Notes (T2, P06)
 		do
 			if last_removed_highlight > 0 and then user_store.is_open and then user_store.is_deleted (last_removed_highlight) then
 				user_store.restore_item ({BIB_USER_STORE}.Kind_highlight, last_removed_highlight)
-				last_removed_highlight := 0
-				open_reading (reading_book, reading_chapter, reading_verse)
+				if attached user_store.write_error as al_error then
+					window.toast (al_error.message, 1)
+				else
+					last_removed_highlight := 0
+					open_reading (reading_book, reading_chapter, reading_verse)
+				end
 			end
 		end
 
@@ -1977,6 +2008,7 @@ feature {NONE} -- Notes (T2, P06)
 			l_lookup: BIB_LOOKUP
 			l_notes: ARRAYED_LIST [STRING_32]
 			l_name, l_note: STRING_32
+			l_reasons: HASH_TABLE [STRING_32, INTEGER]
 		do
 			if reading_book > 0 and then bible.is_open then
 				l_codes := parallel_versions
@@ -2014,14 +2046,19 @@ feature {NONE} -- Notes (T2, P06)
 					c := c + 1
 				end
 				parallel_view.wipe_out
+				l_reasons := chapter_highlight_reasons (reading_book, reading_chapter)
 				across reading_verses as ic loop
 					l_row := parallel_view.add_row (ic.verse.out)
 					from c := 1 until c > 3 loop
 						if attached l_chapters.i_th (c).item (ic.verse) as al_cell then
 							parallel_view.set_cell (l_row, c, al_cell)
-								-- The selected verse is marked in every column, as in the Bible tab.
+								-- A highlight and the selected verse are marked in every column, as in the
+								-- Bible tab (scan 42: highlights showed in the Bible tab only).
+							if attached l_reasons.item (ic.verse) as al_reason then
+								mark_highlighted_verse (parallel_view, l_row, c, al_cell, al_reason)
+							end
 							if ic.verse = reading_verse then
-								mark_selected_verse (parallel_view, l_row, c, al_cell)
+								mark_selected_verse (parallel_view, l_row, c, al_cell, l_reasons.has (ic.verse))
 							end
 						end
 						c := c + 1
@@ -2051,7 +2088,7 @@ feature {NONE} -- Notes (T2, P06)
 			window.add_reference_mark (tools_strip, "C10", "Study tools strip: Parallel and Interlinear work; Guide, Word Study, Count and Ledger come later.", window.Corner_top_left)
 			window.add_reference_mark (mode_switch, "C7", "Mode switch, on Study: only the docking changes. Ctrl+M.", window.Corner_top_left)
 			window.add_reference_mark (navigator_tree, "T1", "P11 Navigator, west: books, chapter by chapter. Bookmarks come later.", window.Corner_top_left)
-			window.add_reference_mark (notes_heading, "T2", "P06 Notes, west below T1: Verse notes on the chapter read (add on the verse read; double-click to edit, each edit keeps the old version; Delete and Restore) and Highlights (a reason, not a color; washed in the text). Journal, Tags, Prayer and Memory come later.", window.Corner_top_left)
+			window.add_reference_mark (notes_heading, "T2", "P06 Notes, west below T1: Verse notes on the chapter read (add on the verse read; double-click to edit, each edit keeps the old version; Delete and Restore) and Highlights (a reason, not a color; washed amber in the Bible and Parallel tabs; click one to read it; Remove and Restore). Journal, Tags, Prayer and Memory come later.", window.Corner_top_left)
 			window.add_reference_mark (center_tabs, "T3", "Centre tabs: the Bible text, Parallel (P02) and Interlinear (P03, Ctrl+I). More Bible tabs come later.", window.Corner_top_left)
 			window.add_reference_mark (analysis_title, "P03.2", "Verse analysis: the verse read, a row per word with its lemma, Strong's number, morphology, gloss, and how often its headword occurs in this testament. Click a row and T4 follows it.", window.Corner_top_left)
 			window.add_reference_mark (interlinear_note, "P03", "Interlinear: word by word in the original, right to left for Hebrew. A click makes the word's verse the place read and opens its headword in T4.", window.Corner_top_left)

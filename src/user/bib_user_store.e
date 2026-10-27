@@ -191,8 +191,8 @@ feature -- Commands: annotations
 		do
 			add_item (a_highlight, a_highlight.reason)
 		ensure
-			stored: last_error = Void implies a_highlight.is_stored
-			count_grown: last_error = Void implies item_count (Kind_highlight, a_highlight.hub_id) = old item_count (Kind_highlight, a_highlight.hub_id) + 1
+			stored: write_error = Void implies a_highlight.is_stored
+			count_grown: write_error = Void implies item_count (Kind_highlight, a_highlight.hub_id) = old item_count (Kind_highlight, a_highlight.hub_id) + 1
 			others_unchanged: item_count (Kind_bookmark, a_highlight.hub_id) = old item_count (Kind_bookmark, a_highlight.hub_id)
 				and item_count (Kind_tag, a_highlight.hub_id) = old item_count (Kind_tag, a_highlight.hub_id)
 		end
@@ -204,8 +204,8 @@ feature -- Commands: annotations
 		do
 			add_item (a_bookmark, a_bookmark.label)
 		ensure
-			stored: last_error = Void implies a_bookmark.is_stored
-			count_grown: last_error = Void implies item_count (Kind_bookmark, a_bookmark.hub_id) = old item_count (Kind_bookmark, a_bookmark.hub_id) + 1
+			stored: write_error = Void implies a_bookmark.is_stored
+			count_grown: write_error = Void implies item_count (Kind_bookmark, a_bookmark.hub_id) = old item_count (Kind_bookmark, a_bookmark.hub_id) + 1
 			others_unchanged: item_count (Kind_highlight, a_bookmark.hub_id) = old item_count (Kind_highlight, a_bookmark.hub_id)
 		end
 
@@ -216,8 +216,8 @@ feature -- Commands: annotations
 		do
 			add_item (a_tag, a_tag.tag)
 		ensure
-			stored: last_error = Void implies a_tag.is_stored
-			count_grown: last_error = Void implies item_count (Kind_tag, a_tag.hub_id) = old item_count (Kind_tag, a_tag.hub_id) + 1
+			stored: write_error = Void implies a_tag.is_stored
+			count_grown: write_error = Void implies item_count (Kind_tag, a_tag.hub_id) = old item_count (Kind_tag, a_tag.hub_id) + 1
 		end
 
 	record_visit (a_visit: BIB_VISIT)
@@ -225,9 +225,9 @@ feature -- Commands: annotations
 			open: is_open
 			not_stored: not a_visit.is_stored
 		do
-			-- Phase 4
+			add_item (a_visit, a_visit.context)
 		ensure
-			stored: last_error = Void implies a_visit.is_stored
+			stored: write_error = Void implies a_visit.is_stored
 		end
 
 	remove_item (a_kind: INTEGER; a_id: INTEGER_64)
@@ -239,7 +239,7 @@ feature -- Commands: annotations
 		do
 			set_item_deleted (a_kind, a_id, True)
 		ensure
-			soft_deleted: last_error = Void implies is_deleted (a_id)
+			soft_deleted: write_error = Void implies is_deleted (a_id)
 		end
 
 	restore_item (a_kind: INTEGER; a_id: INTEGER_64)
@@ -250,7 +250,7 @@ feature -- Commands: annotations
 		do
 			set_item_deleted (a_kind, a_id, False)
 		ensure
-			restored: last_error = Void implies not is_deleted (a_id)
+			restored: write_error = Void implies not is_deleted (a_id)
 		end
 
 feature -- Commands: settings, layouts, census
@@ -392,7 +392,10 @@ feature -- Commands: schema
 feature -- Status
 
 	write_error: detachable BIB_ERROR
-			-- Why the last write into an open user.db failed (`last_error' is only for a failed open).
+			-- Why the last write into an open user.db failed - a setting, a highlight, a bookmark, a
+			-- tag, a removal (`last_error' is only for a failed open). Scan 42: item writes had a
+			-- second, hidden error and their postconditions tested `last_error', so a failed write
+			-- broke a contract.
 
 feature {BIB_NOTE_STORE} -- Connection
 
@@ -415,9 +418,6 @@ feature {BIB_NOTE_STORE} -- Connection
 
 feature {NONE} -- Items
 
-	last_item_error: detachable BIB_ERROR
-			-- Why the last item write failed (`last_error' is only for a failed open).
-
 	add_item (a_item: BIB_USER_ITEM; a_label: READABLE_STRING_GENERAL)
 			-- Keep `a_item' with `a_label' (a highlight's reason, a bookmark's label, a tag).
 		require
@@ -426,12 +426,12 @@ feature {NONE} -- Items
 		local
 			l_at: STRING_8
 		do
-			last_item_error := Void
+			write_error := Void
 			l_at := now_text
 			connection.execute_with_args ("INSERT INTO user_item(kind, hub_id, label, created_at, changed_at) VALUES (?, ?, ?, ?, ?)",
 				<<a_item.kind, a_item.hub_id, a_label.to_string_32, l_at, l_at>>)
 			if connection.has_error then
-				create last_item_error.make ({BIB_ERROR}.Database_problem, failure_text (connection, "The item could not be saved."))
+				create write_error.make ({BIB_ERROR}.Database_problem, failure_text (connection, "The item could not be saved."))
 			else
 				a_item.mark_stored (connection.last_insert_rowid, time_of (l_at))
 			end
@@ -442,13 +442,16 @@ feature {NONE} -- Items
 		local
 			l_flag: INTEGER
 		do
-			last_item_error := Void
+			write_error := Void
 			if a_deleted then
 				l_flag := 1
 			end
 			connection.execute_with_args ("UPDATE user_item SET deleted = ?, changed_at = ? WHERE item_id = ? AND kind = ?", <<l_flag, now_text, a_id, a_kind>>)
 			if connection.has_error then
-				create last_item_error.make ({BIB_ERROR}.Database_problem, failure_text (connection, "The item could not be changed."))
+				create write_error.make ({BIB_ERROR}.Database_problem, failure_text (connection, "The item could not be changed."))
+			elseif connection.changes_count /= 1 then
+					-- Scan 42: an id that names no item of this kind is no success.
+				create write_error.make ({BIB_ERROR}.Not_found, {STRING_32} "No such item: " + a_id.out)
 			end
 		end
 

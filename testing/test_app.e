@@ -248,6 +248,7 @@ feature {NONE} -- Suites
 			run_test (agent t.test_hub_id_is_english_numbering, "test_hub_id_is_english_numbering")
 			run_test (agent t.test_notes_keep_every_version, "test_notes_keep_every_version")
 			run_test (agent t.test_user_store_refuses_another_schema, "test_user_store_refuses_another_schema")
+			run_test (agent t.test_a_failed_item_write_is_reported, "test_a_failed_item_write_is_reported")
 			run_test (agent t.test_highlights_and_bookmarks_keep_their_reason, "test_highlights_and_bookmarks_keep_their_reason")
 			run_test (agent t.test_a_topical_title_survives_export_and_import, "test_a_topical_title_survives_export_and_import")
 			run_test (agent t.test_notes_export_and_import_never_overwrite, "test_notes_export_and_import_never_overwrite")
