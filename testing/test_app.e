@@ -433,6 +433,7 @@ feature {NONE} -- Suites
 			run_test (agent t.test_pack_rules, "test_pack_rules")
 			run_test (agent t.test_pack_fold_is_the_normalizers_fold, "test_pack_fold_is_the_normalizers_fold")
 			run_test (agent t.test_plain_letters_read_a_schwa_as_e, "test_plain_letters_read_a_schwa_as_e")
+			run_test (agent t.test_common_spellings_find_their_lemma, "test_common_spellings_find_their_lemma")
 			run_test (agent t.test_word_view_in_pilot_order, "test_word_view_in_pilot_order")
 			run_test (agent t.test_english_lookup_counts_per_bible, "test_english_lookup_counts_per_bible")
 			run_test (agent t.test_verse_lookup_every_corpus, "test_verse_lookup_every_corpus")

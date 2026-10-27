@@ -745,6 +745,38 @@ feature -- Scan 47
 			close_and_clean (last_pack_set, l_fixture)
 		end
 
+	test_common_spellings_find_their_lemma
+			-- NEEDLE, 2026-10-27: readers type ruach, chesed, nephesh, torah where conc.db stores ruah,
+			-- hesed, nepesh, tora. When nothing matches exactly, ch as h, ph as p and a final h after a
+			-- vowel dropped are tried; an exact match always wins. Before: each found nothing.
+		local
+			l_fixture: CONC_FIXTURE
+			l_pack: BIB_CONC_PACK
+			l_db: SIMPLE_SQL_DATABASE
+		do
+			create l_fixture
+			l_pack := checked_pack (l_fixture)
+			create l_db.make (Pack_file)
+			l_db.execute ("UPDATE lemma SET translit_ascii = 'ruah' WHERE lemma_id = 1")
+			l_db.close
+			assert_integers_equal ("ruach finds ruah", 1, l_pack.headwords_for_text ("ruach").count)
+			create l_db.make (Pack_file)
+			l_db.execute ("UPDATE lemma SET translit_ascii = 'nepesh' WHERE lemma_id = 1")
+			l_db.close
+			assert_integers_equal ("nephesh finds nepesh", 1, l_pack.headwords_for_text ("nephesh").count)
+			create l_db.make (Pack_file)
+			l_db.execute ("UPDATE lemma SET translit_ascii = 'tora' WHERE lemma_id = 1")
+			l_db.close
+			assert_integers_equal ("torah finds tora", 1, l_pack.headwords_for_text ("torah").count)
+			create l_db.make (Pack_file)
+			l_db.execute ("UPDATE lemma SET translit_ascii = 'hesed' WHERE lemma_id = 1")
+			l_db.close
+			assert_integers_equal ("chesed finds hesed", 1, l_pack.headwords_for_text ("Chesed").count)
+			assert_integers_equal ("an exact match still the only one", 1, l_pack.headwords_for_text ("hesed").count)
+			assert_integers_equal ("no spelling, no match", 0, l_pack.headwords_for_text ("xyzzy").count)
+			close_and_clean (last_pack_set, l_fixture)
+		end
+
 feature {NONE} -- Fixture
 
 	Main_file: STRING = "conc_test_main.db"

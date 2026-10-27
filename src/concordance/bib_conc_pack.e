@@ -442,6 +442,47 @@ feature -- Access
 	Greek_root_corpus: STRING_8 = "NT-MACULA"
 			-- Where `key_places' finds roots.
 
+	spelling_variants (a_plain: STRING_32): ARRAYED_LIST [STRING_32]
+			-- Other spellings readers use for the plain letters `a_plain': ch as h (ruach, chesed), ph as
+			-- p (nephesh), a final h after a vowel dropped (torah), each alone and together; `a_plain'
+			-- itself left out.
+		local
+			l_form: STRING_32
+			l_forms: ARRAYED_LIST [STRING_32]
+			l_rule: INTEGER
+		do
+			create l_forms.make (8)
+			l_forms.extend (a_plain)
+			from l_rule := 1 until l_rule > 3 loop
+				across l_forms.twin as ic loop
+					l_form := ic.twin
+					inspect l_rule
+					when 1 then
+						l_form.replace_substring_all ({STRING_32} "ch", {STRING_32} "h")
+					when 2 then
+						l_form.replace_substring_all ({STRING_32} "ph", {STRING_32} "p")
+					else
+						if l_form.count >= 3 and then l_form [l_form.count] = 'h' and then ({STRING_32} "aeiou").has (l_form [l_form.count - 1]) then
+							l_form.remove_tail (1)
+						end
+					end
+					if not across l_forms as jc some jc.same_string (l_form) end then
+						l_forms.extend (l_form)
+					end
+				end
+				l_rule := l_rule + 1
+			end
+			create Result.make (l_forms.count)
+			across l_forms as ic loop
+				if not ic.same_string (a_plain) then
+					Result.extend (ic)
+				end
+			end
+		ensure
+			not_itself: not across Result as ic some ic.same_string (a_plain) end
+			at_most_seven: Result.count <= 7
+		end
+
 	original_search_form (a_word: READABLE_STRING_GENERAL): STRING_32
 			-- `a_word' folded as the pack's `token.search' is (BIB_NORMALIZER_SET.pack_token_form: the
 			-- normalizers' one fold, Hebrew final letters kept, non-letters dropped).
@@ -468,8 +509,10 @@ feature -- Access
 			available: is_available
 			text_not_empty: not a_text.is_empty
 		local
-			l_sql: STRING_8
+			l_sql, l_marks: STRING_8
 			l_plain: STRING_32
+			l_variants: ARRAYED_LIST [STRING_32]
+			l_args: ARRAYED_LIST [detachable ANY]
 		do
 			l_plain := original_search_form (a_text)
 			l_sql := "SELECT " + Entry_columns + " FROM conc.lemma l WHERE l.language IN ('hbo', 'arc', 'grc') AND (l.search = ? OR l.headword = ? OR l.translit_ascii = ? OR replace(l.translit_ascii, ?, 'e') = ?) ORDER BY l.n_tokens DESC, l.lemma_id LIMIT " + Max_text_matches.out
@@ -477,6 +520,29 @@ feature -- Access
 				-- read it as e, so "berit" finds it.
 			run_query (l_sql, {ARRAY [detachable ANY]} <<l_plain, a_text.to_string_32, l_plain, {STRING_32} "%/601/", l_plain>>)
 			Result := entries_result ("headwords_for_text", l_sql, a_text)
+			if Result.is_success and then Result.count = 0 then
+					-- NEEDLE, 2026-10-27: readers type ruach, chesed, nephesh, torah where the pack stores
+					-- ruah, hesed, nepesh, tora. Only when nothing matched exactly, so an exact spelling wins.
+				l_variants := spelling_variants (l_plain)
+				if not l_variants.is_empty then
+					create l_marks.make (l_variants.count * 3)
+					create l_args.make (l_variants.count * 2 + 1)
+					across l_variants as ic loop
+						if not l_marks.is_empty then
+							l_marks.append (", ")
+						end
+						l_marks.append ("?")
+						l_args.extend (ic)
+					end
+					l_args.extend ({STRING_32} "%/601/")
+					across l_variants as ic loop
+						l_args.extend (ic)
+					end
+					l_sql := "SELECT " + Entry_columns + " FROM conc.lemma l WHERE l.language IN ('hbo', 'arc', 'grc') AND (l.translit_ascii IN (" + l_marks + ") OR replace(l.translit_ascii, ?, 'e') IN (" + l_marks + ")) ORDER BY l.n_tokens DESC, l.lemma_id LIMIT " + Max_text_matches.out
+					run_query (l_sql, l_args.to_array)
+					Result := entries_result ("headwords_for_text", l_sql, a_text)
+				end
+			end
 		ensure
 			method_recorded: Result.method.engine_feature.same_string_general ("headwords_for_text")
 			bounded: Result.count <= Max_text_matches
