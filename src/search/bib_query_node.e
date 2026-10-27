@@ -16,11 +16,13 @@ create
 
 feature {NONE} -- Initialization
 
-	make_leaf (a_clause: BIB_QUERY_CLAUSE)
-			-- A word, phrase or key.
+	make_leaf (a_clause: BIB_QUERY_CLAUSE; a_position: INTEGER)
+			-- A word, phrase or key, typed at `a_position'.
 		require
 			leaf: not a_clause.is_operator
+			position_positive: a_position >= 1
 		do
+			position := a_position
 			kind := a_clause.kind
 			leaf_clause := a_clause
 			create children.make (0)
@@ -28,12 +30,14 @@ feature {NONE} -- Initialization
 			no_children: children.is_empty
 		end
 
-	make_operator (a_kind: INTEGER; a_children: ARRAYED_LIST [BIB_QUERY_NODE])
-			-- AND, OR or NOT over `a_children'.
+	make_operator (a_kind: INTEGER; a_children: ARRAYED_LIST [BIB_QUERY_NODE]; a_position: INTEGER)
+			-- AND, OR or NOT over `a_children', starting at `a_position'.
 		require
 			operator_kind: a_kind = {BIB_QUERY_CLAUSE}.And_clause or a_kind = {BIB_QUERY_CLAUSE}.Or_clause or a_kind = {BIB_QUERY_CLAUSE}.Not_clause
 			arity: (a_kind = {BIB_QUERY_CLAUSE}.Not_clause implies a_children.count = 1) and (a_kind /= {BIB_QUERY_CLAUSE}.Not_clause implies a_children.count >= 2)
+			position_positive: a_position >= 1
 		do
+			position := a_position
 			kind := a_kind
 			children := a_children
 		ensure
@@ -46,6 +50,9 @@ feature -- Access
 			-- A {BIB_QUERY_CLAUSE} kind.
 
 	children: ARRAYED_LIST [BIB_QUERY_NODE]
+
+	position: INTEGER
+			-- Where the node starts in the query text (an error about it points there).
 
 	leaf_clause: detachable BIB_QUERY_CLAUSE
 			-- The clause of a leaf.

@@ -60,6 +60,40 @@ feature -- Tests
 			assert_false ("an empty phrase", p.parsed ("%"%"", parser_scope).is_valid)
 		end
 
+	test_query_parser_scan_48_holes
+			-- Scan 48: a NOT of a NOT, a word with nothing to search, empty parentheses, and queries
+			-- too deep or too wide are refused with their place. Before: each was accepted (the NOT
+			-- of a NOT failed later without a place; a lone * emptied every AND silently).
+		local
+			p: BIB_QUERY_PARSER
+			l_deep, l_wide: STRING_8
+			i: INTEGER
+		do
+			create p.make
+			assert_integers_equal ("a NOT of a NOT, at the inner NOT", 12, p.parsed ("grace NOT (NOT law)", parser_scope).error_position)
+			assert_integers_equal ("a word with nothing to search", 7, p.parsed ("grace *", parser_scope).error_position)
+			assert_false ("a phrase with nothing to search", p.parsed ("grace %"--%"", parser_scope).is_valid)
+			assert_true ("empty parentheses said so", p.parsed ("grace ()", parser_scope).error_message.has_substring ("empty"))
+			create l_deep.make_empty
+			from i := 1 until i > 40 loop
+				l_deep.append_character ('(')
+				i := i + 1
+			end
+			l_deep.append ("grace")
+			from i := 1 until i > 40 loop
+				l_deep.append_character (')')
+				i := i + 1
+			end
+			assert_false ("too deep", p.parsed (l_deep, parser_scope).is_valid)
+			create l_wide.make_empty
+			from i := 1 until i > 80 loop
+				l_wide.append ("grace ")
+				i := i + 1
+			end
+			assert_false ("too wide", p.parsed (l_wide, parser_scope).is_valid)
+			assert_true ("a query within the bounds", p.parsed ("((grace OR mercy) AND (peace NOT war))", parser_scope).is_valid)
+		end
+
 	test_query_states
 		local
 			q: BIB_QUERY
