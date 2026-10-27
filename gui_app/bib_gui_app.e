@@ -67,6 +67,9 @@ feature {NONE} -- Initialization
 			create navigator_tabs.make
 			create bookmarks_heading.make_ui ("")
 			create bookmarks_grid.make (100.0)
+			create history_grid.make (100.0)
+			create history_heading.make_ui ("")
+			create history_rows.make (0)
 			create tag_label.make_ui ("")
 			create journal_title_box.make_single_line ("")
 			create journal_body_box.make ("")
@@ -297,6 +300,10 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 				if attached notes_tabs as al_tabs then
 					al_tabs.select_tab (Tags_tab)
 				end
+			elseif snapshot_tab.same_string ({STRING_32} "history") then
+				go_to (43, 3, 16)
+				go_to (65, 1, 6)
+				navigator_tabs.select_tab (History_tab)
 			elseif snapshot_tab.same_string ({STRING_32} "bookmarks") then
 				bookmark_verse
 				navigator_tabs.select_tab (Bookmarks_tab)
@@ -570,6 +577,9 @@ feature {NONE} -- Window
 			cross_refs_grid.add_column ((create {SW_GRID_COLUMN [BIB_READING_CROSS_REF]}.make ("Reference", 180.0, agent cross_ref_text)).growing)
 			highlights_grid.add_column (create {SW_GRID_COLUMN [BIB_HIGHLIGHT]}.make ("Verse", 120.0, agent highlight_place))
 			bookmarks_grid.add_column ((create {SW_GRID_COLUMN [BIB_BOOKMARK]}.make ("Verse", 140.0, agent bookmark_place)).growing)
+			history_grid.add_column ((create {SW_GRID_COLUMN [BIB_VISIT]}.make ("Place", 120.0, agent visit_place)).growing)
+			history_grid.add_column (create {SW_GRID_COLUMN [BIB_VISIT]}.make ("When", 120.0, agent visit_when))
+			history_grid.set_on_select (agent on_history_row)
 			tag_names_grid.add_column ((create {SW_GRID_COLUMN [TUPLE [tag: STRING_32; verses: INTEGER]]}.make ("Tag", 160.0, agent tag_name_text)).growing)
 			tag_names_grid.add_column (create {SW_GRID_COLUMN [TUPLE [tag: STRING_32; verses: INTEGER]]}.make ("Verses", 70.0, agent tag_verses_text))
 			tagged_grid.add_column ((create {SW_GRID_COLUMN [BIB_TAG_ASSIGNMENT]}.make ("Verse", 140.0, agent tag_place)).growing)
@@ -1039,6 +1049,7 @@ feature {NONE} -- Reading (S1, P01)
 					-- or cross-reference click left it showing what was typed last).
 				reference_box.set_text (place_text (a_book, a_chapter, a_verse))
 				window.set_title (window_title)
+				record_reading
 				status_bar.set_left (place_text (a_book, a_chapter, a_verse) + {STRING_32} " (" + reading_version.to_string_32 + {STRING_32} ")")
 				if is_study then
 					fill_parallel
@@ -1409,7 +1420,7 @@ feature {NONE} -- Two layouts (C7)
 			-- bookmarks.
 		local
 			l_roots: ARRAYED_LIST [BIB_NAV_NODE]
-			l_books, l_marks: SW_COLUMN
+			l_books, l_marks, l_history: SW_COLUMN
 			l_buttons: SW_ROW
 		do
 			create l_roots.make (2)
@@ -1432,6 +1443,11 @@ feature {NONE} -- Two layouts (C7)
 			l_marks.put (l_buttons)
 			navigator_tabs.add_page ("Books", l_books)
 			navigator_tabs.add_page ("Bookmarks", l_marks)
+			create l_history.make
+			l_history := l_history.with_gap (6.0)
+			l_history.put (history_heading)
+			l_history.put (history_grid.growing)
+			navigator_tabs.add_page ("History", l_history)
 			create Result.make
 			Result.put (navigator_tabs.growing)
 		end
@@ -1482,6 +1498,98 @@ feature {NONE} -- Two layouts (C7)
 			-- "Jude 1:6".
 		do
 			Result := hub_place (a_bookmark.hub_id)
+		end
+
+	History_tab: INTEGER = 3
+			-- T1's History page.
+
+	History_length: INTEGER = 50
+			-- How many chapters History lists.
+
+	history_heading: SW_LABEL
+	history_grid: SW_DATA_GRID [BIB_VISIT]
+			-- T1's History tab (2026-10-27): the chapters read, newest first, kept in user.db.
+
+	history_rows: ARRAYED_LIST [BIB_VISIT]
+			-- The rows of `history_grid'.
+
+	is_refilling_history: BOOLEAN
+			-- Is `fill_history' reselecting the chapter read (no click to answer)?
+
+	last_recorded_hub: INTEGER_64
+			-- The place History recorded last this run (0: none yet).
+
+	record_reading
+			-- The place read joins History when its chapter is not the one recorded last (a verse
+			-- clicked in the same chapter is no new visit).
+		local
+			l_hub: INTEGER_64
+		do
+			if user_store.is_open and reading_book > 0 and reading_chapter > 0 then
+				l_hub := (create {BIB_HUB_ID}).hub_id (reading_book, reading_chapter, reading_verse.max (1))
+				if l_hub // {BIB_HUB_ID}.Chapter_unit /= last_recorded_hub // {BIB_HUB_ID}.Chapter_unit then
+					user_store.record_visit (create {BIB_VISIT}.make (l_hub, "reading"))
+					if user_store.write_error = Void then
+						last_recorded_hub := l_hub
+					end
+					fill_history
+				end
+			end
+		end
+
+	fill_history
+			-- The chapters read, newest first; the chapter read stays selected.
+		local
+			i, l_index: INTEGER
+			l_hub: BIB_HUB_ID
+			l_place: INTEGER_64
+		do
+			if user_store.is_open then
+				history_rows := user_store.recent_places (History_length)
+			else
+				create history_rows.make (0)
+			end
+			history_grid.set_rows (history_rows)
+			create l_hub
+			from i := 1 until i > history_rows.count or l_index > 0 loop
+				l_place := history_rows.i_th (i).hub_id
+				if l_hub.is_valid_hub (l_place) and then l_hub.book_of (l_place) = reading_book and then l_hub.chapter_of (l_place) = reading_chapter then
+					l_index := i
+				end
+				i := i + 1
+			end
+			is_refilling_history := True
+			history_grid.select_model_row (l_index)
+			is_refilling_history := False
+			if history_rows.is_empty then
+				history_heading.set_text ("No history yet: the chapters you read are listed here.")
+			else
+				history_heading.set_text ("The chapters you read, newest first; click one to read it again.")
+			end
+		end
+
+	on_history_row (a_row: INTEGER)
+			-- A chapter clicked: read it again, at the verse it was opened at.
+		do
+			if not is_refilling_history and then a_row >= 1 and then a_row <= history_rows.count then
+				go_to_hub (history_rows.i_th (a_row).hub_id)
+			end
+		end
+
+	visit_place (a_visit: BIB_VISIT): STRING_32
+			-- "Jude 1:6".
+		do
+			Result := hub_place (a_visit.hub_id)
+		end
+
+	visit_when (a_visit: BIB_VISIT): STRING_32
+			-- "5 minutes ago".
+		do
+			if attached a_visit.created_at as al_at then
+				Result := al_at.time_ago.to_string_32
+			else
+				create Result.make_empty
+			end
 		end
 
 	notes_pane: SW_WIDGET
@@ -2522,7 +2630,7 @@ feature {NONE} -- Notes (T2, P06)
 			add_chrome_pills
 			window.add_reference_mark (tools_strip, "C10", "Study tools strip: Parallel and Interlinear work; Guide, Word Study, Count and Ledger come later.", window.Corner_top_left)
 			window.add_reference_mark (mode_switch, "C7", "Mode switch, on Study: only the docking changes. Ctrl+M.", window.Corner_top_left)
-			window.add_reference_mark (navigator_tabs, "T1", "P11 Navigator, west: Books (chapter by chapter) and Bookmarks (Ctrl+D bookmarks the verse read; click one to read it; Remove and Restore).", window.Corner_top_left)
+			window.add_reference_mark (navigator_tabs, "T1", "P11 Navigator, west: Books (chapter by chapter), Bookmarks (Ctrl+D bookmarks the verse read; click one to read it; Remove and Restore) and History (the chapters read, newest first, kept between runs; click one to read it again).", window.Corner_top_left)
 			window.add_reference_mark (notes_heading, "T2", "P06 Notes, west below T1, in tab order: Verse notes on the chapter read (add on the verse read; double-click to edit, each edit keeps the old version; Delete and Restore); Journal, notes on a subject (New; Save keeps the earlier version; Delete and Restore); Tags (tag the verse read; click a tag for its verses, a verse to read it; Remove and Restore); Highlights (a reason, not a color; washed amber in the Bible and Parallel tabs; click one to read it; Remove and Restore). Prayer and Memory come later.", window.Corner_top_left)
 			window.add_reference_mark (center_tabs, "T3", "Centre tabs: the Bible text, Parallel (P02) and Interlinear (P03, Ctrl+I). More Bible tabs come later.", window.Corner_top_left)
 			window.add_reference_mark (analysis_title, "P03.2", "Verse analysis: the verse read, a row per word with its lemma, Strong's number, morphology, gloss, and how often its headword occurs in this testament. Click a row and T4 follows it.", window.Corner_top_left)
