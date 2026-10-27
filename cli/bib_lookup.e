@@ -172,60 +172,16 @@ feature -- Lookup
 
 	place_named (a_text: READABLE_STRING_GENERAL): detachable TUPLE [book, chapter, verse: INTEGER]
 			-- The place a reference box holds: "John 3:16", "Gen 1 1", "John 3" or "1 John 4" (verse 0:
-			-- the whole chapter); a range ("John 3:16-18") opens its first verse, and a book of one
-			-- chapter takes a lone number as its verse ("Jude 9"; 2026-10-27, after NEEDLE found both
-			-- read wrong); Void when the text names no book the catalog knows.
-		local
-			l_text, l_book: STRING_32
-			l_words: LIST [STRING_32]
-			l_last, l_before: STRING_32
-			l_colon: INTEGER
+			-- the whole chapter), a range ("John 3:16-18", its first verse), a book of one chapter with
+			-- a lone number ("Jude 9", its verse), a prefix or lowercase book ("rom 8"); Void when it
+			-- names no place. Read by BIB_REFERENCE_LINKER's forgiving reader, so the box and the
+			-- reference links read numbers by one rule (scan 41: they had drifted).
 		do
-			l_text := a_text.to_string_32
-			l_text.left_adjust
-			l_text.right_adjust
-			l_words := l_text.split (' ')
-			from until l_words.is_empty or else not l_words.last.is_empty loop
-				l_words.finish
-				l_words.remove
-			end
-			if l_words.count >= 2 then
-				l_last := l_words.last
-				l_before := l_words.i_th (l_words.count - 1)
-				l_last := before_range (l_last)
-				l_colon := l_last.index_of (':', 1)
-				if l_colon > 1 and l_colon < l_last.count then
-					l_book := joined_words (l_words, l_words.count - 1)
-					Result := resolved (l_book, l_last.substring (1, l_colon - 1), l_last.substring (l_colon + 1, l_last.count))
-				elseif l_words.count >= 3 and then l_last.is_integer and then l_before.is_integer then
-					Result := resolved (joined_words (l_words, l_words.count - 2), l_before, l_last)
-				end
-				if Result = Void and then l_last.is_integer then
-					Result := resolved (joined_words (l_words, l_words.count - 1), l_last, "0")
-					if attached Result as al_place and then bible.books.is_single_chapter_book (al_place.book) then
-						Result := [al_place.book, 1, al_place.chapter]
-					end
-				end
+			if not a_text.is_empty then
+				Result := (create {BIB_REFERENCE_LINKER}.make_forgiving (bible.books)).place_in (a_text)
 			end
 		ensure
 			place_positive: attached Result implies (Result.book > 0 and Result.chapter > 0 and Result.verse >= 0)
-		end
-
-	before_range (a_text: STRING_32): STRING_32
-			-- `a_text' up to a range's dash ("3:16-18" is "3:16"; an en dash too).
-		local
-			i: INTEGER
-		do
-			Result := a_text
-			from i := 2 until i > a_text.count loop
-				if a_text [i] = '-' or a_text [i].natural_32_code = 0x2013 then
-					Result := a_text.substring (1, i - 1)
-					i := a_text.count
-				end
-				i := i + 1
-			end
-		ensure
-			no_longer: Result.count <= a_text.count
 		end
 
 	is_verse_text (a_text: READABLE_STRING_32): BOOLEAN
@@ -419,21 +375,6 @@ feature {NONE} -- Implementation
 				end
 				Result.append (a_words.i_th (i))
 				i := i + 1
-			end
-		end
-
-	resolved (a_book, a_chapter, a_verse: STRING_32): detachable TUPLE [book, chapter, verse: INTEGER]
-			-- The place, when `a_book' is a known book and the numbers are whole (verse 0 allowed).
-		local
-			l_candidates: ARRAYED_LIST [INTEGER]
-		do
-			if not a_book.is_empty and then a_chapter.is_integer and then a_verse.is_integer
-				and then a_chapter.to_integer > 0 and then a_verse.to_integer >= 0
-			then
-				l_candidates := bible.books.candidates_for_name (a_book)
-				if not l_candidates.is_empty then
-					Result := [l_candidates.first, a_chapter.to_integer, a_verse.to_integer]
-				end
 			end
 		end
 

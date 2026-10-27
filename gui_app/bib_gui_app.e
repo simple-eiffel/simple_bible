@@ -1924,16 +1924,12 @@ feature {NONE} -- Commentary (S2, P04)
 	on_commentary_link (a_target: STRING_32)
 			-- A link in the commentary clicked: "bible:<book>.<chapter>.<verse>" opens that place
 			-- (verse 0: the chapter); another link is left alone.
-		local
-			l_parts: LIST [STRING_32]
 		do
-			if a_target.starts_with ({STRING_32} "bible:") then
-				l_parts := a_target.substring (7, a_target.count).split ('.')
-				if l_parts.count = 3 and then l_parts.i_th (1).is_integer and then l_parts.i_th (2).is_integer and then l_parts.i_th (3).is_integer
-					and then bible.books.has_book (l_parts.i_th (1).to_integer) and then l_parts.i_th (2).to_integer > 0 and then l_parts.i_th (3).to_integer >= 0
-				then
-					go_to (l_parts.i_th (1).to_integer, l_parts.i_th (2).to_integer, l_parts.i_th (3).to_integer)
-				end
+				-- The target is read where it is written (BIB_REFERENCE_LINKER, scan 41).
+			if attached (create {BIB_REFERENCE_LINKER}.make (bible.books)).target_place (a_target) as al_place
+				and then bible.books.has_book (al_place.book) and then al_place.chapter > 0 and then al_place.verse >= 0
+			then
+				go_to (al_place.book, al_place.chapter, al_place.verse)
 			end
 		end
 
