@@ -41,11 +41,18 @@ feature {NONE} -- Initialization
 			bible.open
 			create settings.make
 			settings.load
-			create user_store.make ((create {BIB_DATA_LOCATION}).user_path)
+			read_snapshot_arguments
+			if is_snapshot then
+					-- A snapshot never touches the reader's notes: its own user.db, emptied first.
+				fresh_snapshot_user_file
+				create user_store.make (snapshot_user_path)
+			else
+				create user_store.make ((create {BIB_DATA_LOCATION}).user_path)
+			end
 			user_store.open
 			create note_store.make (user_store)
 			create note_rows.make (0)
-			create notes_list.make (160.0)
+			create notes_list.make (60.0)
 			create notes_heading.make_ui ("")
 			create new_note_label.make_ui ("")
 			create new_note_box.make ("")
@@ -151,9 +158,107 @@ feature {NONE} -- Initialization
 			dark_switch.set_on (window.theme.is_dark)
 				-- Typing goes straight into the reference box (keys typed before a click were lost once).
 			window.give_focus (reference_box)
-			window.run
+			if is_snapshot then
+				take_snapshot
+			else
+				window.run
+			end
+			if user_store.is_open then
+				user_store.close
+			end
 			if bible.is_open then
 				bible.close
+			end
+		end
+
+feature {NONE} -- Snapshot (a picture of the window without a screen)
+
+	is_snapshot: BOOLEAN
+			-- Was the program started as `bible_gui --snapshot <png> <place> [tab]'? It then builds the
+			-- window, goes to <place> in Study, opens <tab> (interlinear, parallel, commentary or notes:
+			-- notes adds a sample note), writes the whole window to <png> and exits: no event loop, no
+			-- settings saved, a user.db of its own. For checking a build when no screen can be captured
+			-- (2026-10-27: the display was unavailable while Larry was away).
+
+	snapshot_path, snapshot_place, snapshot_tab: STRING_32
+			-- The snapshot's picture file, place and tab.
+		attribute
+			create Result.make_empty
+		end
+
+	read_snapshot_arguments
+			-- `is_snapshot' and its arguments from the command line.
+		local
+			l_arguments: ARGUMENTS_32
+		do
+			create l_arguments
+			if l_arguments.argument_count >= 3 and then l_arguments.argument (1).same_string ({STRING_32} "--snapshot") then
+				is_snapshot := True
+				snapshot_path := l_arguments.argument (2).to_string_32
+				snapshot_place := l_arguments.argument (3).to_string_32
+				if l_arguments.argument_count >= 4 then
+					snapshot_tab := l_arguments.argument (4).to_string_32.as_lower
+				end
+			end
+		end
+
+	snapshot_user_path: STRING_32
+			-- The snapshot's own user.db, in the temporary folder.
+		do
+			if attached (create {SIMPLE_ENV}).item ("TEMP") as al_temp then
+				Result := al_temp.to_string_32 + {STRING_32} "\simple_bible_snapshot_user.db"
+			else
+				Result := {STRING_32} "simple_bible_snapshot_user.db"
+			end
+		end
+
+	fresh_snapshot_user_file
+			-- No user.db left from an earlier snapshot.
+		local
+			l_file: SIMPLE_FILE
+			l_ok: BOOLEAN
+		do
+			create l_file.make (snapshot_user_path)
+			if l_file.exists then
+				l_ok := l_file.delete
+			end
+		end
+
+	take_snapshot
+			-- Go to `snapshot_place' in Study, open `snapshot_tab', draw the window into `snapshot_path'.
+		local
+			l_lookup: BIB_LOOKUP
+			l_written: BOOLEAN
+		do
+			if bible.is_open then
+				create l_lookup.make (bible)
+				if attached l_lookup.place_named (snapshot_place) as al_place then
+					go_to (al_place.book, al_place.chapter, al_place.verse)
+				end
+			end
+			if not is_study then
+				arrange (True)
+			end
+			if snapshot_tab.same_string ({STRING_32} "interlinear") then
+				show_interlinear
+			elseif snapshot_tab.same_string ({STRING_32} "parallel") then
+				show_parallel
+			elseif snapshot_tab.same_string ({STRING_32} "commentary") then
+				commentary_tabs.select_tab (1)
+			elseif snapshot_tab.same_string ({STRING_32} "notes") then
+				new_note_box.set_text ("A sample note written by the snapshot run.")
+				add_note
+			end
+			window.request_render
+				-- The whole frame as drawn (the offscreen picture `render' made).
+			l_written := window.write_frame (snapshot_path)
+			if not l_written then
+				l_written := (create {SIMPLE_FILE}.make (snapshot_path + {STRING_32} ".txt")).write_text ({STRING_32} "no frame written; root "
+					+ layout.width.out + {STRING_32} " x " + layout.height.out)
+				l_written := False
+			end
+			if not l_written then
+				(create {EXCEPTIONS}).die (1)
 			end
 		end
 
@@ -1126,7 +1231,9 @@ feature {NONE} -- Two layouts (C7)
 				add_pills
 			end
 			settings.set_study_layout (a_study)
-			l_saved := settings.save
+			if not is_snapshot then
+				l_saved := settings.save
+			end
 			keep_verse_in_view
 			window.request_render
 		ensure
