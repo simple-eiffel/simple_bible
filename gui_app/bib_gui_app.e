@@ -837,8 +837,9 @@ feature {NONE} -- Toolbar (C3-C9)
 	lookup_text (a_text: READABLE_STRING_GENERAL): detachable STRING_32
 			-- What the lookup box should read for `a_text': the text itself when it is plain words (a
 			-- word, a verse such as John 3:16, an English phrase), a Strong's number for strongs:,
-			-- the headword for lemma:; Void when the search has several parts (OR, NOT, parentheses,
-			-- quotes, or keys among words), which only the verse search reads.
+			-- the headword for lemma:; Void for a grammar code (morph:) and when the search has
+			-- several parts (OR, NOT, parentheses, quotes, or keys among words), which only the verse
+			-- search reads.
 		local
 			l_query: BIB_QUERY
 			l_plain: BOOLEAN
@@ -3268,7 +3269,7 @@ feature {NONE} -- Design pills
 			window.add_reference_mark (renderings_grid, "P05.4", "Range before ruling: every rendering with its count, before any lexicon's verdict.", window.Corner_top_left)
 			window.add_reference_mark (entries_list, "P05.5", "Lexicon entries: each source in its own words (Abbott-Smith, BDB, LSJ, UBS, TBESH).", window.Corner_top_left)
 			window.add_reference_mark (search_word_button, "P05.7", "Actions: Every place of this word; Word Study comes later.", window.Corner_top_left)
-			window.add_reference_mark (verses_heading, "P07.2", "Verses of the version read that the search names, in Bible order with their count; click one to read it. Words, %"phrases%", word*, AND, OR and NOT in capitals (NOT takes away from what stands beside it), parentheses, root words (strongs:H1254 or G5485, lemma:charis) and grammar (morph:V-AAI-3S Greek, morph:Vqp3ms Hebrew; morph:V-AAI* for every code it begins). AND joins verses, not words: G3056 AND morph:N-NSM finds verses holding both, not only the word in that form.", window.Corner_top_left)
+			window.add_reference_mark (verses_heading, "P07.2", "Verses of the version read that the search names, in Bible order with their count; click one to read it. Words, %"phrases%", word*, AND, OR and NOT in capitals (NOT takes away from what stands beside it), parentheses, root words (strongs:H1254 or G5485, lemma:charis) and grammar (morph:V-AAI-3S Greek, morph:Vqp3ms Hebrew, written as the corpora write them, letter case included; morph:V* for every code it begins, Greek and Hebrew alike). AND joins verses, not words: G3056 AND morph:N-NSM finds verses holding both, not only the word in that form.", window.Corner_top_left)
 			window.add_reference_mark (results_note, "P07", "Search results: the dictionary words matching the search, then (P07.2) the verses holding it. Docked west only while there are results (Simple); Close collapses it.", window.Corner_top_left)
 		end
 

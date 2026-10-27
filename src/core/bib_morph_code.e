@@ -20,6 +20,7 @@ feature {NONE} -- Initialization
 		require
 			scheme_not_empty: not a_scheme.is_empty
 			code_not_empty: not a_code.is_empty
+			code_text: is_code_text (a_code)
 		do
 			scheme := a_scheme.to_string_8
 			code := a_code.to_string_32
@@ -47,15 +48,16 @@ feature -- Access
 
 feature -- Schemes (B05)
 
-	Robinson: STRING_8 = "robinson"
-			-- Greek New Testament codes: N-NSF, V-AAI-3S, and CONJ, PREP, ADV, PRT, COND, HEB, ARAM, INJ.
-
-	Oshb: STRING_8 = "oshb"
-			-- Hebrew Bible codes (Westminster Hebrew): Ncfsa, Vqp3ms, and the single capitals R, C, D, T.
+	Every_scheme: STRING_8 = "every"
+			-- A code searched in every corpus (design scan 49: a scheme guessed from letter case read
+			-- morph:V* as Hebrew). Safe because no Greek New Testament code (Robinson: N-NSF, V-AAI-3S,
+			-- CONJ) equals a Hebrew Bible code (OSHB: Ncfsa, Vqp3ms, R), checked against both corpora
+			-- on 2026-10-27; a hit says which corpus it came from.
 
 	is_code_text (a_text: READABLE_STRING_GENERAL): BOOLEAN
-			-- Is `a_text' a code: letters, digits and dashes with at least one letter, then an optional
-			-- final * (nothing that a pattern could read as more than a prefix)?
+			-- Is `a_text' a code: ASCII letters, digits and dashes with at least one letter, then an
+			-- optional final * (nothing a GLOB pattern could read as more than a prefix)? Codes match
+			-- as the corpora write them, letter case included.
 		local
 			i, l_last: INTEGER
 		do
@@ -71,32 +73,5 @@ feature -- Schemes (B05)
 			Result := Result and then across 1 |..| l_last as ic some a_text [ic].is_alpha end
 		end
 
-	scheme_of (a_text: READABLE_STRING_GENERAL): STRING_8
-			-- `Oshb' for a code holding a lowercase letter or one capital alone; `Robinson' otherwise
-			-- (no shipped code fits both: checked against both corpora, 2026-10-27).
-		require
-			code_text: is_code_text (a_text)
-		local
-			l_letters: INTEGER
-			l_lower: BOOLEAN
-		do
-			across 1 |..| a_text.count as ic loop
-				if a_text [ic].is_alpha then
-					l_letters := l_letters + 1
-					l_lower := l_lower or a_text [ic].is_lower
-				end
-			end
-			if l_lower or (l_letters = 1 and not a_text.has ('-')) then
-				Result := Oshb
-			else
-				Result := Robinson
-			end
-		ensure
-			one_of_two: Result = Oshb or Result = Robinson
-		end
-
-invariant
-	scheme_not_empty: not scheme.is_empty
-	code_not_empty: not code.is_empty
 
 end

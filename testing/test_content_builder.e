@@ -173,6 +173,46 @@ feature -- Tests
 			remove_test_files
 		end
 
+	test_morph_codes_search_both_corpora
+			-- Scan 49: a grammar code is looked for in both corpora (no Greek code equals a Hebrew one),
+			-- so morph:V* finds Greek and Hebrew verbs alike. Before: a starred capital was guessed
+			-- Hebrew, and a Greek reader got Hebrew verbs only, with no word said.
+		local
+			l_builder: BIB_CONTENT_BUILDER
+			l_config: BIB_CONFIG
+			l_bible: SIMPLE_BIBLE
+			l_db: SIMPLE_SQL_DATABASE
+		do
+			remove_test_files
+			make_bible_db (Bible_file, True)
+			create l_builder.make
+			l_builder.set_build_id ("test-build")
+			l_builder.build (Bible_file, Out_file)
+			assert_true ("built", l_builder.last_error = Void)
+			fixture.build (Pack_file)
+			create l_db.make (Pack_file)
+			l_db.execute ("INSERT INTO corpus(corpus_id, code, name, language, license, ship_class, lemma_basis) VALUES (2, 'NT-MACULA', 'Greek New Testament', 'grc', 'CC BY 4.0', 'attribution', 'tagged: MACULA Greek lemma')")
+			l_db.execute ("INSERT INTO work(work_id, code, name) VALUES (40, 'MAT', 'Matthew')")
+			l_db.execute ("INSERT INTO work_book(work_id, book_id) VALUES (40, 40)")
+			l_db.execute ("INSERT INTO unit(unit_id, corpus_id, work_id, div1, div2, seq) VALUES (900, 2, 40, '1', '1', 1)")
+			l_db.execute ("INSERT INTO token(token_id, corpus_id, unit_id, pos, surface, search, language, lemma_id, lemma_basis, translit, morph) VALUES (9000, 2, 900, 1, 'EGENNHSEN', 'egennhsen', 'grc', NULL, 'none', 'egennesen', 'V-AAI-3S')")
+			l_db.execute ("UPDATE token SET morph = 'Vqp3ms' WHERE token_id = 5")
+			l_db.close
+			create l_config.make_with_core (Out_file)
+			l_config := l_config.set_conc_path (Pack_file)
+			create l_bible.make (l_config)
+			l_bible.open
+			assert_true ("opens", l_bible.is_open and l_bible.conc_pack.is_available)
+			assert_integers_equal ("a starred capital: Greek and Hebrew verbs", 2, found (l_bible, "morph:V*"))
+			assert_true ("both told", l_bible.verse_search.has_greek_roots and l_bible.verse_search.has_hebrew_roots)
+			assert_integers_equal ("a Greek code", 1, found (l_bible, "morph:V-AAI*"))
+			assert_true ("Greek only", l_bible.verse_search.has_greek_roots and not l_bible.verse_search.has_hebrew_roots)
+			assert_integers_equal ("a Hebrew code", 1, found (l_bible, "morph:Vq*"))
+			assert_true ("Hebrew only", l_bible.verse_search.has_hebrew_roots and not l_bible.verse_search.has_greek_roots)
+			l_bible.close
+			remove_test_files
+		end
+
 	found (a_bible: SIMPLE_BIBLE; a_query: STRING_8): INTEGER
 			-- How many verses `a_query' names in the KJV.
 		do
