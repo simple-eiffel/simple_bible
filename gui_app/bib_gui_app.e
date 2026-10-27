@@ -188,6 +188,7 @@ feature {NONE} -- Initialization
 			previous_button.set_on_click (agent step_chapter (-1))
 			next_button.set_on_click (agent step_chapter (1))
 			reading_view.set_on_cell_click (agent on_verse_click)
+			parallel_view.set_on_cell_click (agent on_parallel_click)
 			cross_refs_grid.set_on_select (agent on_cross_ref)
 			search_word_button.set_on_click (agent show_every_place)
 			results_grid.set_on_select (agent on_choice)
@@ -811,43 +812,65 @@ feature {NONE} -- Reading (S1, P01)
 		end
 
 	on_verse_click (a_row, a_column: INTEGER)
-			-- S4: the verse clicked is selected and S2 follows it. A word clicked in a version with
-			-- per-word links (KJV, BSB) opens its original in S3 (GW-08); otherwise the verse's
-			-- original words fill P07.
+			-- S4: the verse clicked is selected and S2 follows it; the word clicked opens its original
+			-- in S3 (GW-08), or the verse's original words fill P07.
 		local
-			l_lookup: BIB_LOOKUP
 			l_word: STRING_32
 			l_occurrence: INTEGER
-			l_corpus: STRING_8
-			l_found: BIB_LIST_RESULT [BIB_WORD_ENTRY]
-			l_entries: ARRAYED_LIST [BIB_WORD_ENTRY]
-			i: INTEGER
 		do
 			if a_row >= 1 and a_row <= reading_verses.count then
-				l_word := clicked_word (a_row)
+				l_word := clicked_word (reading_view, a_row)
 				l_occurrence := last_word_occurrence
 				go_to (reading_book, reading_chapter, reading_verses.i_th (a_row).verse)
-				if bible.conc_pack.is_available and then bible.books.has_book (reading_book) then
-					create l_lookup.make (bible)
-					l_corpus := l_lookup.english_corpus_for_version (reading_version)
-					create l_entries.make (0)
-					if not l_word.is_empty and not l_corpus.is_empty then
-						l_found := bible.conc_pack.headwords_behind_word (l_corpus,
-							create {BIB_REF}.make (reading_book, reading_chapter, reading_verse, create {BIB_VERSIFICATION_SYSTEM}.make_kjv), l_word, l_occurrence)
-						from i := 1 until i > l_found.count loop
-							l_entries.extend (l_found.item (i))
-							i := i + 1
-						end
+				follow_word (reading_version, l_word, l_occurrence)
+			end
+		end
+
+	on_parallel_click (a_row, a_column: INTEGER)
+			-- T3 Parallel: a click in any column selects the verse in every column and in the Bible tab,
+			-- and its word opens in T4 as in the Bible tab (Larry, 2026-10-26).
+		local
+			l_word: STRING_32
+			l_occurrence: INTEGER
+		do
+			if a_row >= 1 and a_row <= reading_verses.count and a_column >= 1 and a_column <= parallel_codes.count then
+				l_word := clicked_word (parallel_view, a_row)
+				l_occurrence := last_word_occurrence
+				go_to (reading_book, reading_chapter, reading_verses.i_th (a_row).verse)
+				follow_word (parallel_codes.i_th (a_column), l_word, l_occurrence)
+			end
+		end
+
+	follow_word (a_version: STRING_8; a_word: STRING_32; a_occurrence: INTEGER)
+			-- The word `a_word' (its `a_occurrence'th in the selected verse of `a_version') opens its
+			-- headword in S3: through the English words' links (KJV, BSB) or, in a Hebrew or Greek text,
+			-- matched to the tagged tokens. Nothing found: the verse's original words fill P07.
+		local
+			l_lookup: BIB_LOOKUP
+			l_english, l_original: STRING_8
+			l_found: detachable BIB_LIST_RESULT [BIB_WORD_ENTRY]
+			l_ref: BIB_REF
+		do
+			if bible.conc_pack.is_available and then bible.books.has_book (reading_book) and then reading_verse > 0 then
+				create l_lookup.make (bible)
+				create l_ref.make (reading_book, reading_chapter, reading_verse, create {BIB_VERSIFICATION_SYSTEM}.make_kjv)
+				l_english := l_lookup.english_corpus_for_version (a_version)
+				l_original := l_lookup.original_corpus_for_version (a_version, reading_book)
+				if not a_word.is_empty and a_occurrence >= 1 then
+					if not l_english.is_empty then
+						l_found := bible.conc_pack.headwords_behind_word (l_english, l_ref, a_word, a_occurrence)
+					elseif not l_original.is_empty then
+						l_found := bible.conc_pack.headwords_behind_original_word (l_original, l_ref, a_word, a_occurrence)
 					end
-					if l_entries.count >= 1 then
-						open_study (l_entries.first.lemma_id)
-						hide_results
-					else
-						choices := l_lookup.verse_choices (reading_book, reading_chapter, reading_verse)
-						results_grid.set_rows (choices)
-						results_note.set_text (l_lookup.note_text)
-						show_results
-					end
+				end
+				if attached l_found as al_found and then al_found.count >= 1 then
+					open_study (al_found.item (1).lemma_id)
+					hide_results
+				else
+					choices := l_lookup.verse_choices (reading_book, reading_chapter, reading_verse)
+					results_grid.set_rows (choices)
+					results_note.set_text (l_lookup.note_text)
+					show_results
 				end
 			end
 		end
@@ -855,9 +878,9 @@ feature {NONE} -- Reading (S1, P01)
 	last_word_occurrence: INTEGER
 			-- Which occurrence of its word in the verse the last `clicked_word' was (1 for the first).
 
-	clicked_word (a_row: INTEGER): STRING_32
-			-- The word under the pointer in row `a_row' of S1 (the view tracks the character under
-			-- the pointer), and its occurrence in `last_word_occurrence'; empty when none is.
+	clicked_word (a_view: SW_PARALLEL_TEXT; a_row: INTEGER): STRING_32
+			-- The word under the pointer in row `a_row' of `a_view' (the view tracks the character
+			-- under the pointer), and its occurrence in `last_word_occurrence'; empty when none is.
 		local
 			l_item, l_character, l_from: INTEGER
 			l_range: TUPLE [lo, hi: INTEGER]
@@ -865,11 +888,11 @@ feature {NONE} -- Reading (S1, P01)
 		do
 			create Result.make_empty
 			last_word_occurrence := 0
-			l_item := reading_view.hover_item
-			l_character := reading_view.hover_character
-			if l_item > 0 and l_character > 0 and then reading_view.unit_block (l_item) = a_row then
-				l_text := reading_view.text_of (l_item)
-				l_range := reading_view.word_at (l_item, l_character)
+			l_item := a_view.hover_item
+			l_character := a_view.hover_character
+			if l_item > 0 and l_character > 0 and then a_view.unit_block (l_item) = a_row then
+				l_text := a_view.text_of (l_item)
+				l_range := a_view.word_at (l_item, l_character)
 				if l_range.hi > l_range.lo and l_range.hi <= l_text.count then
 					Result := l_text.substring (l_range.lo + 1, l_range.hi).to_string_32
 					last_word_occurrence := 1
@@ -888,6 +911,16 @@ feature {NONE} -- Reading (S1, P01)
 			counted: not Result.is_empty implies last_word_occurrence >= 1
 		end
 
+	is_word_character (a_char: CHARACTER_32): BOOLEAN
+			-- Is `a_char' part of a word: a letter, digit, Hebrew point or Greek letter (not a space,
+			-- punctuation, the Hebrew maqaf or sof pasuq)?
+		do
+			Result := a_char.is_alpha_numeric
+				or else (a_char.natural_32_code > 127 and then not a_char.is_space
+					and then a_char.natural_32_code /= 0x05BE and then a_char.natural_32_code /= 0x05C3
+					and then not (a_char.natural_32_code >= 0x2000 and a_char.natural_32_code <= 0x206F))
+		end
+
 	whole_word_after (a_text: READABLE_STRING_32; a_word: STRING_32; a_from: INTEGER): INTEGER
 			-- Where `a_word' next stands in `a_text' as a whole word, at or after `a_from'; 0 when not.
 		local
@@ -898,8 +931,8 @@ feature {NONE} -- Reading (S1, P01)
 			until
 				l_at = 0 or Result > 0
 			loop
-				if (l_at = 1 or else not a_text.item (l_at - 1).is_alpha_numeric)
-					and then (l_at + a_word.count > a_text.count or else not a_text.item (l_at + a_word.count).is_alpha_numeric)
+				if (l_at = 1 or else not is_word_character (a_text.item (l_at - 1)))
+					and then (l_at + a_word.count > a_text.count or else not is_word_character (a_text.item (l_at + a_word.count)))
 				then
 					Result := l_at
 				else
@@ -963,6 +996,12 @@ feature {NONE} -- Two layouts (C7)
 
 	navigator_tree: SW_TREE [BIB_NAV_NODE]
 	parallel_view: SW_PARALLEL_TEXT
+
+	parallel_codes: ARRAYED_LIST [STRING_8]
+			-- The versions in T3 Parallel's columns, left to right.
+		attribute
+			create Result.make (0)
+		end
 
 	arrange (a_study: BOOLEAN)
 			-- Put the panels where the layout wants them: Simple (the guide's Simple board) or Study
@@ -1200,10 +1239,12 @@ feature {NONE} -- Two layouts (C7)
 			l_chapters: ARRAYED_LIST [HASH_TABLE [STRING_32, INTEGER]]
 			l_chapter: BIB_LIST_RESULT [BIB_READING_VERSE]
 			l_text: HASH_TABLE [STRING_32, INTEGER]
-			l_row, i, c: INTEGER
+			l_row, l_selected, i, c: INTEGER
+			l_mark: SW_MARK
 		do
 			if reading_book > 0 and then bible.is_open then
 				l_codes := parallel_versions
+				parallel_codes := l_codes
 				create l_chapters.make (l_codes.count)
 				from c := 1 until c > 3 loop
 					create l_text.make (40)
@@ -1233,9 +1274,20 @@ feature {NONE} -- Two layouts (C7)
 					from c := 1 until c > 3 loop
 						if attached l_chapters.i_th (c).item (ic.verse) as al_cell then
 							parallel_view.set_cell (l_row, c, al_cell)
+								-- The selected verse is marked in every column, as in the Bible tab.
+							if ic.verse = reading_verse and then not al_cell.is_empty then
+								create l_mark.make ({SW_MARK}.Hue_blue)
+								parallel_view.cell_marks (l_row, c).mark_range_with (0, al_cell.count, "selected verse", l_mark.with_wash).do_nothing
+							end
 						end
 						c := c + 1
 					end
+					if ic.verse = reading_verse then
+						l_selected := l_row
+					end
+				end
+				if l_selected > 0 then
+					parallel_view.scroll_to_row (l_selected)
 				end
 				if not l_codes.is_empty and then attached bible.text_reader.version (l_codes.last) as al_last
 					and then not al_last.versification.same_string ("kjv")

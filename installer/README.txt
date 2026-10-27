@@ -1,4 +1,4 @@
-simple_bible 0.5.2 - PERSONAL EDITION - not for distribution
+simple_bible 0.5.3 - PERSONAL EDITION - not for distribution
 =============================================================
 
 This installs the simple_bible concordance on your own machine, with
@@ -62,6 +62,6 @@ Installing on another machine without questions
 -----------------------------------------------
 From cmd or PowerShell (not Git Bash, which rewrites /FLAGS):
 
-  simple_bible-personal-0.5.2-Setup.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS="addtopath"
+  simple_bible-personal-0.5.3-Setup.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS="addtopath"
 
 Uninstalling removes the programs, both databases and the PATH entry.
