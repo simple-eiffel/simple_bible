@@ -88,7 +88,7 @@ feature -- Building
 				l_db.execute ("INSERT INTO book_catalog VALUES (1, 'GEN', 'Genesis', 0)")
 			else
 				l_db.execute ("CREATE TABLE book_catalog(book_id INTEGER PRIMARY KEY, code TEXT NOT NULL, name TEXT NOT NULL, is_deuterocanonical INTEGER NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key))")
-				l_db.execute ("INSERT INTO book_catalog VALUES (1, 'GEN', 'Genesis', 0, 1), (2, 'EXO', 'Exodus', 0, 1), (40, 'MAT', 'Matthew', 0, 1), (60, '1Pet', '1 Peter', 0, 1), (61, '2Pet', '2 Peter', 0, 1), (65, 'JUD', 'Jude', 0, 1)")
+				l_db.execute ("INSERT INTO book_catalog VALUES (1, 'GEN', 'Genesis', 0, 1), (2, 'EXO', 'Exodus', 0, 1), (23, 'Isa', 'Isaiah', 0, 1), (40, 'MAT', 'Matthew', 0, 1), (60, '1Pet', '1 Peter', 0, 1), (61, '2Pet', '2 Peter', 0, 1), (62, '1John', '1 John', 0, 1), (65, 'JUD', 'Jude', 0, 1)")
 			end
 			l_db.execute ("INSERT INTO source_provenance VALUES (1, 'test-books', 'fixture', 'CC0', 0, 0, 0, 'test fixture', ''), (2, 'test-kjv', 'King James Version', 'public domain', 0, 0, 0, 'KJV', ''), (3, 'test-wlc', 'Westminster Leningrad Codex', 'CC BY 4.0', 0, 0, 0, 'WLC', 'HEBREW versification')")
 				-- v2: two versions and a few verses, one omitted (research/18).

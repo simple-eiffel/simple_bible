@@ -358,6 +358,7 @@ feature {NONE} -- Suites
 			run_test (agent t.test_references_become_links, "test_references_become_links")
 			run_test (agent t.test_reference_box_reads_ranges_and_one_chapter_books, "test_reference_box_reads_ranges_and_one_chapter_books")
 			run_test (agent t.test_reference_box_reads_spoken_forms, "test_reference_box_reads_spoken_forms")
+			run_test (agent t.test_spoken_names_live_in_the_catalog, "test_spoken_names_live_in_the_catalog")
 			run_test (agent t.test_the_reference_readers_agree, "test_the_reference_readers_agree")
 			run_test (agent t.test_place_rows_know_their_verse, "test_place_rows_know_their_verse")
 			run_test (agent t.test_a_failing_chapter_query_says_why, "test_a_failing_chapter_query_says_why")

@@ -200,6 +200,27 @@ feature -- Tests
 			finish
 		end
 
+	test_spoken_names_live_in_the_catalog
+			-- Scan 50: book-name variants have one home, the catalog's forgiving lookup, and nothing
+			-- reads a spoken form falsely. Before: the catalog found no book for "First Peter" while the
+			-- box found one, and "Matthew verse 9" was read as chapter 9.
+		local
+			l_lookup: BIB_LOOKUP
+			l_strict: BIB_REFERENCE_LINKER
+		do
+			create l_lookup.make (bible)
+			create l_strict.make (bible.books)
+			assert_true ("the catalog reads First Peter", bible.books.candidates_for_name ("First Peter").has (60))
+			assert_true ("and II Peter", bible.books.candidates_for_name ("II Peter").has (61))
+			assert_true ("but not exactly: prose stays strict", bible.books.book_named_exactly ("First Peter") = 0)
+			assert_true ("a strict reader reads no spoken form", l_strict.place_in ("First Peter 4:8") = Void)
+			assert_true ("verse with no chapter on a book of many chapters", l_lookup.place_named ("Matthew verse 9") = Void)
+			assert_true ("Isaiah is not I saiah", attached l_lookup.place_named ("Isaiah 5") as al_a and then (al_a.book = 23 and al_a.chapter = 5))
+			assert_true ("I John 4:8", attached l_lookup.place_named ("I John 4:8") as al_b and then (al_b.book = 62 and al_b.verse = 8))
+			assert_true ("a typed colon after a book of many chapters is no place", l_lookup.place_named ("Matthew:5") = Void)
+			finish
+		end
+
 	test_the_reference_readers_agree
 			-- Scan 41: the reference box and the reference links read numbers by one rule (ranges,
 			-- one-chapter books, chapters and verses 1 to 176, no verse 0) and differ only in how a
