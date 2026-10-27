@@ -12,6 +12,7 @@ All notable changes to simple_bible are documented here. The format follows [Kee
 - **Generic data packs** (Task 7b): `BIB_PRIVATE_SOURCE` attaches packs from the pack folder after checking their rules (user_version, meta, provenance, voice); a bad pack is refused and the Bible stays open.
 - **Commentary packs**: `BIB_COMMENTARY_SCHEMA`, `BIB_COMMENTARY_PACK` (the sections for a verse, narrowest first) and `bible_build --commentary`, which builds one `commentary.db` for every book from section sidecars. The **Commentaries** tab labels every claim SOURCED or DEDUCED inline. Commentary packs are private data and are not distributed.
 - **References become links**: `BIB_REFERENCE_LINKER` turns "Jude 9" or "2 Peter 2:4-5" in a commentary into a link that opens the verse; the reference box reads the same forms (ranges open their first verse; one-chapter books take a verse number).
+- **Verse search**: `bible_build` 0.3.0 writes `verse_fts`, a contentless full-text index over every verse's search form (`BIB_VERSE_KEY`: one key range per version); `BIB_TEXT_READER.verses_matching` finds every word, a "quoted phrase" or a `word*` prefix in Bible order. The Hebrew, Greek and English normalizers now fold for real over simple_encoding's `SIMPLE_UNICODE` (LG-01), so unpointed Hebrew finds pointed text and accentless Greek finds accented text. The results zone lists the verses under the word choices.
 - `bible_gui --snapshot <png> <place> [tab]`: a picture of the whole window without a screen, from its own scratch `user.db`.
 
 ### Fixed (design scans 36 to 46)
