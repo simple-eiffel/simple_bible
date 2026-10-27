@@ -118,7 +118,7 @@ feature -- Building
 				run (l_db, Versions_provenance_sql)
 				run (l_db, Version_info_sql)
 				run (l_db, "INSERT INTO source_provenance VALUES (2, 'bible.db cross_references', 'OpenBible.info cross-references', 'CC BY', 0, 0, 0, 'Cross-reference data courtesy of OpenBible.info, CC BY.', 'Votes may be negative.')")
-				run (l_db, "INSERT INTO cross_reference SELECT from_book_id, from_chapter, from_verse, to_book_id, to_chapter, to_verse_start, coalesce(to_verse_end, to_verse_start), coalesce(votes, 0), 2 FROM src.cross_references WHERE from_book_id BETWEEN 1 AND 66 AND to_book_id BETWEEN 1 AND 66 AND from_chapter > 0 AND from_verse > 0 AND to_chapter > 0 AND to_verse_start > 0 ORDER BY from_book_id, from_chapter, from_verse, votes DESC, to_book_id, to_chapter, to_verse_start")
+				run (l_db, "INSERT INTO cross_reference SELECT from_book_id, from_chapter, from_verse, to_book_id, to_chapter, to_verse_start, coalesce(to_verse_end, to_verse_start), coalesce(votes, 0), 2 FROM src.cross_references WHERE from_book_id BETWEEN 1 AND " + {BIB_CANON}.Last_book.out + " AND to_book_id BETWEEN 1 AND " + {BIB_CANON}.Last_book.out + " AND from_chapter > 0 AND from_verse > 0 AND to_chapter > 0 AND to_verse_start > 0 ORDER BY from_book_id, from_chapter, from_verse, votes DESC, to_book_id, to_chapter, to_verse_start")
 				run (l_db, "CREATE INDEX cross_reference_from ON cross_reference(from_book, from_chapter, from_verse, votes)")
 				run (l_db, "INSERT INTO verse_text SELECT v.abbreviation, b.book_id, b.chapter, b.verse, coalesce(b.text, ''), 100 + v.id FROM src.bible_verses b JOIN src.bible_versions v ON v.id = b.version_id ORDER BY v.abbreviation, b.book_id, b.chapter, b.verse")
 				write_verse_index (l_db)

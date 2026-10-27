@@ -315,6 +315,9 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			elseif snapshot_tab.same_string ({STRING_32} "morph") then
 				search_box.set_text ("G3056 AND morph:N-NSM")
 				on_search
+			elseif snapshot_tab.same_string ({STRING_32} "spelling") then
+				search_box.set_text ("lemma:ruach")
+				on_search
 			elseif snapshot_tab.same_string ({STRING_32} "history") then
 				go_to (43, 3, 16)
 				go_to (65, 1, 6)
@@ -845,7 +848,7 @@ feature {NONE} -- Toolbar (C3-C9)
 			l_plain: BOOLEAN
 			i: INTEGER
 		do
-			l_query := bible.query_parser.parsed (a_text, create {BIB_SEARCH_SCOPE}.make ("verses", {ARRAY [STRING_8]} <<"KJV">>, 1, Last_book, "verses"))
+			l_query := bible.query_parser.parsed (a_text, bible.search_scopes.whole_bible ("KJV"))
 			if not l_query.is_valid then
 				Result := a_text.to_string_32
 			elseif l_query.clause_count = 1 and then l_query.clause (1).kind = {BIB_QUERY_CLAUSE}.Morph then
@@ -1123,7 +1126,7 @@ feature {NONE} -- Reading (S1, P01)
 					reading_view.scroll_to_row (l_selected_row)
 				end
 				previous_button.set_enabled (a_chapter > 1 or a_book > 1)
-				next_button.set_enabled (a_chapter < bible.text_reader.last_chapter (reading_version, a_book) or a_book < Last_book)
+				next_button.set_enabled (a_chapter < bible.text_reader.last_chapter (reading_version, a_book) or a_book < {BIB_CANON}.Last_book)
 				back_button.set_enabled (history_index > 1)
 				forward_button.set_enabled (history_index < history.count)
 				show_cross_refs
@@ -1158,7 +1161,7 @@ feature {NONE} -- Reading (S1, P01)
 				if l_chapter < 1 and l_book > 1 then
 					l_book := l_book - 1
 					l_chapter := bible.text_reader.last_chapter (reading_version, l_book)
-				elseif l_chapter > bible.text_reader.last_chapter (reading_version, l_book) and l_book < Last_book then
+				elseif l_chapter > bible.text_reader.last_chapter (reading_version, l_book) and l_book < {BIB_CANON}.Last_book then
 					l_book := l_book + 1
 					l_chapter := 1
 				end
@@ -1507,8 +1510,8 @@ feature {NONE} -- Two layouts (C7)
 			l_buttons: SW_ROW
 		do
 			create l_roots.make (2)
-			l_roots.extend (create {BIB_NAV_NODE}.make_testament ("Old Testament", 1, 39))
-			l_roots.extend (create {BIB_NAV_NODE}.make_testament ("New Testament", 40, Last_book))
+			l_roots.extend (create {BIB_NAV_NODE}.make_testament ("Old Testament", {BIB_CANON}.First_book, {BIB_CANON}.Last_old_testament_book))
+			l_roots.extend (create {BIB_NAV_NODE}.make_testament ("New Testament", {BIB_CANON}.First_new_testament_book, {BIB_CANON}.Last_book))
 			navigator_tree.set_label (agent {BIB_NAV_NODE}.label)
 			navigator_tree.set_children (agent nav_children)
 			navigator_tree.set_roots (l_roots)
@@ -2597,7 +2600,7 @@ feature {NONE} -- Notes (T2, P06)
 			else
 				l_other := "KJV"
 			end
-			if reading_book <= 39 then
+			if reading_book <= {BIB_CANON}.Last_old_testament_book then
 				l_original := "WLC"
 			else
 				l_original := "TR"
@@ -3053,7 +3056,7 @@ feature {NONE} -- Search results (P07)
 			if reading_version.is_empty or else not bible.text_reader.has_version (reading_version) then
 				verses_heading.set_text ("")
 			else
-				l_query := bible.query_parser.parsed (a_words, create {BIB_SEARCH_SCOPE}.make ("verses", {ARRAY [STRING_8]} <<reading_version>>, 1, Last_book, "verses"))
+				l_query := bible.query_parser.parsed (a_words, bible.search_scopes.whole_bible (reading_version))
 				if not l_query.is_valid then
 					verses_heading.set_text ({STRING_32} "The search cannot be read at character " + l_query.error_position.out + {STRING_32} ": " + l_query.error_message)
 				elseif l_query.has_text_clause and not bible.text_reader.has_verse_index then
@@ -3316,9 +3319,6 @@ feature {NONE} -- Constants
 	Key_plus: INTEGER = 0xBB
 	Key_minus: INTEGER = 0xBD
 			-- Virtual keys for the accelerators.
-
-	Last_book: INTEGER = 66
-			-- Revelation, the last of the vault's book ids (FR-105).
 
 	All_at_once: INTEGER_64 = 10000
 			-- Up to this many places load before the word shows; longer lists stream on the tick.

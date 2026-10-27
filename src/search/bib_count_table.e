@@ -17,8 +17,8 @@ feature {NONE} -- Initialization
 
 	make
 		do
-			create counts.make (66)
-			create sizes.make (66)
+			create counts.make ({BIB_CANON}.Last_book)
+			create sizes.make ({BIB_CANON}.Last_book)
 		ensure
 			empty: total = 0
 		end
