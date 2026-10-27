@@ -180,6 +180,28 @@ feature -- Tests
 			finish
 		end
 
+	test_the_reference_readers_agree
+			-- Scan 41: the reference box and the reference links read numbers by one rule (ranges,
+			-- one-chapter books, chapters and verses 1 to 176, no verse 0) and differ only in how a
+			-- book is named (the box forgives a prefix or lowercase; prose needs the exact name).
+			-- Before: the box opened "Jude 999" and "Genesis 1:0", refused "Genesis 1:1.", and the
+			-- linker linked "Genesis. 5 words".
+		local
+			l_lookup: BIB_LOOKUP
+			l_linker: BIB_REFERENCE_LINKER
+		do
+			create l_lookup.make (bible)
+			create l_linker.make (bible.books)
+			assert_true ("no verse 999", l_lookup.place_named ("Jude 999") = Void)
+			assert_true ("no verse 0", l_lookup.place_named ("Genesis 1:0") = Void)
+			assert_true ("a closing period", attached l_lookup.place_named ("Genesis 1:1.") as al_a and then (al_a.book = 1 and al_a.chapter = 1 and al_a.verse = 1))
+			assert_true ("lowercase in the box", attached l_lookup.place_named ("genesis 1:2") as al_b and then al_b.verse = 2)
+			assert_true ("Gen 1 1 still", attached l_lookup.place_named ("Gen 1 1") as al_c and then (al_c.book = 1 and al_c.verse = 1))
+			assert_strings_equal ("a sentence end is prose", "Genesis. 5 words", l_linker.linked ("Genesis. 5 words"))
+			assert_true ("an abbreviation's period still links", l_linker.linked ("Gen. 1:1").has_substring ("](bible:1.1.1)"))
+			finish
+		end
+
 	test_place_rows_know_their_verse
 			-- A place opens in the reading pane: it carries its book, chapter and verse as numbers.
 		local

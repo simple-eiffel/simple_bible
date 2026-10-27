@@ -11,9 +11,17 @@ note
 		WHAT COUNTS AS A REFERENCE: a book named exactly as content.db's catalog
 		names it (its name or code, "Genesis" or "Gen", any case after a
 		capital), followed by a chapter number, then perhaps ":verse" and a
-		range. Prose is never touched by a guess ("is 5" is not Isaiah 5), nor
-		text already inside a link or inline code. An interim reader until the
-		reference grammar (research/15) is vendored.
+		range. Prose is never touched by a guess ("is 5" is not Isaiah 5, and
+		"Numbers. 5 people" ends a sentence), nor text already inside a link or
+		inline code.
+
+		ONE READER FOR BOTH FACES (scan 41): the reference box reads with
+		`make_forgiving' and `place_in' - the same numbers, ranges, one-chapter
+		books and bounds (1 to 176, never verse 0) - and differs only in naming
+		a book: a box forgives a prefix or lowercase ("rom 8"), prose needs the
+		exact name. The link target is written and read here only (`target_text',
+		`target_place'). An interim reader until the reference grammar
+		(research/15) is vendored.
 	]"
 	author: "Larry Rix"
 	date: "$Date$"
@@ -23,20 +31,87 @@ class
 	BIB_REFERENCE_LINKER
 
 create
-	make
+	make,
+	make_forgiving
 
 feature {NONE} -- Initialization
 
 	make (a_books: BIB_BOOK_CATALOG)
+			-- A reader for prose: a book named exactly.
 		do
 			books := a_books
 		ensure
 			books_set: books = a_books
+			strict: not is_forgiving
+		end
+
+	make_forgiving (a_books: BIB_BOOK_CATALOG)
+			-- A reader for a reference box: a book named by a prefix, in any case.
+		do
+			books := a_books
+			is_forgiving := True
+		ensure
+			books_set: books = a_books
+			forgiving: is_forgiving
 		end
 
 feature -- Access
 
 	books: BIB_BOOK_CATALOG
+
+	is_forgiving: BOOLEAN
+			-- Does a book name a prefix or lowercase may give (the reference box)?
+
+feature -- Places
+
+	place_in (a_text: READABLE_STRING_GENERAL): detachable TUPLE [book, chapter, verse: INTEGER]
+			-- The one place `a_text' names, whole: "John 3:16", "John 3:16-18", "Jude 9", "John 3"
+			-- (verse 0), "Gen 1 1", with one closing period allowed; Void when it names none or
+			-- holds more.
+		local
+			l_text: STRING_32
+			l_words: LIST [STRING_32]
+		do
+			l_text := a_text.to_string_32
+			l_text.left_adjust
+			l_text.right_adjust
+			if l_text.ends_with ({STRING_32} ".") then
+				l_text.remove_tail (1)
+			end
+				-- "Gen 1 1": two numbers at the end are a chapter and a verse.
+			l_words := l_text.split (' ')
+			if l_words.count >= 3 and then l_words.last.is_natural and then l_words.i_th (l_words.count - 1).is_natural then
+				l_text := l_text.substring (1, l_text.count - l_words.last.count - 1) + {STRING_32} ":" + l_words.last
+			end
+			if not l_text.is_empty and then attached reference_at (l_text, 1) as al_found and then al_found.last = l_text.count then
+				Result := [al_found.book, al_found.chapter, al_found.verse]
+			end
+		ensure
+			a_verse_or_a_chapter: attached Result as r implies (r.chapter >= 1 and r.chapter <= Max_number and r.verse >= 0 and r.verse <= Max_number)
+		end
+
+	target_text (a_book, a_chapter, a_verse: INTEGER): STRING_32
+			-- The link target of a place: "bible:65.1.5" (verse 0: the chapter).
+		do
+			Result := Target_prefix + a_book.out + {STRING_32} "." + a_chapter.out + {STRING_32} "." + a_verse.out
+		ensure
+			read_back: attached target_place (Result) as r and then (r.book = a_book and r.chapter = a_chapter and r.verse = a_verse)
+		end
+
+	target_place (a_target: READABLE_STRING_GENERAL): detachable TUPLE [book, chapter, verse: INTEGER]
+			-- The place a "bible:" link target names; Void for any other target.
+		local
+			l_parts: LIST [STRING_32]
+		do
+			if a_target.to_string_32.starts_with (Target_prefix) then
+				l_parts := a_target.to_string_32.substring (Target_prefix.count + 1, a_target.count).split ('.')
+				if l_parts.count = 3 and then l_parts.i_th (1).is_integer and then l_parts.i_th (2).is_integer and then l_parts.i_th (3).is_integer then
+					Result := [l_parts.i_th (1).to_integer, l_parts.i_th (2).to_integer, l_parts.i_th (3).to_integer]
+				end
+			end
+		end
+
+	Target_prefix: STRING_32 = "bible:"
 
 feature -- Linking
 
@@ -81,8 +156,7 @@ feature -- Linking
 					end
 					if attached l_found as al_found then
 						l_end := al_found.last
-						Result.append ({STRING_32} "[" + l_text.substring (i, l_end) + {STRING_32} "](bible:"
-							+ al_found.book.out + {STRING_32} "." + al_found.chapter.out + {STRING_32} "." + al_found.verse.out + {STRING_32} ")")
+						Result.append ({STRING_32} "[" + l_text.substring (i, l_end) + {STRING_32} "](" + target_text (al_found.book, al_found.chapter, al_found.verse) + {STRING_32} ")")
 						i := l_end + 1
 					else
 						Result.append_character (l_text [i])
@@ -103,6 +177,7 @@ feature -- Linking
 			l_words: ARRAYED_LIST [TUPLE [first, last: INTEGER]]
 			l_pos, l_word_end, k, l_book, l_number_start: INTEGER
 			l_name: STRING_32
+			l_had_period: BOOLEAN
 		do
 				-- Up to three words ("1 John", "Song of Songs") that may name a book.
 			create l_words.make (3)
@@ -120,12 +195,15 @@ feature -- Linking
 			end
 			from k := l_words.count until k < 1 or Result /= Void loop
 				l_name := a_text.substring (a_start, l_words.i_th (k).last)
-				if l_name.ends_with ({STRING_32} ".") then
+				l_had_period := l_name.ends_with ({STRING_32} ".")
+				if l_had_period then
 					l_name.remove_tail (1)
 				end
-				l_book := 0
-				if starts_like_a_name (l_name) then
-					l_book := books.book_named_exactly (l_name)
+				l_book := book_named (l_name)
+				if l_book > 0 and l_had_period and then books.book (l_book).name.as_lower.same_string (l_name.as_lower) then
+						-- "Numbers. 5 people": a book's whole name before a period ends a sentence; only
+						-- an abbreviation ("Gen.") takes a period (scan 41).
+					l_book := 0
 				end
 				l_number_start := l_words.i_th (k).last + 2
 				if l_book > 0 and then l_number_start <= a_text.count and then a_text [l_number_start - 1] = ' ' and then a_text [l_number_start].is_digit then
@@ -138,6 +216,19 @@ feature -- Linking
 		end
 
 feature {NONE} -- Implementation
+
+	book_named (a_name: STRING_32): INTEGER
+			-- The book `a_name' names: exactly, written as a name is written (prose); or by a prefix
+			-- or in any case, the first candidate (`is_forgiving'); 0 when none.
+		do
+			if is_forgiving then
+				if not a_name.is_empty and then attached books.candidates_for_name (a_name) as al_candidates and then not al_candidates.is_empty then
+					Result := al_candidates.first
+				end
+			elseif starts_like_a_name (a_name) then
+				Result := books.book_named_exactly (a_name)
+			end
+		end
 
 	numbers_at (a_text: STRING_32; a_start, a_book: INTEGER): detachable TUPLE [last, book, chapter, verse: INTEGER]
 			-- "14:11", "5-7", "2:4-9" or "5" at `a_start' after book `a_book'.
