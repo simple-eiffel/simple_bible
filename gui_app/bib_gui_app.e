@@ -72,6 +72,33 @@ feature {NONE} -- Initialization
 			create history_rows.make (0)
 			create tag_label.make_ui ("")
 			create journal_title_box.make_single_line ("")
+			create prayer_title_box.make_single_line ("")
+			create prayer_body_box.make ("")
+			create prayer_answer_box.make_single_line ("")
+			create prayer_add_button.make ("Add", Void)
+			create prayer_answered_button.make ("Answered", Void)
+			create prayer_remove_button.make ("Remove", Void)
+			create prayer_restore_button.make ("Restore", Void)
+			create prayer_open_heading.make_ui ("")
+			create prayer_answered_heading.make_ui ("")
+			create prayer_open_grid.make (60.0)
+			create prayer_answered_grid.make (60.0)
+			create prayer_open_rows.make (0)
+			create prayer_answered_rows.make (0)
+			create memory_add_button.make ("Learn the verse read", Void)
+			create memory_heading.make_ui ("")
+			create memory_place_label.make_ui ("")
+			create memory_text_label.make_ui ("")
+			memory_text_label := memory_text_label.with_wrap
+			create memory_show_button.make ("Show the verse", Void)
+			create memory_again_button.make ("Again", Void)
+			create memory_hard_button.make ("Hard", Void)
+			create memory_good_button.make ("Good", Void)
+			create memory_easy_button.make ("Easy", Void)
+			create memory_remove_button.make ("Remove", Void)
+			create memory_grid.make (60.0)
+			create memory_rows.make (0)
+			create memory_due.make (0)
 			create journal_body_box.make ("")
 			create journal_new_button.make ("New", Void)
 			create journal_save_button.make ("Save", Void)
@@ -329,6 +356,25 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			elseif snapshot_tab.same_string ({STRING_32} "form") then
 				search_box.set_text ("G3056@N-NSM")
 				on_search
+			elseif snapshot_tab.same_string ({STRING_32} "prayer") then
+				prayer_title_box.set_text ("Strength for Daniel")
+				prayer_body_box.set_text ("A sample prayer written by the snapshot run.")
+				add_prayer
+				prayer_title_box.set_text ("Wisdom for the elders")
+				add_prayer
+				chosen_prayer := prayer_open_rows.last.id
+				prayer_answer_box.set_text ("Agreed together on Sunday")
+				mark_prayer_answered
+				prayer_tabs.select_tab (2)
+				if attached notes_tabs as al_tabs then
+					al_tabs.select_tab (Prayer_tab)
+				end
+			elseif snapshot_tab.same_string ({STRING_32} "memory") then
+				add_memory_card
+				show_memory_verse
+				if attached notes_tabs as al_tabs then
+					al_tabs.select_tab (Memory_tab)
+				end
 			elseif snapshot_tab.same_string ({STRING_32} "versification") then
 				search_box.set_text ("H7307 AND H8210")
 				on_search
@@ -424,6 +470,20 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			add_note_button.set_on_click (agent add_note)
 			tag_button.set_on_click (agent tag_verse)
 			journal_new_button.set_on_click (agent new_journal_entry)
+			prayer_add_button.set_on_click (agent add_prayer)
+			prayer_answered_button.set_on_click (agent mark_prayer_answered)
+			prayer_remove_button.set_on_click (agent remove_prayer)
+			prayer_restore_button.set_on_click (agent restore_prayer)
+			prayer_open_grid.set_on_select (agent on_open_prayer)
+			prayer_answered_grid.set_on_select (agent on_answered_prayer)
+			memory_add_button.set_on_click (agent add_memory_card)
+			memory_show_button.set_on_click (agent show_memory_verse)
+			memory_again_button.set_on_click (agent grade_memory_card (1))
+			memory_hard_button.set_on_click (agent grade_memory_card (3))
+			memory_good_button.set_on_click (agent grade_memory_card (4))
+			memory_easy_button.set_on_click (agent grade_memory_card (5))
+			memory_remove_button.set_on_click (agent remove_memory_card)
+			memory_grid.set_on_select (agent on_memory_row)
 			journal_save_button.set_on_click (agent save_journal_entry)
 			journal_delete_button.set_on_click (agent delete_journal_entry)
 			journal_restore_button.set_on_click (agent restore_journal_entry)
@@ -654,6 +714,13 @@ feature {NONE} -- Window
 			tag_names_grid.add_column (create {SW_GRID_COLUMN [TUPLE [tag: STRING_32; verses: INTEGER]]}.make ("Verses", 70.0, agent tag_verses_text))
 			tagged_grid.add_column ((create {SW_GRID_COLUMN [BIB_TAG_ASSIGNMENT]}.make ("Verse", 140.0, agent item_place ({BIB_TAG_ASSIGNMENT} ?))).growing)
 			journal_grid.add_column ((create {SW_GRID_COLUMN [BIB_NOTE]}.make ("Entry", 200.0, agent {BIB_NOTE}.title)).growing)
+			prayer_open_grid.add_column ((create {SW_GRID_COLUMN [BIB_PRAYER]}.make ("Prayer", 180.0, agent {BIB_PRAYER}.title)).growing)
+			prayer_open_grid.add_column (create {SW_GRID_COLUMN [BIB_PRAYER]}.make ("Since", 90.0, agent prayer_since))
+			prayer_answered_grid.add_column ((create {SW_GRID_COLUMN [BIB_PRAYER]}.make ("Prayer", 140.0, agent {BIB_PRAYER}.title)).growing)
+			prayer_answered_grid.add_column (create {SW_GRID_COLUMN [BIB_PRAYER]}.make ("Answered", 90.0, agent prayer_answered_day))
+			prayer_answered_grid.add_column ((create {SW_GRID_COLUMN [BIB_PRAYER]}.make ("How", 160.0, agent {BIB_PRAYER}.answer)).growing)
+			memory_grid.add_column ((create {SW_GRID_COLUMN [BIB_MEMORY_CARD]}.make ("Verse", 140.0, agent memory_card_place)).growing)
+			memory_grid.add_column (create {SW_GRID_COLUMN [BIB_MEMORY_CARD]}.make ("Next", 100.0, agent memory_card_due))
 			highlights_grid.add_column ((create {SW_GRID_COLUMN [BIB_HIGHLIGHT]}.make ("Reason", 160.0, agent {BIB_HIGHLIGHT}.reason)).growing)
 			analysis_grid.add_column (create {SW_GRID_COLUMN [BIB_INTERLINEAR_WORD]}.make ("#", 40.0, agent analysis_position))
 			analysis_grid.add_column (create {SW_GRID_COLUMN [BIB_INTERLINEAR_WORD]}.make ("Word", 130.0, agent {BIB_INTERLINEAR_WORD}.surface))
@@ -1193,6 +1260,8 @@ feature {NONE} -- Reading (S1, P01)
 					fill_tags
 					fill_journal
 					fill_history
+					fill_prayers
+					fill_memory
 				end
 			end
 		end
@@ -1758,8 +1827,8 @@ feature {NONE} -- Two layouts (C7)
 			l_tabs.add_page ("Journal", journal_page)
 			l_tabs.add_page ("Tags", tags_page)
 			l_tabs.add_page ("Highlights", highlights_page)
-			l_tabs.add_page ("Prayer", create {SW_EMPTY_STATE}.make ("Prayer list comes later", "Requests with dates (E06)."))
-			l_tabs.add_page ("Memory", create {SW_EMPTY_STATE}.make ("Memory cards come later", "Verses to learn, spaced (E07)."))
+			l_tabs.add_page ("Prayer", prayer_page)
+			l_tabs.add_page ("Memory", memory_page)
 			notes_tabs := l_tabs
 			Result := l_tabs.growing
 		end
@@ -1938,6 +2007,377 @@ feature {NONE} -- Notes (T2, P06)
 			-- The journal entry Delete removed last; the Journal's Restore brings it back (0: none). Its
 			-- own slot: scan 45 found the Journal and Verse notes sharing one, each Delete losing the
 			-- other's, and Verse notes never showing a journal entry it restored.
+
+	Prayer_tab: INTEGER = 5
+	Memory_tab: INTEGER = 6
+			-- P06's Prayer and Memory pages.
+
+	prayer_title_box, prayer_answer_box: SW_TEXT_BOX
+	prayer_body_box: SW_TEXT_BOX
+	prayer_add_button, prayer_answered_button, prayer_remove_button, prayer_restore_button: SW_BUTTON
+	prayer_open_heading, prayer_answered_heading: SW_LABEL
+	prayer_open_grid, prayer_answered_grid: SW_DATA_GRID [BIB_PRAYER]
+			-- T2's Prayer tab (E06): requests, open and answered.
+
+	prayer_open_rows, prayer_answered_rows: ARRAYED_LIST [BIB_PRAYER]
+			-- The rows of the two grids.
+
+	chosen_prayer: INTEGER_64
+			-- The prayer last clicked in either list (0: none).
+
+	last_removed_prayer: INTEGER_64
+			-- The prayer Remove took away last (0: none).
+
+	prayer_page: SW_COLUMN
+			-- A title and the request, Add; the open prayers; the answered ones with how.
+		local
+			l_row: SW_ROW
+			l_open, l_answered: SW_COLUMN
+		do
+			create Result.make
+			Result := Result.with_gap (6.0)
+			Result.put (prayer_title_box)
+			Result.put (prayer_body_box)
+			create l_row.make
+			l_row.put (prayer_add_button)
+			l_row.put (prayer_remove_button)
+			l_row.put (prayer_restore_button)
+			Result.put (l_row)
+				-- The open and the answered prayers on their own tabs: one under the other, the narrow
+				-- Notes pane hid the answered list (seen by snapshot, 2026-10-27).
+			create l_open.make
+			l_open := l_open.with_gap (6.0)
+			l_open.put (prayer_open_heading)
+			l_open.put (prayer_open_grid.growing)
+			create l_row.make
+			l_row.put (prayer_answer_box.growing)
+			l_row.put (prayer_answered_button)
+			l_open.put (l_row)
+			create l_answered.make
+			l_answered := l_answered.with_gap (6.0)
+			l_answered.put (prayer_answered_heading)
+			l_answered.put (prayer_answered_grid.growing)
+			create prayer_tabs.make
+			prayer_tabs.add_page ("Open", l_open)
+			prayer_tabs.add_page ("Answered", l_answered)
+			Result.put (prayer_tabs.growing)
+		end
+
+	prayer_tabs: SW_TABS
+			-- Open and Answered (made with `prayer_page').
+		attribute
+			create Result.make
+		end
+
+	fill_prayers
+			-- Both lists from user.db.
+		do
+			if user_store.is_open then
+				prayer_open_rows := user_store.prayers (False)
+				prayer_answered_rows := user_store.prayers (True)
+			else
+				create prayer_open_rows.make (0)
+				create prayer_answered_rows.make (0)
+			end
+			prayer_open_grid.set_rows (prayer_open_rows)
+			prayer_answered_grid.set_rows (prayer_answered_rows)
+			if prayer_open_rows.is_empty then
+				prayer_open_heading.set_text ("Open: none. Write a title and the request, then Add.")
+			else
+				prayer_open_heading.set_text ({STRING_32} "Open (" + prayer_open_rows.count.out + {STRING_32} "), newest first. Click one, write how it was answered below, then Answered.")
+			end
+			if prayer_answered_rows.is_empty then
+				prayer_answered_heading.set_text ("Answered: none yet.")
+			else
+				prayer_answered_heading.set_text ({STRING_32} "Answered (" + prayer_answered_rows.count.out + {STRING_32} "), latest first:")
+			end
+			prayer_add_button.set_enabled (user_store.is_open)
+			prayer_answered_button.set_enabled (chosen_prayer > 0 and then across prayer_open_rows as ic some ic.id = chosen_prayer end)
+			prayer_remove_button.set_enabled (chosen_prayer > 0)
+			prayer_restore_button.set_enabled (last_removed_prayer > 0)
+		end
+
+	add_prayer
+			-- The title and request become an open prayer.
+		local
+			l_title, l_body: STRING_32
+			l_prayer: BIB_PRAYER
+		do
+			l_title := prayer_title_box.text.twin
+			l_title.left_adjust
+			l_title.right_adjust
+			l_body := prayer_body_box.text.twin
+			l_body.left_adjust
+			l_body.right_adjust
+			if l_title.is_empty then
+				say ("Give the prayer a title first.")
+			elseif user_store.is_open then
+				create l_prayer.make (l_title, l_body, 0)
+				user_store.add_prayer_item (l_prayer)
+				if attached user_store.write_error as al_error then
+					say (al_error.message)
+				else
+					prayer_title_box.set_text ("")
+					prayer_body_box.set_text ("")
+					chosen_prayer := 0
+					fill_prayers
+					say ("Prayer kept.")
+				end
+			end
+		end
+
+	mark_prayer_answered
+			-- The chosen open prayer answered today, as the answer box tells.
+		do
+			if chosen_prayer > 0 and user_store.is_open then
+				user_store.set_prayer_answered (chosen_prayer, prayer_answer_box.text)
+				if attached user_store.write_error as al_error then
+					say (al_error.message)
+				else
+					prayer_answer_box.set_text ("")
+					chosen_prayer := 0
+					fill_prayers
+					say ("Marked answered.")
+				end
+			end
+		end
+
+	remove_prayer
+			-- The chosen prayer taken off the list (kept: Restore brings it back).
+		do
+			if chosen_prayer > 0 and user_store.is_open then
+				user_store.set_prayer_deleted (chosen_prayer, True)
+				if attached user_store.write_error as al_error then
+					say (al_error.message)
+				else
+					last_removed_prayer := chosen_prayer
+					chosen_prayer := 0
+					fill_prayers
+					say ("Prayer removed. Restore brings it back.")
+				end
+			end
+		end
+
+	restore_prayer
+			-- The prayer Remove took away last, back on the list.
+		do
+			if last_removed_prayer > 0 and user_store.is_open then
+				user_store.set_prayer_deleted (last_removed_prayer, False)
+				if attached user_store.write_error as al_error then
+					say (al_error.message)
+				else
+					last_removed_prayer := 0
+					fill_prayers
+				end
+			end
+		end
+
+	on_open_prayer (a_row: INTEGER)
+			-- An open prayer clicked: chosen.
+		do
+			if not is_reselecting and then a_row >= 1 and then a_row <= prayer_open_rows.count then
+				chosen_prayer := prayer_open_rows.i_th (a_row).id
+				prayer_answered_button.set_enabled (True)
+				prayer_remove_button.set_enabled (True)
+			end
+		end
+
+	on_answered_prayer (a_row: INTEGER)
+			-- An answered prayer clicked: chosen (Remove only).
+		do
+			if not is_reselecting and then a_row >= 1 and then a_row <= prayer_answered_rows.count then
+				chosen_prayer := prayer_answered_rows.i_th (a_row).id
+				prayer_answered_button.set_enabled (False)
+				prayer_remove_button.set_enabled (True)
+			end
+		end
+
+	prayer_since (a_prayer: BIB_PRAYER): STRING_32
+			-- The day it was written.
+		do
+			Result := a_prayer.created_on.head (10)
+		end
+
+	prayer_answered_day (a_prayer: BIB_PRAYER): STRING_32
+			-- The day it was answered.
+		do
+			Result := a_prayer.answered_on.head (10)
+		end
+
+	memory_add_button, memory_show_button, memory_again_button, memory_hard_button, memory_good_button, memory_easy_button, memory_remove_button: SW_BUTTON
+	memory_heading, memory_place_label, memory_text_label: SW_LABEL
+	memory_grid: SW_DATA_GRID [BIB_MEMORY_CARD]
+			-- T2's Memory tab (E07): verses to learn, spaced (BIB_MEMORY_SCHEDULE).
+
+	memory_rows: ARRAYED_LIST [BIB_MEMORY_CARD]
+			-- Every card, soonest first.
+
+	memory_due: ARRAYED_LIST [BIB_MEMORY_CARD]
+			-- The cards due today; the first is the one under review.
+
+	chosen_card: INTEGER_64
+			-- The card last clicked in the list (0: none).
+
+	today_text: STRING_8
+			-- Today, as an ISO date.
+		do
+			Result := (create {SIMPLE_DATE}.make_now).to_iso8601
+		end
+
+	memory_page: SW_COLUMN
+			-- Learn the verse read; today's card to recall and grade; every card with its next date.
+		local
+			l_row: SW_ROW
+		do
+			create Result.make
+			Result := Result.with_gap (6.0)
+			Result.put (memory_add_button)
+			Result.put (memory_heading)
+			Result.put (memory_place_label)
+			Result.put (memory_text_label)
+			create l_row.make
+			l_row.put (memory_show_button)
+			l_row.put (memory_again_button)
+			l_row.put (memory_hard_button)
+			l_row.put (memory_good_button)
+			l_row.put (memory_easy_button)
+			Result.put (l_row)
+			Result.put (memory_grid.growing)
+			Result.put (memory_remove_button)
+		end
+
+	fill_memory
+			-- The cards from user.db; the first due one up for review, its text hidden.
+		do
+			if user_store.is_open then
+				memory_rows := user_store.memory_cards ("")
+				memory_due := user_store.memory_cards (today_text)
+			else
+				create memory_rows.make (0)
+				create memory_due.make (0)
+			end
+			memory_grid.set_rows (memory_rows)
+			if memory_rows.count = 1 then
+				memory_heading.set_text ({STRING_32} "1 card; " + memory_due.count.out + {STRING_32} " due today.")
+			else
+				memory_heading.set_text (memory_rows.count.out.to_string_32 + {STRING_32} " cards; " + memory_due.count.out + {STRING_32} " due today.")
+			end
+			memory_text_label.set_text ("")
+			if memory_due.is_empty then
+				memory_place_label.set_text ("Nothing to review today.")
+			else
+				memory_place_label.set_text ({STRING_32} "Recall " + hub_place (memory_due.first.hub_id) + {STRING_32} ", then Show the verse and grade yourself.")
+			end
+			memory_add_button.set_enabled (user_store.is_open and reading_verse > 0)
+			memory_show_button.set_enabled (not memory_due.is_empty)
+			memory_again_button.set_enabled (False)
+			memory_hard_button.set_enabled (False)
+			memory_good_button.set_enabled (False)
+			memory_easy_button.set_enabled (False)
+			memory_remove_button.set_enabled (chosen_card > 0)
+		end
+
+	add_memory_card
+			-- The verse read becomes a card, due today.
+		local
+			l_card: BIB_MEMORY_CARD
+		do
+			if reading_verse = 0 then
+				say ("Click a verse to learn it.")
+			elseif user_store.is_open then
+				if user_store.has_memory_card (reading_hub) then
+					say (place_text (reading_book, reading_chapter, reading_verse) + {STRING_32} " is already a card.")
+				else
+					create l_card.make (reading_hub, today_text)
+					user_store.add_memory_card (l_card)
+					if attached user_store.write_error as al_error then
+						say (al_error.message)
+					else
+						fill_memory
+						say (place_text (reading_book, reading_chapter, reading_verse) + {STRING_32} " is a card, due today.")
+					end
+				end
+			end
+		end
+
+	show_memory_verse
+			-- The text of the card under review, in the version read; grading opens.
+		local
+			l_keys: BIB_VERSE_KEY
+			l_found: BIB_LIST_RESULT [BIB_READING_VERSE]
+			l_places: ARRAYED_LIST [INTEGER_64]
+		do
+			if not memory_due.is_empty and not reading_version.is_empty and then bible.text_reader.has_version (reading_version) then
+				create l_keys
+				create l_places.make (1)
+				l_places.extend (l_keys.packed_place ((create {BIB_HUB_ID}).book_of (memory_due.first.hub_id), (create {BIB_HUB_ID}).chapter_of (memory_due.first.hub_id), (create {BIB_HUB_ID}).verse_of (memory_due.first.hub_id)))
+				l_found := bible.text_reader.verses_at_places (reading_version, l_places)
+				if l_found.is_success and then l_found.count = 1 then
+					memory_text_label.set_text (l_found.item (1).display_text)
+				end
+				memory_again_button.set_enabled (True)
+				memory_hard_button.set_enabled (True)
+				memory_good_button.set_enabled (True)
+				memory_easy_button.set_enabled (True)
+			end
+		end
+
+	grade_memory_card (a_grade: INTEGER)
+			-- The card under review graded `a_grade' (Again 1, Hard 3, Good 4, Easy 5); the next one up.
+		require
+			grade_valid: a_grade >= 0 and a_grade <= 5
+		do
+			if not memory_due.is_empty and user_store.is_open then
+				user_store.record_review (memory_due.first, a_grade, create {SIMPLE_DATE}.make_now)
+				if attached user_store.write_error as al_error then
+					say (al_error.message)
+				else
+					say ({STRING_32} "Next review: " + memory_due.first.due_on + {STRING_32} ".")
+					fill_memory
+				end
+			end
+		end
+
+	remove_memory_card
+			-- The card chosen in the list taken off (kept in user.db, removed).
+		do
+			if chosen_card > 0 and user_store.is_open then
+				user_store.set_memory_card_deleted (chosen_card, True)
+				if attached user_store.write_error as al_error then
+					say (al_error.message)
+				else
+					chosen_card := 0
+					fill_memory
+					say ("Card removed.")
+				end
+			end
+		end
+
+	on_memory_row (a_row: INTEGER)
+			-- A card clicked: chosen, and its verse read.
+		do
+			if not is_reselecting and then a_row >= 1 and then a_row <= memory_rows.count then
+				chosen_card := memory_rows.i_th (a_row).id
+				memory_remove_button.set_enabled (True)
+				go_to_hub (memory_rows.i_th (a_row).hub_id)
+			end
+		end
+
+	memory_card_place (a_card: BIB_MEMORY_CARD): STRING_32
+			-- "John 3:16".
+		do
+			Result := hub_place (a_card.hub_id)
+		end
+
+	memory_card_due (a_card: BIB_MEMORY_CARD): STRING_32
+			-- Its next date, or "today".
+		do
+			if a_card.is_due (today_text) then
+				Result := {STRING_32} "today"
+			else
+				Result := a_card.due_on
+			end
+		end
 
 	journal_page: SW_COLUMN
 			-- The Journal tab: a title, a body, New, Save and Delete, then every entry.
@@ -2752,7 +3192,7 @@ feature {NONE} -- Notes (T2, P06)
 			window.add_reference_mark (tools_strip, "C10", "Study tools strip: Parallel and Interlinear work; Guide, Word Study, Count and Ledger come later.", window.Corner_top_left)
 			window.add_reference_mark (mode_switch, "C7", "Mode switch, on Study: only the docking changes. Ctrl+M.", window.Corner_top_left)
 			window.add_reference_mark (navigator_tabs, "T1", "P11 Navigator, west: Books (chapter by chapter), Bookmarks (Ctrl+D bookmarks the verse read; click one to read it; Remove and Restore) and History (the last 50 chapters read, newest first, kept between runs; click one to read it again).", window.Corner_top_left)
-			window.add_reference_mark (notes_heading, "T2", "P06 Notes, west below T1, in tab order: Verse notes on the chapter read (add on the verse read; double-click to edit, each edit keeps the old version; Delete and Restore); Journal, notes on a subject (New; Save keeps the earlier version; Delete and Restore); Tags (tag the verse read; click a tag for its verses, a verse to read it; Remove and Restore); Highlights (a reason, not a color; washed amber in the Bible and Parallel tabs; click one to read it; Remove and Restore). Prayer and Memory come later.", window.Corner_top_left)
+			window.add_reference_mark (notes_heading, "T2", "P06 Notes, west below T1, in tab order: Verse notes on the chapter read (add on the verse read; double-click to edit, each edit keeps the old version; Delete and Restore); Journal, notes on a subject (New; Save keeps the earlier version; Delete and Restore); Tags (tag the verse read; click a tag for its verses, a verse to read it; Remove and Restore); Highlights (a reason, not a color; washed amber in the Bible and Parallel tabs; click one to read it; Remove and Restore); Prayer (a title and the request; Open and Answered, with how it was answered; Remove and Restore); Memory (learn the verse read; recall today's card, Show the verse, grade Again, Hard, Good or Easy; the next date follows SuperMemo 2).", window.Corner_top_left)
 			window.add_reference_mark (center_tabs, "T3", "Centre tabs: the Bible text, Parallel (P02) and Interlinear (P03, Ctrl+I). More Bible tabs come later.", window.Corner_top_left)
 			window.add_reference_mark (analysis_title, "P03.2", "Verse analysis: the verse read, a row per word with its lemma, Strong's number, morphology, gloss, and how often its headword occurs in this testament. Click a row and T4 follows it.", window.Corner_top_left)
 			window.add_reference_mark (interlinear_note, "P03", "Interlinear: word by word in the original, right to left for Hebrew. A click makes the word's verse the place read and opens its headword in T4.", window.Corner_top_left)
