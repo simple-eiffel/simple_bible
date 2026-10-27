@@ -15,6 +15,9 @@ note
 class
 	BIB_HUB_ID
 
+inherit
+	BIB_PLACE_PACKING
+
 feature -- Conversion
 
 	hub_id (a_book, a_chapter, a_verse: INTEGER): INTEGER_64
@@ -24,7 +27,7 @@ feature -- Conversion
 			chapter_valid: a_chapter >= 1 and a_chapter <= Max_part
 			verse_valid: a_verse >= 1 and a_verse <= Max_part
 		do
-			Result := a_book.to_integer_64 * Book_unit + a_chapter.to_integer_64 * Chapter_unit + a_verse.to_integer_64
+			Result := packed_place (a_book, a_chapter, a_verse)
 		ensure
 			valid: is_valid_hub (Result)
 			book_back: book_of (Result) = a_book
@@ -36,21 +39,21 @@ feature -- Conversion
 		require
 			valid: is_valid_hub (a_hub)
 		do
-			Result := (a_hub // Book_unit).to_integer_32
+			Result := book_part (a_hub)
 		end
 
 	chapter_of (a_hub: INTEGER_64): INTEGER
 		require
 			valid: is_valid_hub (a_hub)
 		do
-			Result := ((a_hub // Chapter_unit) \\ Chapter_unit).to_integer_32
+			Result := chapter_part (a_hub)
 		end
 
 	verse_of (a_hub: INTEGER_64): INTEGER
 		require
 			valid: is_valid_hub (a_hub)
 		do
-			Result := (a_hub \\ Chapter_unit).to_integer_32
+			Result := verse_part (a_hub)
 		end
 
 	is_valid_hub (a_hub: INTEGER_64): BOOLEAN
@@ -59,12 +62,5 @@ feature -- Conversion
 			Result := a_hub >= Book_unit + Chapter_unit + 1 and a_hub <= Max_part.to_integer_64 * Book_unit + Max_part.to_integer_64 * Chapter_unit + Max_part
 				and (a_hub // Chapter_unit) \\ Chapter_unit >= 1 and a_hub \\ Chapter_unit >= 1
 		end
-
-feature -- Constants
-
-	Book_unit: INTEGER_64 = 1_000_000
-	Chapter_unit: INTEGER_64 = 1_000
-	Max_part: INTEGER = 999
-			-- No book, chapter or verse number reaches a thousand.
 
 end

@@ -67,6 +67,24 @@ feature -- Character properties
 		deferred
 		end
 
+feature -- Character kinds
+
+	is_format_character (a_char: CHARACTER_32): BOOLEAN
+			-- Is `a_char' a format character (category Cf)?
+		do
+			Result := general_category (a_char).same_string ("Cf")
+		end
+
+	is_letter_or_digit (a_char: CHARACTER_32): BOOLEAN
+			-- Is `a_char' a letter or a number (category L* or N*)? The one test for "searchable"
+			-- (design scan 47: it was written four ways).
+		local
+			l_category: STRING_8
+		do
+			l_category := general_category (a_char)
+			Result := l_category [1] = 'L' or l_category [1] = 'N'
+		end
+
 feature -- Text queries
 
 	has_combining_mark (a_text: READABLE_STRING_32): BOOLEAN

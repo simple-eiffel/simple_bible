@@ -49,6 +49,10 @@ feature -- Access
 
 	verses_indexed: INTEGER
 			-- Rows `verse_fts' holds after the last build.
+
+	verses_not_indexed: INTEGER
+			-- Rows of `verse_text' the last build left out of the index (a heading as verse 0, or a
+			-- number out of BIB_VERSE_KEY's range).
 			-- Verses the last `build' wrote, across every version.
 
 	cross_references_written: INTEGER
@@ -93,6 +97,7 @@ feature -- Building
 			versions_written := 0
 			verses_written := 0
 			verses_indexed := 0
+			verses_not_indexed := 0
 			cross_references_written := 0
 			if not (create {SIMPLE_FILE}.make (a_bible_db)).is_file then
 				last_error := {STRING_32} "bible.db was not found: " + a_bible_db.to_string_32
@@ -126,6 +131,10 @@ feature -- Building
 					end
 					across l_db.query ("SELECT count(*) AS n FROM verse_text").rows as ic loop
 						verses_written := ic.integer_value ("n")
+					end
+					if verses_indexed + verses_not_indexed /= verses_written then
+							-- Design scan 47: a short index is a failed build, not a quiet one.
+						last_error := {STRING_32} "The verse index is short: " + verses_indexed.out + {STRING_32} " indexed and " + verses_not_indexed.out + {STRING_32} " left out of " + verses_written.out + {STRING_32} " verses."
 					end
 					across l_db.query ("SELECT count(*) AS n FROM cross_reference").rows as ic loop
 						cross_references_written := ic.integer_value ("n")
@@ -209,18 +218,24 @@ feature {NONE} -- Implementation
 				across a_db.query ("SELECT version_code, language, sort_order FROM version_info ORDER BY sort_order").rows as ic loop
 					l_versions.extend ([ic.string_value ("version_code").to_string_8, ic.string_value ("language").to_string_8, ic.integer_value ("sort_order")])
 				end
+				note_failure (a_db, "The versions could not be read for the verse index")
 				run (a_db, "BEGIN")
 				across l_versions as iv until last_error /= Void loop
 					l_normalizer := l_normalizers.for_language (iv.language)
 					create l_args.make (Index_batch * 2)
 					across a_db.query_with_args ("SELECT book_id, chapter, verse, text FROM verse_text WHERE version_code = ?", {ARRAY [detachable ANY]} <<iv.code>>).rows as ic loop
-						l_args.extend (l_keys.verse_key (iv.order, ic.integer_value ("book_id"), ic.integer_value ("chapter"), ic.integer_value ("verse")))
-						l_args.extend (l_normalizer.normalized (ic.string_value ("text")))
-						if l_args.count = Index_batch * 2 then
-							insert_index_rows (a_db, l_args)
-							l_args.wipe_out
+						if l_keys.is_indexable (ic.integer_value ("book_id"), ic.integer_value ("chapter"), ic.integer_value ("verse")) then
+							l_args.extend (l_keys.verse_key (iv.order, ic.integer_value ("book_id"), ic.integer_value ("chapter"), ic.integer_value ("verse")))
+							l_args.extend (l_normalizer.normalized (ic.string_value ("text")))
+							if l_args.count = Index_batch * 2 then
+								insert_index_rows (a_db, l_args)
+								l_args.wipe_out
+							end
+						else
+							verses_not_indexed := verses_not_indexed + 1
 						end
 					end
+					note_failure (a_db, "A version's verses could not be read for the verse index")
 					if not l_args.is_empty then
 						insert_index_rows (a_db, l_args)
 					end
