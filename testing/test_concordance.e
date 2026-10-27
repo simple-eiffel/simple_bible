@@ -728,6 +728,23 @@ feature -- Scan 47
 			assert_strings_equal ("maqaf and punctuation dropped", {STRING_32} "%/1506/%/1500/%/1508/%/1504/%/1497/", l_pack.original_search_form ({STRING_32} "%/1506/%/1463/%/1500/%/1470/%/1508/%/1468/%/1456/%/1504/%/1461/%/1497/."))
 		end
 
+	test_plain_letters_read_a_schwa_as_e
+			-- conc.db keeps a schwa in some plain-letter forms (b-schwa-rit, covenant): typed "e" finds
+			-- it. Before: lemma:berit found nothing.
+		local
+			l_fixture: CONC_FIXTURE
+			l_pack: BIB_CONC_PACK
+			l_db: SIMPLE_SQL_DATABASE
+		do
+			create l_fixture
+			l_pack := checked_pack (l_fixture)
+			create l_db.make (Pack_file)
+			l_db.execute_with_args ("UPDATE lemma SET translit_ascii = ? WHERE lemma_id = 1", <<{STRING_32} "b%/601/ra">>)
+			l_db.close
+			assert_integers_equal ("typed with e", 1, l_pack.headwords_for_text ("bera").count)
+			close_and_clean (last_pack_set, l_fixture)
+		end
+
 feature {NONE} -- Fixture
 
 	Main_file: STRING = "conc_test_main.db"

@@ -472,8 +472,10 @@ feature -- Access
 			l_plain: STRING_32
 		do
 			l_plain := original_search_form (a_text)
-			l_sql := "SELECT " + Entry_columns + " FROM conc.lemma l WHERE l.language IN ('hbo', 'arc', 'grc') AND (l.search = ? OR l.headword = ? OR l.translit_ascii = ?) ORDER BY l.n_tokens DESC, l.lemma_id LIMIT " + Max_text_matches.out
-			run_query (l_sql, {ARRAY [detachable ANY]} <<l_plain, a_text.to_string_32, l_plain>>)
+			l_sql := "SELECT " + Entry_columns + " FROM conc.lemma l WHERE l.language IN ('hbo', 'arc', 'grc') AND (l.search = ? OR l.headword = ? OR l.translit_ascii = ? OR replace(l.translit_ascii, ?, 'e') = ?) ORDER BY l.n_tokens DESC, l.lemma_id LIMIT " + Max_text_matches.out
+				-- The pack's plain letters keep a schwa in some words (b-schwa-rit for covenant, 2026-10-27):
+				-- read it as e, so "berit" finds it.
+			run_query (l_sql, {ARRAY [detachable ANY]} <<l_plain, a_text.to_string_32, l_plain, {STRING_32} "%/601/", l_plain>>)
 			Result := entries_result ("headwords_for_text", l_sql, a_text)
 		ensure
 			method_recorded: Result.method.engine_feature.same_string_general ("headwords_for_text")

@@ -334,6 +334,14 @@ feature -- Engines (one per instance)
 			create Result.make
 		end
 
+	search_scopes: BIB_SEARCH_SCOPES
+			-- Named scopes: OT, NT, Gospels, Paul's letters, a book.
+		require
+			open: is_open
+		once ("OBJECT")
+			create Result.make (books)
+		end
+
 	verse_search: BIB_VERSE_SEARCH
 			-- Every verse a query names: words, phrases, AND/OR/NOT, root words.
 		require

@@ -160,6 +160,11 @@ feature -- Tests
 			assert_integers_equal ("a root the pack has no corpus for", 0, found (l_bible, "G3588"))
 			assert_false ("no failure", l_bible.verse_search.has_failed)
 			assert_integers_equal ("a root nowhere with a word", 0, found (l_bible, "H1254 AND light"))
+			assert_integers_equal ("scoped to the Old Testament", 2, found_scoped (l_bible, "the", "OT"))
+			assert_integers_equal ("scoped to the New Testament", 0, found_scoped (l_bible, "the", "NT"))
+			assert_integers_equal ("scoped to a book", 2, found_scoped (l_bible, "the", "Genesis"))
+			assert_integers_equal ("scoped to the Gospels", 0, found_scoped (l_bible, "the", "Gospels"))
+			assert_true ("a name that is no scope", l_bible.search_scopes.scope_named ("Hezekiah", "KJV") = Void)
 				-- B05: give the fixture's bara a Hebrew morphology code (the pack is attached read-only).
 			create l_db.make (Pack_file)
 			l_db.execute ("UPDATE token SET morph = 'Vqp3ms' WHERE token_id = 5")
@@ -229,6 +234,21 @@ feature -- Tests
 			a_bible.verse_search.find (l_query, a_version)
 			assert_false ("no failure", a_bible.verse_search.has_failed)
 			Result := a_bible.verse_search.places.count
+		end
+
+	found_scoped (a_bible: SIMPLE_BIBLE; a_query, a_scope: STRING_8): INTEGER
+			-- How many verses `a_query' names in the KJV within the scope named `a_scope'.
+		local
+			l_query: BIB_QUERY
+		do
+			if attached a_bible.search_scopes.scope_named (a_scope, "KJV") as al_scope then
+				l_query := a_bible.query_parser.parsed (a_query, al_scope)
+				assert_true ({STRING_8} "valid: " + a_query, l_query.is_valid)
+				a_bible.verse_search.find (l_query, "KJV")
+				Result := a_bible.verse_search.places.count
+			else
+				assert_true ({STRING_8} "a scope: " + a_scope, False)
+			end
 		end
 
 	kjv_scope: BIB_SEARCH_SCOPE
