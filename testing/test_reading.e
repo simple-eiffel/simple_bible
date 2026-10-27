@@ -92,6 +92,27 @@ feature -- Tests
 			finish
 		end
 
+	test_a_clicked_original_word_finds_its_headword
+			-- The parallel view's Hebrew or Greek column: the clicked word, folded as the pack's search
+			-- forms are, matched to the verse's tokens with a prefix joined to its word ("BBRA" is the
+			-- prefix b and bara), finds the longer token's headword.
+		local
+			l_lookup: BIB_LOOKUP
+			l_ref: BIB_REF
+			l_found: BIB_LIST_RESULT [BIB_WORD_ENTRY]
+		do
+			create l_lookup.make (bible)
+			assert_strings_equal ("WLC is tagged in the Hebrew Bible", "WLC-MACULA", l_lookup.original_corpus_for_version ("WLC", 1))
+			assert_true ("an English version is no original", l_lookup.original_corpus_for_version ("KJV", 1).is_empty)
+			create l_ref.make (1, 1, 1, create {BIB_VERSIFICATION_SYSTEM}.make_kjv)
+			l_found := bible.conc_pack.headwords_behind_original_word ("WLC-MACULA", l_ref, "BBRA", 1)
+			assert_true ("found", l_found.is_success and l_found.count = 1)
+			assert_true ("bara, not the prefix", l_found.item (1).lemma_id = {CONC_FIXTURE}.Create_lemma)
+			assert_integers_equal ("no second", 0, bible.conc_pack.headwords_behind_original_word ("WLC-MACULA", l_ref, "BBRA", 2).count)
+			assert_integers_equal ("a word the verse lacks", 0, bible.conc_pack.headwords_behind_original_word ("WLC-MACULA", l_ref, "ZZZ", 1).count)
+			finish
+		end
+
 	test_place_rows_know_their_verse
 			-- A place opens in the reading pane: it carries its book, chapter and verse as numbers.
 		local

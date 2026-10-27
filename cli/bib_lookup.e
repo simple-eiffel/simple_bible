@@ -62,6 +62,29 @@ feature -- Access
 			known_or_empty: not Result.is_empty implies bible.conc_pack.has_corpus (Result)
 		end
 
+	original_corpus_for_version (a_version: READABLE_STRING_8; a_book: INTEGER): STRING_8
+			-- The tagged corpus a Hebrew or Greek version's words are matched in (the Hebrew Bible for
+			-- WLC and MapM, the Greek New Testament for TR, Byz and WH, the Septuagint for LXX); empty
+			-- when `a_version' is no original-language text the concordance tags.
+		require
+			book_positive: a_book > 0
+		do
+			if a_version.same_string ("WLC") or a_version.same_string ("MapM") then
+				Result := "WLC-MACULA"
+			elseif a_version.same_string ("TR") or a_version.same_string ("Byz") or a_version.same_string ("WH") then
+				Result := "NT-MACULA"
+			elseif a_version.same_string ("LXX") and a_book <= Last_old_testament_book then
+				Result := "LXX-RAHLFS"
+			else
+				create Result.make_empty
+			end
+			if not Result.is_empty and then not bible.conc_pack.has_corpus (Result) then
+				create Result.make_empty
+			end
+		ensure
+			known_or_empty: not Result.is_empty implies bible.conc_pack.has_corpus (Result)
+		end
+
 	corpus_for_book (a_book: INTEGER): STRING_8
 			-- The corpus a verse of book `a_book' is read in: the Hebrew Bible for books 1 to 39,
 			-- the Greek New Testament after (one rule for every face, design scan 32).

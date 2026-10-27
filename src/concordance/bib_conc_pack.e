@@ -287,6 +287,123 @@ feature -- Access
 			method_recorded: Result.method.engine_feature.same_string_general ("headwords_behind_word")
 		end
 
+	headwords_behind_original_word (a_corpus_code: READABLE_STRING_8; a_ref: BIB_REF; a_word: READABLE_STRING_GENERAL; a_occurrence: INTEGER): BIB_LIST_RESULT [BIB_WORD_ENTRY]
+			-- The headword of the `a_occurrence'th `a_word' of verse `a_ref' in a Hebrew or Greek text,
+			-- matched against corpus `a_corpus_code''s tokens there: the word folded as `token.search'
+			-- is (points or accents gone), a word's tokens (a prefix and its word) joined by position,
+			-- its headword the longest of them (the parallel view's word click). Empty when no position
+			-- of the verse spells the word (another edition's reading, for one).
+		require
+			available: is_available
+			corpus_known: has_corpus (a_corpus_code)
+			word_not_empty: not a_word.is_empty
+			occurrence_positive: a_occurrence >= 1
+		local
+			l_key, l_group, l_best_search: STRING_32
+			l_position, l_seen: INTEGER
+			l_best_lemma, l_found_lemma: INTEGER_64
+			l_scope: STRING_32
+			l_rows: ARRAYED_LIST [TUPLE [position: INTEGER; search: STRING_32; lemma: INTEGER_64]]
+			i: INTEGER
+		do
+			l_scope := verse_scope (a_ref).to_string_32 + {STRING_32} ", word " + a_word.to_string_32 + {STRING_32} " #" + a_occurrence.out
+			l_key := original_search_form (a_word)
+			run_query (Verse_original_tokens_sql, {ARRAY [detachable ANY]} <<corpus_id (a_corpus_code), a_ref.book_id, a_ref.chapter.out, a_ref.verse.out>>)
+			if attached last_rows as al_rows then
+				create l_rows.make (al_rows.rows.count)
+				across al_rows.rows as ic loop
+					l_rows.extend ([ic.integer_value ("pos"), ic.string_value ("search"), ic.integer_64_value ("lemma_id")])
+				end
+					-- One position at a time: its tokens' search forms joined, and its longest token's headword.
+				from i := 1 until i > l_rows.count or l_found_lemma > 0 loop
+					l_position := l_rows.i_th (i).position
+					create l_group.make_empty
+					create l_best_search.make_empty
+					l_best_lemma := 0
+					from until i > l_rows.count or else l_rows.i_th (i).position /= l_position loop
+						l_group.append (l_rows.i_th (i).search)
+						if l_rows.i_th (i).lemma > 0 and l_rows.i_th (i).search.count > l_best_search.count then
+							l_best_search := l_rows.i_th (i).search
+							l_best_lemma := l_rows.i_th (i).lemma
+						end
+						i := i + 1
+					end
+					if not l_key.is_empty and then l_group.same_string (l_key) then
+						l_seen := l_seen + 1
+						if l_seen = a_occurrence then
+							l_found_lemma := l_best_lemma
+						end
+					end
+				end
+				run_query ("SELECT " + Entry_columns + " FROM conc.lemma l WHERE l.lemma_id = ?", {ARRAY [detachable ANY]} <<l_found_lemma>>)
+				Result := entries_result ("headwords_behind_original_word", Verse_original_tokens_sql, l_scope)
+			else
+				create Result.make_failure (method ("headwords_behind_original_word", Verse_original_tokens_sql, a_corpus_code, l_scope, 0), query_error)
+			end
+		ensure
+			method_recorded: Result.method.engine_feature.same_string_general ("headwords_behind_original_word")
+		end
+
+	original_search_form (a_word: READABLE_STRING_GENERAL): STRING_32
+			-- `a_word' folded as the pack's `token.search' is: Hebrew without points and cantillation,
+			-- Greek with accents and breathings gone, lowercased, final sigma as sigma; punctuation
+			-- dropped. (The spec's BIB_GREEK_NORMALIZER does this through NFD once LG-01 lands; this
+			-- precomposed table serves the click until then.)
+		local
+			c: NATURAL_32
+		do
+			create Result.make (a_word.count)
+			across a_word.to_string_32 as ic loop
+				c := ic.natural_32_code
+				if c >= 0x05D0 and c <= 0x05EA then
+					Result.append_character (ic)
+				elseif (c >= 0x0391 and c <= 0x03A9) then
+					Result.append_character ((c + 0x20).to_character_32)
+				elseif c = 0x03C2 then
+					Result.append_character ((0x03C3).to_character_32)
+				elseif c >= 0x03B1 and c <= 0x03C9 then
+					Result.append_character (ic)
+				elseif c >= 0x0386 and c <= 0x03CE or (c >= 0x1F00 and c <= 0x1FFC) then
+					if greek_base (c) > 0 then
+						Result.append_character (greek_base (c).to_character_32)
+					end
+				elseif c < 128 and then ic.is_alpha_numeric then
+					Result.append_character (ic.as_lower)
+				end
+			end
+		end
+
+	greek_base (a_code: NATURAL_32): NATURAL_32
+			-- The lowercase base letter of a precomposed Greek letter; 0 when it is none.
+		do
+			inspect a_code
+			when 0x0386, 0x1F00 .. 0x1F0F, 0x1F70, 0x1F71, 0x1F80 .. 0x1F8F, 0x1FB0 .. 0x1FB4, 0x1FB6 .. 0x1FBC then
+				Result := 0x03B1
+			when 0x0388, 0x1F10 .. 0x1F1D, 0x1F72, 0x1F73, 0x1FC8, 0x1FC9 then
+				Result := 0x03B5
+			when 0x0389, 0x1F20 .. 0x1F2F, 0x1F74, 0x1F75, 0x1F90 .. 0x1F9F, 0x1FC2 .. 0x1FC4, 0x1FC6, 0x1FC7, 0x1FCA .. 0x1FCC then
+				Result := 0x03B7
+			when 0x038A, 0x0390, 0x03AF, 0x03CA, 0x1F30 .. 0x1F3F, 0x1F76, 0x1F77, 0x1FD0 .. 0x1FD3, 0x1FD6 .. 0x1FDB then
+				Result := 0x03B9
+			when 0x038C, 0x03CC, 0x1F40 .. 0x1F4D, 0x1F78, 0x1F79, 0x1FF8, 0x1FF9 then
+				Result := 0x03BF
+			when 0x038E, 0x03B0, 0x03CB, 0x03CD, 0x1F50 .. 0x1F5F, 0x1F7A, 0x1F7B, 0x1FE0 .. 0x1FE3, 0x1FE6 .. 0x1FEB then
+				Result := 0x03C5
+			when 0x038F, 0x03CE, 0x1F60 .. 0x1F6F, 0x1F7C, 0x1F7D, 0x1FA0 .. 0x1FAF, 0x1FF2 .. 0x1FF4, 0x1FF6, 0x1FF7, 0x1FFA .. 0x1FFC then
+				Result := 0x03C9
+			when 0x03AC then
+				Result := 0x03B1
+			when 0x03AD then
+				Result := 0x03B5
+			when 0x03AE then
+				Result := 0x03B7
+			when 0x1FE4, 0x1FE5, 0x1FEC then
+				Result := 0x03C1
+			else
+				Result := 0
+			end
+		end
+
 	headwords_for_text (a_text: READABLE_STRING_GENERAL): BIB_LIST_RESULT [BIB_WORD_ENTRY]
 			-- Headwords written or transliterated as `a_text', commonest first: Hebrew matched
 			-- without its points (as `lemma.search'), Greek as written or without accents, and
@@ -783,6 +900,9 @@ feature {NONE} -- Implementation
 
 	Verse_word_tokens_sql: STRING_8 = "SELECT t.token_id FROM conc.token t JOIN conc.unit u ON u.unit_id = t.unit_id JOIN conc.work_book wb ON wb.work_id = u.work_id WHERE t.corpus_id = ? AND wb.book_id = ? AND u.div1 = ? AND u.div2 = ? AND u.recension = '' AND t.surface = ? ORDER BY t.pos, t.token_id"
 			-- One English word's tokens in a verse, in reading order.
+
+	Verse_original_tokens_sql: STRING_8 = "SELECT t.pos, coalesce(t.search, '') AS search, coalesce(t.lemma_id, 0) AS lemma_id FROM conc.token t JOIN conc.unit u ON u.unit_id = t.unit_id JOIN conc.work_book wb ON wb.work_id = u.work_id WHERE t.corpus_id = ? AND wb.book_id = ? AND u.div1 = ? AND u.div2 = ? AND u.recension = '' ORDER BY t.pos, t.token_id"
+			-- A verse's tokens in an original-language corpus, position by position.
 
 	Linked_headwords_sql: STRING_8 = "SELECT DISTINCT l.lemma_id, l.language, l.headword, l.translit, l.pron, l.n_tokens, (SELECT c.corpus_id FROM conc.lemma_corpus_count c WHERE c.lemma_id = l.lemma_id ORDER BY c.n DESC, c.corpus_id LIMIT 1) AS top_corpus FROM conc.link k JOIN conc.token o ON o.token_id = k.from_token JOIN conc.lemma l ON l.lemma_id = o.lemma_id WHERE k.to_token = ? AND k.kind = ? AND l.language IN ('hbo', 'arc', 'grc') ORDER BY l.n_tokens DESC, l.lemma_id"
 			-- The headwords an English token translates (the columns of `Entry_columns').
