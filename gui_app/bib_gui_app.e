@@ -59,6 +59,14 @@ feature {NONE} -- Initialization
 			create add_note_button.make ("Add note", Void)
 			create delete_note_button.make ("Delete", Void)
 			create restore_note_button.make ("Restore", Void)
+			create highlights_heading.make_ui ("")
+			create highlight_reason_label.make_ui ("")
+			create highlight_reason_box.make_single_line ("")
+			create highlight_button.make ("Highlight", Void)
+			create remove_highlight_button.make ("Remove", Void)
+			create restore_highlight_button.make ("Restore", Void)
+			create highlights_grid.make (100.0)
+			create highlight_rows.make (0)
 			create light_theme.make_light
 			create dark_theme.make_dark
 				-- The text size the reader chose last time, for all the window's text (C8).
@@ -252,6 +260,14 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			elseif snapshot_tab.same_string ({STRING_32} "notes") then
 				new_note_box.set_text ("A sample note written by the snapshot run.")
 				add_note
+			elseif snapshot_tab.same_string ({STRING_32} "highlights") then
+				highlight_reason_box.set_text ("A sample reason written by the snapshot run")
+				add_highlight
+					-- The next verse read, so the highlighted one shows its own wash, not the selection's.
+				go_to (reading_book, reading_chapter, reading_verse + 1)
+				if attached notes_tabs as al_tabs then
+					al_tabs.select_tab (4)
+				end
 			end
 			window.request_render
 				-- The whole frame as drawn (the offscreen picture `render' made).
@@ -325,6 +341,10 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			add_note_button.set_on_click (agent add_note)
 			delete_note_button.set_on_click (agent delete_note)
 			restore_note_button.set_on_click (agent restore_note)
+			highlight_button.set_on_click (agent add_highlight)
+			remove_highlight_button.set_on_click (agent remove_highlight)
+			restore_highlight_button.set_on_click (agent restore_highlight)
+			highlights_grid.set_on_select (agent on_highlight_row)
 			cross_refs_grid.set_on_select (agent on_cross_ref)
 			search_word_button.set_on_click (agent show_every_place)
 			results_grid.set_on_select (agent on_choice)
@@ -504,6 +524,8 @@ feature {NONE} -- Window
 			results_grid.add_column (create {SW_GRID_COLUMN [BIB_LOOKUP_CHOICE]}.make ("Word", 150.0, agent {BIB_LOOKUP_CHOICE}.label))
 			results_grid.add_column ((create {SW_GRID_COLUMN [BIB_LOOKUP_CHOICE]}.make ("Details", 200.0, agent {BIB_LOOKUP_CHOICE}.detail)).growing)
 			cross_refs_grid.add_column ((create {SW_GRID_COLUMN [BIB_READING_CROSS_REF]}.make ("Reference", 180.0, agent cross_ref_text)).growing)
+			highlights_grid.add_column (create {SW_GRID_COLUMN [BIB_HIGHLIGHT]}.make ("Verse", 120.0, agent highlight_place))
+			highlights_grid.add_column ((create {SW_GRID_COLUMN [BIB_HIGHLIGHT]}.make ("Reason", 160.0, agent {BIB_HIGHLIGHT}.reason)).growing)
 			analysis_grid.add_column (create {SW_GRID_COLUMN [BIB_INTERLINEAR_WORD]}.make ("#", 40.0, agent analysis_position))
 			analysis_grid.add_column (create {SW_GRID_COLUMN [BIB_INTERLINEAR_WORD]}.make ("Word", 130.0, agent {BIB_INTERLINEAR_WORD}.surface))
 			analysis_grid.add_column (create {SW_GRID_COLUMN [BIB_INTERLINEAR_WORD]}.make ("Transliteration", 130.0, agent {BIB_INTERLINEAR_WORD}.translit))
@@ -903,6 +925,7 @@ feature {NONE} -- Reading (S1, P01)
 			l_chapter: BIB_LIST_RESULT [BIB_READING_VERSE]
 			l_row, l_selected_row, i: INTEGER
 			l_lookup: BIB_LOOKUP
+			l_reasons: HASH_TABLE [STRING_32, INTEGER]
 		do
 			if bible.text_reader.has_version (reading_version) then
 				reading_book := a_book
@@ -922,9 +945,13 @@ feature {NONE} -- Reading (S1, P01)
 				end
 				apply_reading_scale
 				reading_view.wipe_out
+				l_reasons := chapter_highlight_reasons (a_book, a_chapter)
 				across reading_verses as ic loop
 					l_row := reading_view.add_row (ic.verse.out)
 					reading_view.set_cell (l_row, 1, ic.display_text)
+					if attached l_reasons.item (ic.verse) as al_reason and then not ic.display_text.is_empty then
+						reading_view.cell_marks (l_row, 1).mark_range_with (0, ic.display_text.count, al_reason, (create {SW_MARK}.make ({SW_MARK}.Hue_amber)).with_wash).do_nothing
+					end
 					if ic.verse = a_verse then
 						l_selected_row := l_row
 						mark_selected_verse (reading_view, l_row, 1, ic.display_text)
@@ -953,6 +980,7 @@ feature {NONE} -- Reading (S1, P01)
 						fill_interlinear
 					end
 					fill_notes
+					fill_highlights
 				end
 			end
 		end
@@ -1347,9 +1375,10 @@ feature {NONE} -- Two layouts (C7)
 			l_tabs.add_page ("Verse notes", l_page)
 			l_tabs.add_page ("Journal", create {SW_EMPTY_STATE}.make ("Journal comes later", "Notebooks and topical notes (E04)."))
 			l_tabs.add_page ("Tags", create {SW_EMPTY_STATE}.make ("Tags come later", "Your tags and their verses (E05)."))
-			l_tabs.add_page ("Highlights", create {SW_EMPTY_STATE}.make ("Highlights come later", "Highlights by reason, not color (E01)."))
+			l_tabs.add_page ("Highlights", highlights_page)
 			l_tabs.add_page ("Prayer", create {SW_EMPTY_STATE}.make ("Prayer list comes later", "Requests with dates (E06)."))
 			l_tabs.add_page ("Memory", create {SW_EMPTY_STATE}.make ("Memory cards come later", "Verses to learn, spaced (E07)."))
+			notes_tabs := l_tabs
 			Result := l_tabs.growing
 		end
 
@@ -1364,6 +1393,9 @@ feature {NONE} -- Notes (T2, P06)
 	new_note_box: SW_TEXT_BOX
 	add_note_button, delete_note_button, restore_note_button: SW_BUTTON
 			-- Verse notes: the chapter's notes, and a new note on the verse read.
+
+	notes_tabs: detachable SW_TABS
+			-- P06's tabs, once built.
 
 	note_rows: ARRAYED_LIST [BIB_NOTE]
 			-- The notes in `notes_list', in order (paragraph k is note k).
@@ -1486,6 +1518,150 @@ feature {NONE} -- Notes (T2, P06)
 					last_deleted_note := 0
 					fill_notes
 				end
+			end
+		end
+
+	highlights_heading, highlight_reason_label: SW_LABEL
+	highlight_reason_box: SW_TEXT_BOX
+	highlight_button, remove_highlight_button, restore_highlight_button: SW_BUTTON
+	highlights_grid: SW_DATA_GRID [BIB_HIGHLIGHT]
+			-- T2's Highlights tab (E01): every highlight, and a reason for the verse read.
+
+	highlight_rows: ARRAYED_LIST [BIB_HIGHLIGHT]
+			-- The rows of `highlights_grid'.
+
+	last_removed_highlight: INTEGER_64
+			-- The highlight Remove took away last; Restore brings it back (0: none).
+
+	highlights_page: SW_COLUMN
+			-- The Highlights tab: a reason and Highlight for the verse read, then every highlight.
+		local
+			l_buttons: SW_ROW
+		do
+			create Result.make
+			Result := Result.with_gap (6.0)
+			Result.put (highlight_reason_label)
+			Result.put (highlight_reason_box)
+			create l_buttons.make
+			l_buttons.put (highlight_button)
+			l_buttons.put (remove_highlight_button)
+			l_buttons.put (restore_highlight_button)
+			Result.put (l_buttons)
+			Result.put (highlights_heading)
+			Result.put (highlights_grid.growing)
+		end
+
+	fill_highlights
+			-- The Highlights tab follows the place read: every highlight (a click opens its verse), and
+			-- the reason box for the verse read.
+		local
+			l_hub: BIB_HUB_ID
+		do
+			create l_hub
+			if user_store.is_open then
+				highlight_rows := user_store.highlights_between (l_hub.hub_id (1, 1, 1), l_hub.hub_id (l_hub.Max_part, l_hub.Max_part, l_hub.Max_part))
+			else
+				create highlight_rows.make (0)
+			end
+			highlights_grid.set_rows (highlight_rows)
+			if highlight_rows.is_empty then
+				highlights_heading.set_text ("No highlights yet: a highlight is a reason, not a color.")
+			else
+				highlights_heading.set_text ({STRING_32} "Your highlights (" + highlight_rows.count.out + {STRING_32} "), in Bible order:")
+			end
+			if reading_verse > 0 then
+				highlight_reason_label.set_text ({STRING_32} "Why highlight " + place_text (reading_book, reading_chapter, reading_verse) + {STRING_32} "?")
+			else
+				highlight_reason_label.set_text ("Click a verse to highlight it.")
+			end
+			highlight_button.set_enabled (user_store.is_open and reading_verse > 0)
+			remove_highlight_button.set_enabled (False)
+			restore_highlight_button.set_enabled (last_removed_highlight > 0)
+		end
+
+	chapter_highlight_reasons (a_book, a_chapter: INTEGER): HASH_TABLE [STRING_32, INTEGER]
+			-- The reasons each highlighted verse of the chapter carries, joined, by verse number.
+		local
+			l_hub: BIB_HUB_ID
+			l_verse: INTEGER
+		do
+			create Result.make (8)
+			create l_hub
+			if user_store.is_open and then a_book >= 1 and then a_book <= l_hub.Max_part and then a_chapter >= 1 and then a_chapter <= l_hub.Max_part then
+				across user_store.highlights_between (l_hub.hub_id (a_book, a_chapter, 1), l_hub.hub_id (a_book, a_chapter, l_hub.Max_part)) as ic loop
+					l_verse := l_hub.verse_of (ic.hub_id)
+					if attached Result.item (l_verse) as al_reasons then
+						al_reasons.append ({STRING_32} "; " + ic.reason)
+					else
+						Result.put (ic.reason.twin, l_verse)
+					end
+				end
+			end
+		end
+
+	add_highlight
+			-- The verse read is highlighted for the reason in the box.
+		local
+			l_reason: STRING_32
+		do
+			l_reason := highlight_reason_box.text.twin
+			l_reason.left_adjust
+			l_reason.right_adjust
+			if l_reason.is_empty then
+				window.toast ("Say why first: a highlight is a reason.", 1)
+			elseif user_store.is_open and reading_verse > 0 then
+				user_store.add_highlight (create {BIB_HIGHLIGHT}.make ((create {BIB_HUB_ID}).hub_id (reading_book, reading_chapter, reading_verse), l_reason))
+				highlight_reason_box.set_text ("")
+				open_reading (reading_book, reading_chapter, reading_verse)
+			end
+		end
+
+	on_highlight_row (a_row: INTEGER)
+			-- A highlight clicked: its verse is read, and it can be removed.
+		local
+			l_hub: BIB_HUB_ID
+			l_target: INTEGER_64
+		do
+			if a_row >= 1 and a_row <= highlight_rows.count then
+				create l_hub
+				l_target := highlight_rows.i_th (a_row).hub_id
+				if l_hub.is_valid_hub (l_target) then
+					go_to (l_hub.book_of (l_target), l_hub.chapter_of (l_target), l_hub.verse_of (l_target))
+				end
+				remove_highlight_button.set_enabled (True)
+			end
+		end
+
+	remove_highlight
+			-- Take the selected highlight away (Restore brings it back).
+		do
+			if attached highlights_grid.selected_object as al_highlight and then al_highlight.is_stored and then user_store.is_open then
+				last_removed_highlight := al_highlight.id
+				user_store.remove_item ({BIB_USER_STORE}.Kind_highlight, last_removed_highlight)
+				open_reading (reading_book, reading_chapter, reading_verse)
+			end
+		end
+
+	restore_highlight
+			-- Bring back the highlight Remove took last.
+		do
+			if last_removed_highlight > 0 and then user_store.is_open and then user_store.is_deleted (last_removed_highlight) then
+				user_store.restore_item ({BIB_USER_STORE}.Kind_highlight, last_removed_highlight)
+				last_removed_highlight := 0
+				open_reading (reading_book, reading_chapter, reading_verse)
+			end
+		end
+
+	highlight_place (a_highlight: BIB_HIGHLIGHT): STRING_32
+			-- "Jude 1:6".
+		local
+			l_hub: BIB_HUB_ID
+		do
+			create l_hub
+			if l_hub.is_valid_hub (a_highlight.hub_id) and then bible.books.has_book (l_hub.book_of (a_highlight.hub_id)) then
+				Result := place_text (l_hub.book_of (a_highlight.hub_id), l_hub.chapter_of (a_highlight.hub_id), l_hub.verse_of (a_highlight.hub_id))
+			else
+				Result := a_highlight.hub_id.out
 			end
 		end
 
@@ -1875,7 +2051,7 @@ feature {NONE} -- Notes (T2, P06)
 			window.add_reference_mark (tools_strip, "C10", "Study tools strip: Parallel and Interlinear work; Guide, Word Study, Count and Ledger come later.", window.Corner_top_left)
 			window.add_reference_mark (mode_switch, "C7", "Mode switch, on Study: only the docking changes. Ctrl+M.", window.Corner_top_left)
 			window.add_reference_mark (navigator_tree, "T1", "P11 Navigator, west: books, chapter by chapter. Bookmarks come later.", window.Corner_top_left)
-			window.add_reference_mark (notes_heading, "T2", "P06 Notes, west below T1: Verse notes on the chapter read. Add one on the verse read; double-click to edit (each edit keeps the old version); Delete and Restore. The other tabs come later.", window.Corner_top_left)
+			window.add_reference_mark (notes_heading, "T2", "P06 Notes, west below T1: Verse notes on the chapter read (add on the verse read; double-click to edit, each edit keeps the old version; Delete and Restore) and Highlights (a reason, not a color; washed in the text). Journal, Tags, Prayer and Memory come later.", window.Corner_top_left)
 			window.add_reference_mark (center_tabs, "T3", "Centre tabs: the Bible text, Parallel (P02) and Interlinear (P03, Ctrl+I). More Bible tabs come later.", window.Corner_top_left)
 			window.add_reference_mark (analysis_title, "P03.2", "Verse analysis: the verse read, a row per word with its lemma, Strong's number, morphology, gloss, and how often its headword occurs in this testament. Click a row and T4 follows it.", window.Corner_top_left)
 			window.add_reference_mark (interlinear_note, "P03", "Interlinear: word by word in the original, right to left for Hebrew. A click makes the word's verse the place read and opens its headword in T4.", window.Corner_top_left)
