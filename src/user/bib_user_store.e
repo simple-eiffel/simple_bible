@@ -62,7 +62,7 @@ feature -- Access
 			kind_valid: is_valid_kind (a_kind)
 		do
 			if attached database as al_db then
-				Result := first_integer (al_db.query_with_args ("SELECT count(*) AS n FROM user_item WHERE kind = ? AND hub_id = ? AND deleted = 0", <<a_kind, a_hub_id>>))
+				Result := first_integer (al_db.query_with_args ("SELECT count(*) AS n FROM user_item WHERE kind = ? AND hub_id = ? AND " + Live_item_filter, <<a_kind, a_hub_id>>))
 			end
 		ensure
 			non_negative: Result >= 0
@@ -89,7 +89,7 @@ feature -- Access
 			l_highlight: BIB_HIGHLIGHT
 		do
 			create Result.make (8)
-			across connection.query_with_args ("SELECT item_id, hub_id, label, created_at FROM user_item WHERE kind = ? AND hub_id BETWEEN ? AND ? AND deleted = 0 AND hub_id > 0 AND label <> '' ORDER BY hub_id, item_id",
+			across connection.query_with_args ("SELECT item_id, hub_id, label, created_at FROM user_item WHERE kind = ? AND hub_id BETWEEN ? AND ? AND " + Live_item_filter + " ORDER BY hub_id, item_id",
 				<<Kind_highlight, a_first_hub, a_last_hub>>).rows as ic loop
 				create l_highlight.make (ic.integer_64_value ("hub_id"), ic.string_value ("label"))
 				l_highlight.mark_stored (ic.integer_64_value ("item_id"), time_of (ic.string_value ("created_at")))
@@ -107,7 +107,7 @@ feature -- Access
 			l_bookmark: BIB_BOOKMARK
 		do
 			create Result.make (8)
-			across connection.query_with_args ("SELECT item_id, hub_id, label, created_at FROM user_item WHERE kind = ? AND deleted = 0 AND hub_id > 0 ORDER BY item_id DESC", <<Kind_bookmark>>).rows as ic loop
+			across connection.query_with_args ("SELECT item_id, hub_id, label, created_at FROM user_item WHERE kind = ? AND " + Live_item_filter + " ORDER BY item_id DESC", <<Kind_bookmark>>).rows as ic loop
 				create l_bookmark.make (ic.integer_64_value ("hub_id"), ic.string_value ("label"))
 				l_bookmark.mark_stored (ic.integer_64_value ("item_id"), time_of (ic.string_value ("created_at")))
 				Result.extend (l_bookmark)
@@ -120,7 +120,7 @@ feature -- Access
 			open: is_open
 		do
 			create Result.make (8)
-			across connection.query_with_args ("SELECT label, count(*) AS n FROM user_item WHERE kind = ? AND deleted = 0 AND label <> '' AND hub_id > 0 GROUP BY label ORDER BY label COLLATE NOCASE", <<Kind_tag>>).rows as ic loop
+			across connection.query_with_args ("SELECT label, count(*) AS n FROM user_item WHERE kind = ? AND " + Live_item_filter + " GROUP BY label ORDER BY label COLLATE NOCASE", <<Kind_tag>>).rows as ic loop
 				Result.extend ([ic.string_value ("label"), ic.integer_value ("n")])
 			end
 		ensure
@@ -133,7 +133,7 @@ feature -- Access
 			open: is_open
 			tag_given: not a_tag.is_empty
 		do
-			Result := tag_rows ("SELECT item_id, hub_id, label, created_at FROM user_item WHERE kind = ? AND deleted = 0 AND hub_id > 0 AND label = ? ORDER BY hub_id, item_id", <<Kind_tag, a_tag.to_string_32>>)
+			Result := tag_rows ("SELECT item_id, hub_id, label, created_at FROM user_item WHERE kind = ? AND " + Live_item_filter + " AND label = ? ORDER BY hub_id, item_id", <<Kind_tag, a_tag.to_string_32>>)
 		ensure
 			that_tag: across Result as ic all ic.tag.same_string_general (a_tag) end
 		end
@@ -143,7 +143,7 @@ feature -- Access
 		require
 			open: is_open
 		do
-			Result := tag_rows ("SELECT item_id, hub_id, label, created_at FROM user_item WHERE kind = ? AND deleted = 0 AND hub_id = ? AND label <> '' ORDER BY item_id", <<Kind_tag, a_hub_id>>)
+			Result := tag_rows ("SELECT item_id, hub_id, label, created_at FROM user_item WHERE kind = ? AND hub_id = ? AND " + Live_item_filter + " ORDER BY item_id", <<Kind_tag, a_hub_id>>)
 		ensure
 			on_that_verse: across Result as ic all ic.hub_id = a_hub_id end
 			counted: Result.count = item_count (Kind_tag, a_hub_id)
@@ -452,6 +452,10 @@ feature {BIB_NOTE_STORE} -- Connection
 
 
 feature {NONE} -- Items
+
+	Live_item_filter: STRING_8 = "deleted = 0 AND hub_id > 0 AND label <> ''"
+			-- What every query means by a live item: not deleted, on a verse, labelled. Scan 44: six
+			-- spellings disagreed, so an unlabelled row was counted and not listed.
 
 	add_item (a_item: BIB_USER_ITEM; a_label: READABLE_STRING_GENERAL)
 			-- Keep `a_item' with `a_label' (a highlight's reason, a bookmark's label, a tag).

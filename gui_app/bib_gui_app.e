@@ -1445,7 +1445,7 @@ feature {NONE} -- Two layouts (C7)
 			if reading_verse = 0 then
 				window.toast ("Click a verse to bookmark it.", 1)
 			elseif user_store.is_open then
-				user_store.add_bookmark (create {BIB_BOOKMARK}.make ((create {BIB_HUB_ID}).hub_id (reading_book, reading_chapter, reading_verse), place_text (reading_book, reading_chapter, reading_verse)))
+				user_store.add_bookmark (create {BIB_BOOKMARK}.make (reading_hub, place_text (reading_book, reading_chapter, reading_verse)))
 				if attached user_store.write_error as al_error then
 					window.toast (al_error.message, 1)
 				else
@@ -1561,7 +1561,7 @@ feature {NONE} -- Notes (T2, P06)
 			if l_body.is_empty then
 				window.toast ("Write the note in the box first.", 1)
 			elseif user_store.is_open and reading_verse > 0 and note_store.is_writable then
-				create l_note.make ((create {BIB_HUB_ID}).hub_id (reading_book, reading_chapter, reading_verse), "", l_body)
+				create l_note.make (reading_hub, "", l_body)
 				note_store.add_note (l_note)
 				if attached note_store.last_error as al_error then
 					window.toast (al_error.message, 1)
@@ -1655,6 +1655,17 @@ feature {NONE} -- Notes (T2, P06)
 	chosen_tag: STRING_32
 			-- The tag whose verses `tagged_panel' lists; empty for none.
 
+	is_refilling_tags: BOOLEAN
+			-- Is `fill_tags' reselecting the chosen tag (no click to answer)?
+
+	reading_hub: INTEGER_64
+			-- The verse read as a hub id (scan 44: the expression was written at each use).
+		require
+			a_verse_read: reading_book > 0 and reading_chapter > 0 and reading_verse > 0
+		do
+			Result := (create {BIB_HUB_ID}).hub_id (reading_book, reading_chapter, reading_verse)
+		end
+
 	tagged_panel: BIB_ITEM_LIST_PANEL [BIB_TAG_ASSIGNMENT]
 			-- The chosen tag's verses, with Remove and Restore.
 
@@ -1684,7 +1695,7 @@ feature {NONE} -- Notes (T2, P06)
 			-- The Tags tab follows the place read: every tag and its count, the chosen tag's verses, and
 			-- the box for tagging the verse read.
 		local
-			l_still: BOOLEAN
+			i, l_index: INTEGER
 		do
 			if user_store.is_open then
 				tag_name_rows := user_store.tag_counts
@@ -1692,12 +1703,20 @@ feature {NONE} -- Notes (T2, P06)
 				create tag_name_rows.make (0)
 			end
 			tag_names_grid.set_rows (tag_name_rows)
-			across tag_name_rows as ic loop
-				l_still := l_still or ic.tag.same_string (chosen_tag)
+				-- The chosen tag stays selected by name, not by row (scan 44: tag names sort, so a new
+				-- tag moved the old choice to another row).
+			from i := 1 until i > tag_name_rows.count or l_index > 0 loop
+				if tag_name_rows.i_th (i).tag.same_string (chosen_tag) then
+					l_index := i
+				end
+				i := i + 1
 			end
-			if not l_still then
+			if l_index = 0 then
 				chosen_tag := {STRING_32} ""
 			end
+			is_refilling_tags := True
+			tag_names_grid.select_model_row (l_index)
+			is_refilling_tags := False
 			if chosen_tag.is_empty or not user_store.is_open then
 				tagged_panel.set_rows (create {ARRAYED_LIST [BIB_TAG_ASSIGNMENT]}.make (0))
 				if tag_name_rows.is_empty then
@@ -1728,7 +1747,7 @@ feature {NONE} -- Notes (T2, P06)
 			if l_tag.is_empty then
 				say ("Name the tag first.")
 			elseif user_store.is_open and reading_verse > 0 then
-				user_store.tag_verse (create {BIB_TAG_ASSIGNMENT}.make ((create {BIB_HUB_ID}).hub_id (reading_book, reading_chapter, reading_verse), l_tag))
+				user_store.tag_verse (create {BIB_TAG_ASSIGNMENT}.make (reading_hub, l_tag))
 				if attached user_store.write_error as al_error then
 					say (al_error.message)
 				else
@@ -1742,7 +1761,7 @@ feature {NONE} -- Notes (T2, P06)
 	on_tag_name (a_row: INTEGER)
 			-- A tag clicked: its verses listed.
 		do
-			if a_row >= 1 and a_row <= tag_name_rows.count then
+			if not is_refilling_tags and then a_row >= 1 and then a_row <= tag_name_rows.count then
 				chosen_tag := tag_name_rows.i_th (a_row).tag.twin
 				fill_tags
 			end
@@ -1841,7 +1860,7 @@ feature {NONE} -- Notes (T2, P06)
 			if l_reason.is_empty then
 				window.toast ("Say why first: a highlight is a reason.", 1)
 			elseif user_store.is_open and reading_verse > 0 then
-				user_store.add_highlight (create {BIB_HIGHLIGHT}.make ((create {BIB_HUB_ID}).hub_id (reading_book, reading_chapter, reading_verse), l_reason))
+				user_store.add_highlight (create {BIB_HIGHLIGHT}.make (reading_hub, l_reason))
 				if attached user_store.write_error as al_error then
 					window.toast (al_error.message, 1)
 				else
@@ -2288,7 +2307,7 @@ feature {NONE} -- Notes (T2, P06)
 			window.add_reference_mark (tools_strip, "C10", "Study tools strip: Parallel and Interlinear work; Guide, Word Study, Count and Ledger come later.", window.Corner_top_left)
 			window.add_reference_mark (mode_switch, "C7", "Mode switch, on Study: only the docking changes. Ctrl+M.", window.Corner_top_left)
 			window.add_reference_mark (navigator_tabs, "T1", "P11 Navigator, west: Books (chapter by chapter) and Bookmarks (Ctrl+D bookmarks the verse read; click one to read it; Remove and Restore).", window.Corner_top_left)
-			window.add_reference_mark (notes_heading, "T2", "P06 Notes, west below T1: Verse notes on the chapter read (add on the verse read; double-click to edit, each edit keeps the old version; Delete and Restore) Tags (tag the verse read; click a tag for its verses), and Highlights (a reason, not a color; washed amber in the Bible and Parallel tabs). Lists: click to read; Remove and Restore. Journal, Prayer and Memory come later.", window.Corner_top_left)
+			window.add_reference_mark (notes_heading, "T2", "P06 Notes, west below T1: Verse notes on the chapter read (add on the verse read; double-click to edit, each edit keeps the old version; Delete and Restore) Tags (tag the verse read; click a tag for its verses, a verse to read it), and Highlights (a reason, not a color; washed amber in the Bible and Parallel tabs; click one to read it). Remove and Restore on the Tags and Highlights lists. Journal, Prayer and Memory come later.", window.Corner_top_left)
 			window.add_reference_mark (center_tabs, "T3", "Centre tabs: the Bible text, Parallel (P02) and Interlinear (P03, Ctrl+I). More Bible tabs come later.", window.Corner_top_left)
 			window.add_reference_mark (analysis_title, "P03.2", "Verse analysis: the verse read, a row per word with its lemma, Strong's number, morphology, gloss, and how often its headword occurs in this testament. Click a row and T4 follows it.", window.Corner_top_left)
 			window.add_reference_mark (interlinear_note, "P03", "Interlinear: word by word in the original, right to left for Hebrew. A click makes the word's verse the place read and opens its headword in T4.", window.Corner_top_left)
