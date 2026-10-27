@@ -14,7 +14,7 @@ Part of the [Simple Eiffel](https://github.com/simple-eiffel) ecosystem.
 
 ## Status
 
-🚧 **Design and contracts. Not usable yet.**
+🚧 **A working personal edition; no public release yet.**
 
 - ✅ Research (Eiffel Spec Kit pre-phase): scope, landscape, requirements, decisions, risks, plus a feature study of e-Sword and Logos, a user-voice study (294 user comments from 96 sources), a world-timeline design, and a Septuagint source plan
 - ✅ GUI layout and operation spec: native [simple_widgets](https://github.com/simple-eiffel/simple_widgets), with a Simple (three-pane reader) mode and a Study (docked) mode
@@ -28,7 +28,8 @@ Part of the [Simple Eiffel](https://github.com/simple-eiffel) ecosystem.
 - ✅ **The main window, the GUI guide's Simple layout** (`bible_gui.exe`, simple_widgets): the Bible text in the centre (any of 21 versions, chapter by chapter), the commentary panel east (cross-references with OpenBible votes), the dictionary and lexicon south (how the Bibles render a word, lexicon entries, every place), search results west while there are any; a reference box, a search box, Back and Forward, text size, light and dark. Click a verse and the panels follow it; click a word in the KJV or BSB text and the lexicon opens its Greek or Hebrew original. Design pills (View menu) label every part with its code from the GUI guide
 - ✅ **A personal installer** (Inno Setup, per user) for the project lead's own machines; it carries the personal edition, so it is never published
 - ✅ **The Study layout** (Simple | Study, Ctrl+M): the navigator (books by chapter) and notes west, Bible and Parallel tabs centre (three versions side by side), the lexicon over the commentary east, the results zone south; the window opens at most of the screen and remembers the layout and the text size
-- ⏳ Bible tabs, interlinear, notes, commentaries and dictionaries once the content pipeline carries them, then the rest of the engine
+- ✅ **The study tools (2026-10-27):** the Interlinear tab (Hebrew and Greek word by word, with glosses, Strong's numbers and morphology) and its verse analysis; notes in `user.db` with every version kept, export and import; a Journal; highlights, bookmarks, tags and reading history; private data packs, including commentary packs whose claims are labelled SOURCED or DEDUCED; references in a commentary that open their verse; tests 167 pass, 49 skeletal, 0 fail
+- ⏳ Prayer list, memory cards and reading plans (Release 1b), Bible tabs, dictionaries and full-text search, then the rest of the engine
 
 ## The idea
 

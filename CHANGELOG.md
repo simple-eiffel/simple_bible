@@ -4,6 +4,20 @@ All notable changes to simple_bible are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added (2026-10-27: the study tools; personal installer 0.6.0 to 0.7.6)
+
+- **Interlinear tab** (P03, Ctrl+I): the chapter word by word in Hebrew or Greek, with transliteration, gloss, Strong's number and morphology spelled out (`BIB_CONC_PACK.interlinear_chapter`, `BIB_INTERLINEAR_WORD`, `BIB_MORPHOLOGY_NAMES`); the **verse analysis** grid below it (P03.2) gives each word's count in the corpus.
+- **Notes** (T2): `user.db` in the user's local application data (`BIB_USER_STORE`, schema 1); `BIB_DB_NOTE_STORE` keeps every version of a note, soft-deletes and restores, and exports and imports Markdown. Panels: **Verse notes** on the chapter read and a **Journal** of notes on a subject.
+- **Highlights** (a reason, not a color; verses washed amber in the Bible and Parallel tabs), **Bookmarks** (Navigator, Ctrl+D), **Tags** (every tag with its count, the verses of a tag) and **History** (the last 50 chapters read, kept between runs). One list panel, `BIB_ITEM_LIST_PANEL`, gives highlights, bookmarks and tagged verses Remove and Restore.
+- **Generic data packs** (Task 7b): `BIB_PRIVATE_SOURCE` attaches packs from the pack folder after checking their rules (user_version, meta, provenance, voice); a bad pack is refused and the Bible stays open.
+- **Commentary packs**: `BIB_COMMENTARY_SCHEMA`, `BIB_COMMENTARY_PACK` (the sections for a verse, narrowest first) and `bible_build --commentary`, which builds one `commentary.db` for every book from section sidecars. The **Commentaries** tab labels every claim SOURCED or DEDUCED inline. Commentary packs are private data and are not distributed.
+- **References become links**: `BIB_REFERENCE_LINKER` turns "Jude 9" or "2 Peter 2:4-5" in a commentary into a link that opens the verse; the reference box reads the same forms (ranges open their first verse; one-chapter books take a verse number).
+- `bible_gui --snapshot <png> <place> [tab]`: a picture of the whole window without a screen, from its own scratch `user.db`.
+
+### Fixed (design scans 36 to 46)
+
+- Each feature was followed by a read-only design scan (reports in `.eiffel-workflow/evidence/`); every HIGH finding was fixed with a test that failed before. Among them: one Greek and Hebrew fold for every lookup; one door rule for every face of a word; one SQLite reporting mixin; one reference reader for the box and the links; one live-item rule for every user-item query (an unlabelled row was counted but not listed); a list keeps its choice when it is refilled; the Journal and Verse notes no longer share one Restore; a failed History write is told. Tests: 167 pass, 49 skeletal (reported as skipped), 0 fail.
+
 ### Changed (2026-10-26: the spec fold rolled into the skeletons)
 
 - **The concordance comes in** (D-021, debate 05b pathway B): `src/concordance/` with `BIB_CONC_PACK`, `BIB_WORD_LOOKUP`, `BIB_ENGLISH_INDEX`, `BIB_VERSE_WORDS` and five value classes; `SIMPLE_BIBLE` gains `conc_pack`, `word_lookup`, `english_index`, `verse_word_lookup`; `BIB_CONFIG` gains `conc_path` (the edition swap is this one path).
