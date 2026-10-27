@@ -30,24 +30,19 @@ feature -- Access
 	books: BIB_BOOK_CATALOG
 
 	scope_named (a_name: READABLE_STRING_GENERAL; a_version: READABLE_STRING_8): detachable BIB_SEARCH_SCOPE
-			-- The scope `a_name' names in `a_version' ("OT", "NT", "Gospels", "Paul's letters", or a
-			-- book: "Romans", "Psalms", "1 John"); Void when it names none or several books.
+			-- The scope `a_name' names in `a_version': a name of BIB_SCOPE_NAMES (Old Testament, OT,
+			-- Gospels, Paul's letters, ...) or a book ("Romans", "Psalms", "1 John"); Void when it names
+			-- none or several books.
 		require
 			version_not_empty: not a_version.is_empty
 		local
 			l_name: STRING_32
 		do
-			l_name := a_name.to_string_32.as_lower
+			l_name := a_name.to_string_32
 			l_name.left_adjust
 			l_name.right_adjust
-			if l_name.same_string ({STRING_32} "ot") or l_name.same_string ({STRING_32} "old testament") then
-				create Result.make ("Old Testament", <<a_version>>, {BIB_CANON}.First_book, {BIB_CANON}.Last_old_testament_book, "verses")
-			elseif l_name.same_string ({STRING_32} "nt") or l_name.same_string ({STRING_32} "new testament") then
-				create Result.make ("New Testament", <<a_version>>, {BIB_CANON}.First_new_testament_book, {BIB_CANON}.Last_book, "verses")
-			elseif l_name.same_string ({STRING_32} "gospels") then
-				create Result.make ("Gospels", <<a_version>>, {BIB_CANON}.First_gospel, {BIB_CANON}.Last_gospel, "verses")
-			elseif l_name.same_string ({STRING_32} "paul's letters") or l_name.same_string ({STRING_32} "pauline letters") or l_name.same_string ({STRING_32} "paul") then
-				create Result.make ("Paul's letters", <<a_version>>, {BIB_CANON}.First_letter_of_paul, {BIB_CANON}.Last_letter_of_paul, "verses")
+			if attached (create {BIB_SCOPE_NAMES}).range_named (l_name) as al_range then
+				create Result.make (al_range.name, <<a_version>>, al_range.from_book, al_range.to_book, "verses")
 			elseif not l_name.is_empty and then attached books.candidates_for_name (l_name) as al_books and then al_books.count = 1 then
 				create Result.make (books.book (al_books.first).name, <<a_version>>, al_books.first, al_books.first, "verses")
 			end
@@ -58,7 +53,7 @@ feature -- Access
 		require
 			version_not_empty: not a_version.is_empty
 		do
-			create Result.make ("Whole Bible", <<a_version>>, {BIB_CANON}.First_book, {BIB_CANON}.Last_book, "verses")
+			create Result.make ({BIB_SCOPE_NAMES}.Whole_bible_name, <<a_version>>, {BIB_CANON}.First_book, {BIB_CANON}.Last_book, "verses")
 		end
 
 end

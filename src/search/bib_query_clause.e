@@ -82,7 +82,8 @@ feature -- Constants
 	Strongs: INTEGER = 8
 	Morph: INTEGER = 9
 	Form: INTEGER = 10
-			-- A root in a grammatical form on one word (BIB_FORM_KEY).
+			-- A root in a grammatical form on one word (BIB_FORM_KEY). The last kind: `kind_valid'
+			-- reads it as the upper bound.
 
 invariant
 	kind_valid: kind >= Word and kind <= Form

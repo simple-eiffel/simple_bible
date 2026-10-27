@@ -103,9 +103,11 @@ feature {NONE} -- Initialization
 			create reference_box.make_lookup
 			create version_select.make
 			create scope_select.make
-			across Scope_names as ic loop
+			scope_select.add_option ({BIB_SCOPE_NAMES}.Whole_bible_name)
+			across (create {BIB_SCOPE_NAMES}).names as ic loop
 				scope_select.add_option (ic)
 			end
+			scope_select.add_option (Scope_this_book_name)
 			scope_select.select_index (1)
 			create search_box.make_lookup
 			create mode_switch.make
@@ -449,21 +451,16 @@ feature {NONE} -- Window
 			-- C6.1: where the verse search looks (2026-10-27): the whole Bible, a testament, the
 			-- Gospels, Paul's letters, or the book being read.
 
-	Scope_names: ARRAY [STRING_32]
-			-- `scope_select''s choices, in order; the names BIB_SEARCH_SCOPES reads, and "This book".
-		once
-			Result := <<{STRING_32} "Whole Bible", {STRING_32} "Old Testament", {STRING_32} "New Testament", {STRING_32} "Gospels", {STRING_32} "Paul's letters", {STRING_32} "This book">>
-		end
-
-	Scope_this_book: INTEGER = 6
-			-- The `Scope_names' index meaning the book being read.
+	Scope_this_book_name: STRING_32 = "This book"
+			-- `scope_select''s last choice: the book being read.
 
 	search_scope: BIB_SEARCH_SCOPE
-			-- The scope `scope_select' names for the version read.
+			-- The scope `scope_select' names for the version read: the whole Bible, a name of
+			-- BIB_SCOPE_NAMES (the list shows them in their order), or the book being read.
 		do
-			if scope_select.selected_index = Scope_this_book and reading_book > 0 and then attached bible.search_scopes.scope_named (bible.books.book (reading_book).name, reading_version) as al_book then
+			if scope_select.selected_index = (create {BIB_SCOPE_NAMES}).names.count + 2 and reading_book > 0 and then attached bible.search_scopes.scope_named (bible.books.book (reading_book).name, reading_version) as al_book then
 				Result := al_book
-			elseif scope_select.selected_index > 1 and scope_select.selected_index < Scope_this_book and then attached bible.search_scopes.scope_named (Scope_names [scope_select.selected_index], reading_version) as al_named then
+			elseif scope_select.selected_index >= 2 and scope_select.selected_index <= (create {BIB_SCOPE_NAMES}).names.count + 1 and then attached bible.search_scopes.scope_named ((create {BIB_SCOPE_NAMES}).names.i_th (scope_select.selected_index - 1), reading_version) as al_named then
 				Result := al_named
 			else
 				Result := bible.search_scopes.whole_bible (reading_version)
@@ -3097,13 +3094,17 @@ feature {NONE} -- Search results (P07)
 		local
 			l_found: BIB_LIST_RESULT [BIB_READING_VERSE]
 			l_query: BIB_QUERY
+			l_scope: BIB_SEARCH_SCOPE
 			l_total: INTEGER
 		do
 			create verse_hits.make (0)
 			if reading_version.is_empty or else not bible.text_reader.has_version (reading_version) then
 				verses_heading.set_text ("")
 			else
-				l_query := bible.query_parser.parsed (a_words, search_scope)
+					-- The scope once per search (design scan 52: it was built for the parse and again for the
+					-- heading).
+				l_scope := search_scope
+				l_query := bible.query_parser.parsed (a_words, l_scope)
 				if not l_query.is_valid then
 					verses_heading.set_text ({STRING_32} "The search cannot be read at character " + l_query.error_position.out + {STRING_32} ": " + l_query.error_message)
 				elseif l_query.has_text_clause and not bible.text_reader.has_verse_index then
@@ -3119,7 +3120,7 @@ feature {NONE} -- Search results (P07)
 								verse_hits.extend (l_found.item (i))
 							end
 							l_total := bible.verse_search.places.count
-							show_verse_count (l_total)
+							show_verse_count (l_total, l_scope)
 						else
 								-- Design scan 48: a count was shown over no rows.
 							verses_heading.set_text ("The verses were found but could not be read.")
@@ -3130,8 +3131,8 @@ feature {NONE} -- Search results (P07)
 			verses_grid.set_rows (verse_hits)
 		end
 
-	show_verse_count (a_total: INTEGER)
-			-- The heading over `verses_grid' for `a_total' verses found.
+	show_verse_count (a_total: INTEGER; a_scope: BIB_SEARCH_SCOPE)
+			-- The heading over `verses_grid' for `a_total' verses found in `a_scope'.
 		local
 			l_note: STRING_32
 		do
@@ -3143,8 +3144,8 @@ feature {NONE} -- Search results (P07)
 					-- The Colossians 1:2 lesson: the KJV reads "Lord" where the critical text has none.
 				l_note.append ({STRING_32} " Greek roots are read in the Greek New Testament of the concordance (a critical text), whose wording can differ from the Textus Receptus behind the KJV.")
 			end
-			if scope_select.selected_index > 1 then
-				l_note.prepend ({STRING_32} " Searched in " + search_scope.label + {STRING_32} " only.")
+			if not a_scope.label.same_string ({BIB_SCOPE_NAMES}.Whole_bible_name) then
+				l_note.prepend ({STRING_32} " Searched in " + a_scope.label + {STRING_32} " only.")
 			end
 			if a_total = 0 then
 				verses_heading.set_text ({STRING_32} "No verse in " + reading_version.to_string_32 + {STRING_32} " matches." + l_note)

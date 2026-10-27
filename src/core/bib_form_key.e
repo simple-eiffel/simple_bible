@@ -20,10 +20,10 @@ create
 
 feature {NONE} -- Initialization
 
-	make (a_root: BIB_KEY; a_code: BIB_MORPH_CODE)
+	make (a_root: BIB_ROOT_KEY; a_code: BIB_MORPH_CODE)
 			-- Root `a_root' (a Strong's number or a lemma) in form `a_code'.
 		require
-			a_root: attached {BIB_STRONGS_KEY} a_root or attached {BIB_LEMMA_KEY} a_root
+			code_text: a_code.is_code_text (a_code.code)
 		do
 			root := a_root
 			code := a_code
@@ -35,7 +35,7 @@ feature {NONE} -- Initialization
 
 feature -- Access
 
-	root: BIB_KEY
+	root: BIB_ROOT_KEY
 			-- The root: a Strong's number or a lemma.
 
 	code: BIB_MORPH_CODE
@@ -47,6 +47,7 @@ feature -- Access
 		end
 
 invariant
-	root_is_a_root: attached {BIB_STRONGS_KEY} root or attached {BIB_LEMMA_KEY} root
+	code_text: code.is_code_text (code.code)
+			-- Design scan 52: only the parser guarded the code that reaches a GLOB.
 
 end

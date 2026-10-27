@@ -378,8 +378,8 @@ feature -- Access
 				Result := morph_places (al_morph)
 			elseif attached {BIB_FORM_KEY} a_key as al_form then
 				Result := root_places (al_form.root, al_form.code)
-			elseif attached {BIB_STRONGS_KEY} a_key or attached {BIB_LEMMA_KEY} a_key then
-				Result := root_places (a_key, Void)
+			elseif attached {BIB_ROOT_KEY} a_key as al_root then
+				Result := root_places (al_root, Void)
 			else
 					-- Design scan 49: a key kind this pack cannot answer is a failure, never "no verse".
 				create Result.make_failed
@@ -388,10 +388,9 @@ feature -- Access
 			ascending_once: is_ascending (Result.places)
 		end
 
-	root_places (a_root: BIB_KEY; a_form: detachable BIB_MORPH_CODE): BIB_ROOT_PLACES
-			-- Every verse where root `a_root' stands (in form `a_form' on the same word, when given).
-		require
-			a_root: attached {BIB_STRONGS_KEY} a_root or attached {BIB_LEMMA_KEY} a_root
+	root_places (a_root: BIB_ROOT_KEY; a_form: detachable BIB_MORPH_CODE): BIB_ROOT_PLACES
+			-- Every verse where root `a_root' stands (in form `a_form' on the same word, when given;
+			-- `key_places' states the order once).
 		local
 			l_hebrew, l_greek: ARRAYED_LIST [INTEGER_64]
 			l_entries: detachable BIB_LIST_RESULT [BIB_WORD_ENTRY]
@@ -422,8 +421,6 @@ feature -- Access
 			else
 				create Result.make_failed
 			end
-		ensure
-			ascending_once: is_ascending (Result.places)
 		end
 
 	morph_places (a_code: BIB_MORPH_CODE): BIB_ROOT_PLACES
@@ -435,12 +432,7 @@ feature -- Access
 		local
 			l_condition: STRING_8
 		do
-			if a_code.is_prefix then
-					-- `is_code_text' lets only letters, digits and dashes before the star.
-				l_condition := "t.morph GLOB ?"
-			else
-				l_condition := "t.morph = ?"
-			end
+			l_condition := morph_condition (a_code)
 			if attached places_where (Hebrew_root_corpus, l_condition, a_code.code) as al_hebrew and attached places_where (Greek_root_corpus, l_condition, a_code.code) as al_greek then
 				create Result.make (union (al_hebrew, al_greek), not al_hebrew.is_empty, not al_greek.is_empty)
 			else
@@ -1085,13 +1077,25 @@ feature {NONE} -- Implementation
 					l_ids.append (a_lemmas.i_th (i).out)
 					i := i + 1
 				end
-				if attached a_form as al_form and then al_form.is_prefix then
-					Result := places_where (a_corpus_code, "t.lemma_id IN (" + l_ids + ") AND t.morph GLOB ?", al_form.code)
-				elseif attached a_form as al_form then
-					Result := places_where (a_corpus_code, "t.lemma_id IN (" + l_ids + ") AND t.morph = ?", al_form.code)
+				if attached a_form as al_form then
+					Result := places_where (a_corpus_code, "t.lemma_id IN (" + l_ids + ") AND " + morph_condition (al_form), al_form.code)
 				else
 					Result := places_where (a_corpus_code, "t.lemma_id IN (" + l_ids + ")", Void)
 				end
+			end
+		end
+
+	morph_condition (a_code: BIB_MORPH_CODE): STRING_8
+			-- The token condition for `a_code' (one bound ?): GLOB for a code ending in *, equality
+			-- otherwise. The one copy (design scan 52: it was written twice).
+		require
+			code_text: a_code.is_code_text (a_code.code)
+		do
+			if a_code.is_prefix then
+					-- `is_code_text' lets only letters, digits and dashes before the star.
+				Result := "t.morph GLOB ?"
+			else
+				Result := "t.morph = ?"
 			end
 		end
 
