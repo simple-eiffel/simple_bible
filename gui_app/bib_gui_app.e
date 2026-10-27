@@ -38,8 +38,13 @@ feature {NONE} -- Initialization
 			l_config := l_config.set_conc_path (l_location.conc_path)
 			create bible.make (l_config)
 			bible.open
+			create settings.make
+			settings.load
 			create light_theme.make_light
 			create dark_theme.make_dark
+				-- The text size the reader chose last time, for all the window's text (C8).
+			light_theme.set_text_scale (settings.text_scale)
+			dark_theme.set_text_scale (settings.text_scale)
 			create window.make ("simple_bible", 40, 30, 1440, 920, light_theme)
 			window.follow_system_theme (light_theme, dark_theme)
 			window.enable_shaped_text
@@ -95,7 +100,6 @@ feature {NONE} -- Initialization
 			create places.make (0)
 			create study_corpus.make_empty
 			create history.make (40)
-			reading_scale := 1.0
 			create dock.make (reading_pane)
 			build_columns
 			fill_versions
@@ -368,8 +372,8 @@ feature {NONE} -- Menus and keys (C2)
 			Result.add_item ("Simple layout", "Ctrl+M", True, Void)
 			Result.add_item ("Study layout (next step)", "Ctrl+M", False, Void)
 			Result.add_separator
-			Result.add_item ("Larger text", "Ctrl++", reading_scale < Max_scale, agent change_text_size (1))
-			Result.add_item ("Smaller text", "Ctrl+-", reading_scale > Min_scale, agent change_text_size (-1))
+			Result.add_item ("Larger text", "Ctrl++", settings.text_scale < settings.Max_text_scale, agent change_text_size (1))
+			Result.add_item ("Smaller text", "Ctrl+-", settings.text_scale > settings.Min_text_scale, agent change_text_size (-1))
 			if window.theme.is_dark then
 				Result.add_item ("Light theme", "", True, agent set_dark (False))
 			else
@@ -453,11 +457,8 @@ feature {NONE} -- Toolbar (C3-C9)
 	history_index: INTEGER
 			-- Where Back and Forward stand in `history'.
 
-	reading_scale: REAL_64
-			-- The Bible text's size (C8), apart from the interface.
-
-	Min_scale: REAL_64 = 0.8
-	Max_scale: REAL_64 = 2.4
+	settings: BIB_SETTINGS
+			-- The reader's choices kept between runs: the text size (C8).
 
 	on_reference
 			-- C4: a place goes to S1; anything else is searched.
@@ -530,21 +531,31 @@ feature {NONE} -- Toolbar (C3-C9)
 		end
 
 	change_text_size (a_step: INTEGER)
-			-- C8: the Bible text larger (1) or smaller (-1).
+			-- C8: all the window's text larger (1) or smaller (-1), menus too, kept for the next run
+			-- (Larry, 2026-10-26: not the Bible text alone).
+		local
+			l_scale: REAL_64
+			l_saved: BOOLEAN
 		do
-			reading_scale := (reading_scale + 0.15 * a_step).max (Min_scale).min (Max_scale)
-			apply_reading_scale
-			smaller_button.set_enabled (reading_scale > Min_scale)
-			larger_button.set_enabled (reading_scale < Max_scale)
+			l_scale := ((settings.text_scale + 0.1 * a_step) * 10.0).rounded / 10.0
+			l_scale := l_scale.max (settings.Min_text_scale).min (settings.Max_text_scale)
+			settings.set_text_scale (l_scale)
+			light_theme.set_text_scale (l_scale)
+			dark_theme.set_text_scale (l_scale)
+			smaller_button.set_enabled (l_scale > settings.Min_text_scale)
+			larger_button.set_enabled (l_scale < settings.Max_text_scale)
+			l_saved := settings.save
+			window.request_render
+			window.toast ({STRING_32} "Text size " + (l_scale * 100.0).rounded.out + {STRING_32} "%%", 1)
 		end
 
 	apply_reading_scale
-			-- The reading view at `reading_scale', Hebrew and Aramaic a little larger.
+			-- Hebrew and Aramaic read a little larger than the window's text.
 		do
 			if attached bible.text_reader.version (reading_version) as al_version and then al_version.is_right_to_left then
-				reading_view.set_column_scale (1, (reading_scale * 1.35).min (3.0))
+				reading_view.set_column_scale (1, 1.35)
 			else
-				reading_view.set_column_scale (1, reading_scale)
+				reading_view.set_column_scale (1, 1.0)
 			end
 		end
 
@@ -1234,7 +1245,7 @@ feature {NONE} -- Design pills
 			window.add_reference_mark (version_select, "C5", "Version picker: every version content.db holds. S1 changes; the place stays.", window.Corner_top_right)
 			window.add_reference_mark (search_box, "C6", "Quick search: a word, verse or Strong's number; results open P07. Ctrl+F.", window.Corner_top_left)
 			window.add_reference_mark (mode_switch, "C7", "Simple | Study switch: layout only, never data. Study is the next step. Ctrl+M.", window.Corner_top_left)
-			window.add_reference_mark (smaller_button, "C8", "Text size: the Bible text 80 to 240 percent, apart from the interface. Ctrl + and -.", window.Corner_top_left)
+			window.add_reference_mark (smaller_button, "C8", "Text size: all the window's text, 80 to 200 percent, kept for next time. Ctrl + and -.", window.Corner_top_left)
 			window.add_reference_mark (dark_switch, "C9", "Dark / Light: your choice; until you switch, Windows decides.", window.Corner_top_right)
 			window.add_reference_mark (dock, "C16", "Dock host: centre plus west, east, south; an empty zone collapses (P07 here).", window.Corner_top_right)
 			window.add_reference_mark (reading_caption, "S1", "P01 Bible Text, centre: verse per line. Previous and Next step chapters.", window.Corner_top_left)

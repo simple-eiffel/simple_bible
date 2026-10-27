@@ -1,4 +1,4 @@
-simple_bible 0.4.3 - PERSONAL EDITION - not for distribution
+simple_bible 0.4.4 - PERSONAL EDITION - not for distribution
 =============================================================
 
 This installs the simple_bible concordance on your own machine, with
@@ -26,7 +26,7 @@ and lexicon below, search results on the left while there are any.
   Reference box (top left)   John 3:16, Ps 23, Gen 1 1     Ctrl+L
   Search box                 bara, logos, love, G25, H1254 Ctrl+F
   Back and Forward           Alt+Left, Alt+Right
-  Text size                  A- A+, Ctrl + and Ctrl -
+  Text size                  A- A+ (all the text, kept for next time), Ctrl + and Ctrl -
   Dark                       the switch at the top right
 
 Click a verse: the commentary follows it and its original words open on
@@ -57,6 +57,6 @@ Installing on another machine without questions
 -----------------------------------------------
 From cmd or PowerShell (not Git Bash, which rewrites /FLAGS):
 
-  simple_bible-personal-0.4.3-Setup.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS="addtopath"
+  simple_bible-personal-0.4.4-Setup.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS="addtopath"
 
 Uninstalling removes the programs, both databases and the PATH entry.
