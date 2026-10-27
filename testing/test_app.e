@@ -347,6 +347,8 @@ feature {NONE} -- Suites
 			run_test (agent t.test_a_clicked_original_word_finds_its_headword, "test_a_clicked_original_word_finds_its_headword")
 			run_test (agent t.test_an_empty_chapter_says_why, "test_an_empty_chapter_says_why")
 			run_test (agent t.test_every_claim_wears_its_label, "test_every_claim_wears_its_label")
+			run_test (agent t.test_references_become_links, "test_references_become_links")
+			run_test (agent t.test_reference_box_reads_ranges_and_one_chapter_books, "test_reference_box_reads_ranges_and_one_chapter_books")
 			run_test (agent t.test_place_rows_know_their_verse, "test_place_rows_know_their_verse")
 			run_test (agent t.test_a_failing_chapter_query_says_why, "test_a_failing_chapter_query_says_why")
 		end

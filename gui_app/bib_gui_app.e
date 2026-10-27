@@ -317,6 +317,7 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			parallel_view.set_on_cell_click (agent on_parallel_click)
 			interlinear_view.set_on_token_select (agent on_interlinear_word)
 			analysis_grid.set_on_select (agent on_analysis_row)
+			commentary_view.set_on_link_click (agent on_commentary_link)
 			notes_list.set_gutter_renderer (agent draw_note_gutter)
 			notes_list.set_on_activate (agent edit_note)
 			notes_list.set_on_edit_commit (agent on_note_edited)
@@ -1920,6 +1921,22 @@ feature {NONE} -- Commentary (S2, P04)
 	commentary_reader: MD_DOCUMENT_READER
 			-- Markdown into the view's document model.
 
+	on_commentary_link (a_target: STRING_32)
+			-- A link in the commentary clicked: "bible:<book>.<chapter>.<verse>" opens that place
+			-- (verse 0: the chapter); another link is left alone.
+		local
+			l_parts: LIST [STRING_32]
+		do
+			if a_target.starts_with ({STRING_32} "bible:") then
+				l_parts := a_target.substring (7, a_target.count).split ('.')
+				if l_parts.count = 3 and then l_parts.i_th (1).is_integer and then l_parts.i_th (2).is_integer and then l_parts.i_th (3).is_integer
+					and then bible.books.has_book (l_parts.i_th (1).to_integer) and then l_parts.i_th (2).to_integer > 0 and then l_parts.i_th (3).to_integer >= 0
+				then
+					go_to (l_parts.i_th (1).to_integer, l_parts.i_th (2).to_integer, l_parts.i_th (3).to_integer)
+				end
+			end
+		end
+
 	show_commentary
 			-- The Commentaries tab follows the verse: every commentary pack's sections covering it,
 			-- narrowest first, each claim wearing its SOURCED or DEDUCED label.
@@ -1951,7 +1968,7 @@ feature {NONE} -- Commentary (S2, P04)
 								l_list.extend (l_sections.item (i))
 								i := i + 1
 							end
-							l_page.append (l_text.page (ic.title, l_list))
+							l_page.append ((create {BIB_REFERENCE_LINKER}.make (bible.books)).linked (l_text.page (ic.title, l_list)))
 						end
 					end
 				end

@@ -172,7 +172,9 @@ feature -- Lookup
 
 	place_named (a_text: READABLE_STRING_GENERAL): detachable TUPLE [book, chapter, verse: INTEGER]
 			-- The place a reference box holds: "John 3:16", "Gen 1 1", "John 3" or "1 John 4" (verse 0:
-			-- the whole chapter); Void when the text names no book the catalog knows.
+			-- the whole chapter); a range ("John 3:16-18") opens its first verse, and a book of one
+			-- chapter takes a lone number as its verse ("Jude 9"; 2026-10-27, after NEEDLE found both
+			-- read wrong); Void when the text names no book the catalog knows.
 		local
 			l_text, l_book: STRING_32
 			l_words: LIST [STRING_32]
@@ -190,6 +192,7 @@ feature -- Lookup
 			if l_words.count >= 2 then
 				l_last := l_words.last
 				l_before := l_words.i_th (l_words.count - 1)
+				l_last := before_range (l_last)
 				l_colon := l_last.index_of (':', 1)
 				if l_colon > 1 and l_colon < l_last.count then
 					l_book := joined_words (l_words, l_words.count - 1)
@@ -199,10 +202,30 @@ feature -- Lookup
 				end
 				if Result = Void and then l_last.is_integer then
 					Result := resolved (joined_words (l_words, l_words.count - 1), l_last, "0")
+					if attached Result as al_place and then bible.books.is_single_chapter_book (al_place.book) then
+						Result := [al_place.book, 1, al_place.chapter]
+					end
 				end
 			end
 		ensure
 			place_positive: attached Result implies (Result.book > 0 and Result.chapter > 0 and Result.verse >= 0)
+		end
+
+	before_range (a_text: STRING_32): STRING_32
+			-- `a_text' up to a range's dash ("3:16-18" is "3:16"; an en dash too).
+		local
+			i: INTEGER
+		do
+			Result := a_text
+			from i := 2 until i > a_text.count loop
+				if a_text [i] = '-' or a_text [i].natural_32_code = 0x2013 then
+					Result := a_text.substring (1, i - 1)
+					i := a_text.count
+				end
+				i := i + 1
+			end
+		ensure
+			no_longer: Result.count <= a_text.count
 		end
 
 	is_verse_text (a_text: READABLE_STRING_32): BOOLEAN
