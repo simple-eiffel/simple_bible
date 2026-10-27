@@ -116,9 +116,12 @@ feature -- Access
 
 	recent_places (a_limit: INTEGER): ARRAYED_LIST [BIB_VISIT]
 			-- History (2026-10-27): the newest visit of each chapter, newest first, at most `a_limit'.
+			-- Visits are never pruned (DR-024: user data is never lost); a heavy reader adds some
+			-- thousands a year, which SQLite groups in well under a millisecond (scan 46).
 		require
 			open: is_open
 			limit_positive: a_limit > 0
+			limit_capped: a_limit <= Max_recent_places
 		local
 			l_visit: BIB_VISIT
 		do
@@ -607,6 +610,9 @@ feature -- Constants
 	Kind_bookmark: INTEGER = 3
 	Kind_tag: INTEGER = 4
 	Kind_visit: INTEGER = 5
+
+	Max_recent_places: INTEGER = 1000
+			-- The most `recent_places' lists (its `one_per_chapter' check is quadratic: scan 46).
 
 feature {NONE} -- Representation
 

@@ -575,14 +575,14 @@ feature {NONE} -- Window
 			results_grid.add_column (create {SW_GRID_COLUMN [BIB_LOOKUP_CHOICE]}.make ("Word", 150.0, agent {BIB_LOOKUP_CHOICE}.label))
 			results_grid.add_column ((create {SW_GRID_COLUMN [BIB_LOOKUP_CHOICE]}.make ("Details", 200.0, agent {BIB_LOOKUP_CHOICE}.detail)).growing)
 			cross_refs_grid.add_column ((create {SW_GRID_COLUMN [BIB_READING_CROSS_REF]}.make ("Reference", 180.0, agent cross_ref_text)).growing)
-			highlights_grid.add_column (create {SW_GRID_COLUMN [BIB_HIGHLIGHT]}.make ("Verse", 120.0, agent highlight_place))
-			bookmarks_grid.add_column ((create {SW_GRID_COLUMN [BIB_BOOKMARK]}.make ("Verse", 140.0, agent bookmark_place)).growing)
-			history_grid.add_column ((create {SW_GRID_COLUMN [BIB_VISIT]}.make ("Place", 120.0, agent visit_place)).growing)
+			highlights_grid.add_column (create {SW_GRID_COLUMN [BIB_HIGHLIGHT]}.make ("Verse", 120.0, agent item_place ({BIB_HIGHLIGHT} ?)))
+			bookmarks_grid.add_column ((create {SW_GRID_COLUMN [BIB_BOOKMARK]}.make ("Verse", 140.0, agent item_place ({BIB_BOOKMARK} ?))).growing)
+			history_grid.add_column ((create {SW_GRID_COLUMN [BIB_VISIT]}.make ("Place", 120.0, agent item_place ({BIB_VISIT} ?))).growing)
 			history_grid.add_column (create {SW_GRID_COLUMN [BIB_VISIT]}.make ("When", 120.0, agent visit_when))
 			history_grid.set_on_select (agent on_history_row)
 			tag_names_grid.add_column ((create {SW_GRID_COLUMN [TUPLE [tag: STRING_32; verses: INTEGER]]}.make ("Tag", 160.0, agent tag_name_text)).growing)
 			tag_names_grid.add_column (create {SW_GRID_COLUMN [TUPLE [tag: STRING_32; verses: INTEGER]]}.make ("Verses", 70.0, agent tag_verses_text))
-			tagged_grid.add_column ((create {SW_GRID_COLUMN [BIB_TAG_ASSIGNMENT]}.make ("Verse", 140.0, agent tag_place)).growing)
+			tagged_grid.add_column ((create {SW_GRID_COLUMN [BIB_TAG_ASSIGNMENT]}.make ("Verse", 140.0, agent item_place ({BIB_TAG_ASSIGNMENT} ?))).growing)
 			journal_grid.add_column ((create {SW_GRID_COLUMN [BIB_NOTE]}.make ("Entry", 200.0, agent {BIB_NOTE}.title)).growing)
 			highlights_grid.add_column ((create {SW_GRID_COLUMN [BIB_HIGHLIGHT]}.make ("Reason", 160.0, agent {BIB_HIGHLIGHT}.reason)).growing)
 			analysis_grid.add_column (create {SW_GRID_COLUMN [BIB_INTERLINEAR_WORD]}.make ("#", 40.0, agent analysis_position))
@@ -978,6 +978,7 @@ feature {NONE} -- Reading (S1, P01)
 			end
 			history.extend ([a_book, a_chapter, a_verse])
 			history_index := history.count
+			record_place (a_book, a_chapter, a_verse)
 			open_reading (a_book, a_chapter, a_verse)
 		end
 
@@ -1049,7 +1050,6 @@ feature {NONE} -- Reading (S1, P01)
 					-- or cross-reference click left it showing what was typed last).
 				reference_box.set_text (place_text (a_book, a_chapter, a_verse))
 				window.set_title (window_title)
-				record_reading
 				status_bar.set_left (place_text (a_book, a_chapter, a_verse) + {STRING_32} " (" + reading_version.to_string_32 + {STRING_32} ")")
 				if is_study then
 					fill_parallel
@@ -1061,6 +1061,7 @@ feature {NONE} -- Reading (S1, P01)
 					fill_bookmarks
 					fill_tags
 					fill_journal
+					fill_history
 				end
 			end
 		end
@@ -1494,10 +1495,26 @@ feature {NONE} -- Two layouts (C7)
 			end
 		end
 
-	bookmark_place (a_bookmark: BIB_BOOKMARK): STRING_32
-			-- "Jude 1:6".
+	item_place (a_item: BIB_USER_ITEM): STRING_32
+			-- "Jude 1:6": the place of a verse-keyed item in any list (scan 46: one for the four kinds).
 		do
-			Result := hub_place (a_bookmark.hub_id)
+			Result := hub_place (a_item.hub_id)
+		end
+
+	is_reselecting: BOOLEAN
+			-- Is `reselect' choosing a row after a refill (no click for a select handler to answer)?
+
+	reselect (a_grid: SW_DATA_GRID [ANY]; a_row: INTEGER)
+			-- Select row `a_row' of `a_grid' (0: none) after a refill. Scan 46: one guard for every
+			-- list the window refills (Tags, Journal, History each had their own).
+		require
+			in_range: a_row >= 0 and a_row <= a_grid.rows.count
+		do
+			is_reselecting := True
+			a_grid.select_model_row (a_row)
+			is_reselecting := False
+		ensure
+			guard_down: not is_reselecting
 		end
 
 	History_tab: INTEGER = 3
@@ -1513,26 +1530,28 @@ feature {NONE} -- Two layouts (C7)
 	history_rows: ARRAYED_LIST [BIB_VISIT]
 			-- The rows of `history_grid'.
 
-	is_refilling_history: BOOLEAN
-			-- Is `fill_history' reselecting the chapter read (no click to answer)?
-
 	last_recorded_hub: INTEGER_64
 			-- The place History recorded last this run (0: none yet).
 
-	record_reading
-			-- The place read joins History when its chapter is not the one recorded last (a verse
-			-- clicked in the same chapter is no new visit).
+	record_place (a_book, a_chapter, a_verse: INTEGER)
+			-- `go_to' adds the place to History when its chapter is not the one recorded last (a verse
+			-- clicked in the same chapter is no new visit). Scan 46: Back and Forward no longer
+			-- reorder History, and a failed write is told once, not retried silently at each open.
+		require
+			book_positive: a_book > 0
+			chapter_positive: a_chapter > 0
+			verse_not_negative: a_verse >= 0
 		local
 			l_hub: INTEGER_64
 		do
-			if user_store.is_open and reading_book > 0 and reading_chapter > 0 then
-				l_hub := (create {BIB_HUB_ID}).hub_id (reading_book, reading_chapter, reading_verse.max (1))
+			if user_store.is_open then
+				l_hub := (create {BIB_HUB_ID}).hub_id (a_book, a_chapter, a_verse.max (1))
 				if l_hub // {BIB_HUB_ID}.Chapter_unit /= last_recorded_hub // {BIB_HUB_ID}.Chapter_unit then
+					last_recorded_hub := l_hub
 					user_store.record_visit (create {BIB_VISIT}.make (l_hub, "reading"))
-					if user_store.write_error = Void then
-						last_recorded_hub := l_hub
+					if attached user_store.write_error as al_error then
+						say ({STRING_32} "History was not saved: " + al_error.message)
 					end
-					fill_history
 				end
 			end
 		end
@@ -1558,28 +1577,20 @@ feature {NONE} -- Two layouts (C7)
 				end
 				i := i + 1
 			end
-			is_refilling_history := True
-			history_grid.select_model_row (l_index)
-			is_refilling_history := False
+			reselect (history_grid, l_index)
 			if history_rows.is_empty then
 				history_heading.set_text ("No history yet: the chapters you read are listed here.")
 			else
-				history_heading.set_text ("The chapters you read, newest first; click one to read it again.")
+				history_heading.set_text ({STRING_32} "The last " + History_length.out + {STRING_32} " chapters you read, newest first; click one to read it again.")
 			end
 		end
 
 	on_history_row (a_row: INTEGER)
 			-- A chapter clicked: read it again, at the verse it was opened at.
 		do
-			if not is_refilling_history and then a_row >= 1 and then a_row <= history_rows.count then
+			if not is_reselecting and then a_row >= 1 and then a_row <= history_rows.count then
 				go_to_hub (history_rows.i_th (a_row).hub_id)
 			end
-		end
-
-	visit_place (a_visit: BIB_VISIT): STRING_32
-			-- "Jude 1:6".
-		do
-			Result := hub_place (a_visit.hub_id)
 		end
 
 	visit_when (a_visit: BIB_VISIT): STRING_32
@@ -1796,9 +1807,6 @@ feature {NONE} -- Notes (T2, P06)
 			-- own slot: scan 45 found the Journal and Verse notes sharing one, each Delete losing the
 			-- other's, and Verse notes never showing a journal entry it restored.
 
-	is_refilling_journal: BOOLEAN
-			-- Is `fill_journal' reselecting the entry (no click to answer)?
-
 	journal_page: SW_COLUMN
 			-- The Journal tab: a title, a body, New, Save and Delete, then every entry.
 		local
@@ -1839,9 +1847,7 @@ feature {NONE} -- Notes (T2, P06)
 			if l_index = 0 then
 				journal_entry_id := 0
 			end
-			is_refilling_journal := True
-			journal_grid.select_model_row (l_index)
-			is_refilling_journal := False
+			reselect (journal_grid, l_index)
 			if journal_rows.is_empty then
 				journal_heading.set_text ("No journal entries yet: write a title and a body, then Save.")
 			else
@@ -1953,7 +1959,7 @@ feature {NONE} -- Notes (T2, P06)
 	on_journal_row (a_row: INTEGER)
 			-- An entry clicked: into the boxes for editing.
 		do
-			if not is_refilling_journal and then a_row >= 1 and then a_row <= journal_rows.count then
+			if not is_reselecting and then a_row >= 1 and then a_row <= journal_rows.count then
 				journal_entry_id := journal_rows.i_th (a_row).id
 				journal_title_box.set_text (journal_rows.i_th (a_row).title)
 				journal_shown_title := journal_rows.i_th (a_row).title.twin
@@ -1978,9 +1984,6 @@ feature {NONE} -- Notes (T2, P06)
 
 	chosen_tag: STRING_32
 			-- The tag whose verses `tagged_panel' lists; empty for none.
-
-	is_refilling_tags: BOOLEAN
-			-- Is `fill_tags' reselecting the chosen tag (no click to answer)?
 
 	reading_hub: INTEGER_64
 			-- The verse read as a hub id (scan 44: the expression was written at each use).
@@ -2038,9 +2041,7 @@ feature {NONE} -- Notes (T2, P06)
 			if l_index = 0 then
 				chosen_tag := {STRING_32} ""
 			end
-			is_refilling_tags := True
-			tag_names_grid.select_model_row (l_index)
-			is_refilling_tags := False
+			reselect (tag_names_grid, l_index)
 			if chosen_tag.is_empty or not user_store.is_open then
 				tagged_panel.set_rows (create {ARRAYED_LIST [BIB_TAG_ASSIGNMENT]}.make (0))
 				if tag_name_rows.is_empty then
@@ -2085,7 +2086,7 @@ feature {NONE} -- Notes (T2, P06)
 	on_tag_name (a_row: INTEGER)
 			-- A tag clicked: its verses listed.
 		do
-			if not is_refilling_tags and then a_row >= 1 and then a_row <= tag_name_rows.count then
+			if not is_reselecting and then a_row >= 1 and then a_row <= tag_name_rows.count then
 				chosen_tag := tag_name_rows.i_th (a_row).tag.twin
 				fill_tags
 			end
@@ -2099,12 +2100,6 @@ feature {NONE} -- Notes (T2, P06)
 	tag_verses_text (a_row: TUPLE [tag: STRING_32; verses: INTEGER]): STRING_32
 		do
 			Result := a_row.verses.out
-		end
-
-	tag_place (a_tag: BIB_TAG_ASSIGNMENT): STRING_32
-			-- "Jude 1:6".
-		do
-			Result := hub_place (a_tag.hub_id)
 		end
 
 	Highlights_tab: INTEGER = 4
@@ -2192,12 +2187,6 @@ feature {NONE} -- Notes (T2, P06)
 					open_reading (reading_book, reading_chapter, reading_verse)
 				end
 			end
-		end
-
-	highlight_place (a_highlight: BIB_HIGHLIGHT): STRING_32
-			-- "Jude 1:6".
-		do
-			Result := hub_place (a_highlight.hub_id)
 		end
 
 	say (a_text: READABLE_STRING_GENERAL)
@@ -2630,7 +2619,7 @@ feature {NONE} -- Notes (T2, P06)
 			add_chrome_pills
 			window.add_reference_mark (tools_strip, "C10", "Study tools strip: Parallel and Interlinear work; Guide, Word Study, Count and Ledger come later.", window.Corner_top_left)
 			window.add_reference_mark (mode_switch, "C7", "Mode switch, on Study: only the docking changes. Ctrl+M.", window.Corner_top_left)
-			window.add_reference_mark (navigator_tabs, "T1", "P11 Navigator, west: Books (chapter by chapter), Bookmarks (Ctrl+D bookmarks the verse read; click one to read it; Remove and Restore) and History (the chapters read, newest first, kept between runs; click one to read it again).", window.Corner_top_left)
+			window.add_reference_mark (navigator_tabs, "T1", "P11 Navigator, west: Books (chapter by chapter), Bookmarks (Ctrl+D bookmarks the verse read; click one to read it; Remove and Restore) and History (the last 50 chapters read, newest first, kept between runs; click one to read it again).", window.Corner_top_left)
 			window.add_reference_mark (notes_heading, "T2", "P06 Notes, west below T1, in tab order: Verse notes on the chapter read (add on the verse read; double-click to edit, each edit keeps the old version; Delete and Restore); Journal, notes on a subject (New; Save keeps the earlier version; Delete and Restore); Tags (tag the verse read; click a tag for its verses, a verse to read it; Remove and Restore); Highlights (a reason, not a color; washed amber in the Bible and Parallel tabs; click one to read it; Remove and Restore). Prayer and Memory come later.", window.Corner_top_left)
 			window.add_reference_mark (center_tabs, "T3", "Centre tabs: the Bible text, Parallel (P02) and Interlinear (P03, Ctrl+I). More Bible tabs come later.", window.Corner_top_left)
 			window.add_reference_mark (analysis_title, "P03.2", "Verse analysis: the verse read, a row per word with its lemma, Strong's number, morphology, gloss, and how often its headword occurs in this testament. Click a row and T4 follows it.", window.Corner_top_left)
