@@ -113,6 +113,18 @@ feature -- Tests
 			finish
 		end
 
+	test_an_empty_chapter_says_why
+			-- Scan 36: why a chapter shows nothing is said once, for the Bible tab and every Parallel
+			-- column: nothing to say when it has verses; "... is not in this version." when it has none.
+		local
+			l_lookup: BIB_LOOKUP
+		do
+			create l_lookup.make (bible)
+			assert_true ("verses: nothing to say", l_lookup.empty_chapter_text (bible.text_reader.chapter ("KJV", 1, 1), "Genesis 1").is_empty)
+			assert_strings_equal ("none: said", {STRING_32} "Genesis 50 is not in this version.", l_lookup.empty_chapter_text (bible.text_reader.chapter ("KJV", 1, 50), "Genesis 50"))
+			finish
+		end
+
 	test_place_rows_know_their_verse
 			-- A place opens in the reading pane: it carries its book, chapter and verse as numbers.
 		local

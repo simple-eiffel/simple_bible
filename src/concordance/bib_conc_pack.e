@@ -371,6 +371,8 @@ feature -- Access
 					Result.append_character (ic.as_lower)
 				end
 			end
+		ensure
+			no_longer: Result.count <= a_word.count
 		end
 
 	greek_base (a_code: NATURAL_32): NATURAL_32
@@ -405,10 +407,12 @@ feature -- Access
 		end
 
 	headwords_for_text (a_text: READABLE_STRING_GENERAL): BIB_LIST_RESULT [BIB_WORD_ENTRY]
-			-- Headwords written or transliterated as `a_text', commonest first: Hebrew matched
-			-- without its points (as `lemma.search'), Greek as written or without accents, and
-			-- plain letters without diacritics (`lemma.translit_ascii', pack v2: "bara",
-			-- "shamayim"). What a reader types into the lookup box.
+			-- Headwords written or transliterated as `a_text', commonest first: the text folded as
+			-- `lemma.search' holds it (`original_search_form': Hebrew without points, Greek without
+			-- accents or capitals, final sigma as sigma), the headword as written, or plain letters
+			-- (`lemma.translit_ascii', pack v2: "bara", "shamayim"). What a reader types into the
+			-- lookup box. Scan 36 (2026-10-27): typed text was folded by a second routine that left
+			-- Greek alone, so "Logos" typed in Greek without accents or with a capital found nothing.
 		require
 			available: is_available
 			text_not_empty: not a_text.is_empty
@@ -416,7 +420,7 @@ feature -- Access
 			l_sql: STRING_8
 			l_plain: STRING_32
 		do
-			l_plain := without_hebrew_points (a_text.to_string_32).as_lower
+			l_plain := original_search_form (a_text)
 			l_sql := "SELECT " + Entry_columns + " FROM conc.lemma l WHERE l.language IN ('hbo', 'arc', 'grc') AND (l.search = ? OR l.headword = ? OR l.translit_ascii = ?) ORDER BY l.n_tokens DESC, l.lemma_id LIMIT " + Max_text_matches.out
 			run_query (l_sql, {ARRAY [detachable ANY]} <<l_plain, a_text.to_string_32, l_plain>>)
 			Result := entries_result ("headwords_for_text", l_sql, a_text)
@@ -963,19 +967,6 @@ feature {NONE} -- Implementation
 			end
 		ensure
 			named: Result.method.engine_feature.same_string_general (a_feature)
-		end
-
-	without_hebrew_points (a_text: STRING_32): STRING_32
-			-- `a_text' without Hebrew points and cantillation marks (U+0591 to U+05C7), as `lemma.search' holds it.
-		do
-			create Result.make (a_text.count)
-			across a_text as ic loop
-				if ic.natural_32_code < 0x0591 or ic.natural_32_code > 0x05C7 then
-					Result.append_character (ic)
-				end
-			end
-		ensure
-			no_longer: Result.count <= a_text.count
 		end
 
 	Place_select: STRING_8 = "SELECT t.token_id, t.language, t.surface, t.translit, w.name AS work_name, u.div1, u.div2, u.recension, coalesce(wb.book_id, 0) AS book_id FROM conc.token t JOIN conc.unit u ON u.unit_id = t.unit_id JOIN conc.work w ON w.work_id = u.work_id LEFT JOIN conc.work_book wb ON wb.work_id = u.work_id"

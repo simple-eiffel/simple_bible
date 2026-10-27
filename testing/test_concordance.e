@@ -425,6 +425,30 @@ feature -- Tests
 			close_and_clean (last_pack_set, l_fixture)
 		end
 
+	test_typed_greek_folds_as_a_clicked_word
+			-- Scan 36: typed text is folded as the pack's search forms are, the fold a clicked word uses.
+			-- The article's headword becomes "logos" in Greek (search form with sigma, no accent); typed
+			-- with a capital, no accent and a final sigma, it is found. Before: folded by a routine that
+			-- left Greek alone, it found nothing.
+		local
+			l_fixture: CONC_FIXTURE
+			l_pack: BIB_CONC_PACK
+			l_db: SIMPLE_SQL_DATABASE
+			l_typed: STRING_32
+		do
+			create l_fixture
+			l_pack := checked_pack (l_fixture)
+			create l_db.make (Pack_file)
+			l_db.execute_with_args ("UPDATE lemma SET headword = ?, search = ? WHERE lemma_id = 2",
+				<<{STRING_32} "%/955/%/972/%/947/%/959/%/962/", {STRING_32} "%/955/%/959/%/947/%/959/%/963/">>)
+			l_db.close
+			l_typed := {STRING_32} "%/923/%/959/%/947/%/959/%/962/"
+			assert_strings_equal ("one fold", {STRING_32} "%/955/%/959/%/947/%/959/%/963/", l_pack.original_search_form (l_typed))
+			assert_true ("found", l_pack.headwords_for_text (l_typed).count = 1 and then l_pack.headwords_for_text (l_typed).item (1).lemma_id = {CONC_FIXTURE}.Article_lemma)
+			assert_true ("plain letters still found", l_pack.headwords_for_text ("Bara").count = 1)
+			close_and_clean (last_pack_set, l_fixture)
+		end
+
 	test_english_glance_holds_back_function_words
 			-- English at a glance: per Bible, commonest first, without "and" (it outnumbers the real renderings).
 		local
