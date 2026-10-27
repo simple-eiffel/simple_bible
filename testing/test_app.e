@@ -248,6 +248,7 @@ feature {NONE} -- Suites
 			run_test (agent t.test_hub_id_is_english_numbering, "test_hub_id_is_english_numbering")
 			run_test (agent t.test_notes_keep_every_version, "test_notes_keep_every_version")
 			run_test (agent t.test_user_store_refuses_another_schema, "test_user_store_refuses_another_schema")
+			run_test (agent t.test_a_topical_title_survives_export_and_import, "test_a_topical_title_survives_export_and_import")
 			run_test (agent t.test_notes_export_and_import_never_overwrite, "test_notes_export_and_import_never_overwrite")
 			run_test (agent t.test_notes_keyed_by_hub_id, "test_notes_keyed_by_hub_id")
 			run_test (agent t.test_user_items_carry_no_version, "test_user_items_carry_no_version")
@@ -399,6 +400,7 @@ feature {NONE} -- Suites
 			run_test (agent t.test_commentary_pack_builds_attaches_and_answers, "test_commentary_pack_builds_attaches_and_answers")
 			run_test (agent t.test_one_commentary_pack_holds_every_book, "test_one_commentary_pack_holds_every_book")
 			run_test (agent t.test_a_pack_breaking_the_rules_is_refused_and_named, "test_a_pack_breaking_the_rules_is_refused_and_named")
+			run_test (agent t.test_a_claim_without_an_id_is_refused, "test_a_claim_without_an_id_is_refused")
 			run_test (agent t.test_book_catalog_reads_content_db, "test_book_catalog_reads_content_db")
 			run_test (agent t.test_edition_swap_needs_no_code, "test_edition_swap_needs_no_code")
 		end

@@ -17,6 +17,8 @@ class
 inherit
 	BIB_NOTE_STORE
 
+	BIB_SQLITE_REPORTING
+
 create
 	make
 
@@ -42,20 +44,20 @@ feature -- Access
 	note_count (a_hub_id: INTEGER_64): INTEGER
 		do
 			if store.is_open then
-				Result := store.count_of (store.connection.query_with_args ("SELECT count(*) AS n FROM note WHERE hub_id = ? AND deleted = 0", <<a_hub_id>>))
+				Result := first_integer (store.connection.query_with_args ("SELECT count(*) AS n FROM note WHERE hub_id = ? AND deleted = 0", <<a_hub_id>>))
 			end
 		end
 
 	version_count (a_id: INTEGER_64): INTEGER
 		do
 			if store.is_open then
-				Result := store.count_of (store.connection.query_with_args ("SELECT count(*) AS n FROM note_version WHERE note_id = ?", <<a_id>>))
+				Result := first_integer (store.connection.query_with_args ("SELECT count(*) AS n FROM note_version WHERE note_id = ?", <<a_id>>))
 			end
 		end
 
 	version_body (a_id: INTEGER_64; a_version: INTEGER): STRING_32
 		do
-			Result := store.first_text (store.connection.query_with_args ("SELECT body FROM note_version WHERE note_id = ? AND version = ?", <<a_id, a_version>>))
+			Result := first_text (store.connection.query_with_args ("SELECT body FROM note_version WHERE note_id = ? AND version = ?", <<a_id, a_version>>))
 		end
 
 	current_body (a_id: INTEGER_64): STRING_32
@@ -63,7 +65,7 @@ feature -- Access
 		do
 			create Result.make_empty
 			if store.is_open then
-				Result := store.first_text (store.connection.query_with_args ("SELECT body FROM note_version WHERE note_id = ? ORDER BY version DESC LIMIT 1", <<a_id>>))
+				Result := first_text (store.connection.query_with_args ("SELECT body FROM note_version WHERE note_id = ? ORDER BY version DESC LIMIT 1", <<a_id>>))
 			end
 		end
 
@@ -116,7 +118,7 @@ feature -- Status
 	is_deleted (a_id: INTEGER_64): BOOLEAN
 		do
 			if store.is_open then
-				Result := store.count_of (store.connection.query_with_args ("SELECT count(*) AS n FROM note WHERE note_id = ? AND deleted = 1", <<a_id>>)) = 1
+				Result := first_integer (store.connection.query_with_args ("SELECT count(*) AS n FROM note WHERE note_id = ? AND deleted = 1", <<a_id>>)) = 1
 			end
 		end
 
@@ -282,8 +284,14 @@ feature -- Export and import (debate 02 pathway B)
 					if l_hub > 0 then
 						create l_note.make (l_hub, key_text (l_keys, {STRING_32} "title"), l_body)
 					else
-						l_stem := ic.twin
-						l_stem.remove_tail (3)
+							-- A topical note keeps the title its export wrote (scan 39: the file name
+							-- was used, so "Covenant" came back as "note-12"); the file name only
+							-- for a file written by hand without one.
+						l_stem := key_text (l_keys, {STRING_32} "title")
+						if l_stem.is_empty then
+							l_stem := ic.twin
+							l_stem.remove_tail (3)
+						end
 						create l_note.make_topical (l_stem, l_body)
 					end
 					add_note (l_note)
@@ -323,7 +331,7 @@ feature -- Export and import: accounting
 		require
 			open: store.is_open
 		do
-			Result := store.count_of (store.connection.query ("SELECT count(*) AS n FROM note WHERE deleted = 0"))
+			Result := first_integer (store.connection.query ("SELECT count(*) AS n FROM note WHERE deleted = 0"))
 		ensure
 			non_negative: Result >= 0
 		end
@@ -495,7 +503,7 @@ feature {NONE} -- Export and import implementation
 	note_exists (a_id: INTEGER_64): BOOLEAN
 			-- Is there a note `a_id', deleted or not?
 		do
-			Result := store.count_of (store.connection.query_with_args ("SELECT count(*) AS n FROM note WHERE note_id = ?", <<a_id>>)) = 1
+			Result := first_integer (store.connection.query_with_args ("SELECT count(*) AS n FROM note WHERE note_id = ?", <<a_id>>)) = 1
 		end
 
 	joined_path (a_folder, a_name: READABLE_STRING_GENERAL): STRING_32
@@ -537,11 +545,11 @@ feature {NONE} -- Implementation
 			-- Commit the open transaction, or roll it back and say `a_what' in `last_error'.
 		do
 			if a_db.has_error then
-				create last_error.make ({BIB_ERROR}.Database_problem, error_text (a_db, a_what))
+				create last_error.make ({BIB_ERROR}.Database_problem, failure_text (a_db, a_what))
 			elseif a_db.is_in_transaction then
 				a_db.commit
 				if a_db.has_error then
-					create last_error.make ({BIB_ERROR}.Database_problem, error_text (a_db, a_what))
+					create last_error.make ({BIB_ERROR}.Database_problem, failure_text (a_db, a_what))
 				end
 			end
 			if a_db.is_in_transaction then
@@ -549,15 +557,6 @@ feature {NONE} -- Implementation
 			end
 		ensure
 			ended: not a_db.is_in_transaction
-		end
-
-	error_text (a_db: SIMPLE_SQL_DATABASE; a_what: READABLE_STRING_GENERAL): STRING_32
-			-- `a_what', with SQLite's own words when it has any.
-		do
-			Result := a_what.to_string_32
-			if attached a_db.last_error_message as al_message then
-				Result.append ({STRING_32} " " + al_message)
-			end
 		end
 
 	time_of (a_text: READABLE_STRING_GENERAL): SIMPLE_DATE_TIME

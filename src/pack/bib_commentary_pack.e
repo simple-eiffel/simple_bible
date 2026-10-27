@@ -63,6 +63,7 @@ feature -- Access
 			l_license: BIB_LICENSE
 			l_provenance: BIB_PROVENANCE
 			l_rows: ARRAYED_LIST [SIMPLE_SQL_ROW]
+			l_failed: BOOLEAN
 		do
 			l_scope := a_book.out + " " + a_chapter.out + ":" + a_verse.out
 			l_sql := sections_sql
@@ -86,11 +87,17 @@ feature -- Access
 						create l_section.make (ic.string_value ("section_id"), ic.string_value ("heading"), ic.integer_value ("start_book"),
 							ic.integer_value ("start_chapter"), ic.integer_value ("start_verse"), ic.integer_value ("end_chapter"),
 							ic.integer_value ("end_verse"), ic.string_value ("voice"), l_provenance)
-						fill_section (l_section)
-						l_sections.extend (l_section)
+						if fill_section (l_section) then
+							l_sections.extend (l_section)
+						else
+							l_failed := True
+						end
 					end
 				end
-				if l_citations.is_empty then
+				if l_failed then
+						-- Scan 39: a section half read is never shown as if whole.
+					create Result.make_failure (method ("sections_for_verse", l_sql, pack_alias, l_scope, 0), query_error)
+				elseif l_citations.is_empty then
 					create Result.make_success (method ("sections_for_verse", l_sql, pack_alias, l_scope, 0), {ARRAY [BIB_PROVENANCE]} <<pack_provenance>>, l_sections)
 				else
 					create Result.make_success (method ("sections_for_verse", l_sql, pack_alias, l_scope, l_sections.count), l_citations, l_sections)
@@ -131,20 +138,24 @@ feature {NONE} -- Implementation
 				and not a_row.string_value ("voice").is_empty
 		end
 
-	fill_section (a_section: BIB_COMMENTARY_SECTION)
-			-- Read `a_section''s fields, claims, terms, lists and restricted quotations.
+	fill_section (a_section: BIB_COMMENTARY_SECTION): BOOLEAN
+			-- Read `a_section''s fields, claims, terms, lists and restricted quotations; False when
+			-- a query failed (`query_error' says why).
 		local
 			l_id: STRING_32
 			l_label: STRING_32
 		do
+			Result := True
 			l_id := a_section.section_id
 			run_query ("SELECT field_kind, body_markdown FROM " + pack_alias + ".commentary_field WHERE section_id = ? ORDER BY ordinal", {ARRAY [detachable ANY]} <<l_id>>)
+			Result := Result and last_rows /= Void
 			if attached last_rows as al_rows then
 				across al_rows.rows as ic loop
 					a_section.fields.extend ([ic.string_value ("field_kind").to_string_8, ic.string_value ("body_markdown")])
 				end
 			end
 			run_query ("SELECT claim_id, label, claim_text, summary, source_ref FROM " + pack_alias + ".commentary_claim WHERE section_id = ? ORDER BY ordinal", {ARRAY [detachable ANY]} <<l_id>>)
+			Result := Result and last_rows /= Void
 			if attached last_rows as al_rows then
 				across al_rows.rows as ic loop
 					l_label := ic.string_value ("label")
@@ -154,18 +165,21 @@ feature {NONE} -- Implementation
 				end
 			end
 			run_query ("SELECT script, translit, pron, english, language FROM " + pack_alias + ".commentary_term WHERE section_id = ? ORDER BY ordinal", {ARRAY [detachable ANY]} <<l_id>>)
+			Result := Result and last_rows /= Void
 			if attached last_rows as al_rows then
 				across al_rows.rows as ic loop
 					a_section.terms.extend ([ic.string_value ("script"), ic.string_value ("translit"), ic.string_value ("pron"), ic.string_value ("english"), ic.string_value ("language")])
 				end
 			end
 			run_query ("SELECT list_kind, item_markdown FROM " + pack_alias + ".commentary_list WHERE section_id = ? ORDER BY list_kind, ordinal", {ARRAY [detachable ANY]} <<l_id>>)
+			Result := Result and last_rows /= Void
 			if attached last_rows as al_rows then
 				across al_rows.rows as ic loop
 					a_section.lists.extend ([ic.string_value ("list_kind").to_string_8, ic.string_value ("item_markdown")])
 				end
 			end
 			run_query ("SELECT source, ship_class, note, body_markdown FROM " + pack_alias + ".commentary_restricted_quote WHERE section_id = ? ORDER BY ordinal", {ARRAY [detachable ANY]} <<l_id>>)
+			Result := Result and last_rows /= Void
 			if attached last_rows as al_rows then
 				across al_rows.rows as ic loop
 					a_section.restricted_quotes.extend ([ic.string_value ("source"), ic.string_value ("ship_class"), ic.string_value ("note"), ic.string_value ("body_markdown")])

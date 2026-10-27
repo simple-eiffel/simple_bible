@@ -14,6 +14,9 @@ note
 class
 	BIB_CONTENT_BUILDER
 
+inherit
+	BIB_SQLITE_REPORTING
+
 create
 	make
 
@@ -196,11 +199,7 @@ feature {NONE} -- Implementation
 			-- Keep `a_db''s failure as `last_error' unless one is already kept.
 		do
 			if last_error = Void and a_db.has_error then
-				last_error := a_what.to_string_32
-				if attached a_db.last_error_message as al_message and attached last_error as al_text then
-					al_text.append_string_general (": ")
-					al_text.append (al_message)
-				end
+				last_error := failure_text (a_db, a_what)
 			end
 		end
 
