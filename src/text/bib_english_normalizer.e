@@ -25,7 +25,7 @@ feature -- Normalization
 	normalized (a_text: READABLE_STRING_GENERAL): STRING_32
 			-- Lowercase search form.
 		do
-			check implemented_in_phase_4: False then end
+			Result := folded (a_text)
 		ensure then
 			lowercase: across Result as c all unicode.simple_lower (c) = c end
 		end

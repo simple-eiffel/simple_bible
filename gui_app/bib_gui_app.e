@@ -138,6 +138,9 @@ feature {NONE} -- Initialization
 			create results_note.make_ui ("")
 			results_note := results_note.with_wrap
 			create results_grid.make (60.0)
+			create verses_heading.make_ui ("")
+			create verses_grid.make (80.0)
+			create verse_hits.make (0)
 			create close_results_button.make ("Close", Void)
 			create status_bar.make
 			create numbering_label.make_ui ("")
@@ -300,6 +303,12 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 				if attached notes_tabs as al_tabs then
 					al_tabs.select_tab (Tags_tab)
 				end
+			elseif snapshot_tab.same_string ({STRING_32} "search") then
+				search_box.set_text ("%"full of grace%"")
+				on_search
+			elseif snapshot_tab.same_string ({STRING_32} "searchword") then
+				search_box.set_text ("grace")
+				on_search
 			elseif snapshot_tab.same_string ({STRING_32} "history") then
 				go_to (43, 3, 16)
 				go_to (65, 1, 6)
@@ -399,6 +408,7 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			cross_refs_grid.set_on_select (agent on_cross_ref)
 			search_word_button.set_on_click (agent show_every_place)
 			results_grid.set_on_select (agent on_choice)
+			verses_grid.set_on_select (agent on_verse_hit)
 			close_results_button.set_on_click (agent hide_results)
 			places_grid.set_on_select (agent on_place)
 			window.set_on_tick (agent load_more_places)
@@ -567,6 +577,8 @@ feature {NONE} -- Window
 			Result := Result.with_gap (6.0)
 			Result.put (l_head)
 			Result.put (results_grid.growing)
+			Result.put (verses_heading)
+			Result.put (verses_grid.growing)
 		end
 
 	build_columns
@@ -574,6 +586,8 @@ feature {NONE} -- Window
 		do
 			results_grid.add_column (create {SW_GRID_COLUMN [BIB_LOOKUP_CHOICE]}.make ("Word", 150.0, agent {BIB_LOOKUP_CHOICE}.label))
 			results_grid.add_column ((create {SW_GRID_COLUMN [BIB_LOOKUP_CHOICE]}.make ("Details", 200.0, agent {BIB_LOOKUP_CHOICE}.detail)).growing)
+			verses_grid.add_column (create {SW_GRID_COLUMN [BIB_READING_VERSE]}.make ("Verse", 110.0, agent hit_place))
+			verses_grid.add_column ((create {SW_GRID_COLUMN [BIB_READING_VERSE]}.make ("Text", 400.0, agent {BIB_READING_VERSE}.display_text)).growing)
 			cross_refs_grid.add_column ((create {SW_GRID_COLUMN [BIB_READING_CROSS_REF]}.make ("Reference", 180.0, agent cross_ref_text)).growing)
 			highlights_grid.add_column (create {SW_GRID_COLUMN [BIB_HIGHLIGHT]}.make ("Verse", 120.0, agent item_place ({BIB_HIGHLIGHT} ?)))
 			bookmarks_grid.add_column ((create {SW_GRID_COLUMN [BIB_BOOKMARK]}.make ("Verse", 140.0, agent item_place ({BIB_BOOKMARK} ?))).growing)
@@ -775,10 +789,21 @@ feature {NONE} -- Toolbar (C3-C9)
 				results_note.set_text (l_lookup.note_text)
 				if attached l_lookup.last_verse as al_verse and then not reading_version.is_empty then
 					go_to (al_verse.book, al_verse.chapter, al_verse.verse)
+					clear_verse_hits
+				else
+					find_verses (search_box.text)
+					if choices.is_empty and not verse_hits.is_empty then
+							-- The lookup's "nothing found" is about headwords; the verses below say otherwise.
+						results_note.set_text ("No dictionary headword matches; the verses that hold the words are listed below.")
+					end
 				end
 				if choices.count = 1 and then choices.first.opens_a_word then
 					open_study (choices.first.lemma_id)
-					hide_results
+					if verse_hits.is_empty then
+						hide_results
+					else
+						show_results
+					end
 				else
 					show_results
 					if choices.count >= 1 and then choices.first.opens_a_word and then l_lookup.last_verse = Void then
@@ -1146,6 +1171,7 @@ feature {NONE} -- Reading (S1, P01)
 					choices := l_lookup.verse_choices (reading_book, reading_chapter, reading_verse)
 					results_grid.set_rows (choices)
 					results_note.set_text (l_lookup.note_text)
+					clear_verse_hits
 					show_results
 				end
 			end
@@ -2626,7 +2652,7 @@ feature {NONE} -- Notes (T2, P06)
 			window.add_reference_mark (interlinear_note, "P03", "Interlinear: word by word in the original, right to left for Hebrew. A click makes the word's verse the place read and opens its headword in T4.", window.Corner_top_left)
 			window.add_reference_mark (lexicon_heading, "T4", "P05 Lexicon, east: follows the clicked word.", window.Corner_top_left)
 			window.add_reference_mark (commentary_title, "T5", "P04 Commentary, east: Commentaries (Larry's commentary packs, verse by verse, every claim labelled SOURCED or DEDUCED), Cross-refs with OpenBible votes.", window.Corner_top_left)
-			window.add_reference_mark (results_tabs, "T6", "South results zone: Search Results; Guides, Census, Author Library and Ledger come later.", window.Corner_top_left)
+			window.add_reference_mark (results_tabs, "T6", "South results zone: Search Results (word choices, then the verses holding the words; click one to read it); Guides, Census, Author Library and Ledger come later.", window.Corner_top_left)
 		end
 
 feature {NONE} -- Commentary (S2, P04)
@@ -2948,6 +2974,73 @@ feature {NONE} -- Search results (P07)
 	choices: ARRAYED_LIST [BIB_LOOKUP_CHOICE]
 			-- What the last search found, in the order P07 lists it.
 
+	verses_heading: SW_LABEL
+	verses_grid: SW_DATA_GRID [BIB_READING_VERSE]
+			-- P07's verses (2026-10-27): every verse of the version read that holds the words.
+
+	verse_hits: ARRAYED_LIST [BIB_READING_VERSE]
+			-- The rows of `verses_grid', in Bible order.
+
+	Verse_hit_limit: INTEGER = 500
+			-- The most verses P07 lists (the heading gives the full count).
+
+	find_verses (a_words: READABLE_STRING_GENERAL)
+			-- The verses of the version read holding `a_words' (a "quoted phrase" as written, word*
+			-- a prefix), listed under the word choices with their count.
+		local
+			l_found: BIB_LIST_RESULT [BIB_READING_VERSE]
+			l_total: INTEGER
+		do
+			create verse_hits.make (0)
+			if reading_version.is_empty or else not bible.text_reader.has_version (reading_version) then
+				verses_heading.set_text ("")
+			elseif not bible.text_reader.has_verse_index then
+				verses_heading.set_text ("This content.db has no verse index: rebuild it with bible_build 0.3.0 to search the text.")
+			else
+				l_found := bible.text_reader.verses_matching (reading_version, a_words, Verse_hit_limit)
+				if l_found.is_success then
+					across 1 |..| l_found.count as i loop
+						verse_hits.extend (l_found.item (i))
+					end
+					l_total := bible.text_reader.matching_count (reading_version, a_words)
+					if l_total = 0 then
+						verses_heading.set_text ({STRING_32} "No verse in " + reading_version.to_string_32 + {STRING_32} " holds every word.")
+					elseif l_total > verse_hits.count then
+						verses_heading.set_text ({STRING_32} "Verses in " + reading_version.to_string_32 + {STRING_32} ": " + l_total.out + {STRING_32} " hold every word; the first " + verse_hits.count.out + {STRING_32} " in Bible order. Click one to read it.")
+					elseif l_total = 1 then
+						verses_heading.set_text ({STRING_32} "Verses in " + reading_version.to_string_32 + {STRING_32} ": 1 holds every word. Click it to read it.")
+					else
+						verses_heading.set_text ({STRING_32} "Verses in " + reading_version.to_string_32 + {STRING_32} ": " + l_total.out + {STRING_32} " hold every word, in Bible order. Click one to read it.")
+					end
+				else
+					verses_heading.set_text ({STRING_32} "The verse search failed.")
+				end
+			end
+			verses_grid.set_rows (verse_hits)
+		end
+
+	clear_verse_hits
+			-- No verses listed (a reference or a clicked word filled P07).
+		do
+			create verse_hits.make (0)
+			verses_grid.set_rows (verse_hits)
+			verses_heading.set_text ("")
+		end
+
+	on_verse_hit (a_row: INTEGER)
+			-- A verse clicked: read it.
+		do
+			if a_row >= 1 and a_row <= verse_hits.count then
+				go_to (verse_hits.i_th (a_row).book_id, verse_hits.i_th (a_row).chapter, verse_hits.i_th (a_row).verse)
+			end
+		end
+
+	hit_place (a_verse: BIB_READING_VERSE): STRING_32
+			-- "John 1:14".
+		do
+			Result := place_text (a_verse.book_id, a_verse.chapter, a_verse.verse)
+		end
+
 	show_results
 			-- Dock P07 west (Simple), or bring Search Results to the front of T6 (Study).
 		do
@@ -3065,7 +3158,7 @@ feature {NONE} -- Design pills
 			window.add_reference_mark (back_button, "C3", "Back and Forward: history, Alt+Left and Alt+Right.", window.Corner_top_left)
 			window.add_reference_mark (reference_box, "C4", "Reference box: 'John 3:16', 'Ps 23', 'Gen 1 1'. Anything else is searched. Ctrl+L.", window.Corner_top_left)
 			window.add_reference_mark (version_select, "C5", "Version picker: every version content.db holds. The text changes; the place stays.", window.Corner_top_right)
-			window.add_reference_mark (search_box, "C6", "Quick search: a word, verse or Strong's number; results open the results zone. Ctrl+F.", window.Corner_top_left)
+			window.add_reference_mark (search_box, "C6", "Quick search: a word, verse or Strong's number, and every verse of the version read holding the words (a %"quoted phrase%" as written, word* a prefix); results open the results zone. Ctrl+F.", window.Corner_top_left)
 			window.add_reference_mark (smaller_button, "C8", {STRING_32} "Text size: all the window's text, " + (settings.Min_text_scale * 100.0).rounded.out + {STRING_32} " to "
 				+ (settings.Max_text_scale * 100.0).rounded.out + {STRING_32} " percent, kept for next time. Ctrl + and -.", window.Corner_top_left)
 			window.add_reference_mark (dark_switch, "C9", "Dark / Light: your choice; until you switch, Windows decides.", window.Corner_top_right)

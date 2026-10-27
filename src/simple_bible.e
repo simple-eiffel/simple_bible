@@ -325,7 +325,7 @@ feature -- Engines (one per instance)
 		require
 			open: is_open
 		once ("OBJECT")
-			create Result.make (sources, database_edition)
+			create Result.make (sources, database_edition, normalizers)
 		end
 
 	conc_pack: BIB_CONC_PACK
@@ -582,9 +582,9 @@ feature {NONE} -- Implementation
 
 	normalizers: BIB_NORMALIZER_SET
 			-- Hebrew, Greek and English normalizers, shared with the build.
-			-- Bound in Phase 4 to the simple_encoding adapter of BIB_UNICODE_SERVICE (LG-01).
+			-- Over simple_encoding's Unicode tables (LG-01 landed 2026-10-27: BIB_SIMPLE_UNICODE).
 		once ("OBJECT")
-			check bound_after_lg_01: False then end
+			create Result.make (create {BIB_SIMPLE_UNICODE}.make)
 		end
 
 invariant

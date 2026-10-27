@@ -25,14 +25,17 @@ create
 
 feature {NONE} -- Initialization
 
-	make (a_sources: BIB_SOURCE_SET; a_edition: READABLE_STRING_GENERAL)
-			-- A reader over content.db in `a_sources', whose build is `a_edition'.
+	make (a_sources: BIB_SOURCE_SET; a_edition: READABLE_STRING_GENERAL; a_normalizers: BIB_NORMALIZER_SET)
+			-- A reader over content.db in `a_sources', whose build is `a_edition'; searches fold with
+			-- `a_normalizers', as the build did.
 		require
 			edition_not_empty: not a_edition.is_empty
 		do
 			sources := a_sources
 			edition := a_edition.to_string_32
+			normalizers := a_normalizers
 			create versions.make (24)
+			create version_orders.make (24)
 			if a_sources.is_open then
 				load_versions
 			end
@@ -97,6 +100,113 @@ feature -- Reading
 	has_cross_references: BOOLEAN
 			-- Does content.db carry cross-references (an optional table in v2)?
 
+	has_verse_index: BOOLEAN
+			-- Does content.db carry `verse_fts', the verse search index (optional; bible_build 0.3.0)?
+
+	verses_matching (a_version: READABLE_STRING_8; a_words: READABLE_STRING_GENERAL; a_limit: INTEGER): BIB_LIST_RESULT [BIB_READING_VERSE]
+			-- The verses of `a_version' holding every word of `a_words' (a "quoted phrase" as written,
+			-- a word ending in * as a prefix), in Bible order, at most `a_limit'. Words fold as the
+			-- build folded the text (D-009), so unpointed Hebrew finds pointed and "beginning" finds
+			-- "Beginning". Empty when nothing searchable is left or content.db has no index.
+		require
+			version_known: has_version (a_version)
+			limit_positive: a_limit > 0
+		local
+			l_verses: ARRAYED_LIST [BIB_READING_VERSE]
+			l_expression: STRING_32
+			l_first: INTEGER_64
+			l_keys: ARRAYED_LIST [INTEGER_64]
+		do
+			create l_verses.make (0)
+			l_expression := search_expression (a_version, a_words)
+			if attached version (a_version) as al_version then
+				if not has_verse_index or l_expression.is_empty then
+					create Result.make_success (method ("verses_matching", Search_sql, a_version, a_words, 0), {ARRAY [BIB_PROVENANCE]} <<al_version.provenance>>, l_verses)
+				else
+					l_first := keys.first_key (version_orders.item (a_version.to_string_8))
+					run_query (Search_sql, {ARRAY [detachable ANY]} <<l_expression, l_first, keys.last_key (version_orders.item (a_version.to_string_8)), a_limit>>)
+					if attached last_rows as al_rows then
+						create l_keys.make (al_rows.rows.count)
+						across al_rows.rows as ic loop
+							l_keys.extend (ic.integer_64_value ("key"))
+						end
+						across l_keys as ic loop
+							if attached verse_at (al_version, ic) as al_verse then
+								l_verses.extend (al_verse)
+							end
+						end
+						create Result.make_success (method ("verses_matching", Search_sql, a_version, a_words, l_verses.count), {ARRAY [BIB_PROVENANCE]} <<al_version.provenance>>, l_verses)
+					else
+						create Result.make_failure (method ("verses_matching", Search_sql, a_version, a_words, 0), query_error)
+					end
+				end
+			else
+				check version_known: False then end
+			end
+		ensure
+			one_version: across 1 |..| Result.count as i all Result.item (i).version_code.same_string (a_version) end
+			at_most_the_limit: Result.count <= a_limit
+			method_recorded: Result.method.engine_feature.same_string_general ("verses_matching")
+		end
+
+	matching_count (a_version: READABLE_STRING_8; a_words: READABLE_STRING_GENERAL): INTEGER
+			-- How many verses of `a_version' `verses_matching' would find with no limit (0 on failure).
+		require
+			version_known: has_version (a_version)
+		local
+			l_expression: STRING_32
+			l_first: INTEGER_64
+		do
+			l_expression := search_expression (a_version, a_words)
+			if has_verse_index and not l_expression.is_empty then
+				l_first := keys.first_key (version_orders.item (a_version.to_string_8))
+				run_query (Count_sql, {ARRAY [detachable ANY]} <<l_expression, l_first, keys.last_key (version_orders.item (a_version.to_string_8))>>)
+				if attached last_rows as al_rows then
+					across al_rows.rows as ic loop
+						Result := ic.integer_value ("n")
+					end
+				end
+			end
+		ensure
+			not_negative: Result >= 0
+		end
+
+	search_expression (a_version: READABLE_STRING_8; a_words: READABLE_STRING_GENERAL): STRING_32
+			-- The FTS5 expression for `a_words' in `a_version''s language: each word, or each "quoted
+			-- phrase", one FTS5 string (so no word is read as an operator); a word ending in * a
+			-- prefix. Empty when no letter or digit is left.
+		require
+			version_known: has_version (a_version)
+		local
+			l_form, l_term: STRING_32
+			i: INTEGER
+			l_in_quote: BOOLEAN
+		do
+			create Result.make_empty
+			if attached version (a_version) as al_version then
+				l_form := normalizers.for_language (al_version.language).normalized (a_words)
+				create l_term.make_empty
+				from i := 1 until i > l_form.count + 1 loop
+					if i > l_form.count or else l_form [i] = '"' or else (not l_in_quote and l_form [i] = ' ') then
+						append_term (Result, l_term)
+						l_term.wipe_out
+						if i <= l_form.count and then l_form [i] = '"' then
+							l_in_quote := not l_in_quote
+						end
+					else
+						l_term.append_character (l_form [i])
+					end
+					i := i + 1
+				end
+			end
+		end
+
+	keys: BIB_VERSE_KEY
+			-- `verse_fts''s keys (bible_build writes the same).
+		once ("OBJECT")
+			create Result
+		end
+
 	cross_references (a_book, a_chapter, a_verse: INTEGER): BIB_LIST_RESULT [BIB_READING_CROSS_REF]
 			-- The cross-references from `a_book' `a_chapter':`a_verse', most voted first; empty when
 			-- content.db carries none (P04's Cross-refs tab).
@@ -156,6 +266,57 @@ feature {NONE} -- Implementation
 	sources: BIB_SOURCE_SET
 	edition: STRING_32
 
+	normalizers: BIB_NORMALIZER_SET
+			-- The search folds, shared with the build.
+
+	version_orders: HASH_TABLE [INTEGER, STRING_8]
+			-- Each version's `sort_order', the first part of its `verse_key'.
+
+	verse_at (a_version: BIB_READING_VERSION; a_key: INTEGER_64): detachable BIB_READING_VERSE
+			-- The verse `a_key' names in `a_version', its display text read from `verse_text'.
+		local
+			l_book, l_chapter, l_verse: INTEGER
+		do
+			l_book := keys.book_of (a_key)
+			l_chapter := keys.chapter_of (a_key)
+			l_verse := keys.verse_of (a_key)
+			if l_book > 0 and l_chapter > 0 and l_verse > 0 then
+				run_query (Verse_sql, {ARRAY [detachable ANY]} <<a_version.code, l_book, l_chapter, l_verse>>)
+				if attached last_rows as al_rows then
+					across al_rows.rows as ic loop
+						create Result.make (a_version.code, l_book, l_chapter, l_verse, ic.string_value ("text"), a_version.provenance)
+					end
+				end
+			end
+		end
+
+	append_term (a_expression, a_term: STRING_32)
+			-- Add `a_term' to `a_expression' as one FTS5 string ("term", or "term"* for a prefix),
+			-- unless it holds no letter or digit.
+		local
+			l_text: STRING_32
+			l_prefix: BOOLEAN
+		do
+			l_text := a_term.twin
+			l_text.left_adjust
+			l_text.right_adjust
+			from until l_text.is_empty or else l_text [l_text.count] /= '*' loop
+				l_prefix := True
+				l_text.remove_tail (1)
+			end
+			if across l_text as ic some normalizers.english.unicode.general_category (ic) [1] = 'L' or normalizers.english.unicode.general_category (ic) [1] = 'N' end then
+				if not a_expression.is_empty then
+					a_expression.append_character (' ')
+				end
+				a_expression.append_character ('"')
+				a_expression.append (l_text)
+				a_expression.append_character ('"')
+				if l_prefix then
+					a_expression.append_character ('*')
+				end
+			end
+		end
+
 	cross_reference_provenance: detachable BIB_PROVENANCE
 			-- The cross-references' source row, read with the versions.
 
@@ -178,6 +339,8 @@ feature {NONE} -- Implementation
 					has_cross_references := True
 				end
 			end
+			run_query ("SELECT rowid FROM main.verse_fts LIMIT 1", {ARRAY [detachable ANY]} <<>>)
+			has_verse_index := last_rows /= Void
 			run_query (Versions_sql, {ARRAY [detachable ANY]} <<>>)
 			if attached last_rows as al_rows then
 				across al_rows.rows as ic loop
@@ -186,6 +349,7 @@ feature {NONE} -- Implementation
 							ic.integer_value ("share_alike") /= 0, ic.integer_value ("restricted") /= 0, ic.string_value ("credit"))
 						create l_provenance.make (ic.integer_64_value ("provenance_key"), non_empty (ic.string_value ("source_key")),
 							non_empty (ic.string_value ("edition")), l_license, ic.string_value ("caveat"))
+						version_orders.force (ic.integer_value ("sort_order"), ic.string_value ("version_code").to_string_8)
 						versions.extend (create {BIB_READING_VERSION}.make (ic.string_value ("version_code").to_string_8, ic.string_value ("name"),
 							ic.string_value ("language").to_string_8, ic.string_value ("direction").to_string_8,
 							ic.string_value ("versification").to_string_8, ic.string_value ("caveat"), l_provenance))
@@ -225,11 +389,17 @@ feature {NONE} -- Implementation
 
 feature {NONE} -- SQL
 
-	Versions_sql: STRING_8 = "SELECT v.version_code, v.name, v.language, v.direction, v.versification, v.caveat, v.provenance_key, p.source_key, p.edition, p.license_id, p.non_commercial, p.share_alike, p.restricted, p.credit FROM main.version_info v JOIN main.source_provenance p ON p.provenance_key = v.provenance_key ORDER BY v.sort_order, v.version_code"
+	Versions_sql: STRING_8 = "SELECT v.version_code, v.sort_order, v.name, v.language, v.direction, v.versification, v.caveat, v.provenance_key, p.source_key, p.edition, p.license_id, p.non_commercial, p.share_alike, p.restricted, p.credit FROM main.version_info v JOIN main.source_provenance p ON p.provenance_key = v.provenance_key ORDER BY v.sort_order, v.version_code"
 
 	Chapter_sql: STRING_8 = "SELECT verse, text FROM main.verse_text WHERE version_code = ? AND book_id = ? AND chapter = ? ORDER BY verse"
 
 	Cross_references_sql: STRING_8 = "SELECT to_book, to_chapter, to_verse_start, to_verse_end, votes FROM main.cross_reference WHERE from_book = ? AND from_chapter = ? AND from_verse = ? ORDER BY votes DESC, to_book, to_chapter, to_verse_start LIMIT 200"
+
+	Search_sql: STRING_8 = "SELECT rowid AS key FROM main.verse_fts WHERE verse_fts MATCH ? AND rowid BETWEEN ? AND ? ORDER BY rowid LIMIT ?"
+
+	Count_sql: STRING_8 = "SELECT count(*) AS n FROM main.verse_fts WHERE verse_fts MATCH ? AND rowid BETWEEN ? AND ?"
+
+	Verse_sql: STRING_8 = "SELECT text FROM main.verse_text WHERE version_code = ? AND book_id = ? AND chapter = ? AND verse = ?"
 
 	Last_chapter_sql: STRING_8 = "SELECT coalesce(max(chapter), 0) AS last FROM main.verse_text WHERE version_code = ? AND book_id = ?"
 

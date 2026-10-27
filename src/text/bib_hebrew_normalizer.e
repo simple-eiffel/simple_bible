@@ -24,8 +24,21 @@ feature -- Normalization
 
 	normalized (a_text: READABLE_STRING_GENERAL): STRING_32
 			-- Consonantal search form.
+		local
+			i: INTEGER
 		do
-			check implemented_in_phase_4: False then end
+			Result := folded (a_text)
+			from i := 1 until i > Result.count loop
+				inspect Result.code (i)
+				when 0x05BE then
+						-- Maqaf joins words; the search form keeps them apart.
+					Result [i] := ' '
+				when 0x05DA, 0x05DD, 0x05DF, 0x05E3, 0x05E5 then
+					Result [i] := (Result.code (i) + 1).to_character_32
+				else
+				end
+				i := i + 1
+			end
 		ensure then
 			consonants_only: across Result as c all is_hebrew_base_letter (c) or not is_hebrew_letter (c) end
 			finals_folded: not across Result as c some is_final_form (c) end
