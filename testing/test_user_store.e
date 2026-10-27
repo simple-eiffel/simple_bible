@@ -151,6 +151,40 @@ feature -- Tests
 			clean_user_file
 		end
 
+	test_highlights_and_bookmarks_keep_their_reason
+			-- E01: a highlight is a reason, not a color, kept on the verse in every version; a chapter's
+			-- highlights list in verse order; removing is soft and restorable; bookmarks list newest
+			-- first.
+		local
+			l_user: BIB_USER_STORE
+			l_hubs: BIB_HUB_ID
+			l_first, l_second: BIB_HIGHLIGHT
+			l_mark: BIB_BOOKMARK
+		do
+			clean_user_file
+			create l_user.make (User_file)
+			l_user.open
+			create l_hubs
+			create l_first.make (l_hubs.hub_id (65, 1, 6), "Watchers")
+			create l_second.make (l_hubs.hub_id (65, 1, 5), "Exodus pattern")
+			l_user.add_highlight (l_first)
+			l_user.add_highlight (l_second)
+			assert_true ("stored", l_first.is_stored and l_second.is_stored)
+			assert_integers_equal ("one on Jude 6", 1, l_user.item_count ({BIB_USER_STORE}.Kind_highlight, l_hubs.hub_id (65, 1, 6)))
+			assert_integers_equal ("two in Jude 1", 2, l_user.highlights_between (l_hubs.hub_id (65, 1, 1), l_hubs.hub_id (65, 1, 999)).count)
+			assert_strings_equal ("verse order: Jude 5 first", "Exodus pattern", l_user.highlights_between (l_hubs.hub_id (65, 1, 1), l_hubs.hub_id (65, 1, 999)).first.reason)
+			l_user.remove_item ({BIB_USER_STORE}.Kind_highlight, l_first.id)
+			assert_true ("soft deleted", l_user.is_deleted (l_first.id) and l_user.highlights_for (l_hubs.hub_id (65, 1, 6)).is_empty)
+			l_user.restore_item ({BIB_USER_STORE}.Kind_highlight, l_first.id)
+			assert_integers_equal ("restored", 1, l_user.highlights_for (l_hubs.hub_id (65, 1, 6)).count)
+			create l_mark.make (l_hubs.hub_id (61, 2, 4), "Tartarus")
+			l_user.add_bookmark (l_mark)
+			assert_true ("a bookmark", l_user.bookmarks.count = 1 and then l_user.bookmarks.first.label.same_string ("Tartarus"))
+			assert_integers_equal ("highlights untouched by a bookmark", 1, l_user.item_count ({BIB_USER_STORE}.Kind_highlight, l_hubs.hub_id (65, 1, 6)))
+			l_user.close
+			clean_user_file
+		end
+
 	test_user_store_refuses_another_schema
 			-- A user.db of a schema this program does not read is refused and left as it is.
 		local
