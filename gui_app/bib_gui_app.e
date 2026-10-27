@@ -73,6 +73,7 @@ feature {NONE} -- Initialization
 			create journal_new_button.make ("New", Void)
 			create journal_save_button.make ("Save", Void)
 			create journal_delete_button.make ("Delete", Void)
+			create journal_restore_button.make ("Restore", Void)
 			create journal_heading.make_ui ("")
 			create journal_grid.make (60.0)
 			create journal_rows.make (0)
@@ -382,6 +383,7 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			journal_new_button.set_on_click (agent new_journal_entry)
 			journal_save_button.set_on_click (agent save_journal_entry)
 			journal_delete_button.set_on_click (agent delete_journal_entry)
+			journal_restore_button.set_on_click (agent restore_journal_entry)
 			journal_grid.set_on_select (agent on_journal_row)
 			tag_names_grid.set_on_select (agent on_tag_name)
 			delete_note_button.set_on_click (agent delete_note)
@@ -1468,7 +1470,7 @@ feature {NONE} -- Two layouts (C7)
 			elseif user_store.is_open then
 				user_store.add_bookmark (create {BIB_BOOKMARK}.make (reading_hub, place_text (reading_book, reading_chapter, reading_verse)))
 				if attached user_store.write_error as al_error then
-					window.toast (al_error.message, 1)
+					say (al_error.message)
 				else
 					fill_bookmarks
 					window.toast ({STRING_32} "Bookmarked " + place_text (reading_book, reading_chapter, reading_verse) + {STRING_32} ".", 1)
@@ -1580,12 +1582,12 @@ feature {NONE} -- Notes (T2, P06)
 			l_body.left_adjust
 			l_body.right_adjust
 			if l_body.is_empty then
-				window.toast ("Write the note in the box first.", 1)
+				say ("Write the note in the box first.")
 			elseif user_store.is_open and reading_verse > 0 and note_store.is_writable then
 				create l_note.make (reading_hub, "", l_body)
 				note_store.add_note (l_note)
 				if attached note_store.last_error as al_error then
-					window.toast (al_error.message, 1)
+					say (al_error.message)
 				else
 					new_note_box.set_text ("")
 					fill_notes
@@ -1607,7 +1609,7 @@ feature {NONE} -- Notes (T2, P06)
 			if a_index >= 1 and a_index <= note_rows.count and then note_store.is_writable then
 				note_store.update_note (note_rows.i_th (a_index).id, a_text)
 				if attached note_store.last_error as al_error then
-					window.toast (al_error.message, 1)
+					say (al_error.message)
 				end
 			end
 		end
@@ -1627,11 +1629,11 @@ feature {NONE} -- Notes (T2, P06)
 			if l_index >= 1 and l_index <= note_rows.count and then note_store.is_writable then
 				note_store.remove_note (note_rows.i_th (l_index).id)
 				if attached note_store.last_error as al_error then
-					window.toast (al_error.message, 1)
+					say (al_error.message)
 				else
 					last_deleted_note := note_rows.i_th (l_index).id
 					fill_notes
-					window.toast ("Note deleted. Restore brings it back.", 1)
+					say ("Note deleted. Restore brings it back.")
 				end
 			end
 		end
@@ -1642,7 +1644,7 @@ feature {NONE} -- Notes (T2, P06)
 			if last_deleted_note > 0 and then note_store.is_writable and then note_store.is_deleted (last_deleted_note) then
 				note_store.restore_note (last_deleted_note)
 				if attached note_store.last_error as al_error then
-					window.toast (al_error.message, 1)
+					say (al_error.message)
 				else
 					last_deleted_note := 0
 					fill_notes
@@ -1664,7 +1666,7 @@ feature {NONE} -- Notes (T2, P06)
 
 	journal_title_box: SW_TEXT_BOX
 	journal_body_box: SW_TEXT_BOX
-	journal_new_button, journal_save_button, journal_delete_button: SW_BUTTON
+	journal_new_button, journal_save_button, journal_delete_button, journal_restore_button: SW_BUTTON
 	journal_heading: SW_LABEL
 	journal_grid: SW_DATA_GRID [BIB_NOTE]
 			-- T2's Journal tab (E04): topical notes, on a subject rather than a verse.
@@ -1674,6 +1676,17 @@ feature {NONE} -- Notes (T2, P06)
 
 	journal_entry_id: INTEGER_64
 			-- The entry in the boxes (0: a new one).
+
+	journal_shown_title: STRING_32
+			-- The title the entry in the boxes was loaded with.
+		attribute
+			create Result.make_empty
+		end
+
+	last_deleted_entry: INTEGER_64
+			-- The journal entry Delete removed last; the Journal's Restore brings it back (0: none). Its
+			-- own slot: scan 45 found the Journal and Verse notes sharing one, each Delete losing the
+			-- other's, and Verse notes never showing a journal entry it restored.
 
 	is_refilling_journal: BOOLEAN
 			-- Is `fill_journal' reselecting the entry (no click to answer)?
@@ -1692,6 +1705,7 @@ feature {NONE} -- Notes (T2, P06)
 			l_row.put (journal_new_button)
 			l_row.put (journal_save_button)
 			l_row.put (journal_delete_button)
+			l_row.put (journal_restore_button)
 			Result.put (l_row)
 			Result.put (journal_heading)
 			Result.put (journal_grid.growing)
@@ -1731,6 +1745,7 @@ feature {NONE} -- Notes (T2, P06)
 			end
 			journal_save_button.set_enabled (user_store.is_open)
 			journal_delete_button.set_enabled (journal_entry_id > 0)
+			journal_restore_button.set_enabled (last_deleted_entry > 0)
 		end
 
 	new_journal_entry
@@ -1739,6 +1754,7 @@ feature {NONE} -- Notes (T2, P06)
 			journal_entry_id := 0
 			journal_title_box.set_text ("")
 			journal_body_box.set_text ("")
+			create journal_shown_title.make_empty
 			fill_journal
 		end
 
@@ -1753,17 +1769,32 @@ feature {NONE} -- Notes (T2, P06)
 			l_title.left_adjust
 			l_title.right_adjust
 			l_body := journal_body_box.text.twin
+			l_body.left_adjust
+			l_body.right_adjust
 			if not note_store.is_writable then
 				say ("The journal cannot be written now.")
+			elseif l_body.is_empty then
+					-- As Verse notes: a note has words (scan 45).
+				say ("Write the entry first.")
 			elseif journal_entry_id > 0 then
-				if not note_store.current_body (journal_entry_id).same_string (l_body) then
-					note_store.update_note (journal_entry_id, l_body)
-				end
-				if attached note_store.last_error as al_error then
-					say (al_error.message)
+				if note_store.current_body (journal_entry_id).same_string (l_body) then
+					if l_title.same_string (journal_shown_title) then
+						say ("Nothing changed.")
+					else
+						say ("Titles stay as first written; nothing else changed.")
+					end
 				else
-					say ("Saved; the earlier version is kept.")
-					fill_journal
+					note_store.update_note (journal_entry_id, l_body)
+					if attached note_store.last_error as al_error then
+						say (al_error.message)
+					elseif l_title.same_string (journal_shown_title) then
+						say ("Saved; the earlier version is kept.")
+						fill_journal
+					else
+							-- Scan 45: a changed title was dropped while "Saved" was said.
+						say ("Saved; the earlier version is kept. Titles stay as first written.")
+						fill_journal
+					end
 				end
 			elseif l_title.is_empty then
 				say ("Give the entry a title first.")
@@ -1774,6 +1805,7 @@ feature {NONE} -- Notes (T2, P06)
 					say (al_error.message)
 				else
 					journal_entry_id := l_note.id
+					journal_shown_title := l_title.twin
 					say ("Saved.")
 					fill_journal
 				end
@@ -1788,9 +1820,24 @@ feature {NONE} -- Notes (T2, P06)
 				if attached note_store.last_error as al_error then
 					say (al_error.message)
 				else
-					last_deleted_note := journal_entry_id
+					last_deleted_entry := journal_entry_id
 					new_journal_entry
-					say ("Entry deleted. Restore on Verse notes brings it back.")
+					say ("Entry deleted. Restore brings it back.")
+				end
+			end
+		end
+
+	restore_journal_entry
+			-- Bring back the journal entry Delete removed last.
+		do
+			if last_deleted_entry > 0 and then note_store.is_writable and then note_store.is_deleted (last_deleted_entry) then
+				note_store.restore_note (last_deleted_entry)
+				if attached note_store.last_error as al_error then
+					say (al_error.message)
+				else
+					journal_entry_id := last_deleted_entry
+					last_deleted_entry := 0
+					fill_journal
 				end
 			end
 		end
@@ -1801,6 +1848,7 @@ feature {NONE} -- Notes (T2, P06)
 			if not is_refilling_journal and then a_row >= 1 and then a_row <= journal_rows.count then
 				journal_entry_id := journal_rows.i_th (a_row).id
 				journal_title_box.set_text (journal_rows.i_th (a_row).title)
+				journal_shown_title := journal_rows.i_th (a_row).title.twin
 				journal_body_box.set_text (journal_rows.i_th (a_row).body)
 				journal_delete_button.set_enabled (True)
 			end
@@ -2030,7 +2078,7 @@ feature {NONE} -- Notes (T2, P06)
 			elseif user_store.is_open and reading_verse > 0 then
 				user_store.add_highlight (create {BIB_HIGHLIGHT}.make (reading_hub, l_reason))
 				if attached user_store.write_error as al_error then
-					window.toast (al_error.message, 1)
+					say (al_error.message)
 				else
 					highlight_reason_box.set_text ("")
 					open_reading (reading_book, reading_chapter, reading_verse)
@@ -2475,7 +2523,7 @@ feature {NONE} -- Notes (T2, P06)
 			window.add_reference_mark (tools_strip, "C10", "Study tools strip: Parallel and Interlinear work; Guide, Word Study, Count and Ledger come later.", window.Corner_top_left)
 			window.add_reference_mark (mode_switch, "C7", "Mode switch, on Study: only the docking changes. Ctrl+M.", window.Corner_top_left)
 			window.add_reference_mark (navigator_tabs, "T1", "P11 Navigator, west: Books (chapter by chapter) and Bookmarks (Ctrl+D bookmarks the verse read; click one to read it; Remove and Restore).", window.Corner_top_left)
-			window.add_reference_mark (notes_heading, "T2", "P06 Notes, west below T1: Verse notes on the chapter read (add on the verse read; double-click to edit, each edit keeps the old version; Delete and Restore) Tags (tag the verse read; click a tag for its verses, a verse to read it), and Highlights (a reason, not a color; washed amber in the Bible and Parallel tabs; click one to read it). Remove and Restore on the Tags and Highlights lists. Journal: notes on a subject (New, Save keeps the earlier version, Delete). Prayer and Memory come later.", window.Corner_top_left)
+			window.add_reference_mark (notes_heading, "T2", "P06 Notes, west below T1, in tab order: Verse notes on the chapter read (add on the verse read; double-click to edit, each edit keeps the old version; Delete and Restore); Journal, notes on a subject (New; Save keeps the earlier version; Delete and Restore); Tags (tag the verse read; click a tag for its verses, a verse to read it; Remove and Restore); Highlights (a reason, not a color; washed amber in the Bible and Parallel tabs; click one to read it; Remove and Restore). Prayer and Memory come later.", window.Corner_top_left)
 			window.add_reference_mark (center_tabs, "T3", "Centre tabs: the Bible text, Parallel (P02) and Interlinear (P03, Ctrl+I). More Bible tabs come later.", window.Corner_top_left)
 			window.add_reference_mark (analysis_title, "P03.2", "Verse analysis: the verse read, a row per word with its lemma, Strong's number, morphology, gloss, and how often its headword occurs in this testament. Click a row and T4 follows it.", window.Corner_top_left)
 			window.add_reference_mark (interlinear_note, "P03", "Interlinear: word by word in the original, right to left for Hebrew. A click makes the word's verse the place read and opens its headword in T4.", window.Corner_top_left)
