@@ -165,6 +165,91 @@ feature -- Reading
 			not_negative: Result >= 0
 		end
 
+	verse_places_matching (a_version: READABLE_STRING_8; a_words: READABLE_STRING_GENERAL): detachable ARRAYED_LIST [INTEGER_64]
+			-- Every verse of `a_version' holding `a_words' (read as `verses_matching' reads them), as a
+			-- place packed by BIB_PLACE_PACKING, ascending; empty when nothing is searchable or there is
+			-- no index; Void when the query fails. BIB_VERSE_SEARCH's word and phrase clauses.
+		require
+			version_known: has_version (a_version)
+		local
+			l_expression: STRING_32
+			l_first: INTEGER_64
+		do
+			create Result.make (0)
+			l_expression := search_expression (a_version, a_words)
+			if has_verse_index and not l_expression.is_empty then
+				l_first := keys.first_key (version_orders.item (a_version.to_string_8))
+				run_query (Places_sql, {ARRAY [detachable ANY]} <<l_expression, l_first, keys.last_key (version_orders.item (a_version.to_string_8))>>)
+				if attached last_rows as al_rows then
+					create Result.make (al_rows.rows.count)
+					across al_rows.rows as ic loop
+						Result.extend (ic.integer_64_value ("key") - l_first)
+					end
+				else
+					Result := Void
+				end
+			end
+		end
+
+	verses_at_places (a_version: READABLE_STRING_8; a_places: LIST [INTEGER_64]): BIB_LIST_RESULT [BIB_READING_VERSE]
+			-- Each of `a_places' (packed by BIB_PLACE_PACKING) as a verse of `a_version', in the order
+			-- given; a place the version lacks reads as an omitted verse. One query.
+		require
+			version_known: has_version (a_version)
+			bounded: a_places.count <= Max_places_per_read
+			numbered: across a_places as ic all keys.book_part (ic) >= 1 and keys.chapter_part (ic) >= 1 and keys.verse_part (ic) >= 1 end
+		local
+			l_sql: STRING_8
+			l_args: ARRAYED_LIST [detachable ANY]
+			l_texts: HASH_TABLE [STRING_32, INTEGER_64]
+			l_verses: ARRAYED_LIST [BIB_READING_VERSE]
+		do
+			create l_verses.make (a_places.count)
+			if attached version (a_version) as al_version then
+				create l_texts.make (a_places.count)
+				if not a_places.is_empty then
+					create l_args.make (a_places.count + 1)
+					l_args.extend (al_version.code)
+					create l_sql.make (120 + a_places.count * 3)
+					l_sql.append ("SELECT book_id, chapter, verse, text FROM main.verse_text WHERE version_code = ? AND book_id * 1000000 + chapter * 1000 + verse IN (")
+					across a_places as ic loop
+						if l_args.count > 1 then
+							l_sql.append (", ")
+						end
+						l_sql.append ("?")
+						l_args.extend (ic)
+					end
+					l_sql.append (")")
+					run_query (l_sql, l_args.to_array)
+					if attached last_rows as al_rows then
+						across al_rows.rows as ic loop
+							l_texts.force (ic.string_value ("text"), keys.packed_place (ic.integer_value ("book_id"), ic.integer_value ("chapter"), ic.integer_value ("verse")))
+						end
+					end
+				end
+				if a_places.is_empty or last_rows /= Void then
+					across a_places as ic loop
+						if attached l_texts.item (ic) as al_text then
+							l_verses.extend (create {BIB_READING_VERSE}.make (al_version.code, keys.book_part (ic), keys.chapter_part (ic), keys.verse_part (ic), al_text, al_version.provenance))
+						else
+							l_verses.extend (create {BIB_READING_VERSE}.make (al_version.code, keys.book_part (ic), keys.chapter_part (ic), keys.verse_part (ic), "", al_version.provenance))
+						end
+					end
+					create Result.make_success (method ("verses_at_places", "verses_at_places", a_version, a_places.count.out + " places", l_verses.count), {ARRAY [BIB_PROVENANCE]} <<al_version.provenance>>, l_verses)
+				else
+					create Result.make_failure (method ("verses_at_places", "verses_at_places", a_version, a_places.count.out + " places", 0), query_error)
+				end
+			else
+				check version_known: False then end
+			end
+		ensure
+			every_place: Result.is_success implies Result.count = a_places.count
+			one_version: across 1 |..| Result.count as i all Result.item (i).version_code.same_string (a_version) end
+		end
+
+	Max_places_per_read: INTEGER = 500
+			-- The most places `verses_at_places' reads at once.
+
 	search_expression (a_version: READABLE_STRING_8; a_words: READABLE_STRING_GENERAL): STRING_32
 			-- The FTS5 expression for `a_words' in `a_version''s language: each word, or each "quoted
 			-- phrase", one FTS5 string (so no word is read as an operator); a word ending in * a
@@ -382,6 +467,8 @@ feature {NONE} -- SQL
 	Search_sql: STRING_8 = "SELECT t.book_id, t.chapter, t.verse, t.text FROM (SELECT rowid AS key FROM main.verse_fts WHERE verse_fts MATCH ? AND rowid BETWEEN ? AND ? ORDER BY rowid LIMIT ?) h JOIN main.verse_text t ON t.version_code = ? AND t.book_id = (h.key %% 1000000000) / 1000000 AND t.chapter = (h.key %% 1000000) / 1000 AND t.verse = h.key %% 1000 ORDER BY h.key"
 			-- The hits and their text in one query (design scan 47: one query per hit before); the
 			-- key arithmetic is BIB_PLACE_PACKING's units.
+
+	Places_sql: STRING_8 = "SELECT rowid AS key FROM main.verse_fts WHERE verse_fts MATCH ? AND rowid BETWEEN ? AND ? ORDER BY rowid"
 
 	Count_sql: STRING_8 = "SELECT count(*) AS n FROM main.verse_fts WHERE verse_fts MATCH ? AND rowid BETWEEN ? AND ?"
 

@@ -153,6 +153,8 @@ feature {NONE} -- Suites
 		do
 			print ("TEST_SEARCH%N")
 			create t
+			run_test (agent t.test_query_parser_reads_boolean_and_keys, "test_query_parser_reads_boolean_and_keys")
+			run_test (agent t.test_query_parser_locates_errors, "test_query_parser_locates_errors")
 			run_test (agent t.test_query_states, "test_query_states")
 			run_test (agent t.test_scope_contains_book_range, "test_scope_contains_book_range")
 			run_skeletal (agent t.test_copied_phrase_finds_its_verse, "test_copied_phrase_finds_its_verse", "AC-1a-21")
@@ -368,6 +370,7 @@ feature {NONE} -- Suites
 			run_test (agent t.test_builds_a_content_db_the_engine_opens, "test_builds_a_content_db_the_engine_opens")
 			run_test (agent t.test_verse_index_finds_words_phrases_and_pointed_hebrew, "test_verse_index_finds_words_phrases_and_pointed_hebrew")
 			run_test (agent t.test_verse_index_keeps_to_numbered_verses, "test_verse_index_keeps_to_numbered_verses")
+			run_test (agent t.test_boolean_and_root_word_search, "test_boolean_and_root_word_search")
 			run_test (agent t.test_rebuild_is_byte_identical, "test_rebuild_is_byte_identical")
 			run_test (agent t.test_missing_bible_is_reported, "test_missing_bible_is_reported")
 			run_test (agent t.test_failed_build_leaves_nothing_behind, "test_failed_build_leaves_nothing_behind")
