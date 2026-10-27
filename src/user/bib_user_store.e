@@ -114,6 +114,41 @@ feature -- Access
 			end
 		end
 
+	tag_counts: ARRAYED_LIST [TUPLE [tag: STRING_32; verses: INTEGER]]
+			-- Every live tag and how many verses carry it, by tag (E05).
+		require
+			open: is_open
+		do
+			create Result.make (8)
+			across connection.query_with_args ("SELECT label, count(*) AS n FROM user_item WHERE kind = ? AND deleted = 0 AND label <> '' AND hub_id > 0 GROUP BY label ORDER BY label COLLATE NOCASE", <<Kind_tag>>).rows as ic loop
+				Result.extend ([ic.string_value ("label"), ic.integer_value ("n")])
+			end
+		ensure
+			counted: across Result as ic all ic.verses >= 1 and not ic.tag.is_empty end
+		end
+
+	assignments_tagged (a_tag: READABLE_STRING_GENERAL): ARRAYED_LIST [BIB_TAG_ASSIGNMENT]
+			-- The live assignments of tag `a_tag', in verse order.
+		require
+			open: is_open
+			tag_given: not a_tag.is_empty
+		do
+			Result := tag_rows ("SELECT item_id, hub_id, label, created_at FROM user_item WHERE kind = ? AND deleted = 0 AND hub_id > 0 AND label = ? ORDER BY hub_id, item_id", <<Kind_tag, a_tag.to_string_32>>)
+		ensure
+			that_tag: across Result as ic all ic.tag.same_string_general (a_tag) end
+		end
+
+	tags_for (a_hub_id: INTEGER_64): ARRAYED_LIST [BIB_TAG_ASSIGNMENT]
+			-- The live tags on verse `a_hub_id', oldest first.
+		require
+			open: is_open
+		do
+			Result := tag_rows ("SELECT item_id, hub_id, label, created_at FROM user_item WHERE kind = ? AND deleted = 0 AND hub_id = ? AND label <> '' ORDER BY item_id", <<Kind_tag, a_hub_id>>)
+		ensure
+			on_that_verse: across Result as ic all ic.hub_id = a_hub_id end
+			counted: Result.count = item_count (Kind_tag, a_hub_id)
+		end
+
 	setting (a_key: STRING_8): STRING_32
 		require
 			known: has_setting (a_key)
@@ -452,6 +487,21 @@ feature {NONE} -- Items
 			elseif connection.changes_count /= 1 then
 					-- Scan 42: an id that names no item of this kind is no success.
 				create write_error.make ({BIB_ERROR}.Not_found, {STRING_32} "No such item: " + a_id.out)
+			end
+		end
+
+	tag_rows (a_sql: STRING_8; a_arguments: ARRAY [detachable ANY]): ARRAYED_LIST [BIB_TAG_ASSIGNMENT]
+			-- The tag assignments `a_sql' selects (item_id, hub_id, label, created_at).
+		local
+			l_tag: BIB_TAG_ASSIGNMENT
+		do
+			create Result.make (8)
+			across connection.query_with_args (a_sql, a_arguments).rows as ic loop
+				if ic.integer_64_value ("hub_id") > 0 and not ic.string_value ("label").is_empty then
+					create l_tag.make (ic.integer_64_value ("hub_id"), ic.string_value ("label"))
+					l_tag.mark_stored (ic.integer_64_value ("item_id"), time_of (ic.string_value ("created_at")))
+					Result.extend (l_tag)
+				end
 			end
 		end
 

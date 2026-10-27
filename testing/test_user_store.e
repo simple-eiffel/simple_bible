@@ -211,6 +211,30 @@ feature -- Tests
 			clean_user_file
 		end
 
+	test_tags_count_and_list_their_verses
+			-- E05: a tag on several verses is counted once per verse and lists them in verse order; a
+			-- verse lists its own tags.
+		local
+			l_user: BIB_USER_STORE
+			l_hubs: BIB_HUB_ID
+		do
+			clean_user_file
+			create l_user.make (User_file)
+			l_user.open
+			create l_hubs
+			l_user.tag_verse (create {BIB_TAG_ASSIGNMENT}.make (l_hubs.hub_id (61, 2, 4), "Watchers"))
+			l_user.tag_verse (create {BIB_TAG_ASSIGNMENT}.make (l_hubs.hub_id (65, 1, 6), "Watchers"))
+			l_user.tag_verse (create {BIB_TAG_ASSIGNMENT}.make (l_hubs.hub_id (65, 1, 6), "Enoch"))
+			assert_true ("written", l_user.write_error = Void)
+			assert_integers_equal ("two tags", 2, l_user.tag_counts.count)
+			assert_true ("by tag name: Enoch first, Watchers on two verses", l_user.tag_counts.first.tag.same_string ("Enoch")
+				and l_user.tag_counts.i_th (2).verses = 2)
+			assert_true ("verse order", l_user.assignments_tagged ("Watchers").first.hub_id = l_hubs.hub_id (61, 2, 4))
+			assert_integers_equal ("Jude 6 has two tags", 2, l_user.tags_for (l_hubs.hub_id (65, 1, 6)).count)
+			l_user.close
+			clean_user_file
+		end
+
 	test_user_store_refuses_another_schema
 			-- A user.db of a schema this program does not read is refused and left as it is.
 		local
