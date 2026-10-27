@@ -245,6 +245,10 @@ feature {NONE} -- Suites
 		do
 			print ("TEST_USER_STORE%N")
 			create t
+			run_test (agent t.test_hub_id_is_english_numbering, "test_hub_id_is_english_numbering")
+			run_test (agent t.test_notes_keep_every_version, "test_notes_keep_every_version")
+			run_test (agent t.test_user_store_refuses_another_schema, "test_user_store_refuses_another_schema")
+			run_test (agent t.test_notes_export_and_import_never_overwrite, "test_notes_export_and_import_never_overwrite")
 			run_test (agent t.test_notes_keyed_by_hub_id, "test_notes_keyed_by_hub_id")
 			run_test (agent t.test_user_items_carry_no_version, "test_user_items_carry_no_version")
 			run_test (agent t.test_user_store_is_the_only_writer, "test_user_store_is_the_only_writer")
@@ -341,6 +345,7 @@ feature {NONE} -- Suites
 			run_test (agent t.test_a_clicked_word_finds_its_original, "test_a_clicked_word_finds_its_original")
 			run_test (agent t.test_a_clicked_original_word_finds_its_headword, "test_a_clicked_original_word_finds_its_headword")
 			run_test (agent t.test_an_empty_chapter_says_why, "test_an_empty_chapter_says_why")
+			run_test (agent t.test_every_claim_wears_its_label, "test_every_claim_wears_its_label")
 			run_test (agent t.test_place_rows_know_their_verse, "test_place_rows_know_their_verse")
 			run_test (agent t.test_a_failing_chapter_query_says_why, "test_a_failing_chapter_query_says_why")
 		end
@@ -391,7 +396,9 @@ feature {NONE} -- Suites
 			run_test (agent t.test_missing_content_is_refused, "test_missing_content_is_refused")
 			run_test (agent t.test_pack_folder_scan_skips_the_concordance, "test_pack_folder_scan_skips_the_concordance")
 			run_test (agent t.test_pack_folder_scan_compares_files_not_spellings, "test_pack_folder_scan_compares_files_not_spellings")
-			run_test (agent t.test_generic_pack_waits_for_task_7b, "test_generic_pack_waits_for_task_7b")
+			run_test (agent t.test_commentary_pack_builds_attaches_and_answers, "test_commentary_pack_builds_attaches_and_answers")
+			run_test (agent t.test_one_commentary_pack_holds_every_book, "test_one_commentary_pack_holds_every_book")
+			run_test (agent t.test_a_pack_breaking_the_rules_is_refused_and_named, "test_a_pack_breaking_the_rules_is_refused_and_named")
 			run_test (agent t.test_book_catalog_reads_content_db, "test_book_catalog_reads_content_db")
 			run_test (agent t.test_edition_swap_needs_no_code, "test_edition_swap_needs_no_code")
 		end

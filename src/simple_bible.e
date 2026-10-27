@@ -92,11 +92,8 @@ feature -- Lifecycle
 					elseif packs_found > Max_generic_packs then
 						create last_error.make_with_details ({BIB_ERROR}.Source_unavailable, "The pack folder holds " + packs_found.out + " packs; at most " + Max_generic_packs.out + " attach (FR-138).", config.pack_folder)
 						close_after_refusal (l_content)
-					elseif packs_found > 0 then
-							-- Phase 4, Task 7b (2026-10-26): generic packs attach through BIB_PRIVATE_SOURCE.
-						create last_error.make_with_details ({BIB_ERROR}.Source_unavailable, "Generic private packs are not read yet; the pack folder holds " + packs_found.out + ".", config.pack_folder)
-						close_after_refusal (l_content)
 					else
+						attach_private_packs
 						core_schema_valid := True
 						database_edition := l_content.database_edition.twin
 						has_ai_data := l_content.ai_row_count > 0
@@ -112,7 +109,7 @@ feature -- Lifecycle
 			open_or_error: is_open xor (last_error /= Void)
 			core_checked: is_open implies core_schema_valid
 			optional_content_reflects_presence: is_open implies (has_ai_data = content_has_ai_rows and has_author_library = content_has_author_rows)
-			packs_attached: is_open implies (sources.attached_count >= packs_found or last_error /= Void)
+			packs_attached: is_open implies (sources.attached_count >= packs_found - pack_errors.count or last_error /= Void)
 			too_many_packs: packs_found > Max_generic_packs implies last_error /= Void
 			conc_attached_or_reported: (is_open and not config.conc_path.is_empty) implies (conc_pack.is_available or conc_error /= Void)
 			no_history_in_release_1: not has_history
@@ -123,6 +120,9 @@ feature -- Lifecycle
 		require
 			open: is_open
 		do
+			across private_packs as ic loop
+				ic.forget
+			end
 			sources.close
 			if attached content as al_content and then al_content.is_open then
 				al_content.close
@@ -157,6 +157,30 @@ feature -- Status
 			Result := attached content as al_content and then al_content.is_open and then al_content.author_document_count > 0
 		end
 
+	private_packs: ARRAYED_LIST [BIB_PRIVATE_SOURCE]
+			-- The generic private packs attached by the last `open' (2026-10-27).
+		attribute
+			create Result.make (0)
+		end
+
+	pack_errors: ARRAYED_LIST [BIB_ERROR]
+			-- Why each pack the last `open' found was refused: a pack that breaks the pack rules is
+			-- named and left out, and the Bible still opens (as a missing conc.db leaves it open).
+		attribute
+			create Result.make (0)
+		end
+
+	commentary_packs: ARRAYED_LIST [BIB_COMMENTARY_PACK]
+			-- The attached packs whose kind is "commentary" (BIB_COMMENTARY_SCHEMA).
+		do
+			create Result.make (private_packs.count)
+			across private_packs as ic loop
+				if ic.is_open and then ic.pack_kind.same_string ({BIB_COMMENTARY_SCHEMA}.Pack_kind) then
+					Result.extend (create {BIB_COMMENTARY_PACK}.make (sources, ic.alias_name, ic.pack_title))
+				end
+			end
+		end
+
 	packs_found: INTEGER
 			-- `pack_count' as the last `open' counted it, once (design scan 29: the folder was
 			-- scanned up to five times per open, and the postconditions rescanned it).
@@ -181,6 +205,49 @@ feature -- Status
 			end
 		ensure
 			non_negative: Result >= 0
+		end
+
+	attach_private_packs
+			-- Attach each generic pack of the pack folder read-only (BIB_PRIVATE_SOURCE checks its
+			-- rules); a refused pack goes to `pack_errors'. Larry's packs speak in the author voice.
+		local
+			l_folder: SIMPLE_FILE
+			l_pack: BIB_PRIVATE_SOURCE
+			l_count: INTEGER
+		do
+			private_packs.wipe_out
+			pack_errors.wipe_out
+			if not config.pack_folder.is_empty then
+				create l_folder.make (config.pack_folder)
+				if l_folder.is_directory then
+					across l_folder.files_with_extension (".db") as ic loop
+						if not is_conc_file (ic) and then l_count < Max_generic_packs then
+							l_count := l_count + 1
+							create l_pack.make (pack_path (ic), "pack_" + l_count.out, create {BIB_VOICE}.make_author)
+							if l_pack.is_available then
+								l_pack.open_on (sources)
+								if l_pack.is_open then
+									private_packs.extend (l_pack)
+								elseif attached l_pack.last_error as al_error then
+									pack_errors.extend (al_error)
+								end
+							end
+						end
+					end
+				end
+			end
+		ensure
+			every_pack_answered: private_packs.count + pack_errors.count <= packs_found
+		end
+
+	pack_path (a_name: READABLE_STRING_GENERAL): STRING_32
+			-- `a_name' in the pack folder.
+		do
+			Result := config.pack_folder.twin
+			if not Result.is_empty and then Result [Result.count] /= '\' and then Result [Result.count] /= '/' then
+				Result.append_character ('\')
+			end
+			Result.append_string_general (a_name)
 		end
 
 	has_history: BOOLEAN

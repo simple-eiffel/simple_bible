@@ -36,10 +36,29 @@ feature {NONE} -- Initialization
 			create l_location
 			create l_config.make_with_core (l_location.content_path)
 			l_config := l_config.set_conc_path (l_location.conc_path)
+			l_config := l_config.set_pack_folder (l_location.pack_folder)
 			create bible.make (l_config)
 			bible.open
 			create settings.make
 			settings.load
+			read_snapshot_arguments
+			if is_snapshot then
+					-- A snapshot never touches the reader's notes: its own user.db, emptied first.
+				fresh_snapshot_user_file
+				create user_store.make (snapshot_user_path)
+			else
+				create user_store.make ((create {BIB_DATA_LOCATION}).user_path)
+			end
+			user_store.open
+			create note_store.make (user_store)
+			create note_rows.make (0)
+			create notes_list.make (60.0)
+			create notes_heading.make_ui ("")
+			create new_note_label.make_ui ("")
+			create new_note_box.make ("")
+			create add_note_button.make ("Add note", Void)
+			create delete_note_button.make ("Delete", Void)
+			create restore_note_button.make ("Restore", Void)
 			create light_theme.make_light
 			create dark_theme.make_dark
 				-- The text size the reader chose last time, for all the window's text (C8).
@@ -72,6 +91,8 @@ feature {NONE} -- Initialization
 			create reading_version.make_empty
 			create commentary_title.make ("", {SW_PAINTER}.Role_ui, 13.0, True)
 			create commentary_tabs.make
+			create commentary_view.make (200.0)
+			create commentary_reader.make
 			create cross_refs_grid.make (60.0)
 			create cross_refs.make (0)
 			create lexicon_heading.make ("", {SW_PAINTER}.Role_ui, 20.0, True)
@@ -137,9 +158,107 @@ feature {NONE} -- Initialization
 			dark_switch.set_on (window.theme.is_dark)
 				-- Typing goes straight into the reference box (keys typed before a click were lost once).
 			window.give_focus (reference_box)
-			window.run
+			if is_snapshot then
+				take_snapshot
+			else
+				window.run
+			end
+			if user_store.is_open then
+				user_store.close
+			end
 			if bible.is_open then
 				bible.close
+			end
+		end
+
+feature {NONE} -- Snapshot (a picture of the window without a screen)
+
+	is_snapshot: BOOLEAN
+			-- Was the program started as `bible_gui --snapshot <png> <place> [tab]'? It then builds the
+			-- window, goes to <place> in Study, opens <tab> (interlinear, parallel, commentary or notes:
+			-- notes adds a sample note), writes the whole window to <png> and exits: no event loop, no
+			-- settings saved, a user.db of its own. For checking a build when no screen can be captured
+			-- (2026-10-27: the display was unavailable while Larry was away).
+
+	snapshot_path, snapshot_place, snapshot_tab: STRING_32
+			-- The snapshot's picture file, place and tab.
+		attribute
+			create Result.make_empty
+		end
+
+	read_snapshot_arguments
+			-- `is_snapshot' and its arguments from the command line.
+		local
+			l_arguments: ARGUMENTS_32
+		do
+			create l_arguments
+			if l_arguments.argument_count >= 3 and then l_arguments.argument (1).same_string ({STRING_32} "--snapshot") then
+				is_snapshot := True
+				snapshot_path := l_arguments.argument (2).to_string_32
+				snapshot_place := l_arguments.argument (3).to_string_32
+				if l_arguments.argument_count >= 4 then
+					snapshot_tab := l_arguments.argument (4).to_string_32.as_lower
+				end
+			end
+		end
+
+	snapshot_user_path: STRING_32
+			-- The snapshot's own user.db, in the temporary folder.
+		do
+			if attached (create {SIMPLE_ENV}).item ("TEMP") as al_temp then
+				Result := al_temp.to_string_32 + {STRING_32} "\simple_bible_snapshot_user.db"
+			else
+				Result := {STRING_32} "simple_bible_snapshot_user.db"
+			end
+		end
+
+	fresh_snapshot_user_file
+			-- No user.db left from an earlier snapshot.
+		local
+			l_file: SIMPLE_FILE
+			l_ok: BOOLEAN
+		do
+			create l_file.make (snapshot_user_path)
+			if l_file.exists then
+				l_ok := l_file.delete
+			end
+		end
+
+	take_snapshot
+			-- Go to `snapshot_place' in Study, open `snapshot_tab', draw the window into `snapshot_path'.
+		local
+			l_lookup: BIB_LOOKUP
+			l_written: BOOLEAN
+		do
+			if bible.is_open then
+				create l_lookup.make (bible)
+				if attached l_lookup.place_named (snapshot_place) as al_place then
+					go_to (al_place.book, al_place.chapter, al_place.verse)
+				end
+			end
+			if not is_study then
+				arrange (True)
+			end
+			if snapshot_tab.same_string ({STRING_32} "interlinear") then
+				show_interlinear
+			elseif snapshot_tab.same_string ({STRING_32} "parallel") then
+				show_parallel
+			elseif snapshot_tab.same_string ({STRING_32} "commentary") then
+				commentary_tabs.select_tab (1)
+			elseif snapshot_tab.same_string ({STRING_32} "notes") then
+				new_note_box.set_text ("A sample note written by the snapshot run.")
+				add_note
+			end
+			window.request_render
+				-- The whole frame as drawn (the offscreen picture `render' made).
+			l_written := window.write_frame (snapshot_path)
+			if not l_written then
+				l_written := (create {SIMPLE_FILE}.make (snapshot_path + {STRING_32} ".txt")).write_text ({STRING_32} "no frame written; root "
+					+ layout.width.out + {STRING_32} " x " + layout.height.out)
+				l_written := False
+			end
+			if not l_written then
+				(create {EXCEPTIONS}).die (1)
 			end
 		end
 
@@ -193,6 +312,13 @@ feature {NONE} -- Initialization
 			reading_view.set_on_cell_click (agent on_verse_click)
 			parallel_view.set_on_cell_click (agent on_parallel_click)
 			interlinear_view.set_on_token_select (agent on_interlinear_word)
+			notes_list.set_gutter_renderer (agent draw_note_gutter)
+			notes_list.set_on_activate (agent edit_note)
+			notes_list.set_on_edit_commit (agent on_note_edited)
+			notes_list.set_on_select (agent on_note_selected)
+			add_note_button.set_on_click (agent add_note)
+			delete_note_button.set_on_click (agent delete_note)
+			restore_note_button.set_on_click (agent restore_note)
 			cross_refs_grid.set_on_select (agent on_cross_ref)
 			search_word_button.set_on_click (agent show_every_place)
 			results_grid.set_on_select (agent on_choice)
@@ -289,12 +415,16 @@ feature {NONE} -- Window
 	commentary_pane: SW_COLUMN
 			-- S2, P04 Commentary: Commentaries, Cross-refs (live) and Related.
 		do
-			commentary_tabs.add_page ("Commentaries", create {SW_EMPTY_STATE}.make ("No commentary yet",
-				"content.db carries no commentaries yet; Matthew Henry and the others come with the content pipeline."))
+			commentary_tabs.add_page ("Commentaries", commentary_view)
 			commentary_tabs.add_page ("Cross-refs", cross_refs_grid)
 			commentary_tabs.add_page ("Related", create {SW_EMPTY_STATE}.make ("Related passages come later",
 				"AI-made related passages are planned for a later release, always marked as AI-made."))
-			commentary_tabs.select_tab (2)
+				-- Larry's commentary first when a pack holds one (2026-10-27), else the cross-references.
+			if bible.is_open and then not bible.commentary_packs.is_empty then
+				commentary_tabs.select_tab (1)
+			else
+				commentary_tabs.select_tab (2)
+			end
 			create Result.make
 			Result := Result.with_gap (6.0)
 			Result.put (commentary_title)
@@ -808,6 +938,7 @@ feature {NONE} -- Reading (S1, P01)
 					if center_tabs.selected_index = Interlinear_tab then
 						fill_interlinear
 					end
+					fill_notes
 				end
 			end
 		end
@@ -1100,7 +1231,9 @@ feature {NONE} -- Two layouts (C7)
 				add_pills
 			end
 			settings.set_study_layout (a_study)
-			l_saved := settings.save
+			if not is_snapshot then
+				l_saved := settings.save
+			end
 			keep_verse_in_view
 			window.request_render
 		ensure
@@ -1170,9 +1303,182 @@ feature {NONE} -- Two layouts (C7)
 		end
 
 	notes_pane: SW_WIDGET
-			-- T2, P06 Notes: the notes store is designed but not built.
+			-- T2, P06 Notes (GUI spec 5.6): its tabs, of which Verse notes is built (2026-10-27).
+		local
+			l_tabs: SW_TABS
+			l_page: SW_COLUMN
+			l_buttons: SW_ROW
 		do
-			Result := create {SW_EMPTY_STATE}.make ("No notes yet", "Notes come with the notes store.")
+			create l_page.make
+			l_page := l_page.with_gap (6.0)
+			l_page.put (notes_heading)
+			l_page.put (notes_list.growing)
+			l_page.put (new_note_label)
+			l_page.put (new_note_box)
+			create l_buttons.make
+			l_buttons.put (add_note_button)
+			l_buttons.put (delete_note_button)
+			l_buttons.put (restore_note_button)
+			l_page.put (l_buttons)
+			create l_tabs.make
+			l_tabs.add_page ("Verse notes", l_page)
+			l_tabs.add_page ("Journal", create {SW_EMPTY_STATE}.make ("Journal comes later", "Notebooks and topical notes (E04)."))
+			l_tabs.add_page ("Tags", create {SW_EMPTY_STATE}.make ("Tags come later", "Your tags and their verses (E05)."))
+			l_tabs.add_page ("Highlights", create {SW_EMPTY_STATE}.make ("Highlights come later", "Highlights by reason, not color (E01)."))
+			l_tabs.add_page ("Prayer", create {SW_EMPTY_STATE}.make ("Prayer list comes later", "Requests with dates (E06)."))
+			l_tabs.add_page ("Memory", create {SW_EMPTY_STATE}.make ("Memory cards come later", "Verses to learn, spaced (E07)."))
+			Result := l_tabs.growing
+		end
+
+feature {NONE} -- Notes (T2, P06)
+
+	user_store: BIB_USER_STORE
+	note_store: BIB_DB_NOTE_STORE
+			-- user.db, the reader's own data, and its notes.
+
+	notes_list: SW_PARAGRAPH_LIST
+	notes_heading, new_note_label: SW_LABEL
+	new_note_box: SW_TEXT_BOX
+	add_note_button, delete_note_button, restore_note_button: SW_BUTTON
+			-- Verse notes: the chapter's notes, and a new note on the verse read.
+
+	note_rows: ARRAYED_LIST [BIB_NOTE]
+			-- The notes in `notes_list', in order (paragraph k is note k).
+
+	last_deleted_note: INTEGER_64
+			-- The note Delete removed last; Restore brings it back (0: none).
+
+	fill_notes
+			-- Verse notes follow the place read: the chapter's notes, each under its verse number, and
+			-- the box for a new note on the verse read.
+		local
+			l_hub: BIB_HUB_ID
+			i: INTEGER
+		do
+			notes_list.wipe_out
+			note_rows.wipe_out
+			if not user_store.is_open then
+				if attached user_store.last_error as al_error then
+					notes_heading.set_text ({STRING_32} "Notes are unavailable: " + al_error.message)
+				else
+					notes_heading.set_text ("Notes are unavailable.")
+				end
+			elseif reading_book > 0 and reading_chapter > 0 then
+				create l_hub
+				note_rows := note_store.notes_between (l_hub.hub_id (reading_book, reading_chapter, 1), l_hub.hub_id (reading_book, reading_chapter, l_hub.Max_part))
+				from i := 1 until i > note_rows.count loop
+					notes_list.add (note_rows.i_th (i).body)
+					i := i + 1
+				end
+				if note_rows.is_empty then
+					notes_heading.set_text ({STRING_32} "No notes on " + place_text (reading_book, reading_chapter, 0) + {STRING_32} " yet")
+				else
+					notes_heading.set_text ({STRING_32} "Notes on " + place_text (reading_book, reading_chapter, 0) + {STRING_32} " (double-click one to edit)")
+				end
+			end
+			if reading_verse > 0 then
+				new_note_label.set_text ({STRING_32} "A new note on " + place_text (reading_book, reading_chapter, reading_verse) + {STRING_32} ":")
+			else
+				new_note_label.set_text ("Click a verse to write a note on it.")
+			end
+			add_note_button.set_enabled (user_store.is_open and reading_verse > 0)
+			delete_note_button.set_enabled (False)
+			restore_note_button.set_enabled (last_deleted_note > 0)
+		end
+
+	add_note
+			-- The box's text becomes a note on the verse read.
+		local
+			l_note: BIB_NOTE
+			l_body: STRING_32
+		do
+			l_body := new_note_box.text.twin
+			l_body.left_adjust
+			l_body.right_adjust
+			if l_body.is_empty then
+				window.toast ("Write the note in the box first.", 1)
+			elseif user_store.is_open and reading_verse > 0 and note_store.is_writable then
+				create l_note.make ((create {BIB_HUB_ID}).hub_id (reading_book, reading_chapter, reading_verse), "", l_body)
+				note_store.add_note (l_note)
+				if attached note_store.last_error as al_error then
+					window.toast (al_error.message, 1)
+				else
+					new_note_box.set_text ("")
+					fill_notes
+				end
+			end
+		end
+
+	edit_note (a_index: INTEGER)
+			-- A double-click opens the note for editing in place.
+		do
+			if a_index >= 1 and a_index <= note_rows.count then
+				notes_list.begin_edit (a_index)
+			end
+		end
+
+	on_note_edited (a_index: INTEGER; a_text: STRING_32)
+			-- An edit stands: it becomes the note's next version (the old one is kept).
+		do
+			if a_index >= 1 and a_index <= note_rows.count and then note_store.is_writable then
+				note_store.update_note (note_rows.i_th (a_index).id, a_text)
+				if attached note_store.last_error as al_error then
+					window.toast (al_error.message, 1)
+				end
+			end
+		end
+
+	on_note_selected (a_index: INTEGER)
+			-- A selected note can be deleted.
+		do
+			delete_note_button.set_enabled (a_index >= 1 and a_index <= note_rows.count)
+		end
+
+	delete_note
+			-- Soft-delete the selected note (Restore brings it back, with its history).
+		local
+			l_index: INTEGER
+		do
+			l_index := notes_list.selected_index
+			if l_index >= 1 and l_index <= note_rows.count and then note_store.is_writable then
+				note_store.remove_note (note_rows.i_th (l_index).id)
+				if attached note_store.last_error as al_error then
+					window.toast (al_error.message, 1)
+				else
+					last_deleted_note := note_rows.i_th (l_index).id
+					fill_notes
+					window.toast ("Note deleted. Restore brings it back.", 1)
+				end
+			end
+		end
+
+	restore_note
+			-- Bring back the note Delete removed last.
+		do
+			if last_deleted_note > 0 and then note_store.is_writable and then note_store.is_deleted (last_deleted_note) then
+				note_store.restore_note (last_deleted_note)
+				if attached note_store.last_error as al_error then
+					window.toast (al_error.message, 1)
+				else
+					last_deleted_note := 0
+					fill_notes
+				end
+			end
+		end
+
+	draw_note_gutter (a_p: SW_PAINTER; a_index: INTEGER; a_x, a_y, a_width, a_height: REAL_64)
+			-- A note's verse number beside it.
+		local
+			l_hub: BIB_HUB_ID
+		do
+			if a_index >= 1 and a_index <= note_rows.count then
+				create l_hub
+				if l_hub.is_valid_hub (note_rows.i_th (a_index).hub_id) then
+					a_p.set_color (a_p.theme.ink_muted)
+					a_p.font ({SW_PAINTER}.Role_ui, a_p.theme.size_label - 1.0, False)
+					a_p.text (a_x + 2.0, a_y + a_p.theme.size_label + 4.0, l_hub.verse_of (note_rows.i_th (a_index).hub_id).out)
+				end
+			end
 		end
 
 	nav_children (a_node: BIB_NAV_NODE): ARRAYED_LIST [BIB_NAV_NODE]
@@ -1465,11 +1771,11 @@ feature {NONE} -- Two layouts (C7)
 			window.add_reference_mark (tools_strip, "C10", "Study tools strip: Parallel and Interlinear work; Guide, Word Study, Count and Ledger come later.", window.Corner_top_left)
 			window.add_reference_mark (mode_switch, "C7", "Mode switch, on Study: only the docking changes. Ctrl+M.", window.Corner_top_left)
 			window.add_reference_mark (navigator_tree, "T1", "P11 Navigator, west: books, chapter by chapter. Bookmarks come later.", window.Corner_top_left)
-			window.add_reference_mark (dock, "T2", "P06 Notes, west below T1: comes with the notes store.", window.Corner_bottom_left)
+			window.add_reference_mark (notes_heading, "T2", "P06 Notes, west below T1: Verse notes on the chapter read. Add one on the verse read; double-click to edit (each edit keeps the old version); Delete and Restore. The other tabs come later.", window.Corner_top_left)
 			window.add_reference_mark (center_tabs, "T3", "Centre tabs: the Bible text, Parallel (P02) and Interlinear (P03, Ctrl+I). More Bible tabs come later.", window.Corner_top_left)
 			window.add_reference_mark (interlinear_note, "P03", "Interlinear: word by word in the original, right to left for Hebrew. A click makes the word's verse the place read and opens its headword in T4.", window.Corner_top_left)
 			window.add_reference_mark (lexicon_heading, "T4", "P05 Lexicon, east: follows the clicked word.", window.Corner_top_left)
-			window.add_reference_mark (commentary_title, "T5", "P04 Commentary, east: here on Cross-refs, with OpenBible votes.", window.Corner_top_left)
+			window.add_reference_mark (commentary_title, "T5", "P04 Commentary, east: Commentaries (Larry's commentary packs, verse by verse, every claim labelled SOURCED or DEDUCED), Cross-refs with OpenBible votes.", window.Corner_top_left)
 			window.add_reference_mark (results_tabs, "T6", "South results zone: Search Results; Guides, Census, Author Library and Ledger come later.", window.Corner_top_left)
 		end
 
@@ -1501,6 +1807,55 @@ feature {NONE} -- Commentary (S2, P04)
 				commentary_title.set_text (place_text (reading_book, reading_chapter, 0) + {STRING_32} ": click a verse for its cross-references")
 			end
 			cross_refs_grid.set_rows (cross_refs)
+			show_commentary
+		end
+
+	commentary_view: SW_DOCUMENT_VIEW
+			-- S2's Commentaries tab: the commentary packs' sections on the verse read (read-only).
+
+	commentary_reader: MD_DOCUMENT_READER
+			-- Markdown into the view's document model.
+
+	show_commentary
+			-- The Commentaries tab follows the verse: every commentary pack's sections covering it,
+			-- narrowest first, each claim wearing its SOURCED or DEDUCED label.
+		local
+			l_text: BIB_COMMENTARY_TEXT
+			l_page: STRING_32
+			l_sections: BIB_LIST_RESULT [BIB_COMMENTARY_SECTION]
+			l_list: ARRAYED_LIST [BIB_COMMENTARY_SECTION]
+			i: INTEGER
+		do
+			create l_text
+			create l_page.make_empty
+			if not bible.is_open or else bible.commentary_packs.is_empty then
+				l_page := {STRING_32} "**No commentary yet**%N%NA commentary pack in the packs folder shows here, verse by verse."
+				across bible.pack_errors as ic loop
+					l_page.append ({STRING_32} "%N%N*A pack was refused: " + ic.message + {STRING_32} "*")
+				end
+			elseif reading_verse = 0 then
+				l_page := {STRING_32} "Click a verse for its commentary."
+			else
+				across bible.commentary_packs as ic loop
+					if ic.is_available then
+						l_sections := ic.sections_for_verse (reading_book, reading_chapter, reading_verse)
+						if attached l_sections.error as al_error then
+							l_page.append ({STRING_32} "*" + ic.title + {STRING_32} ": " + al_error.message + {STRING_32} "*%N%N")
+						elseif l_sections.count > 0 then
+							create l_list.make (l_sections.count)
+							from i := 1 until i > l_sections.count loop
+								l_list.extend (l_sections.item (i))
+								i := i + 1
+							end
+							l_page.append (l_text.page (ic.title, l_list))
+						end
+					end
+				end
+				if l_page.is_empty then
+					l_page := {STRING_32} "No commentary on " + place_text (reading_book, reading_chapter, reading_verse) + {STRING_32} " yet."
+				end
+			end
+			commentary_view.set_document (commentary_reader.read (l_page))
 		end
 
 	on_cross_ref (a_model: INTEGER)
@@ -1869,7 +2224,7 @@ feature {NONE} -- Design pills
 			window.add_reference_mark (dock, "C16", "Dock host: centre plus west, east, south; an empty zone collapses (P07 here).", window.Corner_top_right)
 			window.add_reference_mark (reading_caption, "S1", "P01 Bible Text, centre: verse per line. Previous and Next step chapters.", window.Corner_top_left)
 			window.add_reference_mark (reading_view, "S4", "Selected verse and word: click a word (English, Hebrew or Greek) and S3 follows it; S2 follows the verse.", window.Corner_top_right)
-			window.add_reference_mark (commentary_title, "S2", "P04 Commentary, east: follows the verse. Cross-refs live (OpenBible votes).", window.Corner_top_left)
+			window.add_reference_mark (commentary_title, "S2", "P04 Commentary, east: follows the verse. Commentaries from the commentary packs (every claim labelled SOURCED or DEDUCED); Cross-refs (OpenBible votes).", window.Corner_top_left)
 			window.add_reference_mark (lexicon_heading, "S3", "P05 Lexicon, south: follows the word. Renderings first, then lexicon entries.", window.Corner_top_left)
 			window.add_reference_mark (renderings_grid, "P05.4", "Range before ruling: every rendering with its count, before any lexicon's verdict.", window.Corner_top_left)
 			window.add_reference_mark (entries_list, "P05.5", "Lexicon entries: each source in its own words (Abbott-Smith, BDB, LSJ, UBS, TBESH).", window.Corner_top_left)
