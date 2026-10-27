@@ -315,6 +315,9 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			elseif snapshot_tab.same_string ({STRING_32} "morph") then
 				search_box.set_text ("G3056 AND morph:N-NSM")
 				on_search
+			elseif snapshot_tab.same_string ({STRING_32} "form") then
+				search_box.set_text ("G3056@N-NSM")
+				on_search
 			elseif snapshot_tab.same_string ({STRING_32} "spelling") then
 				search_box.set_text ("lemma:ruach")
 				on_search
@@ -803,7 +806,7 @@ feature {NONE} -- Toolbar (C3-C9)
 					-- whole and said "nothing found".
 				create choices.make (0)
 				results_grid.set_rows (choices)
-				results_note.set_text ("A search of several parts: the verses it names are listed below.")
+				results_note.set_text ("No dictionary word to show for this search: the verses it names are listed below.")
 				find_verses (search_box.text)
 				show_results
 			elseif bible.is_open and then bible.conc_pack.is_available and then not search_box.text.is_empty and then attached lookup_text (search_box.text) as al_lookup_text then
@@ -851,7 +854,7 @@ feature {NONE} -- Toolbar (C3-C9)
 			l_query := bible.query_parser.parsed (a_text, bible.search_scopes.whole_bible ("KJV"))
 			if not l_query.is_valid then
 				Result := a_text.to_string_32
-			elseif l_query.clause_count = 1 and then l_query.clause (1).kind = {BIB_QUERY_CLAUSE}.Morph then
+			elseif l_query.clause_count = 1 and then (l_query.clause (1).kind = {BIB_QUERY_CLAUSE}.Morph or l_query.clause (1).kind = {BIB_QUERY_CLAUSE}.Form) then
 					-- A grammar code names no headword: the verse search alone.
 				Result := Void
 			elseif l_query.clause_count = 1 and then l_query.clause (1).is_key_clause then
@@ -3246,7 +3249,7 @@ feature {NONE} -- Design pills
 			window.add_reference_mark (back_button, "C3", "Back and Forward: history, Alt+Left and Alt+Right.", window.Corner_top_left)
 			window.add_reference_mark (reference_box, "C4", "Reference box: 'John 3:16', 'Ps 23', 'Gen 1 1'. Anything else is searched. Ctrl+L.", window.Corner_top_left)
 			window.add_reference_mark (version_select, "C5", "Version picker: every version content.db holds. The text changes; the place stays.", window.Corner_top_right)
-			window.add_reference_mark (search_box, "C6", "Quick search: a word, verse or Strong's number, and every verse it names: words, %"phrases%", word*, AND, OR and NOT in capitals, parentheses, strongs:H1254 or G5485, lemma:charis, morph:V-AAI-3S or morph:Vq*. Results open the results zone. Ctrl+F.", window.Corner_top_left)
+			window.add_reference_mark (search_box, "C6", "Quick search: a word, verse or Strong's number, and every verse it names: words, %"phrases%", word*, AND, OR and NOT in capitals, parentheses, strongs:H1254 or G5485, lemma:charis, morph:V-AAI-3S or morph:Vq*, and a root in a form on one word: G3056@N-NSM. Results open the results zone. Ctrl+F.", window.Corner_top_left)
 			window.add_reference_mark (smaller_button, "C8", {STRING_32} "Text size: all the window's text, " + (settings.Min_text_scale * 100.0).rounded.out + {STRING_32} " to "
 				+ (settings.Max_text_scale * 100.0).rounded.out + {STRING_32} " percent, kept for next time. Ctrl + and -.", window.Corner_top_left)
 			window.add_reference_mark (dark_switch, "C9", "Dark / Light: your choice; until you switch, Windows decides.", window.Corner_top_right)
@@ -3272,7 +3275,7 @@ feature {NONE} -- Design pills
 			window.add_reference_mark (renderings_grid, "P05.4", "Range before ruling: every rendering with its count, before any lexicon's verdict.", window.Corner_top_left)
 			window.add_reference_mark (entries_list, "P05.5", "Lexicon entries: each source in its own words (Abbott-Smith, BDB, LSJ, UBS, TBESH).", window.Corner_top_left)
 			window.add_reference_mark (search_word_button, "P05.7", "Actions: Every place of this word; Word Study comes later.", window.Corner_top_left)
-			window.add_reference_mark (verses_heading, "P07.2", "Verses of the version read that the search names, in Bible order with their count; click one to read it. Words, %"phrases%", word*, AND, OR and NOT in capitals (NOT takes away from what stands beside it), parentheses, root words (strongs:H1254 or G5485, lemma:charis) and grammar (morph:V-AAI-3S Greek, morph:Vqp3ms Hebrew, written as the corpora write them, letter case included; morph:V* for every code it begins, Greek and Hebrew alike). AND joins verses, not words: G3056 AND morph:N-NSM finds verses holding both, not only the word in that form.", window.Corner_top_left)
+			window.add_reference_mark (verses_heading, "P07.2", "Verses of the version read that the search names, in Bible order with their count; click one to read it. Words, %"phrases%", word*, AND, OR and NOT in capitals (NOT takes away from what stands beside it), parentheses, root words (strongs:H1254 or G5485, lemma:charis) and grammar (morph:V-AAI-3S Greek, morph:Vqp3ms Hebrew, written as the corpora write them, letter case included; morph:V* for every code it begins, Greek and Hebrew alike). AND joins verses, not words: G3056 AND morph:N-NSM finds verses holding both; G3056@N-NSM finds the word itself in that form.", window.Corner_top_left)
 			window.add_reference_mark (results_note, "P07", "Search results: the dictionary words matching the search, then (P07.2) the verses holding it. Docked west only while there are results (Simple); Close collapses it.", window.Corner_top_left)
 		end
 

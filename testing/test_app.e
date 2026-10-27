@@ -156,6 +156,7 @@ feature {NONE} -- Suites
 			run_test (agent t.test_query_parser_reads_boolean_and_keys, "test_query_parser_reads_boolean_and_keys")
 			run_test (agent t.test_query_parser_locates_errors, "test_query_parser_locates_errors")
 			run_test (agent t.test_query_parser_scan_48_holes, "test_query_parser_scan_48_holes")
+			run_test (agent t.test_query_parser_reads_word_forms, "test_query_parser_reads_word_forms")
 			run_test (agent t.test_query_states, "test_query_states")
 			run_test (agent t.test_scope_contains_book_range, "test_scope_contains_book_range")
 			run_skeletal (agent t.test_copied_phrase_finds_its_verse, "test_copied_phrase_finds_its_verse", "AC-1a-21")

@@ -369,45 +369,57 @@ feature -- Access
 			-- Hebrew and Aramaic in the Hebrew Bible (`Hebrew_root_corpus', Hebrew verse numbers),
 			-- Greek in the Greek New Testament (`Greek_root_corpus'), by key, never by display string
 			-- (FR-023, FR-024): a Strong's number through lemma_xref, a lemma through its headword or
-			-- plain letters. A morphology code (B05): Robinson in the Greek New Testament, OSHB in the
-			-- Hebrew Bible. A value: finding changes nothing (design scan 48).
+			-- plain letters. A morphology code (B05) in both corpora. A form (BIB_FORM_KEY): the root
+			-- in that form on one word. A value: finding changes nothing (design scan 48).
 		require
 			available: is_available
+		do
+			if attached {BIB_MORPH_CODE} a_key as al_morph then
+				Result := morph_places (al_morph)
+			elseif attached {BIB_FORM_KEY} a_key as al_form then
+				Result := root_places (al_form.root, al_form.code)
+			elseif attached {BIB_STRONGS_KEY} a_key or attached {BIB_LEMMA_KEY} a_key then
+				Result := root_places (a_key, Void)
+			else
+					-- Design scan 49: a key kind this pack cannot answer is a failure, never "no verse".
+				create Result.make_failed
+			end
+		ensure
+			ascending_once: is_ascending (Result.places)
+		end
+
+	root_places (a_root: BIB_KEY; a_form: detachable BIB_MORPH_CODE): BIB_ROOT_PLACES
+			-- Every verse where root `a_root' stands (in form `a_form' on the same word, when given).
+		require
+			a_root: attached {BIB_STRONGS_KEY} a_root or attached {BIB_LEMMA_KEY} a_root
 		local
 			l_hebrew, l_greek: ARRAYED_LIST [INTEGER_64]
 			l_entries: detachable BIB_LIST_RESULT [BIB_WORD_ENTRY]
 			l_language: STRING_8
 		do
-			if attached {BIB_MORPH_CODE} a_key as al_morph then
-				Result := morph_places (al_morph)
-			elseif attached {BIB_STRONGS_KEY} a_key or attached {BIB_LEMMA_KEY} a_key then
-				create l_hebrew.make (2)
-				create l_greek.make (2)
-				l_language := "any"
-				if attached {BIB_STRONGS_KEY} a_key as al_strongs then
-					l_entries := headwords_for_strongs (al_strongs)
-				elseif attached {BIB_LEMMA_KEY} a_key as al_lemma then
-					l_entries := headwords_for_text (al_lemma.lemma)
-					l_language := al_lemma.language
-				end
-				if attached l_entries as al_entries then
-					across 1 |..| al_entries.count as i loop
-						if is_hebrew_script (al_entries.item (i).language) and (l_language.same_string ("any") or l_language.same_string ("hbo")) then
-							l_hebrew.extend (al_entries.item (i).lemma_id)
-						elseif al_entries.item (i).language.same_string ("grc") and (l_language.same_string ("any") or l_language.same_string ("grc")) then
-							l_greek.extend (al_entries.item (i).lemma_id)
-						end
+			create l_hebrew.make (2)
+			create l_greek.make (2)
+			l_language := "any"
+			if attached {BIB_STRONGS_KEY} a_root as al_strongs then
+				l_entries := headwords_for_strongs (al_strongs)
+			elseif attached {BIB_LEMMA_KEY} a_root as al_lemma then
+				l_entries := headwords_for_text (al_lemma.lemma)
+				l_language := al_lemma.language
+			end
+			if attached l_entries as al_entries then
+				across 1 |..| al_entries.count as i loop
+					if is_hebrew_script (al_entries.item (i).language) and (l_language.same_string ("any") or l_language.same_string ("hbo")) then
+						l_hebrew.extend (al_entries.item (i).lemma_id)
+					elseif al_entries.item (i).language.same_string ("grc") and (l_language.same_string ("any") or l_language.same_string ("grc")) then
+						l_greek.extend (al_entries.item (i).lemma_id)
 					end
 				end
-				if attached l_entries as al_entries and then not al_entries.is_success then
-					create Result.make_failed
-				elseif attached lemma_places (l_hebrew, Hebrew_root_corpus) as al_hebrew and attached lemma_places (l_greek, Greek_root_corpus) as al_greek then
-					create Result.make (union (al_hebrew, al_greek), not al_hebrew.is_empty, not al_greek.is_empty)
-				else
-					create Result.make_failed
-				end
+			end
+			if attached l_entries as al_entries and then not al_entries.is_success then
+				create Result.make_failed
+			elseif attached lemma_places (l_hebrew, Hebrew_root_corpus, a_form) as al_hebrew and attached lemma_places (l_greek, Greek_root_corpus, a_form) as al_greek then
+				create Result.make (union (al_hebrew, al_greek), not al_hebrew.is_empty, not al_greek.is_empty)
 			else
-					-- Design scan 49: a key kind this pack cannot answer is a failure, never "no verse".
 				create Result.make_failed
 			end
 		ensure
@@ -1053,10 +1065,11 @@ feature {NONE} -- Implementation
 			create Result.make (a_id, {STRING_32} "conc:" + a_code, a_name, l_license, a_ship_class)
 		end
 
-	lemma_places (a_lemmas: ARRAYED_LIST [INTEGER_64]; a_corpus_code: READABLE_STRING_8): detachable ARRAYED_LIST [INTEGER_64]
-			-- Every numbered verse of corpus `a_corpus_code' holding a token of `a_lemmas', packed,
-			-- ascending; empty when there is no lemma; Void when the query fails. The lemma ids are
-			-- written into the SQL as integers (nothing typed reaches it).
+	lemma_places (a_lemmas: ARRAYED_LIST [INTEGER_64]; a_corpus_code: READABLE_STRING_8; a_form: detachable BIB_MORPH_CODE): detachable ARRAYED_LIST [INTEGER_64]
+			-- Every numbered verse of corpus `a_corpus_code' holding a token of `a_lemmas' (coded
+			-- `a_form' on that token, when given), packed, ascending; empty when there is no lemma;
+			-- Void when the query fails. The lemma ids are written into the SQL as integers (nothing
+			-- typed reaches it); the code is bound.
 		local
 			l_ids: STRING_8
 			i: INTEGER
@@ -1072,7 +1085,13 @@ feature {NONE} -- Implementation
 					l_ids.append (a_lemmas.i_th (i).out)
 					i := i + 1
 				end
-				Result := places_where (a_corpus_code, "t.lemma_id IN (" + l_ids + ")", Void)
+				if attached a_form as al_form and then al_form.is_prefix then
+					Result := places_where (a_corpus_code, "t.lemma_id IN (" + l_ids + ") AND t.morph GLOB ?", al_form.code)
+				elseif attached a_form as al_form then
+					Result := places_where (a_corpus_code, "t.lemma_id IN (" + l_ids + ") AND t.morph = ?", al_form.code)
+				else
+					Result := places_where (a_corpus_code, "t.lemma_id IN (" + l_ids + ")", Void)
+				end
 			end
 		end
 

@@ -103,6 +103,23 @@ feature -- Tests
 			assert_true ("a query within the bounds", p.parsed ("((grace OR mercy) AND (peace NOT war))", parser_scope).is_valid)
 		end
 
+	test_query_parser_reads_word_forms
+			-- A root and a grammar code on the same word: G3056@N-NSM, H1254@Vq*, lemma:logos@N-NSM.
+		local
+			p: BIB_QUERY_PARSER
+			q: BIB_QUERY
+		do
+			create p.make
+			q := p.parsed ("G3056@N-NSM", parser_scope)
+			assert_true ("a Strong's form", q.is_valid and then q.clause_count = 1 and then q.clause (1).kind = {BIB_QUERY_CLAUSE}.Form)
+			q := p.parsed ("lemma:logos@N-NSM AND grace", parser_scope)
+			assert_true ("a lemma form beside a word", q.is_valid and then q.clause (2).kind = {BIB_QUERY_CLAUSE}.Form)
+			assert_true ("a form with morph: written", p.parsed ("H1254@morph:Vq*", parser_scope).is_valid)
+			assert_integers_equal ("a form needs a code", 1, p.parsed ("G3056@", parser_scope).error_position)
+			assert_false ("a form needs a root", p.parsed ("grace@N-NSM", parser_scope).is_valid)
+			assert_false ("a form needs a real code", p.parsed ("G3056@N[A]", parser_scope).is_valid)
+		end
+
 	test_query_states
 		local
 			q: BIB_QUERY

@@ -27,7 +27,7 @@ feature {NONE} -- Initialization
 	make_key (a_kind: INTEGER; a_key: BIB_KEY)
 			-- Lemma, Strong's or morphology clause.
 		require
-			key_kind: a_kind = Lemma or a_kind = Strongs or a_kind = Morph
+			key_kind: a_kind = Lemma or a_kind = Strongs or a_kind = Morph or a_kind = Form
 		do
 			kind := a_kind
 			key := a_key
@@ -62,7 +62,7 @@ feature -- Status
 
 	is_key_clause: BOOLEAN
 		do
-			Result := kind = Lemma or kind = Strongs or kind = Morph
+			Result := kind = Lemma or kind = Strongs or kind = Morph or kind = Form
 		end
 
 	is_operator: BOOLEAN
@@ -81,9 +81,11 @@ feature -- Constants
 	Lemma: INTEGER = 7
 	Strongs: INTEGER = 8
 	Morph: INTEGER = 9
+	Form: INTEGER = 10
+			-- A root in a grammatical form on one word (BIB_FORM_KEY).
 
 invariant
-	kind_valid: kind >= Word and kind <= Morph
+	kind_valid: kind >= Word and kind <= Form
 	key_clause_has_key: is_key_clause implies key /= Void
 	operator_has_children: is_operator implies child_count >= 1
 	leaf_has_no_children: not is_operator implies child_count = 0
