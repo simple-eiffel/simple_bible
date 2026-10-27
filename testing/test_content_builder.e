@@ -317,6 +317,38 @@ feature -- Tests
 			create Result.make ("verses", <<"KJV">>, 1, 66, "verses")
 		end
 
+	test_versification_build_reports_what_it_drops
+			-- Scan 53: a TVTMS file without its expanded section fails the build; a Hebrew row naming a
+			-- book outside the Hebrew Bible, or a Hebrew verse already mapped, is counted, never silent;
+			-- TVTMS's book codes reach the right books. Before: the empty file built with 0 rows and no
+			-- word, and drops were not counted.
+		local
+			l_builder: BIB_CONTENT_BUILDER
+		do
+			remove_test_files
+			make_bible_db (Bible_file, True)
+			assert_true ("no expanded section", (create {SIMPLE_FILE}.make (Tvtms_file)).write_text_utf_8 ("TVTMS without its data%N#DataStart(Condensed)%N#DataEnd(Condensed)%N"))
+			create l_builder.make
+			l_builder.set_build_id ("test-build")
+			l_builder.set_tvtms_path (Tvtms_file)
+			l_builder.build (Bible_file, Out_file)
+			assert_true ("refused", attached l_builder.last_error as al_error and then al_error.has_substring ("expanded"))
+			assert_true ("TVTMS rows", (create {SIMPLE_FILE}.make (Tvtms_file)).write_text_utf_8 ("TVTMS%N#DataStart(Expanded)%NSourceType%TSourceRef%TStandardRef%TAction%N"
+				+ "Hebrew%TJol.3:1%TJol.2:28%TRenumber verse%Tx%N"
+				+ "Hebrew%TJol.3:1%TJol.2:29%TRenumber verse%Tx%N"
+				+ "Hebrew%TEsg.1:1%TEst.1:1%TRenumber verse%Tx%N"
+				+ "Hebrew%TSng.7:1%TSng.6:13%TRenumber verse%Tx%N#DataEnd(Expanded)%N"))
+			create l_builder.make
+			l_builder.set_build_id ("test-build")
+			l_builder.set_tvtms_path (Tvtms_file)
+			l_builder.build (Bible_file, Out_file)
+			assert_true ("built", l_builder.last_error = Void)
+			assert_integers_equal ("Joel and the Song of Songs", 2, l_builder.versification_rows_written)
+			assert_integers_equal ("a verse mapped twice: the first kept, the second counted", 1, l_builder.versification_rows_repeated)
+			assert_integers_equal ("a book outside the Hebrew Bible counted", 1, l_builder.versification_rows_unplaced)
+			remove_test_files
+		end
+
 	test_rebuild_is_byte_identical
 			-- Two builds from the same inputs, build id and build time are the same bytes (FR-130's direction).
 		local

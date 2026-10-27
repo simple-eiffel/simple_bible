@@ -27,6 +27,7 @@ feature {NONE} -- Initialization
 		do
 			hebrew_places := a_hebrew
 			greek_places := a_greek
+			places := union (a_hebrew, a_greek)
 		ensure
 			hebrew_set: hebrew_places = a_hebrew
 			greek_set: greek_places = a_greek
@@ -38,6 +39,7 @@ feature {NONE} -- Initialization
 		do
 			create hebrew_places.make (0)
 			create greek_places.make (0)
+			create places.make (0)
 			has_failed := True
 		ensure
 			failed: has_failed
@@ -53,10 +55,7 @@ feature -- Access
 			-- The places in the Greek New Testament.
 
 	places: ARRAYED_LIST [INTEGER_64]
-			-- Both sides, ascending, once each.
-		do
-			Result := union (hebrew_places, greek_places)
-		end
+			-- Both sides, ascending, once each (merged once, when made).
 
 	has_hebrew: BOOLEAN
 			-- Did Hebrew places come?

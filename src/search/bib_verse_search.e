@@ -120,7 +120,7 @@ feature {NONE} -- Evaluation
 	reads_english_numbers (a_version: READABLE_STRING_8): BOOLEAN
 			-- Does `a_version' number verses the English (KJV family) way?
 		do
-			Result := attached reader.version (a_version) as al_version and then al_version.versification.same_string ("kjv")
+			Result := attached reader.version (a_version) as al_version and then al_version.numbers_like_english
 		end
 
 	english_places (a_hebrew: ARRAYED_LIST [INTEGER_64]): ARRAYED_LIST [INTEGER_64]
