@@ -6,8 +6,10 @@ note
 		AND); parentheses; strongs:H1254, or a bare H1254 or G5485; lemma: with a
 		Hebrew or Greek headword or its plain letters (lemma:charis). OR binds
 		loosest, then AND, then NOT; NOT takes away from what stands beside it,
-		so a query cannot be NOT alone. Regular expressions and morph: are told
-		as later work, at their position.
+		so a query cannot be NOT alone, nor NOT of a NOT. Every word and phrase
+		must hold a letter or digit; at most `Max_terms' words, phrases and roots
+		and `Max_depth' nested parentheses (design scan 48). Regular expressions
+		and morph: are told as later work, at their position.
 	]"
 	author: "Larry Rix"
 	date: "$Date$"
@@ -28,6 +30,7 @@ feature {NONE} -- Initialization
 			create error_message.make_empty
 			create strongs_check.make_from_text ("H1")
 			create scripts
+			create unicode.make
 		end
 
 feature -- Parsing
@@ -41,6 +44,7 @@ feature -- Parsing
 			l_clauses: ARRAYED_LIST [BIB_QUERY_CLAUSE]
 		do
 			error_position := 0
+			depth := 0
 			create error_message.make_empty
 			read_tokens (a_text)
 			index := 1
@@ -86,6 +90,23 @@ feature {NONE} -- Tokens
 
 	scripts: BIB_SCRIPT_CLASSIFIER
 
+	unicode: SIMPLE_UNICODE
+			-- Tells a letter or digit, so a word with nothing to search is refused.
+
+	depth: INTEGER
+			-- How many parentheses enclose the token being parsed.
+
+	Max_depth: INTEGER = 16
+	Max_terms: INTEGER = 32
+			-- Bounds on a query (the parser and the search recurse by depth, and each word is one
+			-- index query).
+
+	is_searchable (a_text: READABLE_STRING_32): BOOLEAN
+			-- Does `a_text' hold a letter or a digit?
+		do
+			Result := across a_text as ic some unicode.is_letter_or_digit (ic) end
+		end
+
 	Token_word, Token_phrase, Token_open, Token_close, Token_and, Token_or, Token_not, Token_strongs, Token_lemma: INTEGER = unique
 			-- Token kinds.
 
@@ -118,8 +139,8 @@ feature {NONE} -- Tokens
 							l_word.append_character ('*')
 							j := j + 1
 						end
-						if across l_text.substring (i + 1, (l_text.index_of ('"', i + 1) - 1).max (i)) as ic all ic.is_space or ic = '"' end then
-							fail (i, "This phrase is empty.")
+						if not is_searchable (l_text.substring (i + 1, (l_text.index_of ('"', i + 1) - 1).max (i))) then
+							fail (i, "This phrase has nothing to search for: it needs a letter or a digit.")
 						else
 							tokens.extend ([Token_phrase, l_word, i])
 						end
@@ -160,10 +181,30 @@ feature {NONE} -- Tokens
 						end
 					elseif strongs_check.is_strongs_text (l_word) then
 						tokens.extend ([Token_strongs, l_word, i])
-					else
+					elseif is_searchable (l_word) then
 						tokens.extend ([Token_word, l_word, i])
+					else
+						fail (i, "This word has nothing to search for: it needs a letter or a digit.")
 					end
 					i := j
+				end
+			end
+			if error_position = 0 then
+				check_width
+			end
+		end
+
+	check_width
+			-- At most `Max_terms' words, phrases and roots.
+		local
+			l_terms: INTEGER
+		do
+			across tokens as ic until error_position > 0 loop
+				if ic.kind = Token_word or ic.kind = Token_phrase or ic.kind = Token_strongs or ic.kind = Token_lemma then
+					l_terms := l_terms + 1
+					if l_terms > Max_terms then
+						fail (ic.position, {STRING_32} "A search holds at most " + Max_terms.out + {STRING_32} " words, phrases and root words.")
+					end
 				end
 			end
 		end
@@ -174,7 +215,9 @@ feature {NONE} -- Grammar
 			-- or := and ("OR" and)*
 		local
 			l_operands: ARRAYED_LIST [BIB_QUERY_NODE]
+			l_start: INTEGER
 		do
+			l_start := start_position
 			create l_operands.make (2)
 			if attached parsed_and as al_first then
 				l_operands.extend (al_first)
@@ -186,7 +229,7 @@ feature {NONE} -- Grammar
 				end
 			end
 			if error_position = 0 then
-				Result := combined ({BIB_QUERY_CLAUSE}.Or_clause, l_operands)
+				Result := combined ({BIB_QUERY_CLAUSE}.Or_clause, l_operands, l_start)
 			end
 		end
 
@@ -194,7 +237,9 @@ feature {NONE} -- Grammar
 			-- and := unary (["AND"] unary)*, side by side meaning AND.
 		local
 			l_operands: ARRAYED_LIST [BIB_QUERY_NODE]
+			l_start: INTEGER
 		do
+			l_start := start_position
 			create l_operands.make (2)
 			if attached parsed_unary as al_first then
 				l_operands.extend (al_first)
@@ -208,7 +253,7 @@ feature {NONE} -- Grammar
 				end
 			end
 			if error_position = 0 then
-				Result := combined ({BIB_QUERY_CLAUSE}.And_clause, l_operands)
+				Result := combined ({BIB_QUERY_CLAUSE}.And_clause, l_operands, l_start)
 			end
 		end
 
@@ -216,13 +261,15 @@ feature {NONE} -- Grammar
 			-- unary := "NOT" primary | primary
 		local
 			l_operand: ARRAYED_LIST [BIB_QUERY_NODE]
+			l_start: INTEGER
 		do
 			if index <= tokens.count and then tokens.i_th (index).kind = Token_not then
+				l_start := tokens.i_th (index).position
 				index := index + 1
 				if attached parsed_primary as al_primary then
 					create l_operand.make (1)
 					l_operand.extend (al_primary)
-					create Result.make_operator ({BIB_QUERY_CLAUSE}.Not_clause, l_operand)
+					create Result.make_operator ({BIB_QUERY_CLAUSE}.Not_clause, l_operand, l_start)
 				end
 			else
 				Result := parsed_primary
@@ -245,12 +292,20 @@ feature {NONE} -- Grammar
 				index := index + 1
 				inspect l_token.kind
 				when Token_open then
-					Result := parsed_or
-					if error_position = 0 then
-						if index <= tokens.count and then tokens.i_th (index).kind = Token_close then
-							index := index + 1
-						else
-							fail (l_token.position, "This '(' has no ')' after it.")
+					if index <= tokens.count and then tokens.i_th (index).kind = Token_close then
+						fail (l_token.position, "These parentheses are empty.")
+					elseif depth >= Max_depth then
+						fail (l_token.position, {STRING_32} "Parentheses nest at most " + Max_depth.out + {STRING_32} " deep.")
+					else
+						depth := depth + 1
+						Result := parsed_or
+						depth := depth - 1
+						if error_position = 0 then
+							if index <= tokens.count and then tokens.i_th (index).kind = Token_close then
+								index := index + 1
+							else
+								fail (l_token.position, "This '(' has no ')' after it.")
+							end
 						end
 					end
 				when Token_close then
@@ -260,38 +315,54 @@ feature {NONE} -- Grammar
 				when Token_not then
 					fail (l_token.position, "NOT NOT says nothing: write one NOT.")
 				when Token_word then
-					create Result.make_leaf (create {BIB_QUERY_CLAUSE}.make_text ({BIB_QUERY_CLAUSE}.Word, l_token.text))
+					create Result.make_leaf (create {BIB_QUERY_CLAUSE}.make_text ({BIB_QUERY_CLAUSE}.Word, l_token.text), l_token.position)
 				when Token_phrase then
-					create Result.make_leaf (create {BIB_QUERY_CLAUSE}.make_text ({BIB_QUERY_CLAUSE}.Phrase, l_token.text))
+					create Result.make_leaf (create {BIB_QUERY_CLAUSE}.make_text ({BIB_QUERY_CLAUSE}.Phrase, l_token.text), l_token.position)
 				when Token_strongs then
-					create Result.make_leaf (create {BIB_QUERY_CLAUSE}.make_key ({BIB_QUERY_CLAUSE}.Strongs, create {BIB_STRONGS_KEY}.make_from_text (l_token.text)))
+					create Result.make_leaf (create {BIB_QUERY_CLAUSE}.make_key ({BIB_QUERY_CLAUSE}.Strongs, create {BIB_STRONGS_KEY}.make_from_text (l_token.text)), l_token.position)
 				when Token_lemma then
-					create Result.make_leaf (create {BIB_QUERY_CLAUSE}.make_key ({BIB_QUERY_CLAUSE}.Lemma, create {BIB_LEMMA_KEY}.make (lemma_language (l_token.text), l_token.text)))
+					create Result.make_leaf (create {BIB_QUERY_CLAUSE}.make_key ({BIB_QUERY_CLAUSE}.Lemma, create {BIB_LEMMA_KEY}.make (lemma_language (l_token.text), l_token.text)), l_token.position)
 				else
 					fail (l_token.position, "This cannot be read.")
 				end
 			end
 		end
 
-	combined (a_kind: INTEGER; a_operands: ARRAYED_LIST [BIB_QUERY_NODE]): detachable BIB_QUERY_NODE
-			-- The one operand, or an `a_kind' node over several; Void when there is none.
+	combined (a_kind: INTEGER; a_operands: ARRAYED_LIST [BIB_QUERY_NODE]; a_position: INTEGER): detachable BIB_QUERY_NODE
+			-- The one operand, or an `a_kind' node over several starting at `a_position'; Void when
+			-- there is none.
 		do
 			if a_operands.count = 1 then
 				Result := a_operands.first
 			elseif a_operands.count > 1 then
-				create Result.make_operator (a_kind, a_operands)
+				create Result.make_operator (a_kind, a_operands, a_position.max (1))
+			end
+		end
+
+	start_position: INTEGER
+			-- Where the next token starts (1 at the end of the query).
+		do
+			if index <= tokens.count then
+				Result := tokens.i_th (index).position
+			else
+				Result := 1
 			end
 		end
 
 	check_negations (a_node: BIB_QUERY_NODE; a_stands_alone: BOOLEAN)
 			-- A NOT must take away from something beside it: never the whole query, an OR's branch,
-			-- or an AND made only of NOTs.
+			-- the operand of another NOT, or an AND made only of NOTs. The error points at the NOT.
 		do
 			if a_node.is_negation and a_stands_alone then
-				fail (1, "NOT needs something to take away from: write grace NOT law.")
+				fail (a_node.position, "NOT needs something to take away from: write grace NOT law.")
+			elseif a_node.is_negation then
+					-- Design scan 48: NOT (NOT law) passed here and failed later without a place.
+				across a_node.children as ic loop
+					check_negations (ic, True)
+				end
 			elseif a_node.kind = {BIB_QUERY_CLAUSE}.And_clause then
 				if across a_node.children as ic all ic.is_negation end then
-					fail (1, "NOT needs something to take away from: write grace NOT law.")
+					fail (a_node.children.first.position, "NOT needs something to take away from: write grace NOT law.")
 				end
 				across a_node.children as ic loop
 					check_negations (ic, False)

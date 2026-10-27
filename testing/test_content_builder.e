@@ -75,18 +75,18 @@ feature -- Tests
 			create l_bible.make (l_config)
 			l_bible.open
 			assert_true ("an index", l_bible.text_reader.has_verse_index)
-			l_found := l_bible.text_reader.verses_matching ("KJV", "light", 50)
-			assert_true ("a word", l_found.is_success and then l_found.count = 1 and then l_found.item (1).verse = 3)
-			assert_integers_equal ("every verse with the word, in order", 2, l_bible.text_reader.verses_matching ("KJV", "the", 50).count)
-			assert_integers_equal ("a phrase", 1, l_bible.text_reader.verses_matching ("KJV", "%"the earth%"", 50).count)
-			assert_integers_equal ("any case", 1, l_bible.text_reader.verses_matching ("KJV", "BEGINNING", 50).count)
-			assert_integers_equal ("a prefix", 1, l_bible.text_reader.verses_matching ("KJV", "begin*", 50).count)
-			assert_integers_equal ("every word must be there", 0, l_bible.text_reader.verses_matching ("KJV", "light beginning", 50).count)
-			assert_integers_equal ("one version only", 0, l_bible.text_reader.verses_matching ("WLC", "light", 50).count)
-			assert_integers_equal ("pointed Hebrew from unpointed typing", 1, l_bible.text_reader.verses_matching ("WLC", codes (<<0x05D5, 0x05D4, 0x05D0, 0x05E8, 0x05E5>>), 50).count)
-			assert_integers_equal ("the limit", 1, l_bible.text_reader.verses_matching ("KJV", "the", 1).count)
-			assert_integers_equal ("counted", 2, l_bible.text_reader.matching_count ("KJV", "the"))
-			assert_true ("punctuation alone finds nothing, without failing", l_bible.text_reader.verses_matching ("KJV", "?!", 50).is_success)
+			assert_integers_equal ("a word", 1, found_in (l_bible, "KJV", "light"))
+			l_found := l_bible.verse_search.verses ("KJV", 1, 50)
+			assert_true ("read in the KJV", l_found.is_success and then l_found.count = 1 and then l_found.item (1).verse = 3)
+			assert_integers_equal ("every verse with the word, in order", 2, found_in (l_bible, "KJV", "the"))
+			assert_integers_equal ("the page limit", 1, l_bible.verse_search.verses ("KJV", 1, 1).count)
+			assert_integers_equal ("a phrase", 1, found_in (l_bible, "KJV", "%"the earth%""))
+			assert_integers_equal ("any case", 1, found_in (l_bible, "KJV", "BEGINNING"))
+			assert_integers_equal ("a prefix", 1, found_in (l_bible, "KJV", "begin*"))
+			assert_integers_equal ("every word must be there", 0, found_in (l_bible, "KJV", "light beginning"))
+			assert_integers_equal ("one version only", 0, found_in (l_bible, "WLC", "light"))
+			assert_integers_equal ("pointed Hebrew from unpointed typing", 1, found_in (l_bible, "WLC", codes (<<0x05D5, 0x05D4, 0x05D0, 0x05E8, 0x05E5>>)))
+			assert_false ("punctuation alone is refused, not searched", l_bible.query_parser.parsed ("?!", kjv_scope).is_valid)
 			l_bible.close
 			remove_test_files
 		end
@@ -118,10 +118,10 @@ feature -- Tests
 			l_config := l_config.set_conc_path (Pack_file)
 			create l_bible.make (l_config)
 			l_bible.open
-			assert_integers_equal ("counted as listed", l_bible.text_reader.verses_matching ("KJV", "light", 50).count, l_bible.text_reader.matching_count ("KJV", "light"))
-			assert_integers_equal ("one verse", 1, l_bible.text_reader.matching_count ("KJV", "light"))
-			assert_true ("operators are words", l_bible.text_reader.verses_matching ("KJV", "NEAR(light) OR %" AND *", 50).is_success)
-			assert_integers_equal ("a phrase ending in a prefix", 1, l_bible.text_reader.verses_matching ("KJV", "%"the ear%"*", 50).count)
+			assert_integers_equal ("one verse", 1, found_in (l_bible, "KJV", "light"))
+			assert_integers_equal ("counted as listed", l_bible.verse_search.places.count, l_bible.verse_search.verses ("KJV", 1, 50).count)
+			assert_integers_equal ("an index operator is only a word", 0, found_in (l_bible, "KJV", "NEAR light"))
+			assert_integers_equal ("a phrase ending in a prefix", 1, found_in (l_bible, "KJV", "%"the ear%"*"))
 			l_bible.close
 			remove_test_files
 		end
@@ -166,13 +166,26 @@ feature -- Tests
 
 	found (a_bible: SIMPLE_BIBLE; a_query: STRING_8): INTEGER
 			-- How many verses `a_query' names in the KJV.
+		do
+			Result := found_in (a_bible, "KJV", a_query)
+		end
+
+	found_in (a_bible: SIMPLE_BIBLE; a_version: STRING_8; a_query: READABLE_STRING_GENERAL): INTEGER
+			-- How many verses `a_query' names in `a_version' (the one search path).
 		local
 			l_query: BIB_QUERY
 		do
-			l_query := a_bible.query_parser.parsed (a_query, create {BIB_SEARCH_SCOPE}.make ("verses", <<"KJV">>, 1, 66, "verses"))
-			assert_true ({STRING_8} "valid: " + a_query, l_query.is_valid)
-			a_bible.verse_search.find (l_query, "KJV")
+			l_query := a_bible.query_parser.parsed (a_query, kjv_scope)
+			assert_true ({STRING_32} "valid: " + a_query.to_string_32, l_query.is_valid)
+			a_bible.verse_search.find (l_query, a_version)
+			assert_false ("no failure", a_bible.verse_search.has_failed)
 			Result := a_bible.verse_search.places.count
+		end
+
+	kjv_scope: BIB_SEARCH_SCOPE
+			-- Every book.
+		once
+			create Result.make ("verses", <<"KJV">>, 1, 66, "verses")
 		end
 
 	test_rebuild_is_byte_identical

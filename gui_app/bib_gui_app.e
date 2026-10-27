@@ -792,9 +792,17 @@ feature {NONE} -- Toolbar (C3-C9)
 				results_note.set_text ("No concordance attached: the verses are searched, the dictionary words are not.")
 				find_verses (search_box.text)
 				show_results
-			elseif bible.is_open and then bible.conc_pack.is_available and then not search_box.text.is_empty then
+			elseif bible.is_open and then bible.conc_pack.is_available and then not search_box.text.is_empty and then not attached lookup_text (search_box.text) then
+					-- Design scan 48: a search of several parts is the parser's; the lookup box read it
+					-- whole and said "nothing found".
+				create choices.make (0)
+				results_grid.set_rows (choices)
+				results_note.set_text ("A search of several parts: the verses it names are listed below.")
+				find_verses (search_box.text)
+				show_results
+			elseif bible.is_open and then bible.conc_pack.is_available and then not search_box.text.is_empty and then attached lookup_text (search_box.text) as al_lookup_text then
 				create l_lookup.make (bible)
-				choices := l_lookup.choices_for (search_box.text)
+				choices := l_lookup.choices_for (al_lookup_text)
 				results_grid.set_rows (choices)
 				results_note.set_text (l_lookup.note_text)
 				if attached l_lookup.last_verse as al_verse and then not reading_version.is_empty then
@@ -819,6 +827,37 @@ feature {NONE} -- Toolbar (C3-C9)
 					if choices.count >= 1 and then choices.first.opens_a_word and then l_lookup.last_verse = Void then
 						open_study (choices.first.lemma_id)
 					end
+				end
+			end
+		end
+
+	lookup_text (a_text: READABLE_STRING_GENERAL): detachable STRING_32
+			-- What the lookup box should read for `a_text': the text itself when it is plain words (a
+			-- word, a verse such as John 3:16, an English phrase), a Strong's number for strongs:,
+			-- the headword for lemma:; Void when the search has several parts (OR, NOT, parentheses,
+			-- quotes, or keys among words), which only the verse search reads.
+		local
+			l_query: BIB_QUERY
+			l_plain: BOOLEAN
+			i: INTEGER
+		do
+			l_query := bible.query_parser.parsed (a_text, create {BIB_SEARCH_SCOPE}.make ("verses", {ARRAY [STRING_8]} <<"KJV">>, 1, Last_book, "verses"))
+			if not l_query.is_valid then
+				Result := a_text.to_string_32
+			elseif l_query.clause_count = 1 and then l_query.clause (1).is_key_clause then
+				if attached l_query.clause (1).key as al_key and then attached {BIB_LEMMA_KEY} al_key as al_lemma then
+					Result := al_lemma.lemma
+				else
+					Result := l_query.clause (1).text
+				end
+			else
+				l_plain := not a_text.has ('(') and not a_text.has ('"')
+				from i := 1 until i > l_query.clause_count or not l_plain loop
+					l_plain := l_query.clause (i).kind = {BIB_QUERY_CLAUSE}.Word or l_query.clause (i).kind = {BIB_QUERY_CLAUSE}.And_clause
+					i := i + 1
+				end
+				if l_plain then
+					Result := a_text.to_string_32
 				end
 			end
 		end
@@ -3022,9 +3061,12 @@ feature {NONE} -- Search results (P07)
 							across 1 |..| l_found.count as i loop
 								verse_hits.extend (l_found.item (i))
 							end
+							l_total := bible.verse_search.places.count
+							show_verse_count (l_total)
+						else
+								-- Design scan 48: a count was shown over no rows.
+							verses_heading.set_text ("The verses were found but could not be read.")
 						end
-						l_total := bible.verse_search.places.count
-						show_verse_count (l_total)
 					end
 				end
 			end
@@ -3194,7 +3236,7 @@ feature {NONE} -- Design pills
 			window.add_reference_mark (back_button, "C3", "Back and Forward: history, Alt+Left and Alt+Right.", window.Corner_top_left)
 			window.add_reference_mark (reference_box, "C4", "Reference box: 'John 3:16', 'Ps 23', 'Gen 1 1'. Anything else is searched. Ctrl+L.", window.Corner_top_left)
 			window.add_reference_mark (version_select, "C5", "Version picker: every version content.db holds. The text changes; the place stays.", window.Corner_top_right)
-			window.add_reference_mark (search_box, "C6", "Quick search: a word, verse or Strong's number, and every verse it names: words, %"phrases%", word*, AND, OR, NOT, parentheses, strongs:H1254 or G5485, lemma:charis. Results open the results zone. Ctrl+F.", window.Corner_top_left)
+			window.add_reference_mark (search_box, "C6", "Quick search: a word, verse or Strong's number, and every verse it names: words, %"phrases%", word*, AND, OR and NOT in capitals, parentheses, strongs:H1254 or G5485, lemma:charis. Results open the results zone. Ctrl+F.", window.Corner_top_left)
 			window.add_reference_mark (smaller_button, "C8", {STRING_32} "Text size: all the window's text, " + (settings.Min_text_scale * 100.0).rounded.out + {STRING_32} " to "
 				+ (settings.Max_text_scale * 100.0).rounded.out + {STRING_32} " percent, kept for next time. Ctrl + and -.", window.Corner_top_left)
 			window.add_reference_mark (dark_switch, "C9", "Dark / Light: your choice; until you switch, Windows decides.", window.Corner_top_right)
@@ -3220,7 +3262,7 @@ feature {NONE} -- Design pills
 			window.add_reference_mark (renderings_grid, "P05.4", "Range before ruling: every rendering with its count, before any lexicon's verdict.", window.Corner_top_left)
 			window.add_reference_mark (entries_list, "P05.5", "Lexicon entries: each source in its own words (Abbott-Smith, BDB, LSJ, UBS, TBESH).", window.Corner_top_left)
 			window.add_reference_mark (search_word_button, "P05.7", "Actions: Every place of this word; Word Study comes later.", window.Corner_top_left)
-			window.add_reference_mark (verses_heading, "P07.2", "Verses of the version read that the search names, in Bible order with their count; click one to read it. Words, %"phrases%", word*, AND, OR, NOT, parentheses, and root words: strongs:H1254 or G5485, lemma:charis.", window.Corner_top_left)
+			window.add_reference_mark (verses_heading, "P07.2", "Verses of the version read that the search names, in Bible order with their count; click one to read it. Words, %"phrases%", word*, AND, OR and NOT in capitals (NOT takes away from what stands beside it), parentheses, and root words: strongs:H1254 or G5485, lemma:charis.", window.Corner_top_left)
 			window.add_reference_mark (results_note, "P07", "Search results: the dictionary words matching the search, then (P07.2) the verses holding it. Docked west only while there are results (Simple); Close collapses it.", window.Corner_top_left)
 		end
 

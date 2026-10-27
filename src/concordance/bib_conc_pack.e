@@ -17,6 +17,16 @@ class
 inherit
 	BIB_SQLITE_QUERYING
 
+	BIB_PLACE_PACKING
+		export
+			{NONE} all
+		end
+
+	BIB_PLACE_SETS
+		export
+			{NONE} all
+		end
+
 	BIB_LANGUAGE_CODES
 		export
 			{NONE} all
@@ -354,23 +364,21 @@ feature -- Access
 			method_recorded: Result.method.engine_feature.same_string_general ("headwords_behind_original_word")
 		end
 
-	key_places (a_key: BIB_KEY): ARRAYED_LIST [INTEGER_64]
+	key_places (a_key: BIB_KEY): BIB_ROOT_PLACES
 			-- Every verse where root `a_key' stands, packed by BIB_PLACE_PACKING, ascending, once each:
 			-- Hebrew and Aramaic roots in the Hebrew Bible (`Hebrew_root_corpus', Hebrew verse
 			-- numbers), Greek roots in the Greek New Testament (`Greek_root_corpus'). By key, never by
 			-- display string (FR-023, FR-024): a Strong's number through lemma_xref, a lemma through
-			-- its headword or plain letters. `last_places_were_hebrew' tells whether Hebrew places came.
+			-- its headword or plain letters. A value: finding changes nothing (design scan 48).
 		require
 			available: is_available
 		local
-			l_hebrew, l_greek, l_greek_places: ARRAYED_LIST [INTEGER_64]
+			l_hebrew, l_greek: ARRAYED_LIST [INTEGER_64]
 			l_entries: detachable BIB_LIST_RESULT [BIB_WORD_ENTRY]
 			l_language: STRING_8
 		do
 			create l_hebrew.make (2)
 			create l_greek.make (2)
-			last_places_were_hebrew := False
-			last_places_were_greek := False
 			l_language := "any"
 			if attached {BIB_STRONGS_KEY} a_key as al_strongs then
 				l_entries := headwords_for_strongs (al_strongs)
@@ -387,21 +395,16 @@ feature -- Access
 					end
 				end
 			end
-			Result := lemma_places (l_hebrew, Hebrew_root_corpus)
-			last_places_were_hebrew := not Result.is_empty
-			l_greek_places := lemma_places (l_greek, Greek_root_corpus)
-			last_places_were_greek := not l_greek_places.is_empty
-			Result := merged_places (Result, l_greek_places)
+			if attached l_entries as al_entries and then not al_entries.is_success then
+				create Result.make_failed
+			elseif attached lemma_places (l_hebrew, Hebrew_root_corpus) as al_hebrew and attached lemma_places (l_greek, Greek_root_corpus) as al_greek then
+				create Result.make (union (al_hebrew, al_greek), not al_hebrew.is_empty, not al_greek.is_empty)
+			else
+				create Result.make_failed
+			end
 		ensure
-			ascending_once: across 2 |..| Result.count as i all Result.i_th (i - 1) < Result.i_th (i) end
+			ascending_once: is_ascending (Result.places)
 		end
-
-	last_places_were_hebrew: BOOLEAN
-			-- Did the last `key_places' find Hebrew places (in Hebrew verse numbers)?
-
-	last_places_were_greek: BOOLEAN
-			-- Did the last `key_places' find Greek places (in the critical text of `Greek_root_corpus',
-			-- whose wording can differ from the Textus Receptus behind the KJV)?
 
 	Hebrew_root_corpus: STRING_8 = "WLC-MACULA"
 	Greek_root_corpus: STRING_8 = "NT-MACULA"
@@ -950,17 +953,22 @@ feature {NONE} -- Implementation
 			create Result.make (a_id, {STRING_32} "conc:" + a_code, a_name, l_license, a_ship_class)
 		end
 
-	lemma_places (a_lemmas: ARRAYED_LIST [INTEGER_64]; a_corpus_code: READABLE_STRING_8): ARRAYED_LIST [INTEGER_64]
+	lemma_places (a_lemmas: ARRAYED_LIST [INTEGER_64]; a_corpus_code: READABLE_STRING_8): detachable ARRAYED_LIST [INTEGER_64]
 			-- Every numbered verse of corpus `a_corpus_code' holding a token of `a_lemmas', packed,
-			-- ascending; empty when there is no lemma, no such corpus, or the query fails.
+			-- ascending; empty when there is no lemma or no such corpus; Void when the query fails.
+			-- The lemma ids are written into the SQL as integers (nothing typed reaches it).
 		local
 			l_sql: STRING_8
+			l_numbered: STRING_8
 			i: INTEGER
 		do
 			create Result.make (0)
 			if not a_lemmas.is_empty and has_corpus (a_corpus_code) then
-				create l_sql.make (400)
-				l_sql.append ("SELECT DISTINCT wb.book_id * 1000000 + CAST(u.div1 AS INTEGER) * 1000 + CAST(u.div2 AS INTEGER) AS place FROM conc.token t JOIN conc.unit u ON u.unit_id = t.unit_id JOIN conc.work_book wb ON wb.work_id = u.work_id WHERE t.corpus_id = ? AND u.recension = '' AND CAST(u.div1 AS INTEGER) BETWEEN 1 AND 999 AND CAST(u.div2 AS INTEGER) BETWEEN 1 AND 999 AND wb.book_id BETWEEN 1 AND 999 AND t.lemma_id IN (")
+				l_numbered := " BETWEEN 1 AND " + Max_part.out
+				create l_sql.make (500)
+				l_sql.append ("SELECT DISTINCT " + place_sql ("wb.book_id", "CAST(u.div1 AS INTEGER)", "CAST(u.div2 AS INTEGER)"))
+				l_sql.append (" AS place FROM conc.token t JOIN conc.unit u ON u.unit_id = t.unit_id JOIN conc.work_book wb ON wb.work_id = u.work_id WHERE t.corpus_id = ? AND u.recension = ''")
+				l_sql.append (" AND CAST(u.div1 AS INTEGER)" + l_numbered + " AND CAST(u.div2 AS INTEGER)" + l_numbered + " AND wb.book_id" + l_numbered + " AND t.lemma_id IN (")
 				from i := 1 until i > a_lemmas.count loop
 					if i > 1 then
 						l_sql.append (", ")
@@ -975,27 +983,8 @@ feature {NONE} -- Implementation
 					across al_rows.rows as ic loop
 						Result.extend (ic.integer_64_value ("place"))
 					end
-				end
-			end
-		end
-
-	merged_places (a, b: ARRAYED_LIST [INTEGER_64]): ARRAYED_LIST [INTEGER_64]
-			-- Every place of `a' or `b' (each ascending), ascending, once.
-		local
-			i, j: INTEGER
-		do
-			create Result.make (a.count + b.count)
-			from i := 1; j := 1 until i > a.count and j > b.count loop
-				if j > b.count or else (i <= a.count and then a.i_th (i) < b.i_th (j)) then
-					Result.extend (a.i_th (i))
-					i := i + 1
-				elseif i > a.count or else b.i_th (j) < a.i_th (i) then
-					Result.extend (b.i_th (j))
-					j := j + 1
 				else
-					Result.extend (a.i_th (i))
-					i := i + 1
-					j := j + 1
+					Result := Void
 				end
 			end
 		end

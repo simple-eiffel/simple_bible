@@ -41,6 +41,15 @@ feature -- Packing
 			Result := (a_packed \\ Chapter_unit).to_integer_32
 		end
 
+feature -- SQL
+
+	place_sql (a_book, a_chapter, a_verse: READABLE_STRING_8): STRING_8
+			-- An SQL expression packing the columns or expressions given, as `packed_place' packs
+			-- (design scan 48: the units were copied into SQL text by hand).
+		do
+			Result := "(" + a_book + " * " + Book_unit.out + " + " + a_chapter + " * " + Chapter_unit.out + " + " + a_verse + ")"
+		end
+
 feature -- Constants
 
 	Place_span: INTEGER_64 = 1_000_000_000

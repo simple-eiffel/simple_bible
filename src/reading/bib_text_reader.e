@@ -103,72 +103,12 @@ feature -- Reading
 	has_verse_index: BOOLEAN
 			-- Does content.db carry `verse_fts', the verse search index (optional; bible_build 0.3.0)?
 
-	verses_matching (a_version: READABLE_STRING_8; a_words: READABLE_STRING_GENERAL; a_limit: INTEGER): BIB_LIST_RESULT [BIB_READING_VERSE]
-			-- The verses of `a_version' holding every word of `a_words' (a "quoted phrase" as written,
-			-- a word ending in * as a prefix), in Bible order, at most `a_limit'. Words fold as the
-			-- build folded the text (D-009), so unpointed Hebrew finds pointed and "beginning" finds
-			-- "Beginning". Empty when nothing searchable is left or content.db has no index.
-		require
-			version_known: has_version (a_version)
-			limit_positive: a_limit > 0
-		local
-			l_verses: ARRAYED_LIST [BIB_READING_VERSE]
-			l_expression: STRING_32
-			l_first: INTEGER_64
-		do
-			create l_verses.make (0)
-			l_expression := search_expression (a_version, a_words)
-			if attached version (a_version) as al_version then
-				if not has_verse_index or l_expression.is_empty then
-					create Result.make_success (method ("verses_matching", Search_sql, a_version, a_words, 0), {ARRAY [BIB_PROVENANCE]} <<al_version.provenance>>, l_verses)
-				else
-					l_first := keys.first_key (version_orders.item (a_version.to_string_8))
-					run_query (Search_sql, {ARRAY [detachable ANY]} <<l_expression, l_first, keys.last_key (version_orders.item (a_version.to_string_8)), a_limit, al_version.code>>)
-					if attached last_rows as al_rows then
-						create l_verses.make (al_rows.rows.count)
-						across al_rows.rows as ic loop
-							l_verses.extend (create {BIB_READING_VERSE}.make (al_version.code, ic.integer_value ("book_id"), ic.integer_value ("chapter"), ic.integer_value ("verse"), ic.string_value ("text"), al_version.provenance))
-						end
-						create Result.make_success (method ("verses_matching", Search_sql, a_version, a_words, l_verses.count), {ARRAY [BIB_PROVENANCE]} <<al_version.provenance>>, l_verses)
-					else
-						create Result.make_failure (method ("verses_matching", Search_sql, a_version, a_words, 0), query_error)
-					end
-				end
-			else
-				check version_known: False then end
-			end
-		ensure
-			one_version: across 1 |..| Result.count as i all Result.item (i).version_code.same_string (a_version) end
-			at_most_the_limit: Result.count <= a_limit
-			method_recorded: Result.method.engine_feature.same_string_general ("verses_matching")
-		end
-
-	matching_count (a_version: READABLE_STRING_8; a_words: READABLE_STRING_GENERAL): INTEGER
-			-- How many verses of `a_version' `verses_matching' would find with no limit (0 on failure).
-		require
-			version_known: has_version (a_version)
-		local
-			l_expression: STRING_32
-			l_first: INTEGER_64
-		do
-			l_expression := search_expression (a_version, a_words)
-			if has_verse_index and not l_expression.is_empty then
-				l_first := keys.first_key (version_orders.item (a_version.to_string_8))
-				run_query (Count_sql, {ARRAY [detachable ANY]} <<l_expression, l_first, keys.last_key (version_orders.item (a_version.to_string_8))>>)
-				if attached last_rows as al_rows then
-					across al_rows.rows as ic loop
-						Result := ic.integer_value ("n")
-					end
-				end
-			end
-		ensure
-			not_negative: Result >= 0
-		end
-
 	verse_places_matching (a_version: READABLE_STRING_8; a_words: READABLE_STRING_GENERAL): detachable ARRAYED_LIST [INTEGER_64]
-			-- Every verse of `a_version' holding `a_words' (read as `verses_matching' reads them), as a
-			-- place packed by BIB_PLACE_PACKING, ascending; empty when nothing is searchable or there is
-			-- no index; Void when the query fails. BIB_VERSE_SEARCH's word and phrase clauses.
+			-- Every verse of `a_version' holding `a_words' (every word; a "quoted phrase" as written; a
+			-- word ending in * a prefix; folded as the build folded the text, D-009), as a place packed
+			-- by BIB_PLACE_PACKING, ascending; empty when nothing is searchable or there is no index;
+			-- Void when the query fails. The one search path: BIB_VERSE_SEARCH's word and phrase
+			-- clauses (design scan 48: an older path beside it could disagree).
 		require
 			version_known: has_version (a_version)
 		local
@@ -208,16 +148,20 @@ feature -- Reading
 			if attached version (a_version) as al_version then
 				create l_texts.make (a_places.count)
 				if not a_places.is_empty then
-					create l_args.make (a_places.count + 1)
+					create l_args.make (a_places.count * 3 + 1)
 					l_args.extend (al_version.code)
 					create l_sql.make (120 + a_places.count * 3)
-					l_sql.append ("SELECT book_id, chapter, verse, text FROM main.verse_text WHERE version_code = ? AND book_id * 1000000 + chapter * 1000 + verse IN (")
+						-- Row values over the primary key, so the index finds each verse (design scan 48:
+						-- the packed arithmetic could not use it).
+					l_sql.append ("SELECT book_id, chapter, verse, text FROM main.verse_text WHERE version_code = ? AND (book_id, chapter, verse) IN (VALUES ")
 					across a_places as ic loop
 						if l_args.count > 1 then
 							l_sql.append (", ")
 						end
-						l_sql.append ("?")
-						l_args.extend (ic)
+						l_sql.append ("(?, ?, ?)")
+						l_args.extend (keys.book_part (ic))
+						l_args.extend (keys.chapter_part (ic))
+						l_args.extend (keys.verse_part (ic))
 					end
 					l_sql.append (")")
 					run_query (l_sql, l_args.to_array)
@@ -464,13 +408,7 @@ feature {NONE} -- SQL
 
 	Cross_references_sql: STRING_8 = "SELECT to_book, to_chapter, to_verse_start, to_verse_end, votes FROM main.cross_reference WHERE from_book = ? AND from_chapter = ? AND from_verse = ? ORDER BY votes DESC, to_book, to_chapter, to_verse_start LIMIT 200"
 
-	Search_sql: STRING_8 = "SELECT t.book_id, t.chapter, t.verse, t.text FROM (SELECT rowid AS key FROM main.verse_fts WHERE verse_fts MATCH ? AND rowid BETWEEN ? AND ? ORDER BY rowid LIMIT ?) h JOIN main.verse_text t ON t.version_code = ? AND t.book_id = (h.key %% 1000000000) / 1000000 AND t.chapter = (h.key %% 1000000) / 1000 AND t.verse = h.key %% 1000 ORDER BY h.key"
-			-- The hits and their text in one query (design scan 47: one query per hit before); the
-			-- key arithmetic is BIB_PLACE_PACKING's units.
-
 	Places_sql: STRING_8 = "SELECT rowid AS key FROM main.verse_fts WHERE verse_fts MATCH ? AND rowid BETWEEN ? AND ? ORDER BY rowid"
-
-	Count_sql: STRING_8 = "SELECT count(*) AS n FROM main.verse_fts WHERE verse_fts MATCH ? AND rowid BETWEEN ? AND ?"
 
 	Last_chapter_sql: STRING_8 = "SELECT coalesce(max(chapter), 0) AS last FROM main.verse_text WHERE version_code = ? AND book_id = ?"
 
