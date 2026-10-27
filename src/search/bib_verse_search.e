@@ -83,7 +83,7 @@ feature -- Searching
 		ensure
 			ascending_once: is_ascending (places)
 			empty_on_failure: has_failed implies places.is_empty
-			in_scope: across places as ic all keys.book_part (ic) >= a_query.scope.first_book and keys.book_part (ic) <= a_query.scope.last_book end
+			in_scope: across places as ic all a_query.scope.contains_book (keys.book_part (ic)) end
 		end
 
 	verses (a_version: READABLE_STRING_8; a_from, a_limit: INTEGER): BIB_LIST_RESULT [BIB_READING_VERSE]
@@ -120,7 +120,7 @@ feature {NONE} -- Evaluation
 		do
 			create Result.make (a_places.count)
 			across a_places as ic loop
-				if keys.book_part (ic) >= a_scope.first_book and keys.book_part (ic) <= a_scope.last_book then
+				if a_scope.contains_book (keys.book_part (ic)) then
 					Result.extend (ic)
 				end
 			end

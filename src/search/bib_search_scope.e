@@ -62,7 +62,13 @@ feature -- Status
 	contains (a_ref: BIB_REF): BOOLEAN
 			-- Is `a_ref' inside the book range?
 		do
-			Result := a_ref.book_id >= first_book and a_ref.book_id <= last_book
+			Result := contains_book (a_ref.book_id)
+		end
+
+	contains_book (a_book: INTEGER): BOOLEAN
+			-- Is book `a_book' inside the range (the one book test: design scan 51)?
+		do
+			Result := a_book >= first_book and a_book <= last_book
 		end
 
 feature -- Element change

@@ -79,7 +79,7 @@ feature -- Access
 				Result := "WLC-MACULA"
 			elseif a_version.same_string ("TR") or a_version.same_string ("Byz") or a_version.same_string ("WH") then
 				Result := "NT-MACULA"
-			elseif a_version.same_string ("LXX") and a_book <= Last_old_testament_book then
+			elseif a_version.same_string ("LXX") and a_book <= {BIB_CANON}.Last_old_testament_book then
 				Result := "LXX-RAHLFS"
 			else
 				create Result.make_empty
@@ -115,7 +115,7 @@ feature -- Access
 		require
 			book_positive: a_book > 0
 		do
-			if a_book <= Last_old_testament_book then
+			if a_book <= {BIB_CANON}.Last_old_testament_book then
 				Result := "WLC-MACULA"
 			else
 				Result := "NT-MACULA"
@@ -342,9 +342,6 @@ feature {NONE} -- Implementation
 		ensure
 			told: attached a_result.error as al_error implies (last_error = al_error and note_text.same_string (al_error.message))
 		end
-
-	Last_old_testament_book: INTEGER = 39
-			-- The vault's book ids: Genesis 1 to Malachi 39, Matthew 40 to Revelation 66 (FR-105).
 
 	entry_choice (a_entry: BIB_WORD_ENTRY): BIB_LOOKUP_CHOICE
 			-- A headword as a choice: the word, then its transliteration and how often.
