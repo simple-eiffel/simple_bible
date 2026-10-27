@@ -3,7 +3,7 @@ note
 		bible_build: writes content.db v2 from the vault's bible.db (Phase 4,
 		Task 10), or a commentary pack from a commentary's sidecar JSON
 		(2026-10-27). Usage:
-			bible_build --bible <bible.db> --out <content.db> [--build-id <id>] [--built-at <ISO time>]
+			bible_build --bible <bible.db> --out <content.db> [--tvtms <TVTMS file>] [--build-id <id>] [--built-at <ISO time>]
 			bible_build --commentary <Commentaries folder, or one sidecar.json> --out <commentary.db>
 		Exit code 0 on success, 1 on failure (the reason is printed).
 	]"
@@ -35,6 +35,7 @@ feature {NONE} -- Initialization
 			l_cli.add_required_option ("o|out", "The content.db to write", "path")
 			l_cli.add_option_with_default ("i|build-id", "The build id (the edition)", "id", "content-v2")
 			l_cli.add_option_with_default ("t|built-at", "The build time, for a byte-identical rebuild (empty: now)", "ISO time", "")
+			l_cli.add_option_with_default ("v|tvtms", "STEPBible's TVTMS file, for the versification map (empty: none)", "path", "")
 			l_cli.parse
 			if l_cli.has_errors then
 				across l_cli.errors as ic loop
@@ -71,6 +72,7 @@ feature {NONE} -- Initialization
 					l_builder.set_build_id (l_build_id)
 				end
 				l_builder.set_built_at (l_cli.option_value_or_default ("built-at", ""))
+				l_builder.set_tvtms_path (l_cli.option_value_or_default ("tvtms", ""))
 				l_builder.build (al_bible, al_out)
 				if attached l_builder.last_error as al_error then
 					print ("bible_build failed: ")
@@ -78,7 +80,7 @@ feature {NONE} -- Initialization
 					print ("%N")
 					l_failed := True
 				else
-					print ("bible_build: wrote " + al_out + " (" + l_builder.books_written.out + " books, " + l_builder.versions_written.out + " versions, " + l_builder.verses_written.out + " verses (" + l_builder.verses_indexed.out + " indexed), " + l_builder.cross_references_written.out + " cross-references, build " + l_builder.build_id.to_string_8 + ")%N")
+					print ("bible_build: wrote " + al_out + " (" + l_builder.books_written.out + " books, " + l_builder.versions_written.out + " versions, " + l_builder.verses_written.out + " verses (" + l_builder.verses_indexed.out + " indexed), " + l_builder.cross_references_written.out + " cross-references, " + l_builder.versification_rows_written.out + " versification rows, build " + l_builder.build_id.to_string_8 + ")%N")
 				end
 			else
 				print ("bible_build: --out and either --bible or --commentary each need a path.%N")

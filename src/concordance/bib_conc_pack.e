@@ -417,7 +417,7 @@ feature -- Access
 			if attached l_entries as al_entries and then not al_entries.is_success then
 				create Result.make_failed
 			elseif attached lemma_places (l_hebrew, Hebrew_root_corpus, a_form) as al_hebrew and attached lemma_places (l_greek, Greek_root_corpus, a_form) as al_greek then
-				create Result.make (union (al_hebrew, al_greek), not al_hebrew.is_empty, not al_greek.is_empty)
+				create Result.make (al_hebrew, al_greek)
 			else
 				create Result.make_failed
 			end
@@ -434,7 +434,7 @@ feature -- Access
 		do
 			l_condition := morph_condition (a_code)
 			if attached places_where (Hebrew_root_corpus, l_condition, a_code.code) as al_hebrew and attached places_where (Greek_root_corpus, l_condition, a_code.code) as al_greek then
-				create Result.make (union (al_hebrew, al_greek), not al_hebrew.is_empty, not al_greek.is_empty)
+				create Result.make (al_hebrew, al_greek)
 			else
 				create Result.make_failed
 			end

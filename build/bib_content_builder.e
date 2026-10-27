@@ -50,6 +50,15 @@ feature -- Access
 	verses_indexed: INTEGER
 			-- Rows `verse_fts' holds after the last build.
 
+	versification_rows_written: INTEGER
+			-- Rows `versification_map' holds after the last build (0 without `tvtms_path').
+
+	tvtms_path: STRING_32
+			-- STEPBible's TVTMS file, read for `versification_map'; empty for none.
+		attribute
+			create Result.make_empty
+		end
+
 	verses_not_indexed: INTEGER
 			-- Rows of `verse_text' the last build left out of the index (a heading as verse 0, or a
 			-- number out of BIB_VERSE_KEY's range).
@@ -71,6 +80,14 @@ feature -- Settings
 			build_id := a_id.to_string_32
 		ensure
 			set: build_id.same_string_general (a_id)
+		end
+
+	set_tvtms_path (a_path: READABLE_STRING_GENERAL)
+			-- Read the versification map from STEPBible's TVTMS file at `a_path' (D-005, research/04).
+		do
+			tvtms_path := a_path.to_string_32
+		ensure
+			set: tvtms_path.same_string_general (a_path)
 		end
 
 	set_built_at (a_time: READABLE_STRING_GENERAL)
@@ -97,6 +114,7 @@ feature -- Building
 			versions_written := 0
 			verses_written := 0
 			verses_indexed := 0
+			versification_rows_written := 0
 			verses_not_indexed := 0
 			cross_references_written := 0
 			if not (create {SIMPLE_FILE}.make (a_bible_db)).is_file then
@@ -122,6 +140,9 @@ feature -- Building
 				run (l_db, "CREATE INDEX cross_reference_from ON cross_reference(from_book, from_chapter, from_verse, votes)")
 				run (l_db, "INSERT INTO verse_text SELECT v.abbreviation, b.book_id, b.chapter, b.verse, coalesce(b.text, ''), 100 + v.id FROM src.bible_verses b JOIN src.bible_versions v ON v.id = b.version_id ORDER BY v.abbreviation, b.book_id, b.chapter, b.verse")
 				write_verse_index (l_db)
+				if last_error = Void and not tvtms_path.is_empty then
+					write_versification_map (l_db)
+				end
 				if last_error = Void then
 					across l_db.query ("SELECT count(*) AS n FROM book_catalog").rows as ic loop
 						books_written := ic.integer_value ("n")
@@ -163,7 +184,7 @@ feature -- Building
 
 feature -- Constants
 
-	Builder_name: STRING = "bible_build 0.3.0"
+	Builder_name: STRING = "bible_build 0.4.0"
 			-- The build row's builder.
 
 	Schema: ARRAY [STRING_8]
@@ -175,6 +196,7 @@ feature -- Constants
 				"CREATE TABLE book_catalog(book_id INTEGER PRIMARY KEY, code TEXT NOT NULL, name TEXT NOT NULL, is_deuterocanonical INTEGER NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key))",
 				"CREATE TABLE version_info(version_code TEXT PRIMARY KEY, name TEXT NOT NULL, language TEXT NOT NULL, direction TEXT NOT NULL, versification TEXT NOT NULL, caveat TEXT NOT NULL, sort_order INTEGER NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key))",
 				"CREATE TABLE cross_reference(from_book INTEGER NOT NULL, from_chapter INTEGER NOT NULL, from_verse INTEGER NOT NULL, to_book INTEGER NOT NULL, to_chapter INTEGER NOT NULL, to_verse_start INTEGER NOT NULL, to_verse_end INTEGER NOT NULL, votes INTEGER NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key))",
+				"CREATE TABLE versification_map(system TEXT NOT NULL, from_book INTEGER NOT NULL, from_chapter INTEGER NOT NULL, from_verse INTEGER NOT NULL, to_book INTEGER NOT NULL, to_chapter INTEGER NOT NULL, to_verse INTEGER NOT NULL, rule TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key), PRIMARY KEY (system, from_book, from_chapter, from_verse)) WITHOUT ROWID",
 				"CREATE TABLE verse_text(version_code TEXT NOT NULL, book_id INTEGER NOT NULL, chapter INTEGER NOT NULL, verse INTEGER NOT NULL, text TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key), PRIMARY KEY (version_code, book_id, chapter, verse)) WITHOUT ROWID"
 				>>
 		end
@@ -248,6 +270,109 @@ feature {NONE} -- Implementation
 					end
 				end
 			end
+		end
+
+	write_versification_map (a_db: SIMPLE_SQL_DATABASE)
+			-- `versification_map' from TVTMS's expanded section (STEPBible.org, CC BY 4.0): every row
+			-- whose source tradition is Hebrew and whose action moves the verse (Renumber verse;
+			-- Renumber title, a Psalm title read as verse 1, where English Bibles print it; a divided
+			-- or merged verse to the first verse it names). Hebrew to the Standard (English, NRSV, KJV
+			-- with three small differences). A row the reader cannot place is left out and counted.
+		local
+			l_lines: LIST [STRING_32]
+			l_in_expanded: BOOLEAN
+			l_fields: LIST [STRING_32]
+			l_action: STRING_32
+			l_from, l_to: detachable TUPLE [book, chapter, verse: INTEGER]
+		do
+			l_lines := (create {SIMPLE_FILE}.make (tvtms_path)).read_text_utf_8.split ('%N')
+			if l_lines.count < 3 then
+				last_error := {STRING_32} "The TVTMS file could not be read: " + tvtms_path
+			else
+				run (a_db, "INSERT INTO source_provenance VALUES (3, 'STEPBible TVTMS', 'STEPBible-Data Versification (TVTMS)', 'CC BY 4.0', 0, 0, 0, 'Versification mapping: STEPBible.org (Tyndale House, Cambridge), TVTMS, CC BY 4.0.', 'Hebrew to English (Standard) verse numbers only.')")
+				run (a_db, "BEGIN")
+				across l_lines as ic until last_error /= Void loop
+					if ic.has_substring ({STRING_32} "#DataStart(Expanded)") then
+						l_in_expanded := True
+					elseif ic.has_substring ({STRING_32} "#DataEnd(Expanded)") then
+						l_in_expanded := False
+					elseif l_in_expanded then
+						l_fields := ic.split ('%T')
+						if l_fields.count >= 4 and then across l_fields.first.split ('+') as jc some jc.same_string ({STRING_32} "Hebrew") end then
+							l_action := l_fields.i_th (4).twin
+							l_action.left_adjust
+							l_action.right_adjust
+							if across Moving_actions as jc some jc.same_string (l_action) end then
+								l_from := tvtms_place (l_fields.i_th (2))
+								l_to := tvtms_place (l_fields.i_th (3))
+								if attached l_from as al_from and then attached l_to as al_to and then (al_from.book /= al_to.book or al_from.chapter /= al_to.chapter or al_from.verse /= al_to.verse) then
+									a_db.execute_with_args ("INSERT OR IGNORE INTO versification_map VALUES ('hebrew', ?, ?, ?, ?, ?, ?, ?, 3)",
+										{ARRAY [detachable ANY]} <<al_from.book, al_from.chapter, al_from.verse, al_to.book, al_to.chapter, al_to.verse, l_action>>)
+									note_failure (a_db, "The versification map could not be written")
+								end
+							end
+						end
+					end
+				end
+				run (a_db, "COMMIT")
+				if last_error = Void then
+					across a_db.query ("SELECT count(*) AS n FROM versification_map").rows as ic loop
+						versification_rows_written := ic.integer_value ("n")
+					end
+				end
+			end
+		end
+
+	Moving_actions: ARRAY [STRING_32]
+			-- The TVTMS actions that move a Hebrew verse to another English number.
+		once
+			Result := <<{STRING_32} "Renumber verse", {STRING_32} "Renumber title", {STRING_32} "DividedPrev verse", {STRING_32} "DividedNext verse", {STRING_32} "MergedPrev verse", {STRING_32} "MergedNext verse", {STRING_32} "Concatenation">>
+		end
+
+	tvtms_place (a_reference: STRING_32): detachable TUPLE [book, chapter, verse: INTEGER]
+			-- The place a TVTMS reference names ("Mal.3:19", "Psa.3:Title" as verse 1, "1Sa.20:42!b" as
+			-- 20:42, "Gen.2:25-3:1" as its first verse); Void for a book outside the Hebrew Bible or
+			-- anything else (a list with ";").
+		local
+			l_text, l_book: STRING_32
+			l_dot, l_colon, l_end, l_chapter, l_verse, l_id: INTEGER
+		do
+			l_text := a_reference.twin
+			l_text.left_adjust
+			l_text.right_adjust
+			l_dot := l_text.index_of ('.', 1)
+			l_colon := l_text.index_of (':', 1)
+			if not l_text.has (';') and l_dot > 1 and l_colon > l_dot + 1 then
+				l_book := l_text.substring (1, l_dot - 1)
+				across Tvtms_books as ic until l_id > 0 loop
+					if ic.same_string_general (l_book) then
+						l_id := @ ic.cursor_index
+					end
+				end
+				if l_text.substring (l_dot + 1, l_colon - 1).is_integer then
+					l_chapter := l_text.substring (l_dot + 1, l_colon - 1).to_integer
+				end
+				from l_end := l_colon + 1 until l_end > l_text.count or else not l_text [l_end].is_digit loop
+					l_end := l_end + 1
+				end
+				if l_text.substring (l_colon + 1, l_text.count).starts_with ({STRING_32} "Title") then
+					l_verse := 1
+				elseif l_end > l_colon + 1 then
+					l_verse := l_text.substring (l_colon + 1, l_end - 1).to_integer
+				end
+				if l_id >= 1 and l_chapter >= 1 and l_chapter <= {BIB_PLACE_PACKING}.Max_part and l_verse >= 1 and l_verse <= {BIB_PLACE_PACKING}.Max_part then
+					Result := [l_id, l_chapter, l_verse]
+				end
+			end
+		end
+
+	Tvtms_books: ARRAY [STRING_8]
+			-- TVTMS's codes for the books of the Hebrew Bible, at their book numbers (BIB_CANON order).
+		once
+			Result := <<"Gen", "Exo", "Lev", "Num", "Deu", "Jos", "Jdg", "Rut", "1Sa", "2Sa", "1Ki", "2Ki", "1Ch", "2Ch", "Ezr", "Neh", "Est", "Job", "Psa", "Pro",
+				"Ecc", "Sng", "Isa", "Jer", "Lam", "Ezk", "Dan", "Hos", "Jol", "Amo", "Oba", "Jon", "Mic", "Nam", "Hab", "Zep", "Hag", "Zec", "Mal">>
+		ensure
+			the_hebrew_bible: Result.count = {BIB_CANON}.Last_old_testament_book
 		end
 
 	insert_index_rows (a_db: SIMPLE_SQL_DATABASE; a_args: ARRAYED_LIST [detachable ANY])

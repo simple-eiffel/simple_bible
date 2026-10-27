@@ -29,6 +29,34 @@ feature -- Status
 
 feature -- Set algebra
 
+	sorted_once (a_places: ARRAYED_LIST [INTEGER_64]): ARRAYED_LIST [INTEGER_64]
+			-- `a_places' ascending, each once. An insertion sort: the lists it gets are nearly sorted
+			-- (Hebrew places moved to English numbers shift only locally), so it runs near linear.
+		local
+			l_sorted: ARRAYED_LIST [INTEGER_64]
+			i, j: INTEGER
+			l_place: INTEGER_64
+		do
+			l_sorted := a_places.twin
+			from i := 2 until i > l_sorted.count loop
+				l_place := l_sorted.i_th (i)
+				from j := i - 1 until j < 1 or else l_sorted.i_th (j) <= l_place loop
+					l_sorted.put_i_th (l_sorted.i_th (j), j + 1)
+					j := j - 1
+				end
+				l_sorted.put_i_th (l_place, j + 1)
+				i := i + 1
+			end
+			create Result.make (l_sorted.count)
+			across l_sorted as ic loop
+				if Result.is_empty or else Result.last /= ic then
+					Result.extend (ic)
+				end
+			end
+		ensure
+			ascending_once: is_ascending (Result)
+		end
+
 	union (a, b: ARRAYED_LIST [INTEGER_64]): ARRAYED_LIST [INTEGER_64]
 			-- Every place in `a' or `b' (each ascending), ascending, once.
 		local

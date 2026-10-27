@@ -329,6 +329,9 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			elseif snapshot_tab.same_string ({STRING_32} "form") then
 				search_box.set_text ("G3056@N-NSM")
 				on_search
+			elseif snapshot_tab.same_string ({STRING_32} "versification") then
+				search_box.set_text ("H7307 AND H8210")
+				on_search
 			elseif snapshot_tab.same_string ({STRING_32} "spelling") then
 				search_box.set_text ("lemma:ruach")
 				on_search
@@ -3137,7 +3140,9 @@ feature {NONE} -- Search results (P07)
 			l_note: STRING_32
 		do
 			create l_note.make_empty
-			if bible.verse_search.has_hebrew_roots and a_total > 0 then
+			if bible.verse_search.has_moved_hebrew_roots and a_total > 0 then
+				l_note := {STRING_32} " Hebrew roots are shown at their English verse numbers (versification by STEPBible.org TVTMS, CC BY)."
+			elseif bible.verse_search.has_hebrew_roots and a_total > 0 then
 				l_note := {STRING_32} " Hebrew roots stand in Hebrew verse numbers; a few English Bibles number those verses one off."
 			end
 			if bible.verse_search.has_greek_roots and a_total > 0 then
