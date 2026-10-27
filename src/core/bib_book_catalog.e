@@ -81,7 +81,9 @@ feature -- Access
 		end
 
 	candidates_for_name (a_name: READABLE_STRING_GENERAL): ARRAYED_LIST [INTEGER]
-			-- Ids of every book `a_name' may denote (exact alias, then prefix); empty when none.
+			-- Ids of every book `a_name' may denote (exact alias, then prefix; an ordinal word or Roman
+			-- numeral before the name read as its digit, `spoken_key'); empty when none. What a box
+			-- forgives; `book_named_exactly' forgives nothing.
 		require
 			name_not_empty: not a_name.is_empty
 		local
@@ -92,6 +94,7 @@ feature -- Access
 			l_key := a_name.to_string_32.as_lower
 			l_key.right_adjust
 			l_key.left_adjust
+			l_key := spoken_key (l_key)
 			if aliases.has (l_key) then
 				Result.extend (aliases.item (l_key))
 			else
@@ -179,6 +182,36 @@ feature {NONE} -- Representation
 	sources: BIB_SOURCE_SET
 	books: HASH_TABLE [BIB_BOOK, INTEGER]
 	aliases: HASH_TABLE [INTEGER, STRING_32]
+
+feature {NONE} -- Spoken names
+
+	spoken_key (a_key: STRING_32): STRING_32
+			-- `a_key' (lowercase) with an ordinal word or Roman numeral before the book name read as its
+			-- digit: "first peter", "ii kings", "1st john" as "1 peter", "2 kings", "1 john". The one
+			-- home of these forms (design scan 50: the reference linker kept a second copy that
+			-- disagreed with this catalog); `book_named_exactly' never uses them, so prose stays strict.
+		local
+			l_found: BOOLEAN
+		do
+			Result := a_key
+			across Ordinal_words as ic until l_found loop
+				if a_key.starts_with (ic.word + {STRING_32} " ") and then a_key.count > ic.word.count + 1 then
+					Result := ic.digit + a_key.substring (ic.word.count + 1, a_key.count)
+					l_found := True
+				end
+			end
+		ensure
+			not_longer: Result.count <= a_key.count
+		end
+
+	Ordinal_words: ARRAY [TUPLE [word, digit: STRING_32]]
+			-- Book-number words as typed; the Roman numerals longest first.
+		once
+			Result := <<[{STRING_32} "first", {STRING_32} "1"], [{STRING_32} "second", {STRING_32} "2"], [{STRING_32} "third", {STRING_32} "3"],
+				[{STRING_32} "1st", {STRING_32} "1"], [{STRING_32} "2nd", {STRING_32} "2"], [{STRING_32} "3rd", {STRING_32} "3"],
+				[{STRING_32} "iii", {STRING_32} "3"], [{STRING_32} "ii", {STRING_32} "2"], [{STRING_32} "i", {STRING_32} "1"]>>
+		end
+
 
 invariant
 	book_count_non_negative: book_count >= 0

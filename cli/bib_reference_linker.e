@@ -59,56 +59,6 @@ feature -- Access
 
 	books: BIB_BOOK_CATALOG
 
-	spoken_form (a_text: STRING_32): STRING_32
-			-- `a_text' as a reference box should read it (2026-10-27, from NEEDLE's run 6 misses):
-			-- an ordinal word or Roman numeral before the book as its digit ("First Peter", "II
-			-- Kings", "1st John"), and "chapter" and "verse" written out ("Mark chapter 4", "John
-			-- chapter 3 verse 16", "Jude verse 9"). Prose links stay strict: a sentence beginning
-			-- "I John" is no reference to them.
-		local
-			l_lower: STRING_32
-			l_found: BOOLEAN
-		do
-			Result := a_text.twin
-			l_lower := Result.as_lower
-			across Ordinal_words as ic until l_found loop
-				if l_lower.starts_with (ic.word + {STRING_32} " ") and then Result.count > ic.word.count + 1 then
-					Result := ic.digit + Result.substring (ic.word.count + 1, Result.count)
-					l_found := True
-				end
-			end
-			across Spelled_parts as ic loop
-				from
-					l_lower := Result.as_lower
-				until
-					not l_lower.has_substring (ic.word)
-				loop
-					Result := Result.substring (1, l_lower.substring_index (ic.word, 1) - 1) + ic.mark + Result.substring (l_lower.substring_index (ic.word, 1) + ic.word.count, Result.count)
-					l_lower := Result.as_lower
-				end
-			end
-				-- "Jude verse 9" leaves "Jude:9": a one-chapter book reads a lone number as its verse.
-			if Result.has (':') and then not Result.substring (1, Result.index_of (':', 1) - 1).has (' ') then
-				Result.replace_substring ({STRING_32} " ", Result.index_of (':', 1), Result.index_of (':', 1))
-			end
-		ensure
-			not_longer: Result.count <= a_text.count
-		end
-
-	Ordinal_words: ARRAY [TUPLE [word, digit: STRING_32]]
-			-- Book-number words as typed, longest first among their kind.
-		once
-			Result := <<[{STRING_32} "first", {STRING_32} "1"], [{STRING_32} "second", {STRING_32} "2"], [{STRING_32} "third", {STRING_32} "3"],
-				[{STRING_32} "1st", {STRING_32} "1"], [{STRING_32} "2nd", {STRING_32} "2"], [{STRING_32} "3rd", {STRING_32} "3"],
-				[{STRING_32} "iii", {STRING_32} "3"], [{STRING_32} "ii", {STRING_32} "2"], [{STRING_32} "i", {STRING_32} "1"]>>
-		end
-
-	Spelled_parts: ARRAY [TUPLE [word, mark: STRING_32]]
-			-- "chapter" and "verse" written out, with the separator each stands for.
-		once
-			Result := <<[{STRING_32} " chapter ", {STRING_32} " "], [{STRING_32} " verses ", {STRING_32} ":"], [{STRING_32} " verse ", {STRING_32} ":"]>>
-		end
-
 	is_forgiving: BOOLEAN
 			-- Does a book name a prefix or lowercase may give (the reference box)?
 
@@ -343,5 +293,49 @@ feature {NONE} -- Implementation
 
 	Max_number: INTEGER = 176
 			-- No chapter or verse number exceeds Psalm 119's 176.
+
+feature {NONE} -- Spoken forms
+
+	spoken_form (a_text: STRING_32): STRING_32
+			-- `a_text' with "chapter" and "verse" written out read as a reference box reads numbers
+			-- (2026-10-27, from NEEDLE's run 6 misses): "Mark chapter 4", "John chapter 3 verse 16".
+			-- A bare "verse N" after a book names a verse only in a book of one chapter ("Jude verse
+			-- 9"); elsewhere it stays unread (design scan 50: "John verse 9" was read as chapter 9).
+			-- Ordinal words and Roman numerals before a book are the catalog's
+			-- (BIB_BOOK_CATALOG.candidates_for_name).
+		local
+			l_lower, l_book: STRING_32
+			l_colon: INTEGER
+		do
+			Result := a_text.twin
+			across Spelled_parts as ic loop
+				from
+					l_lower := Result.as_lower
+				until
+					not l_lower.has_substring (ic.word)
+				loop
+					Result := Result.substring (1, l_lower.substring_index (ic.word, 1) - 1) + ic.mark + Result.substring (l_lower.substring_index (ic.word, 1) + ic.word.count, Result.count)
+					l_lower := Result.as_lower
+				end
+			end
+			l_colon := Result.index_of (':', 1)
+			if l_colon > 1 then
+				l_book := Result.substring (1, l_colon - 1)
+				l_book.right_adjust
+				if not l_book.is_empty and then not l_book [l_book.count].is_digit and then attached books.candidates_for_name (l_book) as al_books and then al_books.count = 1 and then books.is_single_chapter_book (al_books.first) then
+						-- "Jude:9": a lone number after a one-chapter book is its verse.
+					Result.put (' ', l_colon)
+				end
+			end
+		ensure
+			not_longer: Result.count <= a_text.count
+			settled: spoken_form (Result).same_string (Result)
+		end
+
+	Spelled_parts: ARRAY [TUPLE [word, mark: STRING_32]]
+			-- "chapter" and "verse" written out, with the separator each stands for.
+		once
+			Result := <<[{STRING_32} " chapter ", {STRING_32} " "], [{STRING_32} " verses ", {STRING_32} ":"], [{STRING_32} " verse ", {STRING_32} ":"]>>
+		end
 
 end
