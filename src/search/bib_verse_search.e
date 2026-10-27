@@ -150,6 +150,8 @@ feature {NONE} -- Evaluation
 						error_message := {STRING_32} "The verse index could not be searched."
 					end
 				when {BIB_QUERY_CLAUSE}.Strongs, {BIB_QUERY_CLAUSE}.Lemma, {BIB_QUERY_CLAUSE}.Morph, {BIB_QUERY_CLAUSE}.Form then
+						-- Every key kind (BIB_QUERY_CLAUSE.is_key_clause); the check below keeps the two in step.
+					check key_clause: l_clause.is_key_clause end
 					if not pack.is_available then
 						error_message := {STRING_32} "No concordance is attached, so root words cannot be searched."
 					elseif attached l_clause.key as al_key then

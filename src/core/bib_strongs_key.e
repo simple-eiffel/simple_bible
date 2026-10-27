@@ -12,7 +12,7 @@ class
 	BIB_STRONGS_KEY
 
 inherit
-	BIB_KEY
+	BIB_ROOT_KEY
 
 create
 	make_from_text
