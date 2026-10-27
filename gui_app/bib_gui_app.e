@@ -45,7 +45,7 @@ feature {NONE} -- Initialization
 				-- The text size the reader chose last time, for all the window's text (C8).
 			light_theme.set_text_scale (settings.text_scale)
 			dark_theme.set_text_scale (settings.text_scale)
-			create window.make ("simple_bible", 40, 30, 1440, 920, light_theme)
+			create window.make ("simple_bible", window_x, window_y, window_width, window_height, light_theme)
 			window.follow_system_theme (light_theme, dark_theme)
 			window.enable_shaped_text
 				-- Every attached attribute before any agent on Current (VEVI). Grid heights are minimums
@@ -67,12 +67,12 @@ feature {NONE} -- Initialization
 			reading_note := reading_note.with_wrap
 			create previous_button.make ("< Previous", Void)
 			create next_button.make ("Next >", Void)
-			create reading_view.make (200.0)
+			create reading_view.make (120.0)
 			create reading_verses.make (0)
 			create reading_version.make_empty
 			create commentary_title.make ("", {SW_PAINTER}.Role_ui, 13.0, True)
 			create commentary_tabs.make
-			create cross_refs_grid.make (120.0)
+			create cross_refs_grid.make (60.0)
 			create cross_refs.make (0)
 			create lexicon_heading.make ("", {SW_PAINTER}.Role_ui, 20.0, True)
 			create lexicon_subtitle.make_ui ("")
@@ -81,14 +81,14 @@ feature {NONE} -- Initialization
 			create word_study_button.make ("Word Study", Void)
 			create lexicon_tabs.make
 			create renderings_title.make_ui ("How the Bibles render it")
-			create renderings_grid.make (100.0)
+			create renderings_grid.make (60.0)
 			create entries_title.make_ui ("Lexicon entries")
-			create entries_list.make (120.0)
+			create entries_list.make (60.0)
 			create places_title.make_ui ("Every place")
-			create places_grid.make (140.0)
+			create places_grid.make (60.0)
 			create results_note.make_ui ("")
 			results_note := results_note.with_wrap
-			create results_grid.make (120.0)
+			create results_grid.make (60.0)
 			create close_results_button.make ("Close", Void)
 			create status_bar.make
 			create numbering_label.make_ui ("")
@@ -100,7 +100,21 @@ feature {NONE} -- Initialization
 			create places.make (0)
 			create study_corpus.make_empty
 			create history.make (40)
-			create dock.make (reading_pane)
+			create center_holder.make
+			create center_tabs.make
+			create bible_page.make
+			create parallel_view.make (200.0)
+			create results_holder.make
+			create results_tabs.make
+			create results_page.make
+			create tools_holder.make
+			create tools_strip.make
+			create navigator_tree.make (80.0)
+			reading_column := reading_pane.growing
+			results_column := results_pane.growing
+			center_tabs := center_tabs.growing
+			results_tabs := results_tabs.growing
+			create dock.make (center_holder)
 			build_columns
 			fill_versions
 			mode_switch.add_segment ("Simple")
@@ -110,6 +124,7 @@ feature {NONE} -- Initialization
 			add_accelerators
 			wire_events
 			show_start
+			arrange (settings.is_study_layout)
 			if bible.is_open and then not reading_version.is_empty and then bible.books.has_book (1) then
 				go_to (1, 1, 0)
 			end
@@ -121,6 +136,39 @@ feature {NONE} -- Initialization
 				bible.close
 			end
 		end
+
+	window_width: INTEGER
+			-- The window opens at most of the main screen (Larry, 2026-10-26: "much larger"):
+			-- 92 percent of its work area, or 1440 when the screen gives none.
+		do
+			Result := ((create {SW_SCREEN}).work_area_width * Window_share).rounded
+			if Result < 800 then
+				Result := 1440
+			end
+		end
+
+	window_height: INTEGER
+			-- 92 percent of the work area's height, or 920.
+		do
+			Result := ((create {SW_SCREEN}).work_area_height * Window_share).rounded
+			if Result < 600 then
+				Result := 920
+			end
+		end
+
+	window_x: INTEGER
+			-- Centred on the work area.
+		do
+			Result := (create {SW_SCREEN}).work_area_x + (((create {SW_SCREEN}).work_area_width - window_width) // 2).max (0)
+		end
+
+	window_y: INTEGER
+		do
+			Result := (create {SW_SCREEN}).work_area_y + (((create {SW_SCREEN}).work_area_height - window_height) // 2).max (0)
+		end
+
+	Window_share: REAL_64 = 0.92
+			-- How much of the screen the window opens on.
 
 	wire_events
 			-- Every control's action.
@@ -186,13 +234,13 @@ feature {NONE} -- Window
 			l_toolbar.put (larger_button)
 			l_toolbar.put (dark_switch)
 
-			results_panel := dock.add_panel ("SEARCH RESULTS", results_pane, dock.Zone_west)
-			commentary_panel := dock.add_panel ("COMMENTARY", commentary_pane, dock.Zone_east)
+				-- One set of panels for both layouts: `arrange' moves them between zones (C7).
+			results_panel := dock.add_panel ("SEARCH RESULTS", results_holder, dock.Zone_west)
 			lexicon_panel := dock.add_panel ("DICTIONARY AND LEXICON", lexicon_pane, dock.Zone_south)
-			dock.set_fraction (dock.Zone_west, 0.22)
-			dock.set_fraction (dock.Zone_east, 0.30)
-			dock.set_fraction (dock.Zone_south, 0.42)
-			dock.hide_panel (results_panel)
+			commentary_panel := dock.add_panel ("COMMENTARY", commentary_pane, dock.Zone_east)
+			navigator_panel := dock.add_panel ("NAVIGATOR", navigator_pane, dock.Zone_west)
+			notes_panel := dock.add_panel ("NOTES", notes_pane, dock.Zone_west)
+			build_study_parts
 
 			status_bar.set_left ("")
 			status_bar.add_widget (link_label, 70.0, False).do_nothing
@@ -204,9 +252,11 @@ feature {NONE} -- Window
 			Result := Result.with_padding (10.0).with_gap (8.0)
 			Result.put (menu_bar)
 			Result.put (l_toolbar)
+				-- C10 sits on its own row under the toolbar in Study, so a large text size never
+				-- squeezes it out (seen at 160 percent); empty in Simple.
+			Result.put (tools_holder)
 			Result.put (dock.growing)
 			Result.put (status_bar)
-			add_pills
 		end
 
 	reading_pane: SW_COLUMN
@@ -369,8 +419,8 @@ feature {NONE} -- Menus and keys (C2)
 	view_menu: SW_MENU
 		do
 			create Result.make
-			Result.add_item ("Simple layout", "Ctrl+M", True, Void)
-			Result.add_item ("Study layout (next step)", "Ctrl+M", False, Void)
+			Result.add_item ("Simple layout", "Ctrl+M", is_study, agent arrange (False))
+			Result.add_item ("Study layout", "Ctrl+M", not is_study, agent arrange (True))
 			Result.add_separator
 			Result.add_item ("Larger text", "Ctrl++", settings.text_scale < settings.Max_text_scale, agent change_text_size (1))
 			Result.add_item ("Smaller text", "Ctrl+-", settings.text_scale > settings.Min_text_scale, agent change_text_size (-1))
@@ -516,18 +566,17 @@ feature {NONE} -- Toolbar (C3-C9)
 		end
 
 	on_mode (a_index: INTEGER)
-			-- C7: the Study layout is the next step; until it is built, the switch says so and stays.
+			-- C7: Simple (1) or Study (2); layout only, never data.
 		do
-			if a_index = 2 then
-				window.toast ("The Study layout is the next step; Simple stays for now.", 1)
-				mode_switch.select_segment (1)
+			if (a_index = 2) /= is_study then
+				arrange (a_index = 2)
 			end
 		end
 
 	toggle_mode
 			-- Ctrl+M.
 		do
-			on_mode (2)
+			arrange (not is_study)
 		end
 
 	change_text_size (a_step: INTEGER)
@@ -731,6 +780,9 @@ feature {NONE} -- Reading (S1, P01)
 				reference_box.set_text (place_text (a_book, a_chapter, a_verse))
 				window.set_title (window_title)
 				status_bar.set_left (place_text (a_book, a_chapter, a_verse) + {STRING_32} " (" + reading_version.to_string_32 + {STRING_32} ")")
+				if is_study then
+					fill_parallel
+				end
 			end
 		end
 
@@ -878,6 +930,321 @@ feature {NONE} -- Reading (S1, P01)
 			else
 				Result := {STRING_32} "English numbering"
 			end
+		end
+
+feature {NONE} -- Two layouts (C7)
+
+	is_study: BOOLEAN
+			-- Is the Study layout on?
+
+	center_holder: SW_COLUMN
+			-- The dock's centre: the Bible text (Simple) or the Bible tabs (Study, T3).
+
+	center_tabs: SW_TABS
+	bible_page: SW_COLUMN
+	reading_column: SW_COLUMN
+			-- T3's tabs, its Bible page, and the Bible text pane both layouts show.
+
+	results_holder: SW_COLUMN
+	results_tabs: SW_TABS
+	results_page: SW_COLUMN
+	results_column: SW_COLUMN
+			-- The results panel: P07 alone (Simple) or T6's tabs (Study).
+
+	tools_holder: SW_ROW
+	tools_strip: SW_TOOLBAR
+			-- C10, in the toolbar in Study only.
+
+	navigator_panel, notes_panel: INTEGER
+			-- T1 and T2, west in Study, hidden in Simple.
+
+	navigator_tree: SW_TREE [BIB_NAV_NODE]
+	parallel_view: SW_PARALLEL_TEXT
+
+	arrange (a_study: BOOLEAN)
+			-- Put the panels where the layout wants them: Simple (the guide's Simple board) or Study
+			-- (T1 Navigator and T2 Notes west, T3 Bible tabs centre, T4 Lexicon over T5 Commentary
+			-- east, T6 results south, C10 in the toolbar). Kept for the next run.
+		local
+			l_saved: BOOLEAN
+		do
+			detach (center_holder, reading_column)
+			detach (bible_page, reading_column)
+			detach (center_holder, center_tabs)
+			detach (results_holder, results_column)
+			detach (results_page, results_column)
+			detach (results_holder, results_tabs)
+			if tools_holder.children.has (tools_strip) then
+				tools_holder.remove (tools_strip)
+			end
+			is_study := a_study
+			if a_study then
+				bible_page.put (reading_column)
+				center_holder.put (center_tabs)
+				results_page.put (results_column)
+				results_holder.put (results_tabs)
+				tools_holder.put (tools_strip)
+				dock.move_panel (lexicon_panel, dock.Zone_east)
+				dock.move_panel (commentary_panel, dock.Zone_east)
+				dock.move_panel (results_panel, dock.Zone_south)
+				dock.show_panel (navigator_panel)
+				dock.show_panel (notes_panel)
+				dock.show_panel (results_panel)
+				dock.set_fraction (dock.Zone_west, 0.18)
+				dock.set_fraction (dock.Zone_east, 0.34)
+				dock.set_fraction (dock.Zone_south, 0.30)
+				center_tabs.select_tab (1)
+				fill_parallel
+			else
+				center_holder.put (reading_column)
+				results_holder.put (results_column)
+				dock.move_panel (lexicon_panel, dock.Zone_south)
+				dock.move_panel (commentary_panel, dock.Zone_east)
+				dock.move_panel (results_panel, dock.Zone_west)
+				dock.hide_panel (navigator_panel)
+				dock.hide_panel (notes_panel)
+				if choices.is_empty then
+					dock.hide_panel (results_panel)
+				else
+					dock.show_panel (results_panel)
+				end
+				dock.set_fraction (dock.Zone_west, 0.22)
+				dock.set_fraction (dock.Zone_east, 0.30)
+				dock.set_fraction (dock.Zone_south, 0.42)
+			end
+			if mode_switch.selected_index /= (if a_study then 2 else 1 end) then
+				mode_switch.select_segment (if a_study then 2 else 1 end)
+			end
+			window.clear_reference_marks
+			if a_study then
+				add_study_pills
+			else
+				add_pills
+			end
+			settings.set_study_layout (a_study)
+			l_saved := settings.save
+			keep_verse_in_view
+			window.request_render
+		ensure
+			set: is_study = a_study
+		end
+
+	detach (a_holder: SW_COLUMN; a_widget: SW_WIDGET)
+			-- Take `a_widget' out of `a_holder' when it is there.
+		do
+			if a_holder.children.has (a_widget) then
+				a_holder.remove (a_widget)
+			end
+		ensure
+			out: not a_holder.children.has (a_widget)
+		end
+
+	build_study_parts
+			-- T3's tabs, T6's tabs and C10's tools, built once.
+		local
+			l_parallel_page: SW_COLUMN
+		do
+			create l_parallel_page.make
+			l_parallel_page.put (parallel_view.growing)
+			center_tabs.add_page ("Bible", bible_page)
+			center_tabs.add_page ("Parallel", l_parallel_page)
+			center_tabs.set_on_change (agent on_center_tab)
+			parallel_view.add_column ("").do_nothing
+			parallel_view.add_column ("").do_nothing
+			parallel_view.add_column ("").do_nothing
+
+			results_tabs.add_page ("Search Results", results_page)
+			results_tabs.add_page ("Guides", create {SW_EMPTY_STATE}.make ("Guides come later", "A guide assembles passages, notes and word studies on one subject (P08)."))
+			results_tabs.add_page ("Census and Checks", create {SW_EMPTY_STATE}.make ("Census comes later", "Counts across books and corpora with their controls (P09)."))
+			results_tabs.add_page ("Author Library", create {SW_EMPTY_STATE}.make ("Author library comes later", "Your own documents and their status (P10)."))
+			results_tabs.add_page ("Study Ledger v1.5", create {SW_EMPTY_STATE}.make ("Study ledger is version 1.5", "Planned for version 1.5."))
+
+			tools_strip.add_tool ("Parallel", "Versions side by side (P02)", True, agent show_parallel)
+			tools_strip.add_tool ("Interlinear", "Word by word under the text (P03): comes later", False, Void)
+			tools_strip.add_tool ("Guide", "A guide on one subject (P08): comes later", False, Void)
+			tools_strip.add_tool ("Word Study", "The word study (P05 Word Study): comes later", False, Void)
+			tools_strip.add_tool ("Count", "Census and checks (P09): comes later", False, Void)
+			tools_strip.add_tool ("Ledger v1.5", "The study ledger, version 1.5", False, Void)
+		end
+
+	navigator_pane: SW_COLUMN
+			-- T1, P11 Navigator: the books, testament by testament, chapter by chapter.
+		local
+			l_roots: ARRAYED_LIST [BIB_NAV_NODE]
+		do
+			create l_roots.make (2)
+			l_roots.extend (create {BIB_NAV_NODE}.make_testament ("Old Testament", 1, 39))
+			l_roots.extend (create {BIB_NAV_NODE}.make_testament ("New Testament", 40, Last_book))
+			navigator_tree.set_label (agent {BIB_NAV_NODE}.label)
+			navigator_tree.set_children (agent nav_children)
+			navigator_tree.set_roots (l_roots)
+			navigator_tree.set_on_select (agent on_nav)
+			create Result.make
+			Result := Result.with_gap (6.0)
+			Result.put (create {SW_LABEL}.make_ui ("Books"))
+			Result.put (navigator_tree.growing)
+		end
+
+	notes_pane: SW_WIDGET
+			-- T2, P06 Notes: the notes store is designed but not built.
+		do
+			Result := create {SW_EMPTY_STATE}.make ("No notes yet", "Notes come with the notes store.")
+		end
+
+	nav_children (a_node: BIB_NAV_NODE): ARRAYED_LIST [BIB_NAV_NODE]
+			-- A testament's books, or a book's chapters (in the version read); a chapter has none.
+		local
+			i, l_last: INTEGER
+		do
+			create Result.make (0)
+			if a_node.is_testament then
+				from i := a_node.first_book until i > a_node.last_book loop
+					if bible.books.has_book (i) then
+						Result.extend (create {BIB_NAV_NODE}.make_book (bible.books.book (i).name, i))
+					end
+					i := i + 1
+				end
+			elseif a_node.is_book and then bible.text_reader.has_version (reading_version) then
+				l_last := bible.text_reader.last_chapter (reading_version, a_node.book_id)
+				if l_last = 0 then
+					l_last := bible.text_reader.last_chapter ("KJV", a_node.book_id)
+				end
+				from i := 1 until i > l_last loop
+					Result.extend (create {BIB_NAV_NODE}.make_chapter (a_node.book_id, i))
+					i := i + 1
+				end
+			end
+		end
+
+	on_nav (a_node: BIB_NAV_NODE)
+			-- A chapter chosen in T1: read it.
+		do
+			if a_node.is_chapter then
+				go_to (a_node.book_id, a_node.chapter, 0)
+			end
+		end
+
+	on_center_tab (a_index: INTEGER)
+			-- T3: the Parallel tab follows the place read.
+		do
+			if a_index = 2 then
+				fill_parallel
+			end
+		end
+
+	show_parallel
+			-- C10 Parallel: the Parallel tab (in Study; Simple has no tabs).
+		do
+			if not is_study then
+				arrange (True)
+			end
+			center_tabs.select_tab (2)
+			fill_parallel
+		end
+
+	parallel_versions: ARRAYED_LIST [STRING_8]
+			-- Three versions side by side: the one read, the other English one, and the original
+			-- (the Hebrew Bible for the Old Testament, the Textus Receptus for the New).
+		local
+			l_other, l_original: STRING_8
+		do
+			create Result.make (3)
+			Result.extend (reading_version)
+			if reading_version.same_string ("KJV") then
+				l_other := "BSB"
+			else
+				l_other := "KJV"
+			end
+			if reading_book <= 39 then
+				l_original := "WLC"
+			else
+				l_original := "TR"
+			end
+			across <<l_other, l_original, "BSB", "YLT">> as ic loop
+				if Result.count < 3 and then not Result.has (ic) and then bible.text_reader.has_version (ic) then
+					Result.extend (ic)
+				end
+			end
+		ensure
+			at_most_three: Result.count <= 3
+		end
+
+	fill_parallel
+			-- T3 Parallel: the chapter read, verse by verse, in `parallel_versions'.
+		local
+			l_codes: ARRAYED_LIST [STRING_8]
+			l_chapters: ARRAYED_LIST [HASH_TABLE [STRING_32, INTEGER]]
+			l_chapter: BIB_LIST_RESULT [BIB_READING_VERSE]
+			l_text: HASH_TABLE [STRING_32, INTEGER]
+			l_row, i, c: INTEGER
+		do
+			if reading_book > 0 and then bible.is_open then
+				l_codes := parallel_versions
+				create l_chapters.make (l_codes.count)
+				from c := 1 until c > 3 loop
+					create l_text.make (40)
+					if c <= l_codes.count then
+						if attached bible.text_reader.version (l_codes.i_th (c)) as al_version then
+							parallel_view.set_column_title (c, al_version.name)
+							if al_version.is_right_to_left then
+								parallel_view.set_column_scale (c, 1.35)
+							else
+								parallel_view.set_column_scale (c, 1.0)
+							end
+						end
+						l_chapter := bible.text_reader.chapter (l_codes.i_th (c), reading_book, reading_chapter)
+						from i := 1 until i > l_chapter.count loop
+							l_text.force (l_chapter.item (i).display_text, l_chapter.item (i).verse)
+							i := i + 1
+						end
+					else
+						parallel_view.set_column_title (c, "")
+					end
+					l_chapters.extend (l_text)
+					c := c + 1
+				end
+				parallel_view.wipe_out
+				across reading_verses as ic loop
+					l_row := parallel_view.add_row (ic.verse.out)
+					from c := 1 until c > 3 loop
+						if attached l_chapters.i_th (c).item (ic.verse) as al_cell then
+							parallel_view.set_cell (l_row, c, al_cell)
+						end
+						c := c + 1
+					end
+				end
+				if not l_codes.is_empty and then attached bible.text_reader.version (l_codes.last) as al_last
+					and then not al_last.versification.same_string ("kjv")
+				then
+					parallel_view.add_note ({STRING_32} "Rows follow the first version's verse numbers; " + al_last.name + {STRING_32} " numbers some verses differently.").do_nothing
+				end
+			end
+		end
+
+	add_study_pills
+			-- The Study board's codes: the chrome as on the Simple board, C10, and T1 to T6.
+		do
+			window.add_reference_mark (menu_bar, "C2", "Menu bar: the same in both layouts.", window.Corner_top_left)
+			window.add_reference_mark (menu_bar, "C1", "Title bar (above): app, chapter and version, edition.", window.Corner_top_right)
+			window.add_reference_mark (back_button, "C3", "Back and Forward: Alt+Left and Alt+Right.", window.Corner_top_left)
+			window.add_reference_mark (reference_box, "C4", "Reference box. Ctrl+L.", window.Corner_top_left)
+			window.add_reference_mark (version_select, "C5", "Version picker.", window.Corner_top_right)
+			window.add_reference_mark (search_box, "C6", "Quick search: results go to T6. Ctrl+F.", window.Corner_top_left)
+			window.add_reference_mark (tools_strip, "C10", "Study tools strip: Parallel works; Interlinear, Guide, Word Study, Count and Ledger come later.", window.Corner_top_left)
+			window.add_reference_mark (mode_switch, "C7", "Mode switch, on Study: only the docking changes. Ctrl+M.", window.Corner_top_left)
+			window.add_reference_mark (smaller_button, "C8", "Text size for the whole window, kept for next time.", window.Corner_top_left)
+			window.add_reference_mark (dark_switch, "C9", "Dark / Light.", window.Corner_top_right)
+			window.add_reference_mark (navigator_tree, "T1", "P11 Navigator, west: books, chapter by chapter. Bookmarks come later.", window.Corner_top_left)
+			window.add_reference_mark (dock, "T2", "P06 Notes, west below T1: comes with the notes store.", window.Corner_bottom_left)
+			window.add_reference_mark (center_tabs, "T3", "Centre tabs: the Bible text and Parallel (P02). More Bible tabs come later.", window.Corner_top_left)
+			window.add_reference_mark (lexicon_heading, "T4", "P05 Lexicon, east: follows the clicked word.", window.Corner_top_left)
+			window.add_reference_mark (commentary_title, "T5", "P04 Commentary, east: here on Cross-refs, with OpenBible votes.", window.Corner_top_left)
+			window.add_reference_mark (results_tabs, "T6", "South results zone: Search Results; Guides, Census, Author Library and Ledger come later.", window.Corner_top_left)
+			window.add_reference_mark (link_label, "C12", "Link set: always A for now.", window.Corner_top_left)
+			window.add_reference_mark (numbering_label, "C13", "Versification.", window.Corner_top_left)
+			window.add_reference_mark (progress, "C14", "Job progress.", window.Corner_top_left)
+			window.add_reference_mark (editions_label, "C15", "Database editions.", window.Corner_top_right)
+			window.add_reference_mark (status_bar, "C11", "Status: the reference and version read.", window.Corner_top_left)
 		end
 
 feature {NONE} -- Commentary (S2, P04)
@@ -1131,17 +1498,22 @@ feature {NONE} -- Search results (P07)
 			-- What the last search found, in the order P07 lists it.
 
 	show_results
-			-- Dock P07 west.
+			-- Dock P07 west (Simple), or bring Search Results to the front of T6 (Study).
 		do
 			dock.show_panel (results_panel)
+			if is_study then
+				results_tabs.select_tab (1)
+			end
 			keep_verse_in_view
 		end
 
 	hide_results
-			-- Collapse P07: an empty zone takes no room (C16).
+			-- Collapse P07: an empty zone takes no room (C16). The Study layout keeps its T6 zone.
 		do
-			dock.hide_panel (results_panel)
-			keep_verse_in_view
+			if not is_study then
+				dock.hide_panel (results_panel)
+				keep_verse_in_view
+			end
 		end
 
 	keep_verse_in_view

@@ -173,11 +173,17 @@ feature -- Tests
 			create l_settings.make_at (Settings_file)
 			l_settings.load
 			assert_true ("no file: the default", l_settings.text_scale = 1.0)
+			assert_false ("Simple by default", l_settings.is_study_layout)
 			l_settings.set_text_scale (1.3)
+			l_settings.set_study_layout (True)
 			assert_true ("saved", l_settings.save)
 			create l_again.make_at (Settings_file)
 			l_again.load
 			assert_true ("read back", (l_again.text_scale - 1.3).abs < 0.0001)
+			assert_true ("the Study layout kept", l_again.is_study_layout)
+			l_settings.set_text_scale (1.6)
+			assert_true ("saved again", l_settings.save)
+			assert_true ("two decimals, not 1.6000000000000001", (create {SIMPLE_FILE}.make (Settings_file)).read_text.has_substring ("text_scale=1.60"))
 			l_ok := (create {SIMPLE_FILE}.make (Settings_file)).write_text ("text_scale=9%Nnonsense%N")
 			create l_again.make_at (Settings_file)
 			l_again.load

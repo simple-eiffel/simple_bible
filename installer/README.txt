@@ -1,4 +1,4 @@
-simple_bible 0.4.4 - PERSONAL EDITION - not for distribution
+simple_bible 0.5.0 - PERSONAL EDITION - not for distribution
 =============================================================
 
 This installs the simple_bible concordance on your own machine, with
@@ -33,6 +33,11 @@ Click a verse: the commentary follows it and its original words open on
 the left; click a word there and the lexicon follows. View > Show design
 pills (Ctrl+Shift+P) labels each part with its code from the GUI guide.
 
+Simple | Study (top right, Ctrl+M) switches to the Study layout: the
+navigator and notes on the left, Bible and Parallel tabs in the middle,
+the lexicon over the commentary on the right, results below. The window
+remembers the layout and the text size.
+
 The command line
 ----------------
 Open "simple_bible prompt" from the Start menu (a console already set to
@@ -57,6 +62,6 @@ Installing on another machine without questions
 -----------------------------------------------
 From cmd or PowerShell (not Git Bash, which rewrites /FLAGS):
 
-  simple_bible-personal-0.4.4-Setup.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS="addtopath"
+  simple_bible-personal-0.5.0-Setup.exe /VERYSILENT /SUPPRESSMSGBOXES /TASKS="addtopath"
 
 Uninstalling removes the programs, both databases and the PATH entry.
