@@ -292,7 +292,7 @@ feature -- Tests
 			fixture.build_content (Content_file, {CONC_FIXTURE}.Content_version, False)
 			l_bible := bible ("", "")
 			l_bible.open
-			assert_integers_equal ("books", 4, l_bible.books.book_count)
+			assert_integers_equal ("books", 6, l_bible.books.book_count)
 			assert_strings_equal ("name", "Matthew", l_bible.books.book (40).name)
 			assert_true ("by name", l_bible.books.candidates_for_name ("Genesis").count = 1 and then l_bible.books.candidates_for_name ("Genesis").first = 1)
 			assert_true ("by code", l_bible.books.candidates_for_name ("mat").first = 40)
