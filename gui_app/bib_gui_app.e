@@ -1352,7 +1352,7 @@ feature {NONE} -- Reading (S1, P01)
 	numbering_note (a_version: BIB_READING_VERSION): STRING_32
 			-- What the reader should know: a place's numbering may differ here, or the version's caveat.
 		do
-			if study_corpus.same_string ("WLC-MACULA") and not a_version.versification.same_string ("hebrew") then
+			if study_corpus.same_string ("WLC-MACULA") and not a_version.numbers_like_hebrew then
 				Result := {STRING_32} "Places follow the Hebrew Bible's numbering; in a few chapters this version numbers verses differently."
 			else
 				Result := a_version.caveat.twin
@@ -1365,11 +1365,11 @@ feature {NONE} -- Reading (S1, P01)
 	numbering_name (a_version: BIB_READING_VERSION): STRING_32
 			-- C13: which numbering the version uses.
 		do
-			if a_version.versification.same_string ("hebrew") then
+			if a_version.numbers_like_hebrew then
 				Result := {STRING_32} "Hebrew numbering"
-			elseif a_version.versification.same_string ("lxx") then
+			elseif a_version.numbers_like_septuagint then
 				Result := {STRING_32} "Septuagint numbering"
-			elseif a_version.versification.same_string ("vulgate") then
+			elseif a_version.numbers_like_vulgate then
 				Result := {STRING_32} "Vulgate numbering"
 			else
 				Result := {STRING_32} "English numbering"
@@ -2738,7 +2738,7 @@ feature {NONE} -- Notes (T2, P06)
 					parallel_view.scroll_to_row (l_selected)
 				end
 				if not l_codes.is_empty and then attached bible.text_reader.version (l_codes.last) as al_last
-					and then not al_last.versification.same_string ("kjv")
+					and then not al_last.numbers_like_english
 				then
 					parallel_view.add_note ({STRING_32} "Rows follow the first version's verse numbers; " + al_last.name + {STRING_32} " numbers some verses differently.").do_nothing
 				end
@@ -3142,8 +3142,10 @@ feature {NONE} -- Search results (P07)
 			create l_note.make_empty
 			if bible.verse_search.has_moved_hebrew_roots and a_total > 0 then
 				l_note := {STRING_32} " Hebrew roots are shown at their English verse numbers (versification by STEPBible.org TVTMS, CC BY)."
-			elseif bible.verse_search.has_hebrew_roots and a_total > 0 then
-				l_note := {STRING_32} " Hebrew roots stand in Hebrew verse numbers; a few English Bibles number those verses one off."
+			end
+				-- Design scan 53: both notes can apply; neither hides the other.
+			if bible.verse_search.has_hebrew_roots and a_total > 0 then
+				l_note.append ({STRING_32} " Hebrew roots stand in Hebrew verse numbers; a few English Bibles number those verses one off.")
 			end
 			if bible.verse_search.has_greek_roots and a_total > 0 then
 					-- The Colossians 1:2 lesson: the KJV reads "Lord" where the critical text has none.

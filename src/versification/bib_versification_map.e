@@ -50,6 +50,20 @@ feature -- Mapping
 			Result := not hebrew_moves.is_empty
 		end
 
+	english_rule (a_place: INTEGER_64): STRING_32
+			-- The TVTMS action that moves Hebrew place `a_place' ("Renumber verse", ...); empty when
+			-- none does. `pair' (the verse hub) will read the same rows, rule and all.
+		do
+			if hebrew_rules.has (a_place) and then attached hebrew_rules.item (a_place) as al_rule then
+				Result := al_rule
+			else
+				create Result.make_empty
+			end
+		end
+
+	map_error: detachable STRING_32
+			-- Why the last read of `versification_map' failed; Void when it worked or was not tried.
+
 	english_place (a_place: INTEGER_64): INTEGER_64
 			-- The English (Standard: NRSV, the KJV family) place of Hebrew-numbered place `a_place',
 			-- packed by BIB_PLACE_PACKING, from `versification_map' (STEPBible TVTMS, CC BY 4.0):
@@ -107,20 +121,65 @@ feature {NONE} -- Implementation
 	sources: BIB_SOURCE_SET
 
 	hebrew_moves: HASH_TABLE [INTEGER_64, INTEGER_64]
-			-- Hebrew place to English place, every row of `versification_map' for "hebrew" (read once;
-			-- empty when content.db carries none or the table is absent).
+			-- Hebrew place to English place, every row of `versification_map' for the Hebrew numbering.
+			-- Read on first use and kept only when the read worked (design scan 53: a once kept an early
+			-- or failed read empty for good); `map_error' says why a read failed.
+		do
+			if attached moves_read as al_moves then
+				Result := al_moves
+			else
+				read_moves
+				if attached moves_read as al_moves then
+					Result := al_moves
+				else
+					create Result.make (0)
+				end
+			end
+		end
+
+	hebrew_rules: HASH_TABLE [STRING_32, INTEGER_64]
+			-- The TVTMS action of each Hebrew place `hebrew_moves' moves.
+		do
+			if attached rules_read as al_rules then
+				Result := al_rules
+			else
+				read_moves
+				if attached rules_read as al_rules then
+					Result := al_rules
+				else
+					create Result.make (0)
+				end
+			end
+		end
+
+	moves_read: detachable HASH_TABLE [INTEGER_64, INTEGER_64]
+	rules_read: detachable HASH_TABLE [STRING_32, INTEGER_64]
+			-- The last good read of `versification_map'.
+
+	read_moves
+			-- Read `versification_map' into `moves_read' and `rules_read', or say why not.
 		local
 			l_keys: BIB_VERSE_KEY
-		once ("OBJECT")
-			create Result.make (2048)
-			create l_keys
+			l_moves: HASH_TABLE [INTEGER_64, INTEGER_64]
+			l_rules: HASH_TABLE [STRING_32, INTEGER_64]
+			l_from: INTEGER_64
+		do
 			if sources.is_open then
-				run_query ("SELECT from_book, from_chapter, from_verse, to_book, to_chapter, to_verse FROM main.versification_map WHERE system = 'hebrew'", {ARRAY [detachable ANY]} <<>>)
+				create l_keys
+				run_query ("SELECT from_book, from_chapter, from_verse, to_book, to_chapter, to_verse, rule FROM main.versification_map WHERE system = ?", {ARRAY [detachable ANY]} <<{BIB_NUMBERING}.Hebrew>>)
 				if attached last_rows as al_rows then
+					create l_moves.make (al_rows.rows.count)
+					create l_rules.make (al_rows.rows.count)
 					across al_rows.rows as ic loop
-						Result.force (l_keys.packed_place (ic.integer_value ("to_book"), ic.integer_value ("to_chapter"), ic.integer_value ("to_verse")),
-							l_keys.packed_place (ic.integer_value ("from_book"), ic.integer_value ("from_chapter"), ic.integer_value ("from_verse")))
+						l_from := l_keys.packed_place (ic.integer_value ("from_book"), ic.integer_value ("from_chapter"), ic.integer_value ("from_verse"))
+						l_moves.force (l_keys.packed_place (ic.integer_value ("to_book"), ic.integer_value ("to_chapter"), ic.integer_value ("to_verse")), l_from)
+						l_rules.force (ic.string_value ("rule"), l_from)
 					end
+					moves_read := l_moves
+					rules_read := l_rules
+					map_error := Void
+				elseif attached query_error as al_error then
+					map_error := al_error.message
 				end
 			end
 		end

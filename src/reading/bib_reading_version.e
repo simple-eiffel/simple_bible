@@ -53,6 +53,30 @@ feature -- Access
 	is_right_to_left: BOOLEAN
 			-- Is it written right to left (Hebrew, Aramaic, Syriac)?
 
+	numbers_like_hebrew: BOOLEAN
+			-- Does this version number verses as the Hebrew Bible does?
+		do
+			Result := versification.same_string ({BIB_NUMBERING}.Hebrew)
+		end
+
+	numbers_like_septuagint: BOOLEAN
+			-- Does this version number verses as the Septuagint does?
+		do
+			Result := versification.same_string ({BIB_NUMBERING}.Septuagint)
+		end
+
+	numbers_like_vulgate: BOOLEAN
+			-- Does this version number verses as the Vulgate does?
+		do
+			Result := versification.same_string ({BIB_NUMBERING}.Vulgate)
+		end
+
+	numbers_like_english: BOOLEAN
+			-- Does this version number verses the English way (the KJV family)?
+		do
+			Result := versification.same_string ({BIB_NUMBERING}.English)
+		end
+
 	versification: STRING_8
 			-- Its own numbering ("kjv", "hebrew", "lxx", "vulgate").
 

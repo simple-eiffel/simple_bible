@@ -30,8 +30,9 @@ feature -- Status
 feature -- Set algebra
 
 	sorted_once (a_places: ARRAYED_LIST [INTEGER_64]): ARRAYED_LIST [INTEGER_64]
-			-- `a_places' ascending, each once. An insertion sort: the lists it gets are nearly sorted
-			-- (Hebrew places moved to English numbers shift only locally), so it runs near linear.
+			-- `a_places' ascending, each once. An insertion sort: meant for nearly sorted lists (Hebrew
+			-- places moved to English numbers shift only locally), where it runs near linear; a list in
+			-- reverse order would cost the square of its length.
 		local
 			l_sorted: ARRAYED_LIST [INTEGER_64]
 			i, j: INTEGER

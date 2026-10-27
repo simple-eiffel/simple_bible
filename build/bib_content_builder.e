@@ -53,6 +53,14 @@ feature -- Access
 	versification_rows_written: INTEGER
 			-- Rows `versification_map' holds after the last build (0 without `tvtms_path').
 
+	versification_rows_repeated: INTEGER
+			-- Hebrew rows of the last build naming a verse an earlier row already mapped (the first
+			-- row kept: TVTMS lists the MT's own row first).
+
+	versification_rows_unplaced: INTEGER
+			-- Hebrew rows of the last build that move a verse the reader could not place (a book
+			-- outside the Hebrew Bible, a reference list).
+
 	tvtms_path: STRING_32
 			-- STEPBible's TVTMS file, read for `versification_map'; empty for none.
 		attribute
@@ -115,6 +123,8 @@ feature -- Building
 			verses_written := 0
 			verses_indexed := 0
 			versification_rows_written := 0
+			versification_rows_repeated := 0
+			versification_rows_unplaced := 0
 			verses_not_indexed := 0
 			cross_references_written := 0
 			if not (create {SIMPLE_FILE}.make (a_bible_db)).is_file then
@@ -205,7 +215,11 @@ feature -- Constants
 			-- One source row per version (keys 100 and up): the vault's licence and caveat as given
 			-- (its licence column is not authoritative; the caveat says so), restricted when personal only.
 
-	Version_info_sql: STRING_8 = "INSERT INTO version_info SELECT v.abbreviation, CASE v.abbreviation WHEN 'KJV' THEN 'King James Version (1769)' WHEN 'BSB' THEN 'Berean Standard Bible' WHEN 'ASV' THEN 'American Standard Version (1901)' WHEN 'YLT' THEN 'Young''s Literal Translation (1898)' WHEN 'WLC' THEN 'Hebrew: Westminster Leningrad Codex' WHEN 'MapM' THEN 'Hebrew: Miqra according to the Masorah' WHEN 'SP' THEN 'Samaritan Pentateuch' WHEN 'TR' THEN 'Greek NT: Textus Receptus (Scrivener)' WHEN 'Byz' THEN 'Greek NT: Byzantine (Robinson-Pierpont)' WHEN 'Peshitta' THEN 'Syriac NT: Peshitta' WHEN 'LXX' THEN 'Greek OT: Septuagint (Rahlfs)' WHEN 'TgO' THEN 'Aramaic: Targum Onkelos' WHEN 'TgJ' THEN 'Aramaic: Targum Jonathan' WHEN 'TgW' THEN 'Aramaic: Targum to the Writings' WHEN 'TgN' THEN 'Aramaic: Targum Neofiti' WHEN 'WH' THEN 'Greek NT: Westcott-Hort (1881)' WHEN 'Tyn' THEN 'Tyndale (1526 and 1530)' WHEN 'Wyc' THEN 'Wycliffe (about 1395, NT)' WHEN 'Vul' THEN 'Latin: Clementine Vulgate (NT)' WHEN 'NWT2013' THEN 'New World Translation (2013)' WHEN 'NWT1984' THEN 'New World Translation (1984)' ELSE v.name END, CASE WHEN v.abbreviation IN ('WLC', 'MapM', 'SP') THEN 'hbo' WHEN v.abbreviation IN ('TgO', 'TgJ', 'TgW', 'TgN') THEN 'arc' WHEN v.abbreviation = 'Peshitta' THEN 'syc' WHEN v.abbreviation IN ('LXX', 'TR', 'Byz', 'WH') THEN 'grc' WHEN v.abbreviation = 'Vul' THEN 'lat' ELSE 'eng' END, CASE WHEN v.abbreviation IN ('WLC', 'MapM', 'SP', 'TgO', 'TgJ', 'TgW', 'TgN', 'Peshitta') THEN 'rtl' ELSE 'ltr' END, CASE WHEN v.abbreviation IN ('WLC', 'MapM', 'SP', 'TgO', 'TgJ', 'TgW', 'TgN') THEN 'hebrew' WHEN v.abbreviation = 'LXX' THEN 'lxx' WHEN v.abbreviation IN ('Vul', 'Wyc') THEN 'vulgate' ELSE 'kjv' END, trim(CASE WHEN instr(coalesce(v.caveat, ''), '|| LICENSE COLUMN IS NOT AUTHORITATIVE') > 0 THEN substr(v.caveat, 1, instr(v.caveat, '|| LICENSE COLUMN IS NOT AUTHORITATIVE') - 1) ELSE coalesce(v.caveat, '') END), v.id, 100 + v.id FROM src.bible_versions v ORDER BY v.id"
+	Version_info_sql: STRING_8
+			-- (The numbering names come from BIB_NUMBERING, design scan 53.)
+		once
+			Result := "INSERT INTO version_info SELECT v.abbreviation, CASE v.abbreviation WHEN 'KJV' THEN 'King James Version (1769)' WHEN 'BSB' THEN 'Berean Standard Bible' WHEN 'ASV' THEN 'American Standard Version (1901)' WHEN 'YLT' THEN 'Young''s Literal Translation (1898)' WHEN 'WLC' THEN 'Hebrew: Westminster Leningrad Codex' WHEN 'MapM' THEN 'Hebrew: Miqra according to the Masorah' WHEN 'SP' THEN 'Samaritan Pentateuch' WHEN 'TR' THEN 'Greek NT: Textus Receptus (Scrivener)' WHEN 'Byz' THEN 'Greek NT: Byzantine (Robinson-Pierpont)' WHEN 'Peshitta' THEN 'Syriac NT: Peshitta' WHEN 'LXX' THEN 'Greek OT: Septuagint (Rahlfs)' WHEN 'TgO' THEN 'Aramaic: Targum Onkelos' WHEN 'TgJ' THEN 'Aramaic: Targum Jonathan' WHEN 'TgW' THEN 'Aramaic: Targum to the Writings' WHEN 'TgN' THEN 'Aramaic: Targum Neofiti' WHEN 'WH' THEN 'Greek NT: Westcott-Hort (1881)' WHEN 'Tyn' THEN 'Tyndale (1526 and 1530)' WHEN 'Wyc' THEN 'Wycliffe (about 1395, NT)' WHEN 'Vul' THEN 'Latin: Clementine Vulgate (NT)' WHEN 'NWT2013' THEN 'New World Translation (2013)' WHEN 'NWT1984' THEN 'New World Translation (1984)' ELSE v.name END, CASE WHEN v.abbreviation IN ('WLC', 'MapM', 'SP') THEN 'hbo' WHEN v.abbreviation IN ('TgO', 'TgJ', 'TgW', 'TgN') THEN 'arc' WHEN v.abbreviation = 'Peshitta' THEN 'syc' WHEN v.abbreviation IN ('LXX', 'TR', 'Byz', 'WH') THEN 'grc' WHEN v.abbreviation = 'Vul' THEN 'lat' ELSE 'eng' END, CASE WHEN v.abbreviation IN ('WLC', 'MapM', 'SP', 'TgO', 'TgJ', 'TgW', 'TgN', 'Peshitta') THEN 'rtl' ELSE 'ltr' END, CASE WHEN v.abbreviation IN ('WLC', 'MapM', 'SP', 'TgO', 'TgJ', 'TgW', 'TgN') THEN '" + {BIB_NUMBERING}.Hebrew + "' WHEN v.abbreviation = 'LXX' THEN '" + {BIB_NUMBERING}.Septuagint + "' WHEN v.abbreviation IN ('Vul', 'Wyc') THEN '" + {BIB_NUMBERING}.Vulgate + "' ELSE '" + {BIB_NUMBERING}.English + "' END, trim(CASE WHEN instr(coalesce(v.caveat, ''), '|| LICENSE COLUMN IS NOT AUTHORITATIVE') > 0 THEN substr(v.caveat, 1, instr(v.caveat, '|| LICENSE COLUMN IS NOT AUTHORITATIVE') - 1) ELSE coalesce(v.caveat, '') END), v.id, 100 + v.id FROM src.bible_versions v ORDER BY v.id"
+		end
 			-- Each version's reader-facing name, language, direction and numbering, from its vault code;
 			-- the caveat without the vault's own bookkeeping clause (the source row keeps it whole).
 
@@ -280,20 +294,28 @@ feature {NONE} -- Implementation
 			-- with three small differences). A row the reader cannot place is left out and counted.
 		local
 			l_lines: LIST [STRING_32]
-			l_in_expanded: BOOLEAN
+			l_in_expanded, l_found_expanded: BOOLEAN
 			l_fields: LIST [STRING_32]
 			l_action: STRING_32
 			l_from, l_to: detachable TUPLE [book, chapter, verse: INTEGER]
+			l_keys: BIB_VERSE_KEY
+			l_mapped: HASH_TABLE [BOOLEAN, INTEGER_64]
 		do
 			l_lines := (create {SIMPLE_FILE}.make (tvtms_path)).read_text_utf_8.split ('%N')
+			create l_keys
+			create l_mapped.make (2048)
 			if l_lines.count < 3 then
 				last_error := {STRING_32} "The TVTMS file could not be read: " + tvtms_path
+			elseif not across l_lines as ic some ic.has_substring ({STRING_32} "#DataStart(Expanded)") end then
+					-- Design scan 53: a file without it built an empty map and said nothing.
+				last_error := {STRING_32} "The TVTMS file has no expanded section (#DataStart(Expanded)): " + tvtms_path
 			else
 				run (a_db, "INSERT INTO source_provenance VALUES (3, 'STEPBible TVTMS', 'STEPBible-Data Versification (TVTMS)', 'CC BY 4.0', 0, 0, 0, 'Versification mapping: STEPBible.org (Tyndale House, Cambridge), TVTMS, CC BY 4.0.', 'Hebrew to English (Standard) verse numbers only.')")
 				run (a_db, "BEGIN")
 				across l_lines as ic until last_error /= Void loop
 					if ic.has_substring ({STRING_32} "#DataStart(Expanded)") then
 						l_in_expanded := True
+						l_found_expanded := True
 					elseif ic.has_substring ({STRING_32} "#DataEnd(Expanded)") then
 						l_in_expanded := False
 					elseif l_in_expanded then
@@ -305,16 +327,28 @@ feature {NONE} -- Implementation
 							if across Moving_actions as jc some jc.same_string (l_action) end then
 								l_from := tvtms_place (l_fields.i_th (2))
 								l_to := tvtms_place (l_fields.i_th (3))
-								if attached l_from as al_from and then attached l_to as al_to and then (al_from.book /= al_to.book or al_from.chapter /= al_to.chapter or al_from.verse /= al_to.verse) then
-									a_db.execute_with_args ("INSERT OR IGNORE INTO versification_map VALUES ('hebrew', ?, ?, ?, ?, ?, ?, ?, 3)",
-										{ARRAY [detachable ANY]} <<al_from.book, al_from.chapter, al_from.verse, al_to.book, al_to.chapter, al_to.verse, l_action>>)
-									note_failure (a_db, "The versification map could not be written")
+								if not attached l_from or not attached l_to then
+									versification_rows_unplaced := versification_rows_unplaced + 1
+								elseif attached l_from as al_from and then attached l_to as al_to and then (al_from.book /= al_to.book or al_from.chapter /= al_to.chapter or al_from.verse /= al_to.verse) then
+									if l_mapped.has (l_keys.packed_place (al_from.book, al_from.chapter, al_from.verse)) then
+										versification_rows_repeated := versification_rows_repeated + 1
+									else
+										l_mapped.force (True, l_keys.packed_place (al_from.book, al_from.chapter, al_from.verse))
+										a_db.execute_with_args ("INSERT INTO versification_map VALUES ('" + {BIB_NUMBERING}.Hebrew + "', ?, ?, ?, ?, ?, ?, ?, 3)",
+											{ARRAY [detachable ANY]} <<al_from.book, al_from.chapter, al_from.verse, al_to.book, al_to.chapter, al_to.verse, l_action>>)
+										note_failure (a_db, "The versification map could not be written")
+									end
 								end
 							end
 						end
 					end
 				end
-				run (a_db, "COMMIT")
+				if last_error = Void then
+					run (a_db, "COMMIT")
+				else
+						-- Design scan 53: a failed insert left the transaction open.
+					a_db.execute ("ROLLBACK")
+				end
 				if last_error = Void then
 					across a_db.query ("SELECT count(*) AS n FROM versification_map").rows as ic loop
 						versification_rows_written := ic.integer_value ("n")
@@ -345,8 +379,8 @@ feature {NONE} -- Implementation
 			if not l_text.has (';') and l_dot > 1 and l_colon > l_dot + 1 then
 				l_book := l_text.substring (1, l_dot - 1)
 				across Tvtms_books as ic until l_id > 0 loop
-					if ic.same_string_general (l_book) then
-						l_id := @ ic.cursor_index
+					if ic.code.same_string_general (l_book) then
+						l_id := ic.book
 					end
 				end
 				if l_text.substring (l_dot + 1, l_colon - 1).is_integer then
@@ -366,13 +400,17 @@ feature {NONE} -- Implementation
 			end
 		end
 
-	Tvtms_books: ARRAY [STRING_8]
-			-- TVTMS's codes for the books of the Hebrew Bible, at their book numbers (BIB_CANON order).
+	Tvtms_books: ARRAY [TUPLE [code: STRING_8; book: INTEGER]]
+			-- TVTMS's code for each book of the Hebrew Bible with its book number, written in pairs so
+			-- no pair can slip against another (design scan 53: a positional list held only by its count).
 		once
-			Result := <<"Gen", "Exo", "Lev", "Num", "Deu", "Jos", "Jdg", "Rut", "1Sa", "2Sa", "1Ki", "2Ki", "1Ch", "2Ch", "Ezr", "Neh", "Est", "Job", "Psa", "Pro",
-				"Ecc", "Sng", "Isa", "Jer", "Lam", "Ezk", "Dan", "Hos", "Jol", "Amo", "Oba", "Jon", "Mic", "Nam", "Hab", "Zep", "Hag", "Zec", "Mal">>
+			Result := <<["Gen", 1], ["Exo", 2], ["Lev", 3], ["Num", 4], ["Deu", 5], ["Jos", 6], ["Jdg", 7], ["Rut", 8], ["1Sa", 9], ["2Sa", 10],
+				["1Ki", 11], ["2Ki", 12], ["1Ch", 13], ["2Ch", 14], ["Ezr", 15], ["Neh", 16], ["Est", 17], ["Job", 18], ["Psa", 19], ["Pro", 20],
+				["Ecc", 21], ["Sng", 22], ["Isa", 23], ["Jer", 24], ["Lam", 25], ["Ezk", 26], ["Dan", 27], ["Hos", 28], ["Jol", 29], ["Amo", 30],
+				["Oba", 31], ["Jon", 32], ["Mic", 33], ["Nam", 34], ["Hab", 35], ["Zep", 36], ["Hag", 37], ["Zec", 38], ["Mal", 39]>>
 		ensure
 			the_hebrew_bible: Result.count = {BIB_CANON}.Last_old_testament_book
+			each_book_once: across Result as ic all ic.book = @ ic.cursor_index end
 		end
 
 	insert_index_rows (a_db: SIMPLE_SQL_DATABASE; a_args: ARRAYED_LIST [detachable ANY])
