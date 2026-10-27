@@ -34,6 +34,11 @@ inherit
 			{NONE} all
 		end
 
+	BIB_WORD_DOOR
+		export
+			{NONE} all
+		end
+
 create
 	make
 
@@ -319,7 +324,7 @@ feature -- Access
 				across al_rows.rows as ic loop
 					l_rows.extend ([ic.integer_value ("pos"), ic.string_value ("search"), ic.integer_64_value ("lemma_id")])
 				end
-					-- One position at a time: its tokens' search forms joined, and its longest token's headword.
+					-- One position at a time: its tokens' search forms joined, and the door BIB_WORD_DOOR picks.
 				from i := 1 until i > l_rows.count or l_found_lemma > 0 loop
 					l_position := l_rows.i_th (i).position
 					create l_group.make_empty
@@ -327,7 +332,7 @@ feature -- Access
 					l_best_lemma := 0
 					from until i > l_rows.count or else l_rows.i_th (i).position /= l_position loop
 						l_group.append (l_rows.i_th (i).search)
-						if l_rows.i_th (i).lemma > 0 and l_rows.i_th (i).search.count > l_best_search.count then
+						if takes_door (l_rows.i_th (i).lemma, l_rows.i_th (i).search.count, l_best_lemma, l_best_search.count) then
 							l_best_search := l_rows.i_th (i).search
 							l_best_lemma := l_rows.i_th (i).lemma
 						end
@@ -648,8 +653,7 @@ feature -- Access
 					else
 						l_kind := basis_kind (ic.string_value ("lemma_basis").to_string_8)
 					end
-					if l_position < 1 or l_position < l_previous or not is_concordance_language (l_language)
-						or not is_translit_complete (l_language, l_surface, l_translit)
+					if word_row_breach (l_position, l_previous.to_integer_32, l_language, l_surface, l_translit)
 						or not is_known_basis (l_kind) or (l_kind.same_string ("none") and l_lemma /= 0)
 					then
 						l_bad := "A word of the verse breaks the pack's rules (position " + l_position.out + ")."
@@ -692,10 +696,13 @@ feature -- Access
 			l_provenance: BIB_PROVENANCE
 			l_bad: detachable STRING_8
 			l_scope: STRING_8
-			l_verse, l_position: INTEGER
+			l_verse, l_position, l_previous_verse, l_previous_position: INTEGER
+			l_language: STRING_8
+			l_surface, l_translit: STRING_32
+			l_lemma: INTEGER_64
 			l_glossed: BOOLEAN
 		do
-			l_scope := "book " + a_book.out + " chapter " + a_chapter.out
+			l_scope := chapter_scope (a_book, a_chapter)
 			run_query (Interlinear_sql, {ARRAY [detachable ANY]} <<Gloss_link_kind, corpus_id (a_corpus_code), a_book, a_chapter.out>>)
 			l_provenance := provenance_of (a_corpus_code)
 			if attached last_rows as al_rows then
@@ -703,22 +710,31 @@ feature -- Access
 				across al_rows.rows as ic until l_bad /= Void loop
 					l_verse := ic.integer_value ("verse")
 					l_position := ic.integer_value ("pos")
-					if l_verse < 1 or l_position < 1 or ic.integer_64_value ("lemma_id") < 0 then
+					l_language := ic.string_value ("language").to_string_8
+					l_surface := ic.string_value ("surface")
+					l_translit := ic.string_value ("translit")
+					l_lemma := ic.integer_64_value ("lemma_id").max (0)
+					if l_verse /= l_previous_verse then
+						l_previous_position := 0
+					end
+					if l_verse < 1 or l_verse < l_previous_verse or word_row_breach (l_position, l_previous_position, l_language, l_surface, l_translit) then
 						l_bad := "A word of the chapter breaks the pack's rules (verse " + l_verse.out + ", position " + l_position.out + ")."
 					else
+						l_previous_verse := l_verse
+						l_previous_position := l_position
 						if attached l_word as al_word and then al_word.verse = l_verse and then al_word.position = l_position then
 							l_current := al_word
 						else
-							create l_current.make (l_verse, l_position, ic.string_value ("language").to_string_8, l_provenance)
+							create l_current.make (l_verse, l_position, l_language, l_provenance)
 							l_words.extend (l_current)
 							l_word := l_current
 						end
-						l_current.add_morpheme (ic.string_value ("surface"), ic.string_value ("translit"), ic.string_value ("gloss"),
+						l_current.add_morpheme (l_surface, l_translit, ic.string_value ("gloss"),
 							ic.string_value ("headword"), ic.string_value ("strongs"),
 							morphology_text (ic.string_value ("pos_tag"),
 								<<ic.string_value ("stem"), ic.string_value ("form"), ic.string_value ("tense"), ic.string_value ("voice"), ic.string_value ("mood")>>,
 								<<ic.string_value ("person"), ic.string_value ("gender"), ic.string_value ("number"), ic.string_value ("gcase"), ic.string_value ("gstate")>>),
-							ic.integer_64_value ("lemma_id"))
+							l_lemma, ic.string_value ("search").count)
 						l_glossed := l_glossed or not ic.string_value ("gloss").is_empty
 					end
 				end
@@ -1110,6 +1126,27 @@ feature {NONE} -- Implementation
 			Result := "book " + a_ref.book_id.out + ", chapter " + a_ref.chapter.out + ", verse " + a_ref.verse.out
 		end
 
+	chapter_scope (a_book, a_chapter: INTEGER): STRING_8
+			-- The scope a chapter query records (beside `verse_scope').
+		require
+			book_positive: a_book > 0
+			chapter_positive: a_chapter > 0
+		do
+			Result := "book " + a_book.out + " chapter " + a_chapter.out
+		end
+
+	word_row_breach (a_position, a_previous: INTEGER; a_language: READABLE_STRING_8; a_surface, a_translit: READABLE_STRING_32): BOOLEAN
+			-- Does a token row break the pack's word rules: a position below 1 or before the one before
+			-- it (`a_previous', 0 at a verse's start), a language the concordance does not hold, or a
+			-- written word without its transliteration? `verse_words' and `interlinear_chapter' both
+			-- ask it (scan 38: the Interlinear had dropped these checks).
+		do
+			Result := a_position < 1 or a_position < a_previous or not is_concordance_language (a_language)
+				or not is_translit_complete (a_language, a_surface, a_translit)
+		ensure
+			position_checked: a_position < 1 implies Result
+		end
+
 	edition_or_pack: STRING_32
 			-- The pack's edition label for the method record, or "concordance pack" before one is read.
 		do
@@ -1160,7 +1197,7 @@ feature {NONE} -- Implementation
 
 	Lexicon_sql: STRING_8 = "SELECT s.source, s.seq, coalesce(s.label, '') AS label, coalesce(s.gloss, '') AS gloss, coalesce(s.text, '') AS text, coalesce(m.name, '') AS source_name, coalesce(m.year, '') AS year, coalesce(m.license, '') AS license, coalesce(m.ship_class, '') AS ship_class, coalesce(m.credit, '') AS credit, coalesce(m.rowid, 0) AS source_row FROM conc.lex_sense s LEFT JOIN conc.meaning_source m ON m.code = s.source WHERE s.lemma_id = ? AND s.source <> 'STEP' ORDER BY CASE s.source WHEN 'AS1922' THEN 1 WHEN 'BDB1906' THEN 2 WHEN 'LSJ' THEN 3 WHEN 'ML1889' THEN 4 WHEN 'SDGNT' THEN 5 WHEN 'SDBH' THEN 6 WHEN 'TBESH' THEN 7 ELSE 9 END, s.source, s.seq"
 
-	Interlinear_sql: STRING_8 = "SELECT CAST(u.div2 AS INTEGER) AS verse, t.pos, t.token_id, coalesce(t.language, '') AS language, coalesce(t.surface, '') AS surface, coalesce(t.translit, '') AS translit, coalesce(t.lemma_id, 0) AS lemma_id, coalesce(t.pos_tag, '') AS pos_tag, coalesce(t.stem, '') AS stem, coalesce(t.form, '') AS form, coalesce(t.person, '') AS person, coalesce(t.gender, '') AS gender, coalesce(t.number, '') AS number, coalesce(t.gstate, '') AS gstate, coalesce(t.tense, '') AS tense, coalesce(t.voice, '') AS voice, coalesce(t.mood, '') AS mood, coalesce(t.gcase, '') AS gcase, coalesce(l.headword, '') AS headword, coalesce((SELECT x.value FROM conc.lemma_xref x WHERE x.lemma_id = t.lemma_id AND x.scheme = 'strongs' LIMIT 1), '') AS strongs, coalesce((SELECT group_concat(g.surface, ' ') FROM (SELECT e.surface FROM conc.link k JOIN conc.token e ON e.token_id = k.to_token WHERE k.from_token = t.token_id AND k.kind = ? ORDER BY e.token_id) g), '') AS gloss FROM conc.token t JOIN conc.unit u ON u.unit_id = t.unit_id JOIN conc.work_book wb ON wb.work_id = u.work_id LEFT JOIN conc.lemma l ON l.lemma_id = t.lemma_id WHERE t.corpus_id = ? AND wb.book_id = ? AND u.div1 = ? AND u.recension = '' ORDER BY verse, t.pos, t.token_id"
+	Interlinear_sql: STRING_8 = "SELECT CAST(u.div2 AS INTEGER) AS verse, t.pos, t.token_id, coalesce(t.language, '') AS language, coalesce(t.surface, '') AS surface, coalesce(t.translit, '') AS translit, coalesce(t.search, '') AS search, coalesce(t.lemma_id, 0) AS lemma_id, coalesce(t.pos_tag, '') AS pos_tag, coalesce(t.stem, '') AS stem, coalesce(t.form, '') AS form, coalesce(t.person, '') AS person, coalesce(t.gender, '') AS gender, coalesce(t.number, '') AS number, coalesce(t.gstate, '') AS gstate, coalesce(t.tense, '') AS tense, coalesce(t.voice, '') AS voice, coalesce(t.mood, '') AS mood, coalesce(t.gcase, '') AS gcase, coalesce(l.headword, '') AS headword, coalesce((SELECT x.value FROM conc.lemma_xref x WHERE x.lemma_id = t.lemma_id AND x.scheme = 'strongs' LIMIT 1), '') AS strongs, coalesce((SELECT group_concat(g.surface, ' ') FROM (SELECT e.surface FROM conc.link k JOIN conc.token e ON e.token_id = k.to_token WHERE k.from_token = t.token_id AND k.kind = ? ORDER BY e.token_id) g), '') AS gloss FROM conc.token t JOIN conc.unit u ON u.unit_id = t.unit_id JOIN conc.work_book wb ON wb.work_id = u.work_id LEFT JOIN conc.lemma l ON l.lemma_id = t.lemma_id WHERE t.corpus_id = ? AND wb.book_id = ? AND u.div1 = ? AND u.recension = '' ORDER BY verse, t.pos, t.token_id"
 			-- The Interlinear tab's words: one row per token, the gloss gathered from its STEPBible links.
 
 	Gloss_link_kind: STRING_8 = "translation:ENG-STEP"
