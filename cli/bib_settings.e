@@ -45,6 +45,9 @@ feature -- Access
 	text_scale: REAL_64
 			-- How large all the window's text is (1.0: as designed).
 
+	is_study_layout: BOOLEAN
+			-- Does the window open in the Study layout (C7)?
+
 feature -- Element change
 
 	set_text_scale (a_scale: REAL_64)
@@ -55,6 +58,14 @@ feature -- Element change
 			text_scale := a_scale
 		ensure
 			set: text_scale = a_scale
+		end
+
+	set_study_layout (a_study: BOOLEAN)
+			-- Keep the layout the window opens in.
+		do
+			is_study_layout := a_study
+		ensure
+			set: is_study_layout = a_study
 		end
 
 feature -- Storage
@@ -78,6 +89,8 @@ feature -- Storage
 						if l_value.is_double and then l_value.to_double >= Min_text_scale and then l_value.to_double <= Max_text_scale then
 							text_scale := l_value.to_double
 						end
+					elseif l_equals > 1 and then l_line.substring (1, l_equals - 1).same_string ("layout") then
+						is_study_layout := l_line.substring (l_equals + 1, l_line.count).same_string ("study")
 					end
 				end
 			end
@@ -98,7 +111,34 @@ feature -- Storage
 					l_made := l_folder.create_directory_recursive
 				end
 			end
-			Result := l_file.write_text ({STRING_32} "text_scale=" + text_scale.out + {STRING_32} "%N")
+			Result := l_file.write_text ({STRING_32} "text_scale=" + scale_text + {STRING_32} "%Nlayout=" + layout_name + {STRING_32} "%N")
+		end
+
+feature {NONE} -- Implementation
+
+	scale_text: STRING_32
+			-- `text_scale' with two decimals ("1.6" is written "1.60", never "1.6000000000000001").
+		local
+			l_hundredths: INTEGER
+		do
+			l_hundredths := (text_scale * 100.0).rounded
+			Result := (l_hundredths // 100).out.to_string_32 + {STRING_32} "."
+			if l_hundredths \\ 100 < 10 then
+				Result.append_character ('0')
+			end
+			Result.append ((l_hundredths \\ 100).out)
+		ensure
+			two_decimals: Result.count >= 4
+		end
+
+	layout_name: STRING_32
+			-- "study" or "simple".
+		do
+			if is_study_layout then
+				Result := {STRING_32} "study"
+			else
+				Result := {STRING_32} "simple"
+			end
 		end
 
 feature -- Constants

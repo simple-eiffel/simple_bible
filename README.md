@@ -27,7 +27,8 @@ Part of the [Simple Eiffel](https://github.com/simple-eiffel) ecosystem.
 - ✅ **Build and application ECFs:** `bible_build.ecf` (`bible_build.exe` writes content.db v2: books, 21 versions, every verse, 344,799 cross-references) and `simple_bible_app.ecf` (`bible.exe`: `word`, `english`, `verse`, `strongs`; `bible_gui.exe`, the window)
 - ✅ **The main window, the GUI guide's Simple layout** (`bible_gui.exe`, simple_widgets): the Bible text in the centre (any of 21 versions, chapter by chapter), the commentary panel east (cross-references with OpenBible votes), the dictionary and lexicon south (how the Bibles render a word, lexicon entries, every place), search results west while there are any; a reference box, a search box, Back and Forward, text size, light and dark. Click a verse and the panels follow it; click a word in the KJV or BSB text and the lexicon opens its Greek or Hebrew original. Design pills (View menu) label every part with its code from the GUI guide
 - ✅ **A personal installer** (Inno Setup, per user) for the project lead's own machines; it carries the personal edition, so it is never published
-- ⏳ The Study layout (navigator, Bible tabs, Parallel), commentaries and dictionaries once the content pipeline carries them, then the rest of the engine
+- ✅ **The Study layout** (Simple | Study, Ctrl+M): the navigator (books by chapter) and notes west, Bible and Parallel tabs centre (three versions side by side), the lexicon over the commentary east, the results zone south; the window opens at most of the screen and remembers the layout and the text size
+- ⏳ Bible tabs, interlinear, notes, commentaries and dictionaries once the content pipeline carries them, then the rest of the engine
 
 ## The idea
 
