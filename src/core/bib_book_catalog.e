@@ -126,7 +126,25 @@ feature -- Access
 			non_negative: Result >= 0
 		end
 
+	book_named_exactly (a_name: READABLE_STRING_GENERAL): INTEGER
+			-- The book named `a_name' exactly (its name or code, any case); 0 when none. Never a
+			-- prefix match, so prose ("is 5") never becomes a book (BIB_REFERENCE_LINKER).
+		do
+			if attached aliases.item (a_name.to_string_32.as_lower) as al_id then
+				Result := al_id
+			end
+		ensure
+			known_or_none: Result = 0 or else has_book (Result)
+		end
+
 feature -- Status
+
+	is_single_chapter_book (a_book_id: INTEGER): BOOLEAN
+			-- Is `a_book_id' one chapter long (Obadiah, Philemon, 2 John, 3 John, Jude), so "Jude 9"
+			-- names verse 9? The one rule for the reference box and the reference links (2026-10-27).
+		do
+			Result := a_book_id = 31 or a_book_id = 57 or a_book_id = 63 or a_book_id = 64 or a_book_id = 65
+		end
 
 	has_book (a_book_id: INTEGER): BOOLEAN
 			-- Is `a_book_id' a canonical book?

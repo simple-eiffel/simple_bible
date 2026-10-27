@@ -147,6 +147,39 @@ feature -- Tests
 			assert_true ("the banner says what the labels mean", l_page.has_substring ("not his words"))
 		end
 
+	test_references_become_links
+			-- 2026-10-27: Bible references in Markdown become links a reading pane follows; a book of
+			-- one chapter takes a lone number as its verse; prose and existing links are left alone.
+		local
+			l_linker: BIB_REFERENCE_LINKER
+			l_out: STRING_32
+		do
+			create l_linker.make (bible.books)
+			l_out := l_linker.linked ("See Genesis 1:1 and Exodus 3:14-15, Matthew 5, Jude 9; it is 5 words.")
+			assert_true ("verse", l_out.has_substring ("[Genesis 1:1](bible:1.1.1)"))
+			assert_true ("range keeps its text, opens its first verse", l_out.has_substring ("[Exodus 3:14-15](bible:2.3.14)"))
+			assert_true ("a chapter", l_out.has_substring ("[Matthew 5](bible:40.5.0)"))
+			assert_true ("one chapter: the number is the verse", l_out.has_substring ("[Jude 9](bible:65.1.9)"))
+			assert_true ("prose untouched", l_out.has_substring ("it is 5 words"))
+			l_out := l_linker.linked ("[Genesis 1:1](https://example.org) and `Genesis 1:2`")
+			assert_strings_equal ("links and code untouched", "[Genesis 1:1](https://example.org) and `Genesis 1:2`", l_out)
+			finish
+		end
+
+	test_reference_box_reads_ranges_and_one_chapter_books
+			-- NEEDLE found, 2026-10-27: "Jude 9" was read as chapter 9 and a range was not read at all.
+			-- Before: both Void or wrong; after: Jude 1:9, and a range's first verse.
+		local
+			l_lookup: BIB_LOOKUP
+		do
+			create l_lookup.make (bible)
+			assert_true ("Jude 9 is verse 9", attached l_lookup.place_named ("Jude 9") as al_a and then (al_a.book = 65 and al_a.chapter = 1 and al_a.verse = 9))
+			assert_true ("Jude 1:9 still", attached l_lookup.place_named ("Jude 1:9") as al_b and then (al_b.chapter = 1 and al_b.verse = 9))
+			assert_true ("a range opens its first verse", attached l_lookup.place_named ("Genesis 1:2-5") as al_c and then (al_c.book = 1 and al_c.chapter = 1 and al_c.verse = 2))
+			assert_true ("a chapter still a chapter", attached l_lookup.place_named ("Matthew 5") as al_d and then (al_d.chapter = 5 and al_d.verse = 0))
+			finish
+		end
+
 	test_place_rows_know_their_verse
 			-- A place opens in the reading pane: it carries its book, chapter and verse as numbers.
 		local
