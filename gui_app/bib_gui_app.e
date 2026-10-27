@@ -68,6 +68,14 @@ feature {NONE} -- Initialization
 			create bookmarks_heading.make_ui ("")
 			create bookmarks_grid.make (100.0)
 			create tag_label.make_ui ("")
+			create journal_title_box.make_single_line ("")
+			create journal_body_box.make ("")
+			create journal_new_button.make ("New", Void)
+			create journal_save_button.make ("Save", Void)
+			create journal_delete_button.make ("Delete", Void)
+			create journal_heading.make_ui ("")
+			create journal_grid.make (60.0)
+			create journal_rows.make (0)
 			create tag_box.make_single_line ("")
 			create tag_button.make ("Tag", Void)
 			create tag_names_grid.make (80.0)
@@ -275,6 +283,13 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			elseif snapshot_tab.same_string ({STRING_32} "notes") then
 				new_note_box.set_text ("A sample note written by the snapshot run.")
 				add_note
+			elseif snapshot_tab.same_string ({STRING_32} "journal") then
+				journal_title_box.set_text ("Covenant")
+				journal_body_box.set_text ("A sample journal entry written by the snapshot run.")
+				save_journal_entry
+				if attached notes_tabs as al_tabs then
+					al_tabs.select_tab (Journal_tab)
+				end
 			elseif snapshot_tab.same_string ({STRING_32} "tags") then
 				tag_box.set_text ("Watchers")
 				tag_verse
@@ -364,6 +379,10 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			notes_list.set_on_select (agent on_note_selected)
 			add_note_button.set_on_click (agent add_note)
 			tag_button.set_on_click (agent tag_verse)
+			journal_new_button.set_on_click (agent new_journal_entry)
+			journal_save_button.set_on_click (agent save_journal_entry)
+			journal_delete_button.set_on_click (agent delete_journal_entry)
+			journal_grid.set_on_select (agent on_journal_row)
 			tag_names_grid.set_on_select (agent on_tag_name)
 			delete_note_button.set_on_click (agent delete_note)
 			restore_note_button.set_on_click (agent restore_note)
@@ -552,6 +571,7 @@ feature {NONE} -- Window
 			tag_names_grid.add_column ((create {SW_GRID_COLUMN [TUPLE [tag: STRING_32; verses: INTEGER]]}.make ("Tag", 160.0, agent tag_name_text)).growing)
 			tag_names_grid.add_column (create {SW_GRID_COLUMN [TUPLE [tag: STRING_32; verses: INTEGER]]}.make ("Verses", 70.0, agent tag_verses_text))
 			tagged_grid.add_column ((create {SW_GRID_COLUMN [BIB_TAG_ASSIGNMENT]}.make ("Verse", 140.0, agent tag_place)).growing)
+			journal_grid.add_column ((create {SW_GRID_COLUMN [BIB_NOTE]}.make ("Entry", 200.0, agent {BIB_NOTE}.title)).growing)
 			highlights_grid.add_column ((create {SW_GRID_COLUMN [BIB_HIGHLIGHT]}.make ("Reason", 160.0, agent {BIB_HIGHLIGHT}.reason)).growing)
 			analysis_grid.add_column (create {SW_GRID_COLUMN [BIB_INTERLINEAR_WORD]}.make ("#", 40.0, agent analysis_position))
 			analysis_grid.add_column (create {SW_GRID_COLUMN [BIB_INTERLINEAR_WORD]}.make ("Word", 130.0, agent {BIB_INTERLINEAR_WORD}.surface))
@@ -1027,6 +1047,7 @@ feature {NONE} -- Reading (S1, P01)
 					fill_highlights
 					fill_bookmarks
 					fill_tags
+					fill_journal
 				end
 			end
 		end
@@ -1481,7 +1502,7 @@ feature {NONE} -- Two layouts (C7)
 			l_page.put (l_buttons)
 			create l_tabs.make
 			l_tabs.add_page ("Verse notes", l_page)
-			l_tabs.add_page ("Journal", create {SW_EMPTY_STATE}.make ("Journal comes later", "Notebooks and topical notes (E04)."))
+			l_tabs.add_page ("Journal", journal_page)
 			l_tabs.add_page ("Tags", tags_page)
 			l_tabs.add_page ("Highlights", highlights_page)
 			l_tabs.add_page ("Prayer", create {SW_EMPTY_STATE}.make ("Prayer list comes later", "Requests with dates (E06)."))
@@ -1637,6 +1658,153 @@ feature {NONE} -- Notes (T2, P06)
 
 	highlights_panel: BIB_ITEM_LIST_PANEL [BIB_HIGHLIGHT]
 			-- The highlights list, in Bible order, with Remove and Restore.
+
+	Journal_tab: INTEGER = 2
+			-- P06's Journal page.
+
+	journal_title_box: SW_TEXT_BOX
+	journal_body_box: SW_TEXT_BOX
+	journal_new_button, journal_save_button, journal_delete_button: SW_BUTTON
+	journal_heading: SW_LABEL
+	journal_grid: SW_DATA_GRID [BIB_NOTE]
+			-- T2's Journal tab (E04): topical notes, on a subject rather than a verse.
+
+	journal_rows: ARRAYED_LIST [BIB_NOTE]
+			-- The rows of `journal_grid', oldest first.
+
+	journal_entry_id: INTEGER_64
+			-- The entry in the boxes (0: a new one).
+
+	is_refilling_journal: BOOLEAN
+			-- Is `fill_journal' reselecting the entry (no click to answer)?
+
+	journal_page: SW_COLUMN
+			-- The Journal tab: a title, a body, New, Save and Delete, then every entry.
+		local
+			l_row: SW_ROW
+		do
+			create Result.make
+			Result := Result.with_gap (6.0)
+			Result.put (journal_title_box)
+			Result.put (journal_body_box)
+				-- The buttons on their own line: beside the title the narrow panel cut Delete off.
+			create l_row.make
+			l_row.put (journal_new_button)
+			l_row.put (journal_save_button)
+			l_row.put (journal_delete_button)
+			Result.put (l_row)
+			Result.put (journal_heading)
+			Result.put (journal_grid.growing)
+		end
+
+	fill_journal
+			-- Every journal entry; the one in the boxes stays selected.
+		local
+			i, l_index: INTEGER
+		do
+			if user_store.is_open then
+				journal_rows := note_store.notes_for (0)
+			else
+				create journal_rows.make (0)
+			end
+			journal_grid.set_rows (journal_rows)
+			from i := 1 until i > journal_rows.count or l_index > 0 loop
+				if journal_rows.i_th (i).id = journal_entry_id then
+					l_index := i
+				end
+				i := i + 1
+			end
+			if l_index = 0 then
+				journal_entry_id := 0
+			end
+			is_refilling_journal := True
+			journal_grid.select_model_row (l_index)
+			is_refilling_journal := False
+			if journal_rows.is_empty then
+				journal_heading.set_text ("No journal entries yet: write a title and a body, then Save.")
+			else
+				if journal_rows.count = 1 then
+					journal_heading.set_text ("Your journal (1 entry; click it to edit it):")
+				else
+					journal_heading.set_text ({STRING_32} "Your journal (" + journal_rows.count.out + {STRING_32} " entries; click one to edit it):")
+				end
+			end
+			journal_save_button.set_enabled (user_store.is_open)
+			journal_delete_button.set_enabled (journal_entry_id > 0)
+		end
+
+	new_journal_entry
+			-- Empty boxes for a new entry.
+		do
+			journal_entry_id := 0
+			journal_title_box.set_text ("")
+			journal_body_box.set_text ("")
+			fill_journal
+		end
+
+	save_journal_entry
+			-- A new entry is added; an entry being edited gets the body as its next version (the old
+			-- one kept).
+		local
+			l_title, l_body: STRING_32
+			l_note: BIB_NOTE
+		do
+			l_title := journal_title_box.text.twin
+			l_title.left_adjust
+			l_title.right_adjust
+			l_body := journal_body_box.text.twin
+			if not note_store.is_writable then
+				say ("The journal cannot be written now.")
+			elseif journal_entry_id > 0 then
+				if not note_store.current_body (journal_entry_id).same_string (l_body) then
+					note_store.update_note (journal_entry_id, l_body)
+				end
+				if attached note_store.last_error as al_error then
+					say (al_error.message)
+				else
+					say ("Saved; the earlier version is kept.")
+					fill_journal
+				end
+			elseif l_title.is_empty then
+				say ("Give the entry a title first.")
+			else
+				create l_note.make_topical (l_title, l_body)
+				note_store.add_note (l_note)
+				if attached note_store.last_error as al_error then
+					say (al_error.message)
+				else
+					journal_entry_id := l_note.id
+					say ("Saved.")
+					fill_journal
+				end
+			end
+		end
+
+	delete_journal_entry
+			-- Soft-delete the entry in the boxes (its history kept).
+		do
+			if journal_entry_id > 0 and then note_store.is_writable then
+				note_store.remove_note (journal_entry_id)
+				if attached note_store.last_error as al_error then
+					say (al_error.message)
+				else
+					last_deleted_note := journal_entry_id
+					new_journal_entry
+					say ("Entry deleted. Restore on Verse notes brings it back.")
+				end
+			end
+		end
+
+	on_journal_row (a_row: INTEGER)
+			-- An entry clicked: into the boxes for editing.
+		do
+			if not is_refilling_journal and then a_row >= 1 and then a_row <= journal_rows.count then
+				journal_entry_id := journal_rows.i_th (a_row).id
+				journal_title_box.set_text (journal_rows.i_th (a_row).title)
+				journal_body_box.set_text (journal_rows.i_th (a_row).body)
+				journal_delete_button.set_enabled (True)
+			end
+		end
 
 	Tags_tab: INTEGER = 3
 			-- P06's Tags page.
@@ -2307,7 +2475,7 @@ feature {NONE} -- Notes (T2, P06)
 			window.add_reference_mark (tools_strip, "C10", "Study tools strip: Parallel and Interlinear work; Guide, Word Study, Count and Ledger come later.", window.Corner_top_left)
 			window.add_reference_mark (mode_switch, "C7", "Mode switch, on Study: only the docking changes. Ctrl+M.", window.Corner_top_left)
 			window.add_reference_mark (navigator_tabs, "T1", "P11 Navigator, west: Books (chapter by chapter) and Bookmarks (Ctrl+D bookmarks the verse read; click one to read it; Remove and Restore).", window.Corner_top_left)
-			window.add_reference_mark (notes_heading, "T2", "P06 Notes, west below T1: Verse notes on the chapter read (add on the verse read; double-click to edit, each edit keeps the old version; Delete and Restore) Tags (tag the verse read; click a tag for its verses, a verse to read it), and Highlights (a reason, not a color; washed amber in the Bible and Parallel tabs; click one to read it). Remove and Restore on the Tags and Highlights lists. Journal, Prayer and Memory come later.", window.Corner_top_left)
+			window.add_reference_mark (notes_heading, "T2", "P06 Notes, west below T1: Verse notes on the chapter read (add on the verse read; double-click to edit, each edit keeps the old version; Delete and Restore) Tags (tag the verse read; click a tag for its verses, a verse to read it), and Highlights (a reason, not a color; washed amber in the Bible and Parallel tabs; click one to read it). Remove and Restore on the Tags and Highlights lists. Journal: notes on a subject (New, Save keeps the earlier version, Delete). Prayer and Memory come later.", window.Corner_top_left)
 			window.add_reference_mark (center_tabs, "T3", "Centre tabs: the Bible text, Parallel (P02) and Interlinear (P03, Ctrl+I). More Bible tabs come later.", window.Corner_top_left)
 			window.add_reference_mark (analysis_title, "P03.2", "Verse analysis: the verse read, a row per word with its lemma, Strong's number, morphology, gloss, and how often its headword occurs in this testament. Click a row and T4 follows it.", window.Corner_top_left)
 			window.add_reference_mark (interlinear_note, "P03", "Interlinear: word by word in the original, right to left for Hebrew. A click makes the word's verse the place read and opens its headword in T4.", window.Corner_top_left)
