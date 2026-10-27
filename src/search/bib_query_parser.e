@@ -113,7 +113,7 @@ feature {NONE} -- Tokens
 			Result := across a_text as ic some unicode.is_letter_or_digit (ic) end
 		end
 
-	Token_word, Token_phrase, Token_open, Token_close, Token_and, Token_or, Token_not, Token_strongs, Token_lemma, Token_morph: INTEGER = unique
+	Token_word, Token_phrase, Token_open, Token_close, Token_and, Token_or, Token_not, Token_strongs, Token_lemma, Token_morph, Token_form: INTEGER = unique
 			-- Token kinds.
 
 	read_tokens (a_text: READABLE_STRING_GENERAL)
@@ -166,6 +166,15 @@ feature {NONE} -- Tokens
 						tokens.extend ([Token_not, l_word, i])
 					elseif l_word [1] = '/' then
 						fail (i, "Regular expressions (/.../) come in a later release.")
+					elseif l_word.has ('@') then
+							-- A root in a form on one word: G3056@N-NSM.
+						if not attached form_root (l_word.substring (1, l_word.index_of ('@', 1) - 1)) then
+							fail (i, "Before @ write a root: a Strong's number such as G3056, or lemma:logos.")
+						elseif not morph_check.is_code_text (form_code_text (l_word)) then
+							fail (i, "After @ write a grammar code such as N-NSM or Vq*.")
+						else
+							tokens.extend ([Token_form, l_word, i])
+						end
 					elseif l_lower.starts_with ({STRING_32} "morph:") then
 						l_rest := l_word.substring (7, l_word.count)
 						if morph_check.is_code_text (l_rest) then
@@ -211,7 +220,7 @@ feature {NONE} -- Tokens
 			l_terms: INTEGER
 		do
 			across tokens as ic until error_position > 0 loop
-				if ic.kind = Token_word or ic.kind = Token_phrase or ic.kind = Token_strongs or ic.kind = Token_lemma or ic.kind = Token_morph then
+				if ic.kind = Token_word or ic.kind = Token_phrase or ic.kind = Token_strongs or ic.kind = Token_lemma or ic.kind = Token_morph or ic.kind = Token_form then
 					l_terms := l_terms + 1
 					if l_terms > Max_terms then
 						fail (ic.position, {STRING_32} "A search holds at most " + Max_terms.out + {STRING_32} " words, phrases and root words.")
@@ -333,6 +342,10 @@ feature {NONE} -- Grammar
 					create Result.make_leaf (create {BIB_QUERY_CLAUSE}.make_key ({BIB_QUERY_CLAUSE}.Strongs, create {BIB_STRONGS_KEY}.make_from_text (l_token.text)), l_token.position)
 				when Token_lemma then
 					create Result.make_leaf (create {BIB_QUERY_CLAUSE}.make_key ({BIB_QUERY_CLAUSE}.Lemma, create {BIB_LEMMA_KEY}.make (lemma_language (l_token.text), l_token.text)), l_token.position)
+				when Token_form then
+					if attached form_root (l_token.text.substring (1, l_token.text.index_of ('@', 1) - 1)) as al_root then
+						create Result.make_leaf (create {BIB_QUERY_CLAUSE}.make_key ({BIB_QUERY_CLAUSE}.Form, create {BIB_FORM_KEY}.make (al_root, create {BIB_MORPH_CODE}.make ({BIB_MORPH_CODE}.Every_scheme, form_code_text (l_token.text)))), l_token.position)
+					end
 				when Token_morph then
 					create Result.make_leaf (create {BIB_QUERY_CLAUSE}.make_key ({BIB_QUERY_CLAUSE}.Morph, create {BIB_MORPH_CODE}.make ({BIB_MORPH_CODE}.Every_scheme, l_token.text)), l_token.position)
 				else
@@ -384,6 +397,39 @@ feature {NONE} -- Grammar
 				across a_node.children as ic loop
 					check_negations (ic, a_node.kind = {BIB_QUERY_CLAUSE}.Or_clause)
 				end
+			end
+		end
+
+	form_root (a_text: STRING_32): detachable BIB_KEY
+			-- The root before a form's @: strongs:G3056, a bare G3056, or lemma:logos; Void when none.
+		local
+			l_rest: STRING_32
+		do
+			if a_text.as_lower.starts_with ({STRING_32} "strongs:") then
+				l_rest := a_text.substring (9, a_text.count)
+				if not l_rest.is_empty then
+					l_rest [1] := l_rest [1].as_upper
+				end
+			else
+				l_rest := a_text.twin
+			end
+			if a_text.as_lower.starts_with ({STRING_32} "lemma:") then
+				if a_text.count > 6 then
+					create {BIB_LEMMA_KEY} Result.make (lemma_language (a_text.substring (7, a_text.count)), a_text.substring (7, a_text.count))
+				end
+			elseif strongs_check.is_strongs_text (l_rest) then
+				create {BIB_STRONGS_KEY} Result.make_from_text (l_rest)
+			end
+		end
+
+	form_code_text (a_word: STRING_32): STRING_32
+			-- The grammar code after a form's @ ("morph:" before it allowed).
+		require
+			a_form: a_word.has ('@')
+		do
+			Result := a_word.substring (a_word.index_of ('@', 1) + 1, a_word.count)
+			if Result.as_lower.starts_with ({STRING_32} "morph:") then
+				Result := Result.substring (7, Result.count)
 			end
 		end
 

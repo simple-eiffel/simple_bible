@@ -174,6 +174,10 @@ feature -- Tests
 			assert_integers_equal ("another stem", 0, found (l_bible, "morph:Vn*"))
 			assert_integers_equal ("a code and a word", 1, found (l_bible, "morph:Vqp3ms AND beginning"))
 			assert_true ("a Hebrew code is told as Hebrew numbering", found (l_bible, "morph:Vq*") = 1 and then l_bible.verse_search.has_hebrew_roots)
+			assert_integers_equal ("a root in that form", 1, found (l_bible, "H1254@Vqp3ms"))
+			assert_integers_equal ("a root in a form it never takes", 0, found (l_bible, "H1254@Vn*"))
+			assert_integers_equal ("a root in a family of forms", 1, found (l_bible, "H1254@Vq*"))
+			assert_integers_equal ("a form by lemma letters", 1, found (l_bible, "lemma:bara@Vq*"))
 			l_bible.close
 			remove_test_files
 		end

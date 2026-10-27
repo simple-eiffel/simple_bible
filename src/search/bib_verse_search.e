@@ -149,7 +149,7 @@ feature {NONE} -- Evaluation
 					else
 						error_message := {STRING_32} "The verse index could not be searched."
 					end
-				when {BIB_QUERY_CLAUSE}.Strongs, {BIB_QUERY_CLAUSE}.Lemma, {BIB_QUERY_CLAUSE}.Morph then
+				when {BIB_QUERY_CLAUSE}.Strongs, {BIB_QUERY_CLAUSE}.Lemma, {BIB_QUERY_CLAUSE}.Morph, {BIB_QUERY_CLAUSE}.Form then
 					if not pack.is_available then
 						error_message := {STRING_32} "No concordance is attached, so root words cannot be searched."
 					elseif attached l_clause.key as al_key then
