@@ -235,6 +235,29 @@ feature -- Tests
 			clean_user_file
 		end
 
+	test_one_rule_for_a_live_item
+			-- Scan 44: a row with no label (an imported or hand-made one) is no live item for any
+			-- query, so the counts and the lists agree. Before: item_count counted it while
+			-- highlights_for skipped it, and highlights_for's `counted' postcondition failed.
+		local
+			l_user: BIB_USER_STORE
+			l_other: SIMPLE_SQL_DATABASE
+			l_hub: INTEGER_64
+		do
+			clean_user_file
+			create l_user.make (User_file)
+			l_user.open
+			l_hub := (create {BIB_HUB_ID}).hub_id (65, 1, 6)
+			l_user.add_highlight (create {BIB_HIGHLIGHT}.make (l_hub, "Watchers"))
+			create l_other.make (User_file)
+			l_other.execute_with_args ("INSERT INTO user_item(kind, hub_id, label, created_at, changed_at) VALUES (?, ?, '', '2026-10-27T12:00:00', '2026-10-27T12:00:00')", <<{BIB_USER_STORE}.Kind_highlight, l_hub>>)
+			l_other.close
+			assert_integers_equal ("the empty one is not counted", 1, l_user.item_count ({BIB_USER_STORE}.Kind_highlight, l_hub))
+			assert_integers_equal ("nor listed", 1, l_user.highlights_for (l_hub).count)
+			l_user.close
+			clean_user_file
+		end
+
 	test_user_store_refuses_another_schema
 			-- A user.db of a schema this program does not read is refused and left as it is.
 		local
