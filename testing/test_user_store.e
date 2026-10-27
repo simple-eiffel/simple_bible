@@ -185,6 +185,32 @@ feature -- Tests
 			clean_user_file
 		end
 
+	test_a_failed_item_write_is_reported
+			-- Scan 42: a highlight that cannot be written, or a removal that matches no item, is
+			-- reported in `write_error' (one place for every write into an open user.db), never a
+			-- broken postcondition. Before: add_highlight's count_grown failed (it tested last_error,
+			-- which only a failed open sets) and removing an unknown item "succeeded".
+		local
+			l_user: BIB_USER_STORE
+			l_other: SIMPLE_SQL_DATABASE
+			l_highlight: BIB_HIGHLIGHT
+		do
+			clean_user_file
+			create l_user.make (User_file)
+			l_user.open
+			l_user.remove_item ({BIB_USER_STORE}.Kind_highlight, 999)
+			assert_true ("an unknown item is no success", l_user.write_error /= Void)
+			create l_other.make (User_file)
+			l_other.execute ("DROP TABLE user_item")
+			l_other.close
+			create l_highlight.make ((create {BIB_HUB_ID}).hub_id (65, 1, 6), "Watchers")
+			l_user.add_highlight (l_highlight)
+			assert_true ("reported", l_user.write_error /= Void)
+			assert_false ("not stored", l_highlight.is_stored)
+			l_user.close
+			clean_user_file
+		end
+
 	test_user_store_refuses_another_schema
 			-- A user.db of a schema this program does not read is refused and left as it is.
 		local
