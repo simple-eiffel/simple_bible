@@ -128,6 +128,10 @@ feature {NONE} -- Initialization
 			create interlinear_view.make (200.0)
 			create interlinear_note.make_ui ("")
 			create interlinear_words.make (0)
+			create analysis_title.make_ui ("")
+			create analysis_grid.make (140.0)
+			create analysis_rows.make (0)
+			create analysis_uses.make (32)
 			create results_holder.make
 			create results_tabs.make
 			create results_page.make
@@ -312,6 +316,7 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			reading_view.set_on_cell_click (agent on_verse_click)
 			parallel_view.set_on_cell_click (agent on_parallel_click)
 			interlinear_view.set_on_token_select (agent on_interlinear_word)
+			analysis_grid.set_on_select (agent on_analysis_row)
 			notes_list.set_gutter_renderer (agent draw_note_gutter)
 			notes_list.set_on_activate (agent edit_note)
 			notes_list.set_on_edit_commit (agent on_note_edited)
@@ -498,6 +503,14 @@ feature {NONE} -- Window
 			results_grid.add_column (create {SW_GRID_COLUMN [BIB_LOOKUP_CHOICE]}.make ("Word", 150.0, agent {BIB_LOOKUP_CHOICE}.label))
 			results_grid.add_column ((create {SW_GRID_COLUMN [BIB_LOOKUP_CHOICE]}.make ("Details", 200.0, agent {BIB_LOOKUP_CHOICE}.detail)).growing)
 			cross_refs_grid.add_column ((create {SW_GRID_COLUMN [BIB_READING_CROSS_REF]}.make ("Reference", 180.0, agent cross_ref_text)).growing)
+			analysis_grid.add_column (create {SW_GRID_COLUMN [BIB_INTERLINEAR_WORD]}.make ("#", 40.0, agent analysis_position))
+			analysis_grid.add_column (create {SW_GRID_COLUMN [BIB_INTERLINEAR_WORD]}.make ("Word", 130.0, agent {BIB_INTERLINEAR_WORD}.surface))
+			analysis_grid.add_column (create {SW_GRID_COLUMN [BIB_INTERLINEAR_WORD]}.make ("Transliteration", 130.0, agent {BIB_INTERLINEAR_WORD}.translit))
+			analysis_grid.add_column (create {SW_GRID_COLUMN [BIB_INTERLINEAR_WORD]}.make ("Gloss", 150.0, agent {BIB_INTERLINEAR_WORD}.gloss))
+			analysis_grid.add_column (create {SW_GRID_COLUMN [BIB_INTERLINEAR_WORD]}.make ("Lemma", 130.0, agent {BIB_INTERLINEAR_WORD}.lemma_text))
+			analysis_grid.add_column (create {SW_GRID_COLUMN [BIB_INTERLINEAR_WORD]}.make ("Strong's", 120.0, agent {BIB_INTERLINEAR_WORD}.strongs))
+			analysis_grid.add_column ((create {SW_GRID_COLUMN [BIB_INTERLINEAR_WORD]}.make ("Morphology", 260.0, agent {BIB_INTERLINEAR_WORD}.morphology)).growing)
+			analysis_grid.add_column (create {SW_GRID_COLUMN [BIB_INTERLINEAR_WORD]}.make ("Uses", 70.0, agent analysis_uses_text))
 			cross_refs_grid.add_column (create {SW_GRID_COLUMN [BIB_READING_CROSS_REF]}.make ("Votes", 70.0, agent votes_text))
 			renderings_grid.add_column (create {SW_GRID_COLUMN [BIB_ENGLISH_GLANCE_ROW]}.make ("Rendering", 150.0, agent {BIB_ENGLISH_GLANCE_ROW}.english))
 			renderings_grid.add_column ((create {SW_GRID_COLUMN [BIB_ENGLISH_GLANCE_ROW]}.make ("Version", 200.0, agent version_name)).growing)
@@ -1260,6 +1273,8 @@ feature {NONE} -- Two layouts (C7)
 			create l_interlinear_page.make
 			l_interlinear_page.put (interlinear_note)
 			l_interlinear_page.put (interlinear_view.growing)
+			l_interlinear_page.put (analysis_title)
+			l_interlinear_page.put (analysis_grid)
 				-- No pronunciation of the written word in the pack yet (lemma.pron is the headword's).
 			interlinear_view.set_line_visible ({SW_INTERLINEAR_TOKEN}.Line_pronunciation, False)
 			center_tabs.add_page ("Bible", bible_page)
@@ -1627,6 +1642,80 @@ feature {NONE} -- Notes (T2, P06)
 					interlinear_view.select_token (l_select)
 					is_interlinear_click := False
 				end
+				fill_verse_analysis
+			end
+		end
+
+	analysis_title: SW_LABEL
+	analysis_grid: SW_DATA_GRID [BIB_INTERLINEAR_WORD]
+			-- C13 Verse analysis, under the Interlinear: the verse read, a row per word.
+
+	analysis_rows: ARRAYED_LIST [BIB_INTERLINEAR_WORD]
+			-- The rows of `analysis_grid'.
+
+	analysis_uses: HASH_TABLE [INTEGER_64, INTEGER_64]
+			-- How often each headword of the verse occurs in its testament's tagged text, by headword
+			-- (the concordance's per-corpus counts, read when the verse changes).
+
+	fill_verse_analysis
+			-- C13: the words of the verse read in the Interlinear, with their headword's uses.
+		local
+			l_lookup: BIB_LOOKUP
+			l_corpus: STRING_8
+			i: INTEGER
+		do
+			create analysis_rows.make (24)
+			analysis_uses.wipe_out
+			if reading_verse > 0 then
+				from i := 1 until i > interlinear_words.count loop
+					if interlinear_words.i_th (i).verse = reading_verse then
+						analysis_rows.extend (interlinear_words.i_th (i))
+					end
+					i := i + 1
+				end
+			end
+			if not analysis_rows.is_empty and then bible.conc_pack.is_available then
+				create l_lookup.make (bible)
+				l_corpus := l_lookup.corpus_for_book (reading_book)
+				if bible.conc_pack.has_corpus (l_corpus) then
+					across analysis_rows as ic loop
+						if ic.has_door and then not analysis_uses.has (ic.lemma_id)
+							and then attached bible.conc_pack.place_total (ic.lemma_id, l_corpus) as al_total
+						then
+							analysis_uses.put (al_total.value, ic.lemma_id)
+						end
+					end
+				end
+			end
+			if analysis_rows.is_empty then
+				analysis_title.set_text ("Verse analysis: click a verse or a word.")
+			else
+				analysis_title.set_text ({STRING_32} "Verse analysis: " + place_text (reading_book, reading_chapter, reading_verse)
+					+ {STRING_32} ", " + analysis_rows.count.out + {STRING_32} " words (Uses: how often the headword occurs in this testament)")
+			end
+			analysis_grid.set_rows (analysis_rows)
+		end
+
+	on_analysis_row (a_row: INTEGER)
+			-- A row clicked: T4 follows its headword.
+		do
+			if a_row >= 1 and a_row <= analysis_rows.count and then analysis_rows.i_th (a_row).has_door then
+				open_study (analysis_rows.i_th (a_row).lemma_id)
+			end
+		end
+
+	analysis_position (a_word: BIB_INTERLINEAR_WORD): STRING_32
+			-- The word's place in its verse.
+		do
+			Result := a_word.position.out
+		end
+
+	analysis_uses_text (a_word: BIB_INTERLINEAR_WORD): STRING_32
+			-- How often the word's headword occurs; empty when it has none or the count is unknown.
+		do
+			create Result.make_empty
+			if a_word.has_door and then analysis_uses.has (a_word.lemma_id) then
+				Result := analysis_uses.item (a_word.lemma_id).out
 			end
 		end
 
@@ -1641,6 +1730,7 @@ feature {NONE} -- Notes (T2, P06)
 				is_interlinear_click := True
 				if l_word.verse /= reading_verse then
 					go_to (reading_book, reading_chapter, l_word.verse)
+					fill_verse_analysis
 				end
 				is_interlinear_click := False
 				if l_word.has_door then
@@ -1773,6 +1863,7 @@ feature {NONE} -- Notes (T2, P06)
 			window.add_reference_mark (navigator_tree, "T1", "P11 Navigator, west: books, chapter by chapter. Bookmarks come later.", window.Corner_top_left)
 			window.add_reference_mark (notes_heading, "T2", "P06 Notes, west below T1: Verse notes on the chapter read. Add one on the verse read; double-click to edit (each edit keeps the old version); Delete and Restore. The other tabs come later.", window.Corner_top_left)
 			window.add_reference_mark (center_tabs, "T3", "Centre tabs: the Bible text, Parallel (P02) and Interlinear (P03, Ctrl+I). More Bible tabs come later.", window.Corner_top_left)
+			window.add_reference_mark (analysis_title, "C13", "Verse analysis: the verse read, a row per word with its lemma, Strong's number, morphology, gloss, and how often its headword occurs in this testament. Click a row and T4 follows it.", window.Corner_top_left)
 			window.add_reference_mark (interlinear_note, "P03", "Interlinear: word by word in the original, right to left for Hebrew. A click makes the word's verse the place read and opens its headword in T4.", window.Corner_top_left)
 			window.add_reference_mark (lexicon_heading, "T4", "P05 Lexicon, east: follows the clicked word.", window.Corner_top_left)
 			window.add_reference_mark (commentary_title, "T5", "P04 Commentary, east: Commentaries (Larry's commentary packs, verse by verse, every claim labelled SOURCED or DEDUCED), Cross-refs with OpenBible votes.", window.Corner_top_left)
