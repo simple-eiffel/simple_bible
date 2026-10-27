@@ -508,6 +508,9 @@ feature {NONE} -- Toolbar (C3-C9)
 				if reading_book > 0 then
 					open_reading (reading_book, reading_chapter, reading_verse)
 				end
+				if study_lemma > 0 then
+					renderings_grid.set_rows (renderings_for_version (renderings))
+				end
 			end
 		end
 
@@ -712,6 +715,9 @@ feature {NONE} -- Reading (S1, P01)
 				back_button.set_enabled (history_index > 1)
 				forward_button.set_enabled (history_index < history.count)
 				show_cross_refs
+					-- C4 shows the place S1 reads, however S1 got there (Larry, 2026-10-26: a verse
+					-- or cross-reference click left it showing what was typed last).
+				reference_box.set_text (place_text (a_book, a_chapter, a_verse))
 				window.set_title (window_title)
 				status_bar.set_left (place_text (a_book, a_chapter, a_verse) + {STRING_32} " (" + reading_version.to_string_32 + {STRING_32} ")")
 			end
@@ -954,7 +960,7 @@ feature {NONE} -- Dictionary and lexicon (S3, P05)
 					renderings.extend (l_glance.item (i))
 					i := i + 1
 				end
-				renderings_grid.set_rows (renderings)
+				renderings_grid.set_rows (renderings_for_version (renderings))
 				entries_list.wipe_out
 				l_entries := bible.conc_pack.lexicon_entries (a_lemma_id)
 				from i := 1 until i > l_entries.count loop
@@ -1007,6 +1013,28 @@ feature {NONE} -- Dictionary and lexicon (S3, P05)
 					Result := l_reading
 				end
 			end
+		end
+
+	renderings_for_version (a_rows: ARRAYED_LIST [BIB_ENGLISH_GLANCE_ROW]): ARRAYED_LIST [BIB_ENGLISH_GLANCE_ROW]
+			-- `a_rows' with the reading version's own renderings first (C5: KJV picked, the KJV's
+			-- renderings lead), the rest in their order.
+		local
+			l_corpus: STRING_8
+		do
+			create Result.make (a_rows.count)
+			l_corpus := (create {BIB_LOOKUP}.make (bible)).english_corpus_for_version (reading_version)
+			across a_rows as ic loop
+				if not l_corpus.is_empty and then ic.bible.same_string (l_corpus) then
+					Result.extend (ic)
+				end
+			end
+			across a_rows as ic loop
+				if l_corpus.is_empty or else not ic.bible.same_string (l_corpus) then
+					Result.extend (ic)
+				end
+			end
+		ensure
+			same_rows: Result.count = a_rows.count
 		end
 
 	entry_text (a_entry: BIB_LIBRARY_ENTRY): STRING_32
