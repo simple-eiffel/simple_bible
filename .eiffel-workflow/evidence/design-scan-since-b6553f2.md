@@ -4,7 +4,7 @@
 #   src/search/bib_query.e, src/search/bib_query_node.e, src/search/bib_query_parser.e,
 #   src/search/bib_verse_search.e, src/simple_bible.e
 # Each subject was compared against src/, cli/, gui_app/, build/, build_app/ (testing/ read only to see who calls what).
-# All paths are under D:\prod\simple_bible. Line numbers are the files as they stand at HEAD.
+# All paths are relative to the repository root. Line numbers are the files as they stand at HEAD.
 
 ## Summary
 
