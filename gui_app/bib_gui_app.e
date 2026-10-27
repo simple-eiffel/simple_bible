@@ -1173,6 +1173,13 @@ feature {NONE} -- Two layouts (C7)
 	interlinear_book, interlinear_chapter: INTEGER
 			-- The chapter `interlinear_view' holds; 0 when none.
 
+	interlinear_corpus: STRING_8
+			-- The tagged text that chapter was read from; the verse analysis counts in it (scan 40:
+			-- the corpus was worked out again in each place).
+		attribute
+			create Result.make_empty
+		end
+
 	is_interlinear_click: BOOLEAN
 			-- Is a word clicked in the Interlinear moving the place read? Then the click's word stays
 			-- selected, not the verse's first.
@@ -1593,6 +1600,7 @@ feature {NONE} -- Notes (T2, P06)
 					interlinear_chapter := reading_chapter
 					create l_lookup.make (bible)
 					l_corpus := l_lookup.corpus_for_book (reading_book)
+					interlinear_corpus := l_corpus
 					if not bible.conc_pack.is_available then
 						l_note := {STRING_32} "The interlinear needs the concordance pack (conc.db), which is not open."
 					elseif not bible.conc_pack.has_corpus (l_corpus) then
@@ -1658,10 +1666,9 @@ feature {NONE} -- Notes (T2, P06)
 			-- (the concordance's per-corpus counts, read when the verse changes).
 
 	fill_verse_analysis
-			-- C13: the words of the verse read in the Interlinear, with their headword's uses.
+			-- P03.2: the words of the verse read in the Interlinear, with their headword's uses in the
+			-- tagged text the Interlinear was read from (`Unknown_uses' when the count cannot be read).
 		local
-			l_lookup: BIB_LOOKUP
-			l_corpus: STRING_8
 			i: INTEGER
 		do
 			create analysis_rows.make (24)
@@ -1674,15 +1681,13 @@ feature {NONE} -- Notes (T2, P06)
 					i := i + 1
 				end
 			end
-			if not analysis_rows.is_empty and then bible.conc_pack.is_available then
-				create l_lookup.make (bible)
-				l_corpus := l_lookup.corpus_for_book (reading_book)
-				if bible.conc_pack.has_corpus (l_corpus) then
-					across analysis_rows as ic loop
-						if ic.has_door and then not analysis_uses.has (ic.lemma_id)
-							and then attached bible.conc_pack.place_total (ic.lemma_id, l_corpus) as al_total
-						then
+			if not analysis_rows.is_empty and then bible.conc_pack.is_available and then bible.conc_pack.has_corpus (interlinear_corpus) then
+				across analysis_rows as ic loop
+					if ic.has_door and then not analysis_uses.has (ic.lemma_id) then
+						if attached bible.conc_pack.place_total (ic.lemma_id, interlinear_corpus) as al_total then
 							analysis_uses.put (al_total.value, ic.lemma_id)
+						else
+							analysis_uses.put (Unknown_uses, ic.lemma_id)
 						end
 					end
 				end
@@ -1715,9 +1720,17 @@ feature {NONE} -- Notes (T2, P06)
 		do
 			create Result.make_empty
 			if a_word.has_door and then analysis_uses.has (a_word.lemma_id) then
-				Result := analysis_uses.item (a_word.lemma_id).out
+				if analysis_uses.item (a_word.lemma_id) = Unknown_uses then
+						-- Said, never a blank that reads as "none" (scan 40).
+					Result := {STRING_32} "unknown"
+				else
+					Result := analysis_uses.item (a_word.lemma_id).out
+				end
 			end
 		end
+
+	Unknown_uses: INTEGER_64 = -1
+			-- `analysis_uses' for a headword whose count could not be read.
 
 	on_interlinear_word (a_token: INTEGER)
 			-- A word clicked (or stepped to) in the Interlinear: its verse becomes the place read, and
@@ -1729,8 +1742,8 @@ feature {NONE} -- Notes (T2, P06)
 				l_word := interlinear_words.i_th (a_token)
 				is_interlinear_click := True
 				if l_word.verse /= reading_verse then
+						-- go_to reaches fill_interlinear, which fills the verse analysis (scan 40: it was filled twice).
 					go_to (reading_book, reading_chapter, l_word.verse)
-					fill_verse_analysis
 				end
 				is_interlinear_click := False
 				if l_word.has_door then
@@ -1863,7 +1876,7 @@ feature {NONE} -- Notes (T2, P06)
 			window.add_reference_mark (navigator_tree, "T1", "P11 Navigator, west: books, chapter by chapter. Bookmarks come later.", window.Corner_top_left)
 			window.add_reference_mark (notes_heading, "T2", "P06 Notes, west below T1: Verse notes on the chapter read. Add one on the verse read; double-click to edit (each edit keeps the old version); Delete and Restore. The other tabs come later.", window.Corner_top_left)
 			window.add_reference_mark (center_tabs, "T3", "Centre tabs: the Bible text, Parallel (P02) and Interlinear (P03, Ctrl+I). More Bible tabs come later.", window.Corner_top_left)
-			window.add_reference_mark (analysis_title, "C13", "Verse analysis: the verse read, a row per word with its lemma, Strong's number, morphology, gloss, and how often its headword occurs in this testament. Click a row and T4 follows it.", window.Corner_top_left)
+			window.add_reference_mark (analysis_title, "P03.2", "Verse analysis: the verse read, a row per word with its lemma, Strong's number, morphology, gloss, and how often its headword occurs in this testament. Click a row and T4 follows it.", window.Corner_top_left)
 			window.add_reference_mark (interlinear_note, "P03", "Interlinear: word by word in the original, right to left for Hebrew. A click makes the word's verse the place read and opens its headword in T4.", window.Corner_top_left)
 			window.add_reference_mark (lexicon_heading, "T4", "P05 Lexicon, east: follows the clicked word.", window.Corner_top_left)
 			window.add_reference_mark (commentary_title, "T5", "P04 Commentary, east: Commentaries (Larry's commentary packs, verse by verse, every claim labelled SOURCED or DEDUCED), Cross-refs with OpenBible votes.", window.Corner_top_left)
