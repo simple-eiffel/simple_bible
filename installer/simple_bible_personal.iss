@@ -23,7 +23,7 @@
 ; ============================================================================
 
 #define AppName        "simple_bible"
-#define AppVersion     "0.5.3"
+#define AppVersion     "0.6.0"
 #define AppPublisher   "Larry Rix"
 #define GuiExe         "..\EIFGENs\bible_gui\F_code\bible_gui_lean.exe"
 #define CairoDll       GetEnv("SIMPLE_EIFFEL") + "\simple_cairo\cairo.dll"
