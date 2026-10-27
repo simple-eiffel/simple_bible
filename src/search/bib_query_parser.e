@@ -9,8 +9,9 @@ note
 		so a query cannot be NOT alone, nor NOT of a NOT. Every word and phrase
 		must hold a letter or digit; at most `Max_terms' words, phrases and roots
 		and `Max_depth' nested parentheses (design scan 48). morph: takes a Greek
-		(V-AAI-3S) or Hebrew (Vqp3ms) code, a final * for every code it begins
-		(B05). Regular expressions are told as later work, at their position.
+		(V-AAI-3S) or Hebrew (Vqp3ms) code as the corpora write it, a final * for
+		every code it begins (B05), searched in both corpora. Regular expressions
+		are told as later work, at their position.
 	]"
 	author: "Larry Rix"
 	date: "$Date$"
@@ -30,7 +31,7 @@ feature {NONE} -- Initialization
 			create tokens.make (8)
 			create error_message.make_empty
 			create strongs_check.make_from_text ("H1")
-			create morph_check.make ({BIB_MORPH_CODE}.Robinson, "V")
+			create morph_check.make ({BIB_MORPH_CODE}.Every_scheme, "V")
 			create scripts
 			create unicode.make
 		end
@@ -91,7 +92,7 @@ feature {NONE} -- Tokens
 			-- Answers `is_strongs_text'.
 
 	morph_check: BIB_MORPH_CODE
-			-- Answers `is_code_text' and `scheme_of'.
+			-- Answers `is_code_text'.
 
 	scripts: BIB_SCRIPT_CLASSIFIER
 
@@ -333,7 +334,7 @@ feature {NONE} -- Grammar
 				when Token_lemma then
 					create Result.make_leaf (create {BIB_QUERY_CLAUSE}.make_key ({BIB_QUERY_CLAUSE}.Lemma, create {BIB_LEMMA_KEY}.make (lemma_language (l_token.text), l_token.text)), l_token.position)
 				when Token_morph then
-					create Result.make_leaf (create {BIB_QUERY_CLAUSE}.make_key ({BIB_QUERY_CLAUSE}.Morph, create {BIB_MORPH_CODE}.make (morph_check.scheme_of (l_token.text), l_token.text)), l_token.position)
+					create Result.make_leaf (create {BIB_QUERY_CLAUSE}.make_key ({BIB_QUERY_CLAUSE}.Morph, create {BIB_MORPH_CODE}.make ({BIB_MORPH_CODE}.Every_scheme, l_token.text)), l_token.position)
 				else
 					fail (l_token.position, "This cannot be read.")
 				end

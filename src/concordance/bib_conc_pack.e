@@ -380,7 +380,7 @@ feature -- Access
 		do
 			if attached {BIB_MORPH_CODE} a_key as al_morph then
 				Result := morph_places (al_morph)
-			else
+			elseif attached {BIB_STRONGS_KEY} a_key or attached {BIB_LEMMA_KEY} a_key then
 				create l_hebrew.make (2)
 				create l_greek.make (2)
 				l_language := "any"
@@ -392,7 +392,7 @@ feature -- Access
 				end
 				if attached l_entries as al_entries then
 					across 1 |..| al_entries.count as i loop
-						if (al_entries.item (i).language.same_string ("hbo") or al_entries.item (i).language.same_string ("arc")) and (l_language.same_string ("any") or l_language.same_string ("hbo")) then
+						if is_hebrew_script (al_entries.item (i).language) and (l_language.same_string ("any") or l_language.same_string ("hbo")) then
 							l_hebrew.extend (al_entries.item (i).lemma_id)
 						elseif al_entries.item (i).language.same_string ("grc") and (l_language.same_string ("any") or l_language.same_string ("grc")) then
 							l_greek.extend (al_entries.item (i).lemma_id)
@@ -406,6 +406,9 @@ feature -- Access
 				else
 					create Result.make_failed
 				end
+			else
+					-- Design scan 49: a key kind this pack cannot answer is a failure, never "no verse".
+				create Result.make_failed
 			end
 		ensure
 			ascending_once: is_ascending (Result.places)
@@ -413,22 +416,21 @@ feature -- Access
 
 	morph_places (a_code: BIB_MORPH_CODE): BIB_ROOT_PLACES
 			-- Every numbered verse holding a word coded `a_code' (a final * matches every code it
-			-- begins): Robinson codes in `Greek_root_corpus', OSHB codes in `Hebrew_root_corpus'.
+			-- begins), looked for in both `Greek_root_corpus' and `Hebrew_root_corpus': no Greek code
+			-- equals a Hebrew one ({BIB_MORPH_CODE}.Every_scheme), and each side says if it gave places.
+		require
+			code_text: a_code.is_code_text (a_code.code)
 		local
-			l_hebrew: BOOLEAN
 			l_condition: STRING_8
 		do
-			l_hebrew := a_code.scheme.same_string ({BIB_MORPH_CODE}.Oshb)
 			if a_code.is_prefix then
-					-- The parser lets only letters, digits and dashes before the star (is_code_text).
+					-- `is_code_text' lets only letters, digits and dashes before the star.
 				l_condition := "t.morph GLOB ?"
 			else
 				l_condition := "t.morph = ?"
 			end
-			if l_hebrew and then attached places_where (Hebrew_root_corpus, l_condition, a_code.code) as al_places then
-				create Result.make (al_places, not al_places.is_empty, False)
-			elseif not l_hebrew and then attached places_where (Greek_root_corpus, l_condition, a_code.code) as al_places then
-				create Result.make (al_places, False, not al_places.is_empty)
+			if attached places_where (Hebrew_root_corpus, l_condition, a_code.code) as al_hebrew and attached places_where (Greek_root_corpus, l_condition, a_code.code) as al_greek then
+				create Result.make (union (al_hebrew, al_greek), not al_hebrew.is_empty, not al_greek.is_empty)
 			else
 				create Result.make_failed
 			end
