@@ -61,7 +61,9 @@ feature -- Access
 		require
 			kind_valid: is_valid_kind (a_kind)
 		do
-			-- Phase 4
+			if attached database as al_db then
+				Result := first_integer (al_db.query_with_args ("SELECT count(*) AS n FROM user_item WHERE kind = ? AND hub_id = ? AND deleted = 0", <<a_kind, a_hub_id>>))
+			end
 		ensure
 			non_negative: Result >= 0
 		end
@@ -71,10 +73,45 @@ feature -- Access
 		require
 			open: is_open
 		do
-			check implemented_in_phase_4: False then end
+			Result := highlights_between (a_hub_id, a_hub_id)
 		ensure
 			version_independent: across Result as h all h.hub_id = a_hub_id and not h.is_deleted end
 			counted: Result.count = item_count (Kind_highlight, a_hub_id)
+		end
+
+	highlights_between (a_first_hub, a_last_hub: INTEGER_64): ARRAYED_LIST [BIB_HIGHLIGHT]
+			-- Live highlights on the verses `a_first_hub' to `a_last_hub' (a chapter, or every verse),
+			-- in verse order, then oldest first.
+		require
+			open: is_open
+			ordered: a_first_hub <= a_last_hub
+		local
+			l_highlight: BIB_HIGHLIGHT
+		do
+			create Result.make (8)
+			across connection.query_with_args ("SELECT item_id, hub_id, label, created_at FROM user_item WHERE kind = ? AND hub_id BETWEEN ? AND ? AND deleted = 0 AND hub_id > 0 AND label <> '' ORDER BY hub_id, item_id",
+				<<Kind_highlight, a_first_hub, a_last_hub>>).rows as ic loop
+				create l_highlight.make (ic.integer_64_value ("hub_id"), ic.string_value ("label"))
+				l_highlight.mark_stored (ic.integer_64_value ("item_id"), time_of (ic.string_value ("created_at")))
+				Result.extend (l_highlight)
+			end
+		ensure
+			in_range: across Result as ic all ic.hub_id >= a_first_hub and ic.hub_id <= a_last_hub and not ic.is_deleted end
+		end
+
+	bookmarks: ARRAYED_LIST [BIB_BOOKMARK]
+			-- Every live bookmark, newest first.
+		require
+			open: is_open
+		local
+			l_bookmark: BIB_BOOKMARK
+		do
+			create Result.make (8)
+			across connection.query_with_args ("SELECT item_id, hub_id, label, created_at FROM user_item WHERE kind = ? AND deleted = 0 AND hub_id > 0 ORDER BY item_id DESC", <<Kind_bookmark>>).rows as ic loop
+				create l_bookmark.make (ic.integer_64_value ("hub_id"), ic.string_value ("label"))
+				l_bookmark.mark_stored (ic.integer_64_value ("item_id"), time_of (ic.string_value ("created_at")))
+				Result.extend (l_bookmark)
+			end
 		end
 
 	setting (a_key: STRING_8): STRING_32
@@ -125,8 +162,11 @@ feature -- Status
 		end
 
 	is_deleted (a_id: INTEGER_64): BOOLEAN
+			-- Is user item `a_id' soft-deleted?
 		do
-			-- Phase 4
+			if attached database as al_db then
+				Result := first_integer (al_db.query_with_args ("SELECT count(*) AS n FROM user_item WHERE item_id = ? AND deleted = 1", <<a_id>>)) = 1
+			end
 		end
 
 	has_setting (a_key: STRING_8): BOOLEAN
@@ -144,11 +184,12 @@ feature -- Status
 feature -- Commands: annotations
 
 	add_highlight (a_highlight: BIB_HIGHLIGHT)
+			-- Keep `a_highlight' (its reason in `label').
 		require
 			open: is_open
 			not_stored: not a_highlight.is_stored
 		do
-			-- Phase 4
+			add_item (a_highlight, a_highlight.reason)
 		ensure
 			stored: last_error = Void implies a_highlight.is_stored
 			count_grown: last_error = Void implies item_count (Kind_highlight, a_highlight.hub_id) = old item_count (Kind_highlight, a_highlight.hub_id) + 1
@@ -161,7 +202,7 @@ feature -- Commands: annotations
 			open: is_open
 			not_stored: not a_bookmark.is_stored
 		do
-			-- Phase 4
+			add_item (a_bookmark, a_bookmark.label)
 		ensure
 			stored: last_error = Void implies a_bookmark.is_stored
 			count_grown: last_error = Void implies item_count (Kind_bookmark, a_bookmark.hub_id) = old item_count (Kind_bookmark, a_bookmark.hub_id) + 1
@@ -173,7 +214,7 @@ feature -- Commands: annotations
 			open: is_open
 			not_stored: not a_tag.is_stored
 		do
-			-- Phase 4
+			add_item (a_tag, a_tag.tag)
 		ensure
 			stored: last_error = Void implies a_tag.is_stored
 			count_grown: last_error = Void implies item_count (Kind_tag, a_tag.hub_id) = old item_count (Kind_tag, a_tag.hub_id) + 1
@@ -196,7 +237,7 @@ feature -- Commands: annotations
 			kind_valid: is_valid_kind (a_kind) and a_kind /= Kind_note
 			stored: a_id > 0
 		do
-			-- Phase 4
+			set_item_deleted (a_kind, a_id, True)
 		ensure
 			soft_deleted: last_error = Void implies is_deleted (a_id)
 		end
@@ -207,7 +248,7 @@ feature -- Commands: annotations
 			kind_valid: is_valid_kind (a_kind) and a_kind /= Kind_note
 			deleted: is_deleted (a_id)
 		do
-			-- Phase 4
+			set_item_deleted (a_kind, a_id, False)
 		ensure
 			restored: last_error = Void implies not is_deleted (a_id)
 		end
@@ -371,6 +412,51 @@ feature {BIB_NOTE_STORE} -- Connection
 			Result := (create {SIMPLE_DATE_TIME}.make_now).to_iso8601
 		end
 
+
+feature {NONE} -- Items
+
+	last_item_error: detachable BIB_ERROR
+			-- Why the last item write failed (`last_error' is only for a failed open).
+
+	add_item (a_item: BIB_USER_ITEM; a_label: READABLE_STRING_GENERAL)
+			-- Keep `a_item' with `a_label' (a highlight's reason, a bookmark's label, a tag).
+		require
+			open: is_open
+			not_stored: not a_item.is_stored
+		local
+			l_at: STRING_8
+		do
+			last_item_error := Void
+			l_at := now_text
+			connection.execute_with_args ("INSERT INTO user_item(kind, hub_id, label, created_at, changed_at) VALUES (?, ?, ?, ?, ?)",
+				<<a_item.kind, a_item.hub_id, a_label.to_string_32, l_at, l_at>>)
+			if connection.has_error then
+				create last_item_error.make ({BIB_ERROR}.Database_problem, failure_text (connection, "The item could not be saved."))
+			else
+				a_item.mark_stored (connection.last_insert_rowid, time_of (l_at))
+			end
+		end
+
+	set_item_deleted (a_kind: INTEGER; a_id: INTEGER_64; a_deleted: BOOLEAN)
+			-- Mark item `a_id' of `a_kind' deleted or live.
+		local
+			l_flag: INTEGER
+		do
+			last_item_error := Void
+			if a_deleted then
+				l_flag := 1
+			end
+			connection.execute_with_args ("UPDATE user_item SET deleted = ?, changed_at = ? WHERE item_id = ? AND kind = ?", <<l_flag, now_text, a_id, a_kind>>)
+			if connection.has_error then
+				create last_item_error.make ({BIB_ERROR}.Database_problem, failure_text (connection, "The item could not be changed."))
+			end
+		end
+
+	time_of (a_text: READABLE_STRING_GENERAL): SIMPLE_DATE_TIME
+			-- The time user.db stored as `a_text'.
+		do
+			create Result.make_from_iso8601 (a_text.to_string_8)
+		end
 
 feature {NONE} -- Schema
 
