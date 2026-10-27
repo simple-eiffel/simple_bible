@@ -77,8 +77,6 @@ feature {NONE} -- Initialization
 			create prayer_answer_box.make_single_line ("")
 			create prayer_add_button.make ("Add", Void)
 			create prayer_answered_button.make ("Answered", Void)
-			create prayer_remove_button.make ("Remove", Void)
-			create prayer_restore_button.make ("Restore", Void)
 			create prayer_open_heading.make_ui ("")
 			create prayer_answered_heading.make_ui ("")
 			create prayer_open_grid.make (60.0)
@@ -95,7 +93,6 @@ feature {NONE} -- Initialization
 			create memory_hard_button.make ("Hard", Void)
 			create memory_good_button.make ("Good", Void)
 			create memory_easy_button.make ("Easy", Void)
-			create memory_remove_button.make ("Remove", Void)
 			create memory_grid.make (60.0)
 			create memory_rows.make (0)
 			create memory_due.make (0)
@@ -212,9 +209,15 @@ feature {NONE} -- Initialization
 			create highlights_panel.make (user_store, {BIB_USER_STORE}.Kind_highlight, highlights_grid, "Highlight")
 			create bookmarks_panel.make (user_store, {BIB_USER_STORE}.Kind_bookmark, bookmarks_grid, "Bookmark")
 			create tagged_panel.make (user_store, {BIB_USER_STORE}.Kind_tag, tagged_grid, "Tag")
+			create prayer_open_panel.make (user_store, {BIB_USER_STORE}.Kind_prayer, prayer_open_grid, "Prayer")
+			create prayer_answered_panel.make (user_store, {BIB_USER_STORE}.Kind_prayer, prayer_answered_grid, "Prayer")
+			create memory_panel.make (user_store, {BIB_USER_STORE}.Kind_memory_card, memory_grid, "Card")
 			tagged_panel.set_actions (agent say, agent fill_tags, agent go_to_hub)
 			highlights_panel.set_actions (agent say, agent reopen_reading, agent go_to_hub)
 			bookmarks_panel.set_actions (agent say, agent fill_bookmarks, agent go_to_hub)
+			prayer_open_panel.set_actions (agent say, agent fill_prayers, agent read_hub_if_any)
+			prayer_answered_panel.set_actions (agent say, agent fill_prayers, agent read_hub_if_any)
+			memory_panel.set_actions (agent say, agent fill_memory, agent go_to_hub)
 			build_columns
 			fill_versions
 			mode_switch.add_segment ("Simple")
@@ -362,7 +365,7 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 				add_prayer
 				prayer_title_box.set_text ("Wisdom for the elders")
 				add_prayer
-				chosen_prayer := prayer_open_rows.last.id
+				prayer_open_grid.select_model_row (prayer_open_rows.count)
 				prayer_answer_box.set_text ("Agreed together on Sunday")
 				mark_prayer_answered
 				prayer_tabs.select_tab (2)
@@ -472,18 +475,12 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			journal_new_button.set_on_click (agent new_journal_entry)
 			prayer_add_button.set_on_click (agent add_prayer)
 			prayer_answered_button.set_on_click (agent mark_prayer_answered)
-			prayer_remove_button.set_on_click (agent remove_prayer)
-			prayer_restore_button.set_on_click (agent restore_prayer)
-			prayer_open_grid.set_on_select (agent on_open_prayer)
-			prayer_answered_grid.set_on_select (agent on_answered_prayer)
 			memory_add_button.set_on_click (agent add_memory_card)
 			memory_show_button.set_on_click (agent show_memory_verse)
-			memory_again_button.set_on_click (agent grade_memory_card (1))
-			memory_hard_button.set_on_click (agent grade_memory_card (3))
-			memory_good_button.set_on_click (agent grade_memory_card (4))
-			memory_easy_button.set_on_click (agent grade_memory_card (5))
-			memory_remove_button.set_on_click (agent remove_memory_card)
-			memory_grid.set_on_select (agent on_memory_row)
+			memory_again_button.set_on_click (agent grade_memory_card ({BIB_MEMORY_SCHEDULE}.Grade_again))
+			memory_hard_button.set_on_click (agent grade_memory_card ({BIB_MEMORY_SCHEDULE}.Grade_hard))
+			memory_good_button.set_on_click (agent grade_memory_card ({BIB_MEMORY_SCHEDULE}.Grade_good))
+			memory_easy_button.set_on_click (agent grade_memory_card ({BIB_MEMORY_SCHEDULE}.Grade_easy))
 			journal_save_button.set_on_click (agent save_journal_entry)
 			journal_delete_button.set_on_click (agent delete_journal_entry)
 			journal_restore_button.set_on_click (agent restore_journal_entry)
@@ -2014,7 +2011,7 @@ feature {NONE} -- Notes (T2, P06)
 
 	prayer_title_box, prayer_answer_box: SW_TEXT_BOX
 	prayer_body_box: SW_TEXT_BOX
-	prayer_add_button, prayer_answered_button, prayer_remove_button, prayer_restore_button: SW_BUTTON
+	prayer_add_button, prayer_answered_button: SW_BUTTON
 	prayer_open_heading, prayer_answered_heading: SW_LABEL
 	prayer_open_grid, prayer_answered_grid: SW_DATA_GRID [BIB_PRAYER]
 			-- T2's Prayer tab (E06): requests, open and answered.
@@ -2022,11 +2019,17 @@ feature {NONE} -- Notes (T2, P06)
 	prayer_open_rows, prayer_answered_rows: ARRAYED_LIST [BIB_PRAYER]
 			-- The rows of the two grids.
 
-	chosen_prayer: INTEGER_64
-			-- The prayer last clicked in either list (0: none).
+	prayer_open_panel, prayer_answered_panel: BIB_ITEM_LIST_PANEL [BIB_PRAYER]
+			-- The two lists with their Remove and Restore (design scan 54: hand-made copies brought back
+			-- the stale selection scan 43 fixed).
 
-	last_removed_prayer: INTEGER_64
-			-- The prayer Remove took away last (0: none).
+	read_hub_if_any (a_hub: INTEGER_64)
+			-- Read verse `a_hub' when a prayer rests on one (0: none).
+		do
+			if a_hub > 0 then
+				go_to_hub (a_hub)
+			end
+		end
 
 	prayer_page: SW_COLUMN
 			-- A title and the request, Add; the open prayers; the answered ones with how.
@@ -2038,11 +2041,7 @@ feature {NONE} -- Notes (T2, P06)
 			Result := Result.with_gap (6.0)
 			Result.put (prayer_title_box)
 			Result.put (prayer_body_box)
-			create l_row.make
-			l_row.put (prayer_add_button)
-			l_row.put (prayer_remove_button)
-			l_row.put (prayer_restore_button)
-			Result.put (l_row)
+			Result.put (prayer_add_button)
 				-- The open and the answered prayers on their own tabs: one under the other, the narrow
 				-- Notes pane hid the answered list (seen by snapshot, 2026-10-27).
 			create l_open.make
@@ -2053,10 +2052,18 @@ feature {NONE} -- Notes (T2, P06)
 			l_row.put (prayer_answer_box.growing)
 			l_row.put (prayer_answered_button)
 			l_open.put (l_row)
+			create l_row.make
+			l_row.put (prayer_open_panel.remove_button)
+			l_row.put (prayer_open_panel.restore_button)
+			l_open.put (l_row)
 			create l_answered.make
 			l_answered := l_answered.with_gap (6.0)
 			l_answered.put (prayer_answered_heading)
 			l_answered.put (prayer_answered_grid.growing)
+			create l_row.make
+			l_row.put (prayer_answered_panel.remove_button)
+			l_row.put (prayer_answered_panel.restore_button)
+			l_answered.put (l_row)
 			create prayer_tabs.make
 			prayer_tabs.add_page ("Open", l_open)
 			prayer_tabs.add_page ("Answered", l_answered)
@@ -2079,8 +2086,8 @@ feature {NONE} -- Notes (T2, P06)
 				create prayer_open_rows.make (0)
 				create prayer_answered_rows.make (0)
 			end
-			prayer_open_grid.set_rows (prayer_open_rows)
-			prayer_answered_grid.set_rows (prayer_answered_rows)
+			prayer_open_panel.set_rows (prayer_open_rows)
+			prayer_answered_panel.set_rows (prayer_answered_rows)
 			if prayer_open_rows.is_empty then
 				prayer_open_heading.set_text ("Open: none. Write a title and the request, then Add.")
 			else
@@ -2092,9 +2099,7 @@ feature {NONE} -- Notes (T2, P06)
 				prayer_answered_heading.set_text ({STRING_32} "Answered (" + prayer_answered_rows.count.out + {STRING_32} "), latest first:")
 			end
 			prayer_add_button.set_enabled (user_store.is_open)
-			prayer_answered_button.set_enabled (chosen_prayer > 0 and then across prayer_open_rows as ic some ic.id = chosen_prayer end)
-			prayer_remove_button.set_enabled (chosen_prayer > 0)
-			prayer_restore_button.set_enabled (last_removed_prayer > 0)
+			prayer_answered_button.set_enabled (not prayer_open_rows.is_empty)
 		end
 
 	add_prayer
@@ -2119,7 +2124,6 @@ feature {NONE} -- Notes (T2, P06)
 				else
 					prayer_title_box.set_text ("")
 					prayer_body_box.set_text ("")
-					chosen_prayer := 0
 					fill_prayers
 					say ("Prayer kept.")
 				end
@@ -2129,66 +2133,17 @@ feature {NONE} -- Notes (T2, P06)
 	mark_prayer_answered
 			-- The chosen open prayer answered today, as the answer box tells.
 		do
-			if chosen_prayer > 0 and user_store.is_open then
-				user_store.set_prayer_answered (chosen_prayer, prayer_answer_box.text)
+			if prayer_open_panel.chosen_id = 0 then
+				say ("Click an open prayer first.")
+			elseif user_store.is_open then
+				user_store.set_prayer_answered (prayer_open_panel.chosen_id, prayer_answer_box.text)
 				if attached user_store.write_error as al_error then
 					say (al_error.message)
 				else
 					prayer_answer_box.set_text ("")
-					chosen_prayer := 0
 					fill_prayers
 					say ("Marked answered.")
 				end
-			end
-		end
-
-	remove_prayer
-			-- The chosen prayer taken off the list (kept: Restore brings it back).
-		do
-			if chosen_prayer > 0 and user_store.is_open then
-				user_store.set_prayer_deleted (chosen_prayer, True)
-				if attached user_store.write_error as al_error then
-					say (al_error.message)
-				else
-					last_removed_prayer := chosen_prayer
-					chosen_prayer := 0
-					fill_prayers
-					say ("Prayer removed. Restore brings it back.")
-				end
-			end
-		end
-
-	restore_prayer
-			-- The prayer Remove took away last, back on the list.
-		do
-			if last_removed_prayer > 0 and user_store.is_open then
-				user_store.set_prayer_deleted (last_removed_prayer, False)
-				if attached user_store.write_error as al_error then
-					say (al_error.message)
-				else
-					last_removed_prayer := 0
-					fill_prayers
-				end
-			end
-		end
-
-	on_open_prayer (a_row: INTEGER)
-			-- An open prayer clicked: chosen.
-		do
-			if not is_reselecting and then a_row >= 1 and then a_row <= prayer_open_rows.count then
-				chosen_prayer := prayer_open_rows.i_th (a_row).id
-				prayer_answered_button.set_enabled (True)
-				prayer_remove_button.set_enabled (True)
-			end
-		end
-
-	on_answered_prayer (a_row: INTEGER)
-			-- An answered prayer clicked: chosen (Remove only).
-		do
-			if not is_reselecting and then a_row >= 1 and then a_row <= prayer_answered_rows.count then
-				chosen_prayer := prayer_answered_rows.i_th (a_row).id
-				prayer_answered_button.set_enabled (False)
-				prayer_remove_button.set_enabled (True)
 			end
 		end
 
@@ -2204,7 +2159,7 @@ feature {NONE} -- Notes (T2, P06)
 			Result := a_prayer.answered_on.head (10)
 		end
 
-	memory_add_button, memory_show_button, memory_again_button, memory_hard_button, memory_good_button, memory_easy_button, memory_remove_button: SW_BUTTON
+	memory_add_button, memory_show_button, memory_again_button, memory_hard_button, memory_good_button, memory_easy_button: SW_BUTTON
 	memory_heading, memory_place_label, memory_text_label: SW_LABEL
 	memory_grid: SW_DATA_GRID [BIB_MEMORY_CARD]
 			-- T2's Memory tab (E07): verses to learn, spaced (BIB_MEMORY_SCHEDULE).
@@ -2215,8 +2170,8 @@ feature {NONE} -- Notes (T2, P06)
 	memory_due: ARRAYED_LIST [BIB_MEMORY_CARD]
 			-- The cards due today; the first is the one under review.
 
-	chosen_card: INTEGER_64
-			-- The card last clicked in the list (0: none).
+	memory_panel: BIB_ITEM_LIST_PANEL [BIB_MEMORY_CARD]
+			-- Every card, with Remove and Restore (design scan 54: Memory had no Restore).
 
 	today_text: STRING_8
 			-- Today, as an ISO date.
@@ -2243,7 +2198,10 @@ feature {NONE} -- Notes (T2, P06)
 			l_row.put (memory_easy_button)
 			Result.put (l_row)
 			Result.put (memory_grid.growing)
-			Result.put (memory_remove_button)
+			create l_row.make
+			l_row.put (memory_panel.remove_button)
+			l_row.put (memory_panel.restore_button)
+			Result.put (l_row)
 		end
 
 	fill_memory
@@ -2256,7 +2214,7 @@ feature {NONE} -- Notes (T2, P06)
 				create memory_rows.make (0)
 				create memory_due.make (0)
 			end
-			memory_grid.set_rows (memory_rows)
+			memory_panel.set_rows (memory_rows)
 			if memory_rows.count = 1 then
 				memory_heading.set_text ({STRING_32} "1 card; " + memory_due.count.out + {STRING_32} " due today.")
 			else
@@ -2274,7 +2232,6 @@ feature {NONE} -- Notes (T2, P06)
 			memory_hard_button.set_enabled (False)
 			memory_good_button.set_enabled (False)
 			memory_easy_button.set_enabled (False)
-			memory_remove_button.set_enabled (chosen_card > 0)
 		end
 
 	add_memory_card
@@ -2325,41 +2282,16 @@ feature {NONE} -- Notes (T2, P06)
 	grade_memory_card (a_grade: INTEGER)
 			-- The card under review graded `a_grade' (Again 1, Hard 3, Good 4, Easy 5); the next one up.
 		require
-			grade_valid: a_grade >= 0 and a_grade <= 5
+			grade_valid: (create {BIB_MEMORY_SCHEDULE}).is_valid_grade (a_grade)
 		do
 			if not memory_due.is_empty and user_store.is_open then
-				user_store.record_review (memory_due.first, a_grade, create {SIMPLE_DATE}.make_now)
+				user_store.record_review (memory_due.first, a_grade, create {SIMPLE_DATE}.make_from_string (today_text))
 				if attached user_store.write_error as al_error then
 					say (al_error.message)
 				else
 					say ({STRING_32} "Next review: " + memory_due.first.due_on + {STRING_32} ".")
 					fill_memory
 				end
-			end
-		end
-
-	remove_memory_card
-			-- The card chosen in the list taken off (kept in user.db, removed).
-		do
-			if chosen_card > 0 and user_store.is_open then
-				user_store.set_memory_card_deleted (chosen_card, True)
-				if attached user_store.write_error as al_error then
-					say (al_error.message)
-				else
-					chosen_card := 0
-					fill_memory
-					say ("Card removed.")
-				end
-			end
-		end
-
-	on_memory_row (a_row: INTEGER)
-			-- A card clicked: chosen, and its verse read.
-		do
-			if not is_reselecting and then a_row >= 1 and then a_row <= memory_rows.count then
-				chosen_card := memory_rows.i_th (a_row).id
-				memory_remove_button.set_enabled (True)
-				go_to_hub (memory_rows.i_th (a_row).hub_id)
 			end
 		end
 
