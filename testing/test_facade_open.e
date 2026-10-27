@@ -167,8 +167,87 @@ feature -- Tests
 			remove_test_files
 		end
 
-	test_generic_pack_waits_for_task_7b
-			-- Until Task 7b, a generic pack in the folder makes `open' refuse with a named reason.
+	test_commentary_pack_builds_attaches_and_answers
+			-- 2026-10-27, Task 7b's first customer: a commentary sidecar becomes a pack
+			-- (BIB_COMMENTARY_BUILDER), the pack folder's pack attaches read-only with its rules
+			-- checked, and a verse finds the sections covering it, the narrowest first, each claim
+			-- labelled SOURCED or DEDUCED, a restricted quotation kept apart, the author voice.
+		local
+			l_builder: BIB_COMMENTARY_BUILDER
+			l_bible: SIMPLE_BIBLE
+			l_sections: BIB_LIST_RESULT [BIB_COMMENTARY_SECTION]
+			l_ok: BOOLEAN
+		do
+			close_leftovers
+			fixture.build_content (Content_file, {CONC_FIXTURE}.Content_version, False)
+			make_folder
+			l_ok := (create {SIMPLE_FILE}.make (Sidecar_file)).write_text_utf_8 (Sidecar_text)
+			create l_builder.make
+			l_builder.build (<<Sidecar_file>>, Folder_other_file)
+			assert_true ("built", l_builder.last_error = Void)
+			assert_true ("counts", l_builder.section_count = 2 and l_builder.claim_count = 2 and l_builder.term_count = 1 and l_builder.restricted_count = 1)
+			l_bible := bible ("", Folder)
+			l_bible.open
+			assert_true ("open with the pack", l_bible.is_open and l_bible.pack_errors.is_empty and l_bible.private_packs.count = 1)
+			assert_integers_equal ("one commentary", 1, l_bible.commentary_packs.count)
+			assert_strings_equal ("titled", "Larry Rix: Commentaries", l_bible.commentary_packs.first.title)
+			l_sections := l_bible.commentary_packs.first.sections_for_verse (65, 1, 6)
+			assert_true ("two sections cover Jude 6", l_sections.is_success and l_sections.count = 2)
+			assert_strings_equal ("the narrowest first", "jude-5-7", l_sections.item (1).section_id)
+			assert_strings_equal ("then the whole letter", "jude-intro", l_sections.item (2).section_id)
+			assert_true ("a deduction says so", attached l_sections.item (1).claim ("D5.1") as al_claim and then not al_claim.is_sourced)
+			assert_true ("a sourced claim says so", attached l_sections.item (2).claim ("S1.1") as al_claim2 and then al_claim2.is_sourced)
+			assert_strings_equal ("a field", "Saved, then destroyed [D5.1].", l_sections.item (1).field ("teaser"))
+			assert_integers_equal ("the restricted quotation apart", 1, l_sections.item (1).restricted_quotes.count)
+			assert_strings_equal ("the author voice, provisional", "author", l_sections.item (1).voice)
+			assert_integers_equal ("Jude 2: the introduction only", 1, l_bible.commentary_packs.first.sections_for_verse (65, 1, 2).count)
+			assert_integers_equal ("John 3:16: nothing", 0, l_bible.commentary_packs.first.sections_for_verse (43, 3, 16).count)
+			l_bible.close
+			fixture.delete_file (Sidecar_file)
+			remove_test_files
+		end
+
+	test_one_commentary_pack_holds_every_book
+			-- Larry, 2026-10-27: one commentary database for every book. Two books' sidecars make one
+			-- pack; each book answers its own verses; a claim id may repeat across books (claims are
+			-- keyed by section and id). The builder finds every book under a Commentaries folder.
+		local
+			l_builder: BIB_COMMENTARY_BUILDER
+			l_bible: SIMPLE_BIBLE
+			l_ok: BOOLEAN
+			l_root: SIMPLE_FILE
+		do
+			close_leftovers
+			fixture.build_content (Content_file, {CONC_FIXTURE}.Content_version, False)
+			make_folder
+			create l_root.make (Commentaries_folder)
+			if l_root.is_directory then
+				l_ok := l_root.delete_directory_recursive
+			end
+			l_ok := (create {SIMPLE_FILE}.make (Commentaries_folder + "\Jude\_build")).create_directory_recursive
+			l_ok := (create {SIMPLE_FILE}.make (Commentaries_folder + "\Revelation\_build")).create_directory_recursive
+			l_ok := (create {SIMPLE_FILE}.make (Commentaries_folder + "\Jude\_build\jude.sections.json")).write_text_utf_8 (Sidecar_text)
+			l_ok := (create {SIMPLE_FILE}.make (Commentaries_folder + "\Revelation\_build\rev.sections.json")).write_text_utf_8 (Second_sidecar_text)
+			create l_builder.make
+			assert_integers_equal ("both books found", 2, l_builder.sidecars_in (Commentaries_folder).count)
+			l_builder.build (l_builder.sidecars_in (Commentaries_folder), Folder_other_file)
+			assert_true ("built", l_builder.last_error = Void and l_builder.book_count = 2 and l_builder.section_count = 3)
+			l_bible := bible ("", Folder)
+			l_bible.open
+			assert_integers_equal ("one pack", 1, l_bible.commentary_packs.count)
+			assert_integers_equal ("Jude 6", 2, l_bible.commentary_packs.first.sections_for_verse (65, 1, 6).count)
+			assert_true ("Revelation 1:1, its own S1.1", l_bible.commentary_packs.first.sections_for_verse (66, 1, 1).count = 1
+				and then attached l_bible.commentary_packs.first.sections_for_verse (66, 1, 1).item (1).claim ("S1.1") as al_claim
+				and then al_claim.summary.same_string ("unveiling"))
+			l_bible.close
+			l_ok := l_root.delete_directory_recursive
+			remove_test_files
+		end
+
+	test_a_pack_breaking_the_rules_is_refused_and_named
+			-- A database in the pack folder without the pack rules (no meta, no voice column) is
+			-- refused with its reason, and the Bible still opens (was: until Task 7b, every generic
+			-- pack made `open' refuse).
 		local
 			l_bible: SIMPLE_BIBLE
 		do
@@ -179,8 +258,10 @@ feature -- Tests
 			l_bible := bible ("", Folder)
 			assert_integers_equal ("one generic pack", 1, l_bible.pack_count)
 			l_bible.open
-			assert_false ("not open", l_bible.is_open)
-			assert_true ("named", attached l_bible.last_error as al_e and then al_e.message.has_substring ("Generic private packs"))
+			assert_true ("open", l_bible.is_open)
+			assert_true ("refused and named", l_bible.pack_errors.count = 1 and then l_bible.pack_errors.first.code = {BIB_ERROR}.Schema_mismatch)
+			assert_true ("not attached", l_bible.private_packs.is_empty and l_bible.commentary_packs.is_empty)
+			l_bible.close
 			remove_test_files
 		end
 
@@ -241,6 +322,35 @@ feature {NONE} -- Fixture
 	Folder: STRING = "facade_test_packs"
 	Folder_pack_file: STRING = "facade_test_packs\conc.db"
 	Folder_other_file: STRING = "facade_test_packs\other.db"
+	Sidecar_file: STRING = "facade_test_sidecar.json"
+
+	Commentaries_folder: STRING = "facade_test_commentaries"
+
+	Second_sidecar_text: STRING
+			-- A one-section Revelation sidecar whose claim id repeats one of Jude's.
+		once
+			Result := "{%"meta%":{%"book%":%"Revelation%",%"book_id%":66,%"versification%":%"kjv%",%"status%":%"TEST%"},%"sections%":[{%"section_id%":%"rev-1-1%",%""
+				+ "heading%":%"Revelation 1:1%",%"start%":{%"book%":66,%"chapter%":1,%"verse%":1},%"end%":{%"book%":66,%"chapter%":1,%"verse%":1},%"versificati"
+				+ "on%":%"kjv%",%"voice%":null,%"fields%":{%"teaser%":%"The unveiling [S1.1].%"},%"frameworks%":[],%"questions%":[],%"further_reading%":[],%"te"
+				+ "rms%":[],%"claims%":[{%"id%":%"S1.1%",%"field%":%"teaser%",%"label%":%"SOURCED%",%"text%":%"The unveiling.%",%"summary%":%"unveiling%",%"sou"
+				+ "rce%":%"test:2%"}],%"restricted_quotes%":[]}]}"
+		end
+
+	Sidecar_text: STRING
+			-- A two-section commentary sidecar (BIB_COMMENTARY_BUILDER's input).
+		once
+			Result := "{%"meta%":{%"book%":%"Jude%",%"book_id%":65,%"versification%":%"kjv%",%"status%":%"TEST%"},%"sections%":[{%"section_id%":%"jude-intro%",%"heading%":%""
+				+ "Jude 1-25%",%"start%":{%"book%":65,%"chapter%":1,%"verse%":1},%"end%":{%"book%":65,%"chapter%":1,%"verse%":25},%"versification%":%"kjv%",%"voice%":nul"
+				+ "l,%"fields%":{%"teaser%":%"The whole letter [S1.1].%",%"text%":%"%",%"commentary%":%"Read it whole.%"},%"frameworks%":[%"ZAKAR%"],%"questions%":[%"Wha"
+				+ "t is Jude about?%"],%"further_reading%":[],%"terms%":[],%"claims%":[{%"id%":%"S1.1%",%"field%":%"teaser%",%"label%":%"SOURCED%",%"text%":%"The whole l"
+				+ "etter.%",%"summary%":%"whole%",%"source%":%"test:1%"}],%"restricted_quotes%":[]},{%"section_id%":%"jude-5-7%",%"heading%":%"Jude 5-7%",%"start%":{%"bo"
+				+ "ok%":65,%"chapter%":1,%"verse%":5},%"end%":{%"book%":65,%"chapter%":1,%"verse%":7},%"versification%":%"kjv%",%"voice%":null,%"fields%":{%"teaser%":%"S"
+				+ "aved, then destroyed [D5.1].%",%"variants%":%"- v5: Jesus or the Lord.%"},%"frameworks%":[],%"questions%":[%"Who saved the people?%",%"Who was destroy"
+				+ "ed?%"],%"further_reading%":[%"[Essay](https://example.org/essay)%"],%"terms%":[{%"script%":%"pistis%",%"translit%":%"pistis%",%"pron%":%"PIS-tis%",%"e"
+				+ "nglish%":%"faithfulness%",%"language%":%"grc%",%"lemma_key%":null,%"strongs%":null}],%"claims%":[{%"id%":%"D5.1%",%"field%":%"teaser%",%"label%":%"DED"
+				+ "UCED%",%"text%":%"Saved, then destroyed.%",%"summary%":%"saved%",%"source%":%"Basis: test%"}],%"restricted_quotes%":[{%"source%":%"Test edition%",%"sh"
+				+ "ip_class%":%"research_only%",%"note%":%"reference only%",%"markdown%":%"A quoted line.%"}]}]}"
+		end
 
 	fixture: CONC_FIXTURE
 			-- The shared test-file helpers.

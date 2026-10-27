@@ -36,6 +36,7 @@ feature {NONE} -- Initialization
 			create l_location
 			create l_config.make_with_core (l_location.content_path)
 			l_config := l_config.set_conc_path (l_location.conc_path)
+			l_config := l_config.set_pack_folder (l_location.pack_folder)
 			create bible.make (l_config)
 			bible.open
 			create settings.make
@@ -83,6 +84,8 @@ feature {NONE} -- Initialization
 			create reading_version.make_empty
 			create commentary_title.make ("", {SW_PAINTER}.Role_ui, 13.0, True)
 			create commentary_tabs.make
+			create commentary_view.make (200.0)
+			create commentary_reader.make
 			create cross_refs_grid.make (60.0)
 			create cross_refs.make (0)
 			create lexicon_heading.make ("", {SW_PAINTER}.Role_ui, 20.0, True)
@@ -307,12 +310,16 @@ feature {NONE} -- Window
 	commentary_pane: SW_COLUMN
 			-- S2, P04 Commentary: Commentaries, Cross-refs (live) and Related.
 		do
-			commentary_tabs.add_page ("Commentaries", create {SW_EMPTY_STATE}.make ("No commentary yet",
-				"content.db carries no commentaries yet; Matthew Henry and the others come with the content pipeline."))
+			commentary_tabs.add_page ("Commentaries", commentary_view)
 			commentary_tabs.add_page ("Cross-refs", cross_refs_grid)
 			commentary_tabs.add_page ("Related", create {SW_EMPTY_STATE}.make ("Related passages come later",
 				"AI-made related passages are planned for a later release, always marked as AI-made."))
-			commentary_tabs.select_tab (2)
+				-- Larry's commentary first when a pack holds one (2026-10-27), else the cross-references.
+			if bible.is_open and then not bible.commentary_packs.is_empty then
+				commentary_tabs.select_tab (1)
+			else
+				commentary_tabs.select_tab (2)
+			end
 			create Result.make
 			Result := Result.with_gap (6.0)
 			Result.put (commentary_title)
@@ -1661,7 +1668,7 @@ feature {NONE} -- Notes (T2, P06)
 			window.add_reference_mark (center_tabs, "T3", "Centre tabs: the Bible text, Parallel (P02) and Interlinear (P03, Ctrl+I). More Bible tabs come later.", window.Corner_top_left)
 			window.add_reference_mark (interlinear_note, "P03", "Interlinear: word by word in the original, right to left for Hebrew. A click makes the word's verse the place read and opens its headword in T4.", window.Corner_top_left)
 			window.add_reference_mark (lexicon_heading, "T4", "P05 Lexicon, east: follows the clicked word.", window.Corner_top_left)
-			window.add_reference_mark (commentary_title, "T5", "P04 Commentary, east: here on Cross-refs, with OpenBible votes.", window.Corner_top_left)
+			window.add_reference_mark (commentary_title, "T5", "P04 Commentary, east: Commentaries (Larry's commentary packs, verse by verse, every claim labelled SOURCED or DEDUCED), Cross-refs with OpenBible votes.", window.Corner_top_left)
 			window.add_reference_mark (results_tabs, "T6", "South results zone: Search Results; Guides, Census, Author Library and Ledger come later.", window.Corner_top_left)
 		end
 
@@ -1693,6 +1700,55 @@ feature {NONE} -- Commentary (S2, P04)
 				commentary_title.set_text (place_text (reading_book, reading_chapter, 0) + {STRING_32} ": click a verse for its cross-references")
 			end
 			cross_refs_grid.set_rows (cross_refs)
+			show_commentary
+		end
+
+	commentary_view: SW_DOCUMENT_VIEW
+			-- S2's Commentaries tab: the commentary packs' sections on the verse read (read-only).
+
+	commentary_reader: MD_DOCUMENT_READER
+			-- Markdown into the view's document model.
+
+	show_commentary
+			-- The Commentaries tab follows the verse: every commentary pack's sections covering it,
+			-- narrowest first, each claim wearing its SOURCED or DEDUCED label.
+		local
+			l_text: BIB_COMMENTARY_TEXT
+			l_page: STRING_32
+			l_sections: BIB_LIST_RESULT [BIB_COMMENTARY_SECTION]
+			l_list: ARRAYED_LIST [BIB_COMMENTARY_SECTION]
+			i: INTEGER
+		do
+			create l_text
+			create l_page.make_empty
+			if not bible.is_open or else bible.commentary_packs.is_empty then
+				l_page := {STRING_32} "**No commentary yet**%N%NA commentary pack in the packs folder shows here, verse by verse."
+				across bible.pack_errors as ic loop
+					l_page.append ({STRING_32} "%N%N*A pack was refused: " + ic.message + {STRING_32} "*")
+				end
+			elseif reading_verse = 0 then
+				l_page := {STRING_32} "Click a verse for its commentary."
+			else
+				across bible.commentary_packs as ic loop
+					if ic.is_available then
+						l_sections := ic.sections_for_verse (reading_book, reading_chapter, reading_verse)
+						if attached l_sections.error as al_error then
+							l_page.append ({STRING_32} "*" + ic.title + {STRING_32} ": " + al_error.message + {STRING_32} "*%N%N")
+						elseif l_sections.count > 0 then
+							create l_list.make (l_sections.count)
+							from i := 1 until i > l_sections.count loop
+								l_list.extend (l_sections.item (i))
+								i := i + 1
+							end
+							l_page.append (l_text.page (ic.title, l_list))
+						end
+					end
+				end
+				if l_page.is_empty then
+					l_page := {STRING_32} "No commentary on " + place_text (reading_book, reading_chapter, reading_verse) + {STRING_32} " yet."
+				end
+			end
+			commentary_view.set_document (commentary_reader.read (l_page))
 		end
 
 	on_cross_ref (a_model: INTEGER)
@@ -2061,7 +2117,7 @@ feature {NONE} -- Design pills
 			window.add_reference_mark (dock, "C16", "Dock host: centre plus west, east, south; an empty zone collapses (P07 here).", window.Corner_top_right)
 			window.add_reference_mark (reading_caption, "S1", "P01 Bible Text, centre: verse per line. Previous and Next step chapters.", window.Corner_top_left)
 			window.add_reference_mark (reading_view, "S4", "Selected verse and word: click a word (English, Hebrew or Greek) and S3 follows it; S2 follows the verse.", window.Corner_top_right)
-			window.add_reference_mark (commentary_title, "S2", "P04 Commentary, east: follows the verse. Cross-refs live (OpenBible votes).", window.Corner_top_left)
+			window.add_reference_mark (commentary_title, "S2", "P04 Commentary, east: follows the verse. Commentaries from the commentary packs (every claim labelled SOURCED or DEDUCED); Cross-refs (OpenBible votes).", window.Corner_top_left)
 			window.add_reference_mark (lexicon_heading, "S3", "P05 Lexicon, south: follows the word. Renderings first, then lexicon entries.", window.Corner_top_left)
 			window.add_reference_mark (renderings_grid, "P05.4", "Range before ruling: every rendering with its count, before any lexicon's verdict.", window.Corner_top_left)
 			window.add_reference_mark (entries_list, "P05.5", "Lexicon entries: each source in its own words (Abbott-Smith, BDB, LSJ, UBS, TBESH).", window.Corner_top_left)

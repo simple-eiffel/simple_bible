@@ -125,6 +125,28 @@ feature -- Tests
 			finish
 		end
 
+	test_every_claim_wears_its_label
+			-- 2026-10-27: a claim tag in the commentary's text is shown with its label, and each
+			-- section lists its claims by label; a DEDUCED claim never reads as Larry's words.
+		local
+			l_section: BIB_COMMENTARY_SECTION
+			l_text: BIB_COMMENTARY_TEXT
+			l_page: STRING_32
+		do
+			create l_section.make ("jude-5-7", "Jude 5-7", 65, 1, 5, 1, 7, "author",
+				create {BIB_PROVENANCE}.make (1, "Larry Rix: Jude", "TEST", create {BIB_LICENSE}.make ("private", True, False, True, "Larry Rix"), ""))
+			l_section.fields.extend (["teaser", {STRING_32} "Saved, then destroyed [D5.1]; he says so [S5.2]."])
+			l_section.claims.extend (create {BIB_COMMENTARY_CLAIM}.make ("D5.1", "DEDUCED", "Saved, then destroyed.", "saved then destroyed", "Basis: ZAKAR"))
+			l_section.claims.extend (create {BIB_COMMENTARY_CLAIM}.make ("S5.2", "SOURCED", "He says so.", "his words", "CL 1:2"))
+			create l_text
+			l_page := l_text.page ("Jude: A Commentary", <<l_section>>)
+			assert_true ("the deduction labelled inline", l_page.has_substring ("**[DEDUCED D5.1]**"))
+			assert_true ("the sourced claim labelled inline", l_page.has_substring ("**[SOURCED S5.2]**"))
+			assert_false ("no bare tag left", l_page.has_substring (" [D5.1]"))
+			assert_true ("listed by label", l_page.has_substring ("- **[DEDUCED D5.1]** saved then destroyed"))
+			assert_true ("the banner says what the labels mean", l_page.has_substring ("not his words"))
+		end
+
 	test_place_rows_know_their_verse
 			-- A place opens in the reading pane: it carries its book, chapter and verse as numbers.
 		local

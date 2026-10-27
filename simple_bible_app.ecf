@@ -47,6 +47,8 @@
 		<library name="simple_file" location="$SIMPLE_EIFFEL/simple_file/simple_file.ecf"/>
 		<library name="simple_shell" location="$SIMPLE_EIFFEL/simple_shell/simple_shell.ecf"/>
 		<library name="simple_cairo" location="$SIMPLE_EIFFEL/simple_cairo/simple_cairo.ecf"/>
+		<library name="simple_markdown" location="$SIMPLE_EIFFEL/simple_markdown/simple_markdown.ecf"/>
+		<library name="simple_document" location="$SIMPLE_EIFFEL/simple_document/simple_document.ecf"/>
 		<library name="simple_widgets" location="$SIMPLE_EIFFEL/simple_widgets/simple_widgets.ecf">
 			<option warning="none"/>
 		</library>

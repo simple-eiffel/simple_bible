@@ -1,8 +1,10 @@
 note
 	description: "[
 		bible_build: writes content.db v2 from the vault's bible.db (Phase 4,
-		Task 10). Usage:
+		Task 10), or a commentary pack from a commentary's sidecar JSON
+		(2026-10-27). Usage:
 			bible_build --bible <bible.db> --out <content.db> [--build-id <id>] [--built-at <ISO time>]
+			bible_build --commentary <Commentaries folder, or one sidecar.json> --out <commentary.db>
 		Exit code 0 on success, 1 on failure (the reason is printed).
 	]"
 	author: "Larry Rix"
@@ -22,12 +24,14 @@ feature {NONE} -- Initialization
 		local
 			l_cli: SIMPLE_CLI
 			l_builder: BIB_CONTENT_BUILDER
+			l_commentary: BIB_COMMENTARY_BUILDER
 			l_build_id: STRING
 			l_failed: BOOLEAN
 		do
 			create l_cli.make
 			l_cli.set_app_info ("bible_build", "Writes content.db v2 (books, versions, every verse) from the vault's bible.db.", {BIB_CONTENT_BUILDER}.Builder_name)
-			l_cli.add_required_option ("b|bible", "The vault's bible.db", "path")
+			l_cli.add_option_with_default ("b|bible", "The vault's bible.db", "path", "")
+			l_cli.add_option_with_default ("c|commentary", "The Commentaries folder (every book's _build sidecar) or one sidecar JSON: write the commentary pack instead", "path", "")
 			l_cli.add_required_option ("o|out", "The content.db to write", "path")
 			l_cli.add_option_with_default ("i|build-id", "The build id (the edition)", "id", "content-v2")
 			l_cli.add_option_with_default ("t|built-at", "The build time, for a byte-identical rebuild (empty: now)", "ISO time", "")
@@ -37,6 +41,27 @@ feature {NONE} -- Initialization
 					print (ic + "%N")
 				end
 				l_failed := True
+			elseif attached l_cli.value_of ("commentary") as al_sidecar and then not al_sidecar.is_empty
+				and then attached l_cli.value_of ("out") as al_pack and then not al_pack.is_empty
+			then
+				create l_commentary.make
+				if l_commentary.sidecars_in (al_sidecar).is_empty then
+					print ("bible_build: no <Book>/_build/*.sections.json under " + al_sidecar + "%N")
+					l_failed := True
+				else
+					l_commentary.build (l_commentary.sidecars_in (al_sidecar), al_pack)
+				end
+				if l_failed then
+						-- Said above.
+				elseif attached l_commentary.last_error as al_error then
+					print ("bible_build failed: ")
+					print (al_error)
+					print ("%N")
+					l_failed := True
+				else
+					print ("bible_build: wrote " + al_pack + " (" + l_commentary.book_count.out + " books, " + l_commentary.section_count.out + " sections, " + l_commentary.claim_count.out + " claims, "
+						+ l_commentary.term_count.out + " terms, " + l_commentary.list_count.out + " list items, " + l_commentary.restricted_count.out + " restricted quotations)%N")
+				end
 			elseif attached l_cli.value_of ("bible") as al_bible and then not al_bible.is_empty
 				and then attached l_cli.value_of ("out") as al_out and then not al_out.is_empty
 			then
@@ -56,7 +81,7 @@ feature {NONE} -- Initialization
 					print ("bible_build: wrote " + al_out + " (" + l_builder.books_written.out + " books, " + l_builder.versions_written.out + " versions, " + l_builder.verses_written.out + " verses, " + l_builder.cross_references_written.out + " cross-references, build " + l_builder.build_id.to_string_8 + ")%N")
 				end
 			else
-				print ("bible_build: --bible and --out each need a path.%N")
+				print ("bible_build: --out and either --bible or --commentary each need a path.%N")
 				l_failed := True
 			end
 				-- One exit point, after everything is closed (design scan 31).

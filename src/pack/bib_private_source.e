@@ -35,6 +35,8 @@ feature {NONE} -- Initialization
 			alias_text := a_alias.to_string_8
 			voice := a_voice
 			create sqlite_version.make_empty
+			create pack_kind.make_empty
+			create pack_title.make_empty
 		ensure
 			path_set: path.same_string_general (a_path)
 			alias_set: alias_name.same_string (a_alias)
@@ -52,6 +54,12 @@ feature -- Access
 	voice: BIB_VOICE
 			-- How results from this pack are labeled.
 
+	pack_kind: STRING_8
+			-- `meta.pack_kind' as read at attach ("commentary"); empty before.
+
+	pack_title: STRING_32
+			-- `meta.title' as read at attach; empty when the pack names none.
+
 	expected_schema_version: INTEGER
 		do
 			Result := Pack_schema_version
@@ -60,25 +68,102 @@ feature -- Access
 feature -- Status
 
 	pack_voice_column_present: BOOLEAN
-			-- Does every pack table carry its NOT NULL voice column?
-		do
-			-- Phase 4: PRAGMA table_info over the pack's tables.
-		end
+			-- Does every pack table (but `meta' and `source_provenance') carry its NOT NULL voice
+			-- column? Recorded by `open_on'.
 
 feature -- Commands
 
 	open_on (a_set: BIB_SOURCE_SET)
-			-- Attach this pack to `a_set', read-only.
+			-- Attach this pack to `a_set', read-only, and check the pack rules (2026-10-27, Task 7b's
+			-- first customer, the commentary pack): `user_version' `Pack_schema_version'; `meta' and
+			-- `source_provenance' present; every other table carries NOT NULL `voice' and
+			-- `provenance_key'. A pack that breaks a rule is detached again and `last_error' says which.
+		local
+			l_tables: ARRAYED_LIST [STRING_8]
+			l_voiced, l_sourced: BOOLEAN
 		do
-			-- Phase 4: a_set.attach (alias_name, path); read user_version; check the voice column.
+			last_error := Void
+			has_required_tables := False
+			pack_voice_column_present := False
+			tables_without_provenance_column := 0
+			a_set.attach (alias_name, path)
+			if attached a_set.last_error as al_error then
+				last_error := al_error
+			elseif attached a_set.database as al_db then
+				schema_version := first_integer (al_db.query ("PRAGMA " + alias_name + ".user_version"))
+				create l_tables.make (8)
+				across al_db.query ("SELECT name FROM " + alias_name + ".sqlite_master WHERE type = 'table'").rows as ic loop
+					l_tables.extend (ic.string_value ("name").to_string_8)
+				end
+				l_tables.compare_objects
+				has_required_tables := l_tables.has ("meta") and l_tables.has ("source_provenance")
+				pack_voice_column_present := True
+				across l_tables as ic loop
+					if not ic.same_string ("meta") and not ic.same_string ("source_provenance") then
+						l_voiced := False
+						l_sourced := False
+						across al_db.query ("PRAGMA " + alias_name + ".table_info(" + ic + ")").rows as ic_column loop
+							if ic_column.integer_value ("notnull") = 1 then
+								if ic_column.string_value ("name").same_string ("voice") then
+									l_voiced := True
+								elseif ic_column.string_value ("name").same_string ("provenance_key") then
+									l_sourced := True
+								end
+							end
+						end
+						if not l_voiced then
+							pack_voice_column_present := False
+						end
+						if not l_sourced then
+							tables_without_provenance_column := tables_without_provenance_column + 1
+						end
+					end
+				end
+				if schema_version /= expected_schema_version then
+					create last_error.make_with_details ({BIB_ERROR}.Schema_mismatch, "The pack's version is " + schema_version.out + "; this program reads version " + expected_schema_version.out + ".", path)
+				elseif not has_required_tables then
+					create last_error.make_with_details ({BIB_ERROR}.Schema_mismatch, "The pack has no meta or source_provenance table.", path)
+				elseif not pack_voice_column_present then
+					create last_error.make_with_details ({BIB_ERROR}.Schema_mismatch, "A table of the pack has no NOT NULL voice column: its results could not be labelled.", path)
+				elseif tables_without_provenance_column > 0 then
+					create last_error.make_with_details ({BIB_ERROR}.Schema_mismatch, "A table of the pack has no NOT NULL provenance_key.", path)
+				else
+					pack_kind := meta_value (al_db, "pack_kind").to_string_8
+					pack_title := meta_value (al_db, "title")
+					sqlite_version := a_set.sqlite_version.twin
+					if sqlite_version.is_empty then
+						sqlite_version := {STRING_32} "unknown"
+					end
+					attached_set := a_set
+					is_open := True
+				end
+				if last_error /= Void then
+					a_set.detach (alias_name)
+				end
+			end
 		ensure then
 			voice_column_checked: is_open implies pack_voice_column_present
 			user_version_checked: is_open implies schema_version = expected_schema_version
 		end
 
 	close
+			-- Detach the pack.
 		do
-			-- Phase 4
+			if attached attached_set as al_set and then al_set.is_open and then al_set.is_attached_alias (alias_name) then
+				al_set.detach (alias_name)
+			end
+			attached_set := Void
+			is_open := False
+		end
+
+	forget
+			-- The connection was closed under this pack (the whole source set closed): it is no
+			-- longer open.
+		do
+			attached_set := Void
+			is_open := False
+		ensure
+			closed: not is_open
 		end
 
 feature -- Constants
@@ -88,6 +173,29 @@ feature -- Constants
 feature {NONE} -- Implementation
 
 	alias_text: STRING_8
+
+	attached_set: detachable BIB_SOURCE_SET
+			-- Where the pack is attached while open.
+
+	first_integer (a_result: SIMPLE_SQL_RESULT): INTEGER
+			-- The first column of the first row as a whole number; 0 when there is none.
+		do
+			if not a_result.rows.is_empty and then a_result.rows.first.count >= 1 then
+				Result := a_result.rows.first.integer_value (a_result.rows.first.column_name (1))
+			end
+		end
+
+	meta_value (a_db: SIMPLE_SQL_DATABASE; a_key: STRING_8): STRING_32
+			-- `meta' row `a_key' of the pack; empty when absent.
+		local
+			l_result: SIMPLE_SQL_RESULT
+		do
+			create Result.make_empty
+			l_result := a_db.query_with_args ("SELECT value FROM " + alias_name + ".meta WHERE key = ?", <<a_key>>)
+			if not l_result.rows.is_empty then
+				Result := l_result.rows.first.string_value ("value")
+			end
+		end
 
 invariant
 	not_main: not alias_text.same_string ("main")

@@ -22,6 +22,7 @@
 		<library name="simple_file" location="$SIMPLE_EIFFEL/simple_file/simple_file.ecf"/>
 		<library name="simple_datetime" location="$SIMPLE_EIFFEL/simple_datetime/simple_datetime.ecf"/>
 		<library name="simple_cli" location="$SIMPLE_EIFFEL/simple_cli/simple_cli.ecf"/>
+		<library name="simple_json" location="$SIMPLE_EIFFEL/simple_json/simple_json.ecf"/>
 		<cluster name="build" location=".\build\" recursive="true"/>
 		<cluster name="build_app" location=".\build_app\" recursive="true"/>
 	</target>
