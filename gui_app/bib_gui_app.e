@@ -102,6 +102,11 @@ feature {NONE} -- Initialization
 			create forward_button.make (">", Void)
 			create reference_box.make_lookup
 			create version_select.make
+			create scope_select.make
+			across Scope_names as ic loop
+				scope_select.add_option (ic)
+			end
+			scope_select.select_index (1)
 			create search_box.make_lookup
 			create mode_switch.make
 			create smaller_button.make ("A-", Void)
@@ -315,6 +320,10 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			elseif snapshot_tab.same_string ({STRING_32} "morph") then
 				search_box.set_text ("G3056 AND morph:N-NSM")
 				on_search
+			elseif snapshot_tab.same_string ({STRING_32} "scope") then
+				scope_select.select_index (3)
+				search_box.set_text ("grace")
+				on_search
 			elseif snapshot_tab.same_string ({STRING_32} "form") then
 				search_box.set_text ("G3056@N-NSM")
 				on_search
@@ -391,6 +400,7 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			reference_box.set_on_enter (agent on_reference)
 			search_box.set_on_enter (agent on_search)
 			version_select.set_on_change (agent on_version_change)
+			scope_select.set_on_change (agent on_scope_change)
 			mode_switch.set_on_change (agent on_mode)
 			smaller_button.set_on_click (agent change_text_size (-1))
 			larger_button.set_on_click (agent change_text_size (1))
@@ -434,6 +444,39 @@ feature {NONE} -- Window
 	back_button, forward_button: SW_BUTTON
 	reference_box, search_box: BIB_LOOKUP_BOX
 	version_select: SW_SELECT
+
+	scope_select: SW_SELECT
+			-- C6.1: where the verse search looks (2026-10-27): the whole Bible, a testament, the
+			-- Gospels, Paul's letters, or the book being read.
+
+	Scope_names: ARRAY [STRING_32]
+			-- `scope_select''s choices, in order; the names BIB_SEARCH_SCOPES reads, and "This book".
+		once
+			Result := <<{STRING_32} "Whole Bible", {STRING_32} "Old Testament", {STRING_32} "New Testament", {STRING_32} "Gospels", {STRING_32} "Paul's letters", {STRING_32} "This book">>
+		end
+
+	Scope_this_book: INTEGER = 6
+			-- The `Scope_names' index meaning the book being read.
+
+	search_scope: BIB_SEARCH_SCOPE
+			-- The scope `scope_select' names for the version read.
+		do
+			if scope_select.selected_index = Scope_this_book and reading_book > 0 and then attached bible.search_scopes.scope_named (bible.books.book (reading_book).name, reading_version) as al_book then
+				Result := al_book
+			elseif scope_select.selected_index > 1 and scope_select.selected_index < Scope_this_book and then attached bible.search_scopes.scope_named (Scope_names [scope_select.selected_index], reading_version) as al_named then
+				Result := al_named
+			else
+				Result := bible.search_scopes.whole_bible (reading_version)
+			end
+		end
+
+	on_scope_change
+			-- C6.1 changed: search again in the new scope when there is a search.
+		do
+			if bible.is_open and then not search_box.text.is_empty then
+				find_verses (search_box.text)
+			end
+		end
 	mode_switch: SW_SEGMENTED
 	smaller_button, larger_button: SW_BUTTON
 	dark_switch: SW_SWITCH
@@ -460,6 +503,7 @@ feature {NONE} -- Window
 			l_toolbar.put (reference_box.growing)
 			l_toolbar.put (version_select)
 			l_toolbar.put (search_box.growing)
+			l_toolbar.put (scope_select)
 			create l_spacer.make_weighted (0.2)
 			l_toolbar.put (l_spacer)
 			l_toolbar.put (mode_switch)
@@ -3059,7 +3103,7 @@ feature {NONE} -- Search results (P07)
 			if reading_version.is_empty or else not bible.text_reader.has_version (reading_version) then
 				verses_heading.set_text ("")
 			else
-				l_query := bible.query_parser.parsed (a_words, bible.search_scopes.whole_bible (reading_version))
+				l_query := bible.query_parser.parsed (a_words, search_scope)
 				if not l_query.is_valid then
 					verses_heading.set_text ({STRING_32} "The search cannot be read at character " + l_query.error_position.out + {STRING_32} ": " + l_query.error_message)
 				elseif l_query.has_text_clause and not bible.text_reader.has_verse_index then
@@ -3099,8 +3143,11 @@ feature {NONE} -- Search results (P07)
 					-- The Colossians 1:2 lesson: the KJV reads "Lord" where the critical text has none.
 				l_note.append ({STRING_32} " Greek roots are read in the Greek New Testament of the concordance (a critical text), whose wording can differ from the Textus Receptus behind the KJV.")
 			end
+			if scope_select.selected_index > 1 then
+				l_note.prepend ({STRING_32} " Searched in " + search_scope.label + {STRING_32} " only.")
+			end
 			if a_total = 0 then
-				verses_heading.set_text ({STRING_32} "No verse in " + reading_version.to_string_32 + {STRING_32} " matches.")
+				verses_heading.set_text ({STRING_32} "No verse in " + reading_version.to_string_32 + {STRING_32} " matches." + l_note)
 			elseif a_total > verse_hits.count then
 				verses_heading.set_text ({STRING_32} "Verses in " + reading_version.to_string_32 + {STRING_32} ": " + a_total.out + {STRING_32} " match; the first " + verse_hits.count.out + {STRING_32} " in Bible order. Click one to read it." + l_note)
 			elseif a_total = 1 then
@@ -3248,6 +3295,7 @@ feature {NONE} -- Design pills
 			window.add_reference_mark (menu_bar, "C1", "Title bar (above): app, chapter and version, and the PERSONAL EDITION label.", window.Corner_top_right)
 			window.add_reference_mark (back_button, "C3", "Back and Forward: history, Alt+Left and Alt+Right.", window.Corner_top_left)
 			window.add_reference_mark (reference_box, "C4", "Reference box: 'John 3:16', 'Ps 23', 'Gen 1 1'. Anything else is searched. Ctrl+L.", window.Corner_top_left)
+			window.add_reference_mark (scope_select, "C6.1", "Search scope: the whole Bible, the Old or New Testament, the Gospels, Paul's letters, or the book being read. Changing it searches again.", window.Corner_top_right)
 			window.add_reference_mark (version_select, "C5", "Version picker: every version content.db holds. The text changes; the place stays.", window.Corner_top_right)
 			window.add_reference_mark (search_box, "C6", "Quick search: a word, verse or Strong's number, and every verse it names: words, %"phrases%", word*, AND, OR and NOT in capitals, parentheses, strongs:H1254 or G5485, lemma:charis, morph:V-AAI-3S or morph:Vq*, and a root in a form on one word: G3056@N-NSM. Results open the results zone. Ctrl+F.", window.Corner_top_left)
 			window.add_reference_mark (smaller_button, "C8", {STRING_32} "Text size: all the window's text, " + (settings.Min_text_scale * 100.0).rounded.out + {STRING_32} " to "
