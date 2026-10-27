@@ -159,7 +159,35 @@ feature -- Tests
 			finish
 		end
 
+	test_settings_round_trip
+			-- The text size is kept between runs (C8); a missing or odd file gives the default.
+		local
+			l_settings, l_again: BIB_SETTINGS
+			l_file: SIMPLE_FILE
+			l_ok: BOOLEAN
+		do
+			create l_file.make (Settings_file)
+			if l_file.exists then
+				l_ok := l_file.delete
+			end
+			create l_settings.make_at (Settings_file)
+			l_settings.load
+			assert_true ("no file: the default", l_settings.text_scale = 1.0)
+			l_settings.set_text_scale (1.3)
+			assert_true ("saved", l_settings.save)
+			create l_again.make_at (Settings_file)
+			l_again.load
+			assert_true ("read back", (l_again.text_scale - 1.3).abs < 0.0001)
+			l_ok := (create {SIMPLE_FILE}.make (Settings_file)).write_text ("text_scale=9%Nnonsense%N")
+			create l_again.make_at (Settings_file)
+			l_again.load
+			assert_true ("out of range: the default", l_again.text_scale = 1.0)
+			l_ok := (create {SIMPLE_FILE}.make (Settings_file)).delete
+		end
+
 feature {NONE} -- Fixture
+
+	Settings_file: STRING = "settings_test.txt"
 
 	Content_file: STRING = "cli_test_content.db"
 	Pack_file: STRING = "cli_test_pack.db"

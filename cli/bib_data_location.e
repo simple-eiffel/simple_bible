@@ -41,6 +41,15 @@ feature -- Access
 			Result := first_file (<<installed_data ("conc.db"), l_variable, local_data ("conc.db")>>)
 		end
 
+	settings_path: STRING
+			-- The reader's settings file, always in %LOCALAPPDATA%\simple_bible (never beside the program,
+			-- which an installer replaces).
+		do
+			Result := local_data ("settings.txt")
+		ensure
+			not_empty: not Result.is_empty
+		end
+
 feature {NONE} -- Implementation
 
 	installed_data (a_name: STRING): STRING
