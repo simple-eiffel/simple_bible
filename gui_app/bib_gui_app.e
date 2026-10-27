@@ -125,9 +125,12 @@ feature {NONE} -- Initialization
 			wire_events
 			show_start
 			arrange (settings.is_study_layout)
+				-- Genesis 1:1 selected, so the commentary has its cross-references from the start (Larry:
+				-- T5 was empty until a verse was clicked).
 			if bible.is_open and then not reading_version.is_empty and then bible.books.has_book (1) then
-				go_to (1, 1, 0)
+				go_to (1, 1, 1)
 			end
+			show_no_word
 			dark_switch.set_on (window.theme.is_dark)
 				-- Typing goes straight into the reference box (keys typed before a click were lost once).
 			window.give_focus (reference_box)
@@ -1117,10 +1120,15 @@ feature {NONE} -- Two layouts (C7)
 		end
 
 	on_nav (a_node: BIB_NAV_NODE)
-			-- A chapter chosen in T1: read it.
+			-- A chapter chosen in T1: read it. A testament or book clicked opens or closes, not only
+			-- on its small arrow (Larry: clicking John did not show its chapters).
 		do
 			if a_node.is_chapter then
 				go_to (a_node.book_id, a_node.chapter, 0)
+			elseif navigator_tree.is_expanded (a_node) then
+				navigator_tree.collapse_node (a_node)
+			else
+				navigator_tree.expand_node (a_node)
 			end
 		end
 
@@ -1413,6 +1421,14 @@ feature {NONE} -- Dictionary and lexicon (S3, P05)
 			end
 		ensure
 			same_rows: Result.count = a_rows.count
+		end
+
+	show_no_word
+			-- S3/T4 before any word is chosen: say what to do, never a blank panel (Larry: T4 could not
+			-- be seen until a search).
+		do
+			lexicon_heading.set_text ("No word chosen yet")
+			lexicon_subtitle.set_text ("Click a word in the Bible text, or search for one.")
 		end
 
 	entry_text (a_entry: BIB_LIBRARY_ENTRY): STRING_32
