@@ -180,6 +180,26 @@ feature -- Tests
 			finish
 		end
 
+	test_reference_box_reads_spoken_forms
+			-- NEEDLE's run 6 misses, 2026-10-27: a box should read what people type. Ordinal words and
+			-- Roman numerals before a book, and "chapter" and "verse" written out. Before: Void.
+		local
+			l_lookup: BIB_LOOKUP
+		do
+			create l_lookup.make (bible)
+			assert_true ("First Peter 4:8", attached l_lookup.place_named ("First Peter 4:8") as al_a and then (al_a.book = 60 and al_a.chapter = 4 and al_a.verse = 8))
+			assert_true ("Second Peter 3:8", attached l_lookup.place_named ("Second Peter 3:8") as al_b and then (al_b.book = 61 and al_b.chapter = 3 and al_b.verse = 8))
+			assert_true ("II Peter 1:1", attached l_lookup.place_named ("II Peter 1:1") as al_c and then al_c.book = 61)
+			assert_true ("I Peter 1:1", attached l_lookup.place_named ("I Peter 1:1") as al_d and then al_d.book = 60)
+			assert_true ("1st Peter 2:9", attached l_lookup.place_named ("1st Peter 2:9") as al_e and then (al_e.book = 60 and al_e.verse = 9))
+			assert_true ("1 Pet 3:15 by prefix", attached l_lookup.place_named ("1 Pet 3:15") as al_f and then (al_f.book = 60 and al_f.verse = 15))
+			assert_true ("2 Pet 1:16-18", attached l_lookup.place_named ("2 Pet 1:16-18") as al_g and then (al_g.book = 61 and al_g.verse = 16))
+			assert_true ("Matthew chapter 5", attached l_lookup.place_named ("Matthew chapter 5") as al_h and then (al_h.book = 40 and al_h.chapter = 5 and al_h.verse = 0))
+			assert_true ("Matthew chapter 5 verse 3", attached l_lookup.place_named ("Matthew chapter 5 verse 3") as al_i and then (al_i.chapter = 5 and al_i.verse = 3))
+			assert_true ("Jude verse 9", attached l_lookup.place_named ("Jude verse 9") as al_j and then (al_j.book = 65 and al_j.chapter = 1 and al_j.verse = 9))
+			finish
+		end
+
 	test_the_reference_readers_agree
 			-- Scan 41: the reference box and the reference links read numbers by one rule (ranges,
 			-- one-chapter books, chapters and verses 1 to 176, no verse 0) and differ only in how a

@@ -59,6 +59,56 @@ feature -- Access
 
 	books: BIB_BOOK_CATALOG
 
+	spoken_form (a_text: STRING_32): STRING_32
+			-- `a_text' as a reference box should read it (2026-10-27, from NEEDLE's run 6 misses):
+			-- an ordinal word or Roman numeral before the book as its digit ("First Peter", "II
+			-- Kings", "1st John"), and "chapter" and "verse" written out ("Mark chapter 4", "John
+			-- chapter 3 verse 16", "Jude verse 9"). Prose links stay strict: a sentence beginning
+			-- "I John" is no reference to them.
+		local
+			l_lower: STRING_32
+			l_found: BOOLEAN
+		do
+			Result := a_text.twin
+			l_lower := Result.as_lower
+			across Ordinal_words as ic until l_found loop
+				if l_lower.starts_with (ic.word + {STRING_32} " ") and then Result.count > ic.word.count + 1 then
+					Result := ic.digit + Result.substring (ic.word.count + 1, Result.count)
+					l_found := True
+				end
+			end
+			across Spelled_parts as ic loop
+				from
+					l_lower := Result.as_lower
+				until
+					not l_lower.has_substring (ic.word)
+				loop
+					Result := Result.substring (1, l_lower.substring_index (ic.word, 1) - 1) + ic.mark + Result.substring (l_lower.substring_index (ic.word, 1) + ic.word.count, Result.count)
+					l_lower := Result.as_lower
+				end
+			end
+				-- "Jude verse 9" leaves "Jude:9": a one-chapter book reads a lone number as its verse.
+			if Result.has (':') and then not Result.substring (1, Result.index_of (':', 1) - 1).has (' ') then
+				Result.replace_substring ({STRING_32} " ", Result.index_of (':', 1), Result.index_of (':', 1))
+			end
+		ensure
+			not_longer: Result.count <= a_text.count
+		end
+
+	Ordinal_words: ARRAY [TUPLE [word, digit: STRING_32]]
+			-- Book-number words as typed, longest first among their kind.
+		once
+			Result := <<[{STRING_32} "first", {STRING_32} "1"], [{STRING_32} "second", {STRING_32} "2"], [{STRING_32} "third", {STRING_32} "3"],
+				[{STRING_32} "1st", {STRING_32} "1"], [{STRING_32} "2nd", {STRING_32} "2"], [{STRING_32} "3rd", {STRING_32} "3"],
+				[{STRING_32} "iii", {STRING_32} "3"], [{STRING_32} "ii", {STRING_32} "2"], [{STRING_32} "i", {STRING_32} "1"]>>
+		end
+
+	Spelled_parts: ARRAY [TUPLE [word, mark: STRING_32]]
+			-- "chapter" and "verse" written out, with the separator each stands for.
+		once
+			Result := <<[{STRING_32} " chapter ", {STRING_32} " "], [{STRING_32} " verses ", {STRING_32} ":"], [{STRING_32} " verse ", {STRING_32} ":"]>>
+		end
+
 	is_forgiving: BOOLEAN
 			-- Does a book name a prefix or lowercase may give (the reference box)?
 
@@ -67,7 +117,7 @@ feature -- Places
 	place_in (a_text: READABLE_STRING_GENERAL): detachable TUPLE [book, chapter, verse: INTEGER]
 			-- The one place `a_text' names, whole: "John 3:16", "John 3:16-18", "Jude 9", "John 3"
 			-- (verse 0), "Gen 1 1", with one closing period allowed; Void when it names none or
-			-- holds more.
+			-- holds more. A forgiving reader also reads it as typed or spoken (`spoken_form').
 		local
 			l_text: STRING_32
 			l_words: LIST [STRING_32]
@@ -77,6 +127,9 @@ feature -- Places
 			l_text.right_adjust
 			if l_text.ends_with ({STRING_32} ".") then
 				l_text.remove_tail (1)
+			end
+			if is_forgiving then
+				l_text := spoken_form (l_text)
 			end
 				-- "Gen 1 1": two numbers at the end are a chapter and a verse.
 			l_words := l_text.split (' ')
