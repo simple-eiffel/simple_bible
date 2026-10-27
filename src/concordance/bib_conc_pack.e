@@ -365,11 +365,12 @@ feature -- Access
 		end
 
 	key_places (a_key: BIB_KEY): BIB_ROOT_PLACES
-			-- Every verse where root `a_key' stands, packed by BIB_PLACE_PACKING, ascending, once each:
-			-- Hebrew and Aramaic roots in the Hebrew Bible (`Hebrew_root_corpus', Hebrew verse
-			-- numbers), Greek roots in the Greek New Testament (`Greek_root_corpus'). By key, never by
-			-- display string (FR-023, FR-024): a Strong's number through lemma_xref, a lemma through
-			-- its headword or plain letters. A value: finding changes nothing (design scan 48).
+			-- Every verse `a_key' names, packed by BIB_PLACE_PACKING, ascending, once each. A root:
+			-- Hebrew and Aramaic in the Hebrew Bible (`Hebrew_root_corpus', Hebrew verse numbers),
+			-- Greek in the Greek New Testament (`Greek_root_corpus'), by key, never by display string
+			-- (FR-023, FR-024): a Strong's number through lemma_xref, a lemma through its headword or
+			-- plain letters. A morphology code (B05): Robinson in the Greek New Testament, OSHB in the
+			-- Hebrew Bible. A value: finding changes nothing (design scan 48).
 		require
 			available: is_available
 		local
@@ -377,28 +378,57 @@ feature -- Access
 			l_entries: detachable BIB_LIST_RESULT [BIB_WORD_ENTRY]
 			l_language: STRING_8
 		do
-			create l_hebrew.make (2)
-			create l_greek.make (2)
-			l_language := "any"
-			if attached {BIB_STRONGS_KEY} a_key as al_strongs then
-				l_entries := headwords_for_strongs (al_strongs)
-			elseif attached {BIB_LEMMA_KEY} a_key as al_lemma then
-				l_entries := headwords_for_text (al_lemma.lemma)
-				l_language := al_lemma.language
-			end
-			if attached l_entries as al_entries then
-				across 1 |..| al_entries.count as i loop
-					if (al_entries.item (i).language.same_string ("hbo") or al_entries.item (i).language.same_string ("arc")) and (l_language.same_string ("any") or l_language.same_string ("hbo")) then
-						l_hebrew.extend (al_entries.item (i).lemma_id)
-					elseif al_entries.item (i).language.same_string ("grc") and (l_language.same_string ("any") or l_language.same_string ("grc")) then
-						l_greek.extend (al_entries.item (i).lemma_id)
+			if attached {BIB_MORPH_CODE} a_key as al_morph then
+				Result := morph_places (al_morph)
+			else
+				create l_hebrew.make (2)
+				create l_greek.make (2)
+				l_language := "any"
+				if attached {BIB_STRONGS_KEY} a_key as al_strongs then
+					l_entries := headwords_for_strongs (al_strongs)
+				elseif attached {BIB_LEMMA_KEY} a_key as al_lemma then
+					l_entries := headwords_for_text (al_lemma.lemma)
+					l_language := al_lemma.language
+				end
+				if attached l_entries as al_entries then
+					across 1 |..| al_entries.count as i loop
+						if (al_entries.item (i).language.same_string ("hbo") or al_entries.item (i).language.same_string ("arc")) and (l_language.same_string ("any") or l_language.same_string ("hbo")) then
+							l_hebrew.extend (al_entries.item (i).lemma_id)
+						elseif al_entries.item (i).language.same_string ("grc") and (l_language.same_string ("any") or l_language.same_string ("grc")) then
+							l_greek.extend (al_entries.item (i).lemma_id)
+						end
 					end
 				end
+				if attached l_entries as al_entries and then not al_entries.is_success then
+					create Result.make_failed
+				elseif attached lemma_places (l_hebrew, Hebrew_root_corpus) as al_hebrew and attached lemma_places (l_greek, Greek_root_corpus) as al_greek then
+					create Result.make (union (al_hebrew, al_greek), not al_hebrew.is_empty, not al_greek.is_empty)
+				else
+					create Result.make_failed
+				end
 			end
-			if attached l_entries as al_entries and then not al_entries.is_success then
-				create Result.make_failed
-			elseif attached lemma_places (l_hebrew, Hebrew_root_corpus) as al_hebrew and attached lemma_places (l_greek, Greek_root_corpus) as al_greek then
-				create Result.make (union (al_hebrew, al_greek), not al_hebrew.is_empty, not al_greek.is_empty)
+		ensure
+			ascending_once: is_ascending (Result.places)
+		end
+
+	morph_places (a_code: BIB_MORPH_CODE): BIB_ROOT_PLACES
+			-- Every numbered verse holding a word coded `a_code' (a final * matches every code it
+			-- begins): Robinson codes in `Greek_root_corpus', OSHB codes in `Hebrew_root_corpus'.
+		local
+			l_hebrew: BOOLEAN
+			l_condition: STRING_8
+		do
+			l_hebrew := a_code.scheme.same_string ({BIB_MORPH_CODE}.Oshb)
+			if a_code.is_prefix then
+					-- The parser lets only letters, digits and dashes before the star (is_code_text).
+				l_condition := "t.morph GLOB ?"
+			else
+				l_condition := "t.morph = ?"
+			end
+			if l_hebrew and then attached places_where (Hebrew_root_corpus, l_condition, a_code.code) as al_places then
+				create Result.make (al_places, not al_places.is_empty, False)
+			elseif not l_hebrew and then attached places_where (Greek_root_corpus, l_condition, a_code.code) as al_places then
+				create Result.make (al_places, False, not al_places.is_empty)
 			else
 				create Result.make_failed
 			end
@@ -955,29 +985,47 @@ feature {NONE} -- Implementation
 
 	lemma_places (a_lemmas: ARRAYED_LIST [INTEGER_64]; a_corpus_code: READABLE_STRING_8): detachable ARRAYED_LIST [INTEGER_64]
 			-- Every numbered verse of corpus `a_corpus_code' holding a token of `a_lemmas', packed,
-			-- ascending; empty when there is no lemma or no such corpus; Void when the query fails.
-			-- The lemma ids are written into the SQL as integers (nothing typed reaches it).
+			-- ascending; empty when there is no lemma; Void when the query fails. The lemma ids are
+			-- written into the SQL as integers (nothing typed reaches it).
 		local
-			l_sql: STRING_8
-			l_numbered: STRING_8
+			l_ids: STRING_8
 			i: INTEGER
 		do
+			if a_lemmas.is_empty then
+				create Result.make (0)
+			else
+				create l_ids.make (a_lemmas.count * 8)
+				from i := 1 until i > a_lemmas.count loop
+					if i > 1 then
+						l_ids.append (", ")
+					end
+					l_ids.append (a_lemmas.i_th (i).out)
+					i := i + 1
+				end
+				Result := places_where (a_corpus_code, "t.lemma_id IN (" + l_ids + ")", Void)
+			end
+		end
+
+	places_where (a_corpus_code: READABLE_STRING_8; a_condition: STRING_8; a_argument: detachable READABLE_STRING_GENERAL): detachable ARRAYED_LIST [INTEGER_64]
+			-- Every numbered verse of corpus `a_corpus_code' holding a token that meets `a_condition'
+			-- (SQL over the token `t', with one ? for `a_argument' when given), packed, ascending;
+			-- empty when there is no such corpus; Void when the query fails. The one place query of
+			-- `lemma_places' and `morph_places'.
+		local
+			l_sql, l_numbered: STRING_8
+		do
 			create Result.make (0)
-			if not a_lemmas.is_empty and has_corpus (a_corpus_code) then
+			if has_corpus (a_corpus_code) then
 				l_numbered := " BETWEEN 1 AND " + Max_part.out
 				create l_sql.make (500)
 				l_sql.append ("SELECT DISTINCT " + place_sql ("wb.book_id", "CAST(u.div1 AS INTEGER)", "CAST(u.div2 AS INTEGER)"))
 				l_sql.append (" AS place FROM conc.token t JOIN conc.unit u ON u.unit_id = t.unit_id JOIN conc.work_book wb ON wb.work_id = u.work_id WHERE t.corpus_id = ? AND u.recension = ''")
-				l_sql.append (" AND CAST(u.div1 AS INTEGER)" + l_numbered + " AND CAST(u.div2 AS INTEGER)" + l_numbered + " AND wb.book_id" + l_numbered + " AND t.lemma_id IN (")
-				from i := 1 until i > a_lemmas.count loop
-					if i > 1 then
-						l_sql.append (", ")
-					end
-					l_sql.append (a_lemmas.i_th (i).out)
-					i := i + 1
+				l_sql.append (" AND CAST(u.div1 AS INTEGER)" + l_numbered + " AND CAST(u.div2 AS INTEGER)" + l_numbered + " AND wb.book_id" + l_numbered + " AND " + a_condition + " ORDER BY place")
+				if attached a_argument as al_argument then
+					run_query (l_sql, {ARRAY [detachable ANY]} <<corpus_id (a_corpus_code), al_argument.to_string_32>>)
+				else
+					run_query (l_sql, {ARRAY [detachable ANY]} <<corpus_id (a_corpus_code)>>)
 				end
-				l_sql.append (") ORDER BY place")
-				run_query (l_sql, {ARRAY [detachable ANY]} <<corpus_id (a_corpus_code)>>)
 				if attached last_rows as al_rows then
 					create Result.make (al_rows.rows.count)
 					across al_rows.rows as ic loop

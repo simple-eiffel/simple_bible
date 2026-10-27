@@ -8,8 +8,9 @@ note
 		loosest, then AND, then NOT; NOT takes away from what stands beside it,
 		so a query cannot be NOT alone, nor NOT of a NOT. Every word and phrase
 		must hold a letter or digit; at most `Max_terms' words, phrases and roots
-		and `Max_depth' nested parentheses (design scan 48). Regular expressions
-		and morph: are told as later work, at their position.
+		and `Max_depth' nested parentheses (design scan 48). morph: takes a Greek
+		(V-AAI-3S) or Hebrew (Vqp3ms) code, a final * for every code it begins
+		(B05). Regular expressions are told as later work, at their position.
 	]"
 	author: "Larry Rix"
 	date: "$Date$"
@@ -29,6 +30,7 @@ feature {NONE} -- Initialization
 			create tokens.make (8)
 			create error_message.make_empty
 			create strongs_check.make_from_text ("H1")
+			create morph_check.make ({BIB_MORPH_CODE}.Robinson, "V")
 			create scripts
 			create unicode.make
 		end
@@ -88,6 +90,9 @@ feature {NONE} -- Tokens
 	strongs_check: BIB_STRONGS_KEY
 			-- Answers `is_strongs_text'.
 
+	morph_check: BIB_MORPH_CODE
+			-- Answers `is_code_text' and `scheme_of'.
+
 	scripts: BIB_SCRIPT_CLASSIFIER
 
 	unicode: SIMPLE_UNICODE
@@ -107,7 +112,7 @@ feature {NONE} -- Tokens
 			Result := across a_text as ic some unicode.is_letter_or_digit (ic) end
 		end
 
-	Token_word, Token_phrase, Token_open, Token_close, Token_and, Token_or, Token_not, Token_strongs, Token_lemma: INTEGER = unique
+	Token_word, Token_phrase, Token_open, Token_close, Token_and, Token_or, Token_not, Token_strongs, Token_lemma, Token_morph: INTEGER = unique
 			-- Token kinds.
 
 	read_tokens (a_text: READABLE_STRING_GENERAL)
@@ -161,7 +166,12 @@ feature {NONE} -- Tokens
 					elseif l_word [1] = '/' then
 						fail (i, "Regular expressions (/.../) come in a later release.")
 					elseif l_lower.starts_with ({STRING_32} "morph:") then
-						fail (i, "Morphology search (morph:) comes in a later release.")
+						l_rest := l_word.substring (7, l_word.count)
+						if morph_check.is_code_text (l_rest) then
+							tokens.extend ([Token_morph, l_rest, i])
+						else
+							fail (i, "morph: needs a code such as V-AAI-3S (Greek) or Vqp3ms (Hebrew); end it in * for every code it begins.")
+						end
 					elseif l_lower.starts_with ({STRING_32} "strongs:") then
 						l_rest := l_word.substring (9, l_word.count)
 						if not l_rest.is_empty then
@@ -200,7 +210,7 @@ feature {NONE} -- Tokens
 			l_terms: INTEGER
 		do
 			across tokens as ic until error_position > 0 loop
-				if ic.kind = Token_word or ic.kind = Token_phrase or ic.kind = Token_strongs or ic.kind = Token_lemma then
+				if ic.kind = Token_word or ic.kind = Token_phrase or ic.kind = Token_strongs or ic.kind = Token_lemma or ic.kind = Token_morph then
 					l_terms := l_terms + 1
 					if l_terms > Max_terms then
 						fail (ic.position, {STRING_32} "A search holds at most " + Max_terms.out + {STRING_32} " words, phrases and root words.")
@@ -322,6 +332,8 @@ feature {NONE} -- Grammar
 					create Result.make_leaf (create {BIB_QUERY_CLAUSE}.make_key ({BIB_QUERY_CLAUSE}.Strongs, create {BIB_STRONGS_KEY}.make_from_text (l_token.text)), l_token.position)
 				when Token_lemma then
 					create Result.make_leaf (create {BIB_QUERY_CLAUSE}.make_key ({BIB_QUERY_CLAUSE}.Lemma, create {BIB_LEMMA_KEY}.make (lemma_language (l_token.text), l_token.text)), l_token.position)
+				when Token_morph then
+					create Result.make_leaf (create {BIB_QUERY_CLAUSE}.make_key ({BIB_QUERY_CLAUSE}.Morph, create {BIB_MORPH_CODE}.make (morph_check.scheme_of (l_token.text), l_token.text)), l_token.position)
 				else
 					fail (l_token.position, "This cannot be read.")
 				end
