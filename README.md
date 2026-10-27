@@ -24,10 +24,10 @@ Part of the [Simple Eiffel](https://github.com/simple-eiffel) ecosystem.
 - ✅ **One specification fold (2026-10-26)** carried every verdict into the spec, and the engine skeletons follow it: the concordance cluster, one content database, data packs, note export and import; tests 73 pass, 52 skeletal (reported as skipped), 0 fail
 - ✅ **Phase 2 contract review of the concordance slice** (separate-seat cycle, 13 findings ruled, all applied) and **Phase 3 task plan**, both approved
 - ✅ **Phase 4, the concordance engine and command line** (the personal edition comes before the public Release 1a): `SIMPLE_BIBLE.open` checks content.db v1 and attaches the concordance pack read-only; the word view, English and verse lookups and Strong's lookup run on the real data; the word view's first screen takes about 42 ms on the lean build; tests 131 pass, 49 skeletal (reported as skipped), 0 fail
-- ✅ **Build and application ECFs:** `bible_build.ecf` (`bible_build.exe` writes content.db v1) and `simple_bible_app.ecf` (`bible.exe`: `word`, `english`, `verse`, `strongs`)
-- ✅ **The first window** (`bible_gui.exe`, simple_widgets): the GUI guide's Simple layout with one lookup box (a Hebrew, Greek or English word, a verse, a Strong's number), the words found, and the word study (heading, how the Bibles render it, every place, streaming in); light and dark follow Windows
+- ✅ **Build and application ECFs:** `bible_build.ecf` (`bible_build.exe` writes content.db v2: books, 21 versions, every verse, 344,799 cross-references) and `simple_bible_app.ecf` (`bible.exe`: `word`, `english`, `verse`, `strongs`; `bible_gui.exe`, the window)
+- ✅ **The main window, the GUI guide's Simple layout** (`bible_gui.exe`, simple_widgets): the Bible text in the centre (any of 21 versions, chapter by chapter), the commentary panel east (cross-references with OpenBible votes), the dictionary and lexicon south (how the Bibles render a word, lexicon entries, every place), search results west while there are any; a reference box, a search box, Back and Forward, text size, light and dark. Click a verse and the panels follow it; click a word in the KJV or BSB text and the lexicon opens its Greek or Hebrew original. Design pills (View menu) label every part with its code from the GUI guide
 - ✅ **A personal installer** (Inno Setup, per user) for the project lead's own machines; it carries the personal edition, so it is never published
-- ⏳ More of the window (Study layout, Bible text and commentary once the content pipeline carries them), then the rest of the engine
+- ⏳ The Study layout (navigator, Bible tabs, Parallel), commentaries and dictionaries once the content pipeline carries them, then the rest of the engine
 
 ## The idea
 
