@@ -26,11 +26,13 @@ create
 
 feature {NONE} -- Initialization
 
-	make (a_reader: BIB_TEXT_READER; a_pack: BIB_CONC_PACK)
-			-- A search over `a_reader''s versions and `a_pack''s roots.
+	make (a_reader: BIB_TEXT_READER; a_pack: BIB_CONC_PACK; a_map: BIB_VERSIFICATION_MAP)
+			-- A search over `a_reader''s versions and `a_pack''s roots, moving Hebrew places to English
+			-- verse numbers by `a_map' where the version read uses them.
 		do
 			reader := a_reader
 			pack := a_pack
+			map := a_map
 			create places.make (0)
 			create error_message.make_empty
 		ensure
@@ -45,6 +47,12 @@ feature -- Access
 
 	pack: BIB_CONC_PACK
 			-- The concordance, for root words.
+
+	map: BIB_VERSIFICATION_MAP
+			-- Hebrew to English verse numbers (STEPBible TVTMS).
+
+	has_moved_hebrew_roots: BOOLEAN
+			-- Did the last `find' move Hebrew places to English verse numbers?
 
 	places: ARRAYED_LIST [INTEGER_64]
 			-- The verses the last `find' named, packed, ascending, each once.
@@ -75,6 +83,7 @@ feature -- Searching
 			create error_message.make_empty
 			has_hebrew_roots := False
 			has_greek_roots := False
+			has_moved_hebrew_roots := False
 			cursor := 1
 			places := within_scope (evaluated (a_query, a_version, False), a_query.scope)
 			if has_failed then
@@ -107,6 +116,24 @@ feature -- Searching
 		end
 
 feature {NONE} -- Evaluation
+
+	reads_english_numbers (a_version: READABLE_STRING_8): BOOLEAN
+			-- Does `a_version' number verses the English (KJV family) way?
+		do
+			Result := attached reader.version (a_version) as al_version and then al_version.versification.same_string ("kjv")
+		end
+
+	english_places (a_hebrew: ARRAYED_LIST [INTEGER_64]): ARRAYED_LIST [INTEGER_64]
+			-- `a_hebrew' moved to English verse numbers, ascending, once each.
+		local
+			l_moved: ARRAYED_LIST [INTEGER_64]
+		do
+			create l_moved.make (a_hebrew.count)
+			across a_hebrew as ic loop
+				l_moved.extend (map.english_place (ic))
+			end
+			Result := sorted_once (l_moved)
+		end
 
 	keys: BIB_VERSE_KEY
 			-- Reads the book of a place.
@@ -160,9 +187,19 @@ feature {NONE} -- Evaluation
 								-- Design scan 48: a failed root query read as "no verse matches".
 							error_message := {STRING_32} "The concordance could not be searched for " + l_clause.text + {STRING_32} "."
 						else
-							Result := l_roots.places
+							if l_roots.has_hebrew and then map.has_hebrew_map and then reads_english_numbers (a_version) then
+									-- The version numbers verses the English way: the Hebrew side moves first.
+								Result := union (english_places (l_roots.hebrew_places), l_roots.greek_places)
+								if not a_negated then
+									has_moved_hebrew_roots := True
+								end
+							else
+								Result := l_roots.places
+								if not a_negated then
+									has_hebrew_roots := has_hebrew_roots or l_roots.has_hebrew
+								end
+							end
 							if not a_negated then
-								has_hebrew_roots := has_hebrew_roots or l_roots.has_hebrew
 								has_greek_roots := has_greek_roots or l_roots.has_greek
 							end
 						end

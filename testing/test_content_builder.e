@@ -222,6 +222,62 @@ feature -- Tests
 			remove_test_files
 		end
 
+	test_versification_map_moves_hebrew_roots
+			-- The versification map (STEPBible TVTMS, D-005): bible_build reads the Hebrew rows that move
+			-- a verse, the map answers English places, and a Hebrew root read in the KJV stands at its
+			-- English number (Malachi 3:19 is 4:1), in the Hebrew text at its own.
+		local
+			l_builder: BIB_CONTENT_BUILDER
+			l_config: BIB_CONFIG
+			l_bible: SIMPLE_BIBLE
+			l_db: SIMPLE_SQL_DATABASE
+			l_keys: BIB_VERSE_KEY
+		do
+			remove_test_files
+			make_bible_db (Bible_file, True)
+			assert_true ("TVTMS fixture written", (create {SIMPLE_FILE}.make (Tvtms_file)).write_text_utf_8 ("TVTMS test%N#DataStart(Expanded)%NSourceType%TSourceRef%TStandardRef%TAction%N"
+				+ "Hebrew%TMal.3:19%TMal.4:1%TRenumber verse%Tx%N"
+				+ "Hebrew+Latin%TPsa.3:2%TPsa.3:1%TRenumber verse%Tx%N"
+				+ "Hebrew%TPsa.3:1%TPsa.3:Title%TRenumber title%Tx%N"
+				+ "Hebrew%T1Sa.21:1%T1Sa.20:42!b%TDividedPrev verse%Tx%N"
+				+ "Hebrew%TGen.1:1%TGen.1:1%TKeep verse%Tx%N"
+				+ "Eng-KJV+Latin%TMal.4:1%TMal.4:1%TKeep verse%Tx%N"
+				+ "Hebrew%TNum.25:19; 26:1%TNum.26:1%TConcatenation%Tx%N"
+				+ "Greek%TMal.3:22%TMal.4:4%TRenumber verse%Tx%N#DataEnd(Expanded)%N"))
+			create l_builder.make
+			l_builder.set_build_id ("test-build")
+			l_builder.set_tvtms_path (Tvtms_file)
+			l_builder.build (Bible_file, Out_file)
+			assert_true ("built", l_builder.last_error = Void)
+				-- Malachi, the Psalm's verse 2 and the divided verse; the Psalm title (Hebrew 3:1) is read
+				-- as verse 1, where English Bibles print it, so it moves nowhere and needs no row.
+			assert_integers_equal ("the Hebrew rows that move a verse", 3, l_builder.versification_rows_written)
+			fixture.build (Pack_file)
+			create l_db.make (Pack_file)
+			l_db.execute ("INSERT INTO work(work_id, code, name) VALUES (39, 'MAL', 'Malachi')")
+			l_db.execute ("INSERT INTO work_book(work_id, book_id) VALUES (39, 39)")
+			l_db.execute ("INSERT INTO unit(unit_id, corpus_id, work_id, div1, div2, seq) VALUES (901, 1, 39, '3', '19', 1)")
+			l_db.execute ("INSERT INTO token(token_id, corpus_id, unit_id, pos, surface, search, language, lemma_id, lemma_basis, translit) VALUES (9001, 1, 901, 1, 'BRA', 'bra', 'hbo', 1, 'tagged:MACULA-Hebrew', 'bara')")
+			l_db.close
+			create l_config.make_with_core (Out_file)
+			l_config := l_config.set_conc_path (Pack_file)
+			create l_bible.make (l_config)
+			l_bible.open
+			create l_keys
+			assert_true ("a map", l_bible.versification.has_hebrew_map)
+			assert_true ("Malachi 3:19 is 4:1", l_bible.versification.english_place (l_keys.packed_place (39, 3, 19)) = l_keys.packed_place (39, 4, 1))
+			assert_true ("a Psalm's verse 2 is its verse 1", l_bible.versification.english_place (l_keys.packed_place (19, 3, 2)) = l_keys.packed_place (19, 3, 1))
+			assert_true ("a divided verse to its first", l_bible.versification.english_place (l_keys.packed_place (9, 21, 1)) = l_keys.packed_place (9, 20, 42))
+			assert_true ("an unmoved verse stays", l_bible.versification.english_place (l_keys.packed_place (1, 1, 1)) = l_keys.packed_place (1, 1, 1))
+			assert_integers_equal ("bara twice", 2, found (l_bible, "H1254"))
+			assert_true ("read in the KJV: Malachi 4:1", l_bible.verse_search.places.has (l_keys.packed_place (39, 4, 1)) and not l_bible.verse_search.places.has (l_keys.packed_place (39, 3, 19)))
+			assert_true ("told as moved", l_bible.verse_search.has_moved_hebrew_roots and not l_bible.verse_search.has_hebrew_roots)
+			assert_integers_equal ("bara twice in the Hebrew text", 2, found_in (l_bible, "WLC", "H1254"))
+			assert_true ("read in the Hebrew text: Malachi 3:19", l_bible.verse_search.places.has (l_keys.packed_place (39, 3, 19)))
+			l_bible.close
+			remove_test_files
+		end
+
 	found (a_bible: SIMPLE_BIBLE; a_query: STRING_8): INTEGER
 			-- How many verses `a_query' names in the KJV.
 		do
@@ -332,6 +388,7 @@ feature {NONE} -- Fixture
 	Bible_file: STRING = "builder_test_bible.db"
 	Out_file: STRING = "builder_test_content.db"
 	Pack_file: STRING = "builder_test_pack.db"
+	Tvtms_file: STRING = "builder_test_tvtms.txt"
 
 	fixture: CONC_FIXTURE
 			-- The shared test-file helpers.
@@ -377,6 +434,7 @@ feature {NONE} -- Fixture
 			fixture.delete_file (Out_file)
 			fixture.delete_file (Out_file + ".tmp")
 			fixture.delete_file (Pack_file)
+			fixture.delete_file (Tvtms_file)
 			fixture.delete_file (Folder_out + ".tmp")
 		end
 

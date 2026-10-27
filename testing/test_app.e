@@ -376,6 +376,7 @@ feature {NONE} -- Suites
 			run_test (agent t.test_verse_index_keeps_to_numbered_verses, "test_verse_index_keeps_to_numbered_verses")
 			run_test (agent t.test_boolean_and_root_word_search, "test_boolean_and_root_word_search")
 			run_test (agent t.test_morph_codes_search_both_corpora, "test_morph_codes_search_both_corpora")
+			run_test (agent t.test_versification_map_moves_hebrew_roots, "test_versification_map_moves_hebrew_roots")
 			run_test (agent t.test_rebuild_is_byte_identical, "test_rebuild_is_byte_identical")
 			run_test (agent t.test_missing_bible_is_reported, "test_missing_bible_is_reported")
 			run_test (agent t.test_failed_build_leaves_nothing_behind, "test_failed_build_leaves_nothing_behind")

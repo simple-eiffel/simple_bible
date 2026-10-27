@@ -347,7 +347,7 @@ feature -- Engines (one per instance)
 		require
 			open: is_open
 		once ("OBJECT")
-			create Result.make (text_reader, conc_pack)
+			create Result.make (text_reader, conc_pack, versification)
 		end
 
 	conc_pack: BIB_CONC_PACK
