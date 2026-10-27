@@ -64,6 +64,19 @@ feature -- Access
 	book_id: INTEGER
 	chapter: INTEGER
 
+	children: detachable ARRAYED_LIST [BIB_NAV_NODE]
+			-- The node's children, once built. SW_TREE remembers what is open by object identity, so a
+			-- node must hand out the same child objects every time (Larry, 2026-10-26: a book built anew
+			-- on each expansion of its testament never stayed open).
+
+	set_children (a_children: ARRAYED_LIST [BIB_NAV_NODE])
+			-- Keep `a_children' as this node's children.
+		do
+			children := a_children
+		ensure
+			kept: children = a_children
+		end
+
 	is_testament: BOOLEAN
 		do
 			Result := first_book > 0

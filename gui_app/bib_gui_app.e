@@ -1095,7 +1095,23 @@ feature {NONE} -- Two layouts (C7)
 		end
 
 	nav_children (a_node: BIB_NAV_NODE): ARRAYED_LIST [BIB_NAV_NODE]
-			-- A testament's books, or a book's chapters (in the version read); a chapter has none.
+			-- A testament's books, or a book's chapters (in the version read); a chapter has none. Built
+			-- once per node and kept there, so the tree finds the same objects again.
+		local
+			i, l_last: INTEGER
+		do
+			if attached a_node.children as al_kept then
+				Result := al_kept
+			else
+				Result := new_nav_children (a_node)
+				a_node.set_children (Result)
+			end
+		ensure
+			kept: a_node.children = Result
+		end
+
+	new_nav_children (a_node: BIB_NAV_NODE): ARRAYED_LIST [BIB_NAV_NODE]
+			-- `nav_children', built.
 		local
 			i, l_last: INTEGER
 		do
