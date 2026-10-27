@@ -115,7 +115,6 @@ feature -- Reading
 			l_verses: ARRAYED_LIST [BIB_READING_VERSE]
 			l_expression: STRING_32
 			l_first: INTEGER_64
-			l_keys: ARRAYED_LIST [INTEGER_64]
 		do
 			create l_verses.make (0)
 			l_expression := search_expression (a_version, a_words)
@@ -124,16 +123,11 @@ feature -- Reading
 					create Result.make_success (method ("verses_matching", Search_sql, a_version, a_words, 0), {ARRAY [BIB_PROVENANCE]} <<al_version.provenance>>, l_verses)
 				else
 					l_first := keys.first_key (version_orders.item (a_version.to_string_8))
-					run_query (Search_sql, {ARRAY [detachable ANY]} <<l_expression, l_first, keys.last_key (version_orders.item (a_version.to_string_8)), a_limit>>)
+					run_query (Search_sql, {ARRAY [detachable ANY]} <<l_expression, l_first, keys.last_key (version_orders.item (a_version.to_string_8)), a_limit, al_version.code>>)
 					if attached last_rows as al_rows then
-						create l_keys.make (al_rows.rows.count)
+						create l_verses.make (al_rows.rows.count)
 						across al_rows.rows as ic loop
-							l_keys.extend (ic.integer_64_value ("key"))
-						end
-						across l_keys as ic loop
-							if attached verse_at (al_version, ic) as al_verse then
-								l_verses.extend (al_verse)
-							end
+							l_verses.extend (create {BIB_READING_VERSE}.make (al_version.code, ic.integer_value ("book_id"), ic.integer_value ("chapter"), ic.integer_value ("verse"), ic.string_value ("text"), al_version.provenance))
 						end
 						create Result.make_success (method ("verses_matching", Search_sql, a_version, a_words, l_verses.count), {ARRAY [BIB_PROVENANCE]} <<al_version.provenance>>, l_verses)
 					else
@@ -180,7 +174,7 @@ feature -- Reading
 		local
 			l_form, l_term: STRING_32
 			i: INTEGER
-			l_in_quote: BOOLEAN
+			l_in_quote, l_closing_star: BOOLEAN
 		do
 			create Result.make_empty
 			if attached version (a_version) as al_version then
@@ -188,10 +182,18 @@ feature -- Reading
 				create l_term.make_empty
 				from i := 1 until i > l_form.count + 1 loop
 					if i > l_form.count or else l_form [i] = '"' or else (not l_in_quote and l_form [i] = ' ') then
+						l_closing_star := l_in_quote and then i < l_form.count and then l_form [i] = '"' and then l_form [i + 1] = '*'
+						if l_closing_star then
+								-- "a phrase"* ends in a prefix (design scan 47: the star was dropped).
+							l_term.append_character ('*')
+						end
 						append_term (Result, l_term)
 						l_term.wipe_out
 						if i <= l_form.count and then l_form [i] = '"' then
 							l_in_quote := not l_in_quote
+						end
+						if l_closing_star then
+							i := i + 1
 						end
 					else
 						l_term.append_character (l_form [i])
@@ -272,24 +274,6 @@ feature {NONE} -- Implementation
 	version_orders: HASH_TABLE [INTEGER, STRING_8]
 			-- Each version's `sort_order', the first part of its `verse_key'.
 
-	verse_at (a_version: BIB_READING_VERSION; a_key: INTEGER_64): detachable BIB_READING_VERSE
-			-- The verse `a_key' names in `a_version', its display text read from `verse_text'.
-		local
-			l_book, l_chapter, l_verse: INTEGER
-		do
-			l_book := keys.book_of (a_key)
-			l_chapter := keys.chapter_of (a_key)
-			l_verse := keys.verse_of (a_key)
-			if l_book > 0 and l_chapter > 0 and l_verse > 0 then
-				run_query (Verse_sql, {ARRAY [detachable ANY]} <<a_version.code, l_book, l_chapter, l_verse>>)
-				if attached last_rows as al_rows then
-					across al_rows.rows as ic loop
-						create Result.make (a_version.code, l_book, l_chapter, l_verse, ic.string_value ("text"), a_version.provenance)
-					end
-				end
-			end
-		end
-
 	append_term (a_expression, a_term: STRING_32)
 			-- Add `a_term' to `a_expression' as one FTS5 string ("term", or "term"* for a prefix),
 			-- unless it holds no letter or digit.
@@ -304,7 +288,7 @@ feature {NONE} -- Implementation
 				l_prefix := True
 				l_text.remove_tail (1)
 			end
-			if across l_text as ic some normalizers.english.unicode.general_category (ic) [1] = 'L' or normalizers.english.unicode.general_category (ic) [1] = 'N' end then
+			if across l_text as ic some normalizers.unicode.is_letter_or_digit (ic) end then
 				if not a_expression.is_empty then
 					a_expression.append_character (' ')
 				end
@@ -395,11 +379,11 @@ feature {NONE} -- SQL
 
 	Cross_references_sql: STRING_8 = "SELECT to_book, to_chapter, to_verse_start, to_verse_end, votes FROM main.cross_reference WHERE from_book = ? AND from_chapter = ? AND from_verse = ? ORDER BY votes DESC, to_book, to_chapter, to_verse_start LIMIT 200"
 
-	Search_sql: STRING_8 = "SELECT rowid AS key FROM main.verse_fts WHERE verse_fts MATCH ? AND rowid BETWEEN ? AND ? ORDER BY rowid LIMIT ?"
+	Search_sql: STRING_8 = "SELECT t.book_id, t.chapter, t.verse, t.text FROM (SELECT rowid AS key FROM main.verse_fts WHERE verse_fts MATCH ? AND rowid BETWEEN ? AND ? ORDER BY rowid LIMIT ?) h JOIN main.verse_text t ON t.version_code = ? AND t.book_id = (h.key %% 1000000000) / 1000000 AND t.chapter = (h.key %% 1000000) / 1000 AND t.verse = h.key %% 1000 ORDER BY h.key"
+			-- The hits and their text in one query (design scan 47: one query per hit before); the
+			-- key arithmetic is BIB_PLACE_PACKING's units.
 
 	Count_sql: STRING_8 = "SELECT count(*) AS n FROM main.verse_fts WHERE verse_fts MATCH ? AND rowid BETWEEN ? AND ?"
-
-	Verse_sql: STRING_8 = "SELECT text FROM main.verse_text WHERE version_code = ? AND book_id = ? AND chapter = ? AND verse = ?"
 
 	Last_chapter_sql: STRING_8 = "SELECT coalesce(max(chapter), 0) AS last FROM main.verse_text WHERE version_code = ? AND book_id = ?"
 

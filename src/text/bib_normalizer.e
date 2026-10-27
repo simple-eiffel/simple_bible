@@ -64,11 +64,8 @@ feature -- Status
 
 	is_dropped (a_char: CHARACTER_32): BOOLEAN
 			-- Does the search form drop `a_char' (a mark, Mn/Mc/Me, or a format character, Cf)?
-		local
-			l_category: STRING_8
 		do
-			l_category := unicode.general_category (a_char)
-			Result := l_category [1] = 'M' or l_category.same_string ("Cf")
+			Result := unicode.is_combining_mark (a_char) or unicode.is_format_character (a_char)
 		end
 
 	is_variant_character (a_char: CHARACTER_32): BOOLEAN
@@ -80,7 +77,7 @@ feature -- Status
 			Result := n = 0xA0 or (n >= 0x2010 and n <= 0x2015) or (n >= 0x2018 and n <= 0x201F)
 		end
 
-feature {NONE} -- Implementation
+feature {BIB_NORMALIZER_SET} -- Folding
 
 	folded (a_text: READABLE_STRING_GENERAL): STRING_32
 			-- The fold every language shares (2026-10-27, LG-01 landed): NFD, marks and format

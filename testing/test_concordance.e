@@ -711,6 +711,23 @@ feature -- Tests
 			assert_strings_equal ("headword not swapped", "BRA", l_english.headword)
 		end
 
+feature -- Scan 47
+
+	test_pack_fold_is_the_normalizers_fold
+			-- Scan 47: the pack's token key comes from the normalizers' one fold, with the pack's own
+			-- rule (Hebrew final letters kept, every non-letter dropped). Before: a hand-made Greek
+			-- table dropped capital iota and upsilon with dialytika (U+03AA, U+03AB).
+		local
+			l_pack: BIB_CONC_PACK
+		do
+			create l_pack.make (create {BIB_SOURCE_SET}.make)
+			assert_strings_equal ("capital iota with dialytika", {STRING_32} "%/953/", l_pack.original_search_form ({STRING_32} "%/938/"))
+			assert_strings_equal ("capital upsilon with dialytika", {STRING_32} "%/965/", l_pack.original_search_form ({STRING_32} "%/939/"))
+			assert_strings_equal ("Greek folded, final sigma as sigma", {STRING_32} "%/955/%/959/%/947/%/959/%/963/", l_pack.original_search_form ({STRING_32} "%/923/%/972/%/947/%/959/%/962/"))
+			assert_strings_equal ("Hebrew final mem kept, points gone", {STRING_32} "%/1513/%/1500/%/1493/%/1501/", l_pack.original_search_form ({STRING_32} "%/1513/%/1473/%/1464/%/1500/%/1493/%/1465/%/1501/"))
+			assert_strings_equal ("maqaf and punctuation dropped", {STRING_32} "%/1506/%/1500/%/1508/%/1504/%/1497/", l_pack.original_search_form ({STRING_32} "%/1506/%/1463/%/1500/%/1470/%/1508/%/1468/%/1456/%/1504/%/1461/%/1497/."))
+		end
+
 feature {NONE} -- Fixture
 
 	Main_file: STRING = "conc_test_main.db"

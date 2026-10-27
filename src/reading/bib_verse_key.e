@@ -1,8 +1,8 @@
 note
 	description: "[
 		The key of a verse in `verse_fts', the verse search index (bible_build
-		0.3.0): the version's `sort_order' times `Version_unit', then book times a
-		million, chapter times a thousand and verse, in the version's own
+		0.3.0): the version's `sort_order' times `Place_span', plus the place
+		packed as a hub id is (BIB_PLACE_PACKING), in the version's own
 		numbering. A version is one key range, so a search filters by range
 		(spec 07, SB-1), and a hit names its place without a join. Not a hub id:
 		user records anchor to BIB_HUB_ID, never to this key.
@@ -14,20 +14,24 @@ note
 class
 	BIB_VERSE_KEY
 
+inherit
+	BIB_PLACE_PACKING
+
 feature -- Conversion
 
 	verse_key (a_order, a_book, a_chapter, a_verse: INTEGER): INTEGER_64
 			-- The key of verse `a_book' `a_chapter':`a_verse' in the version ordered `a_order'.
 		require
 			order_not_negative: a_order >= 0
-			parts_in_range: a_book >= 0 and a_book < 100 and a_chapter >= 0 and a_chapter < 1000 and a_verse >= 0 and a_verse < 1000
+			numbered: a_book >= 1 and a_chapter >= 1 and a_verse >= 1
+			parts_in_range: a_book <= Max_part and a_chapter <= Max_part and a_verse <= Max_part
 		do
-			Result := a_order.to_integer_64 * Version_unit + a_book.to_integer_64 * Book_unit + a_chapter.to_integer_64 * Chapter_unit + a_verse.to_integer_64
+			Result := first_key (a_order) + packed_place (a_book, a_chapter, a_verse)
 		ensure
-			in_its_version_range: Result // Version_unit = a_order.to_integer_64
-			book_back: book_of (Result) = a_book
-			chapter_back: chapter_of (Result) = a_chapter
-			verse_back: verse_of (Result) = a_verse
+			in_its_version_range: Result >= first_key (a_order) and Result <= last_key (a_order)
+			book_back: book_part (Result) = a_book
+			chapter_back: chapter_part (Result) = a_chapter
+			verse_back: verse_part (Result) = a_verse
 		end
 
 	first_key (a_order: INTEGER): INTEGER_64
@@ -35,7 +39,7 @@ feature -- Conversion
 		require
 			order_not_negative: a_order >= 0
 		do
-			Result := a_order.to_integer_64 * Version_unit
+			Result := a_order.to_integer_64 * Place_span
 		end
 
 	last_key (a_order: INTEGER): INTEGER_64
@@ -43,29 +47,13 @@ feature -- Conversion
 		require
 			order_not_negative: a_order >= 0
 		do
-			Result := first_key (a_order) + Version_unit - 1
+			Result := first_key (a_order) + Place_span - 1
 		end
 
-	book_of (a_key: INTEGER_64): INTEGER
+	is_indexable (a_book, a_chapter, a_verse: INTEGER): BOOLEAN
+			-- Can verse `a_book' `a_chapter':`a_verse' take a key (a numbered verse in range)?
 		do
-			Result := ((a_key \\ Version_unit) // Book_unit).to_integer_32
+			Result := a_book >= 1 and a_book <= Max_part and a_chapter >= 1 and a_chapter <= Max_part and a_verse >= 1 and a_verse <= Max_part
 		end
-
-	chapter_of (a_key: INTEGER_64): INTEGER
-		do
-			Result := ((a_key \\ Book_unit) // Chapter_unit).to_integer_32
-		end
-
-	verse_of (a_key: INTEGER_64): INTEGER
-		do
-			Result := (a_key \\ Chapter_unit).to_integer_32
-		end
-
-feature -- Constants
-
-	Version_unit: INTEGER_64 = 100_000_000
-	Book_unit: INTEGER_64 = 1_000_000
-	Chapter_unit: INTEGER_64 = 1_000
-			-- No book reaches 100, no chapter or verse 1,000.
 
 end

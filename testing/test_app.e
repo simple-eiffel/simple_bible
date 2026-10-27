@@ -367,6 +367,7 @@ feature {NONE} -- Suites
 			create t
 			run_test (agent t.test_builds_a_content_db_the_engine_opens, "test_builds_a_content_db_the_engine_opens")
 			run_test (agent t.test_verse_index_finds_words_phrases_and_pointed_hebrew, "test_verse_index_finds_words_phrases_and_pointed_hebrew")
+			run_test (agent t.test_verse_index_keeps_to_numbered_verses, "test_verse_index_keeps_to_numbered_verses")
 			run_test (agent t.test_rebuild_is_byte_identical, "test_rebuild_is_byte_identical")
 			run_test (agent t.test_missing_bible_is_reported, "test_missing_bible_is_reported")
 			run_test (agent t.test_failed_build_leaves_nothing_behind, "test_failed_build_leaves_nothing_behind")
@@ -423,6 +424,7 @@ feature {NONE} -- Suites
 			run_test (agent t.test_contracts_are_checked_in_this_build, "test_contracts_are_checked_in_this_build")
 			run_test (agent t.test_pack_absent_until_attached, "test_pack_absent_until_attached")
 			run_test (agent t.test_pack_rules, "test_pack_rules")
+			run_test (agent t.test_pack_fold_is_the_normalizers_fold, "test_pack_fold_is_the_normalizers_fold")
 			run_test (agent t.test_word_view_in_pilot_order, "test_word_view_in_pilot_order")
 			run_test (agent t.test_english_lookup_counts_per_bible, "test_english_lookup_counts_per_bible")
 			run_test (agent t.test_verse_lookup_every_corpus, "test_verse_lookup_every_corpus")

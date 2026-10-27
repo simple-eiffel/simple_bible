@@ -13,6 +13,10 @@ class
 
 inherit
 	BIB_UNICODE_SERVICE
+		redefine
+			is_format_character,
+			is_letter_or_digit
+		end
 
 create
 	make
@@ -52,6 +56,18 @@ feature -- Character properties
 	is_combining_mark (a_char: CHARACTER_32): BOOLEAN
 		do
 			Result := unicode.is_combining_mark (a_char)
+		end
+
+	is_format_character (a_char: CHARACTER_32): BOOLEAN
+			-- (Read from the table without copying its category.)
+		do
+			Result := unicode.is_format_character (a_char)
+		end
+
+	is_letter_or_digit (a_char: CHARACTER_32): BOOLEAN
+			-- (Read from the table without copying its category.)
+		do
+			Result := unicode.is_letter_or_digit (a_char)
 		end
 
 	simple_lower (a_char: CHARACTER_32): CHARACTER_32

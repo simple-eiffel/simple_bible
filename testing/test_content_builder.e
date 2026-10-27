@@ -91,6 +91,41 @@ feature -- Tests
 			remove_test_files
 		end
 
+	test_verse_index_keeps_to_numbered_verses
+			-- Scan 47: a heading row (verse 0) is not indexed, so the count and the list agree, and the
+			-- build says how many rows it left out; a hostile query cannot break the expression; a
+			-- quoted phrase can end in a prefix. Before: matching_count counted the heading (2) while
+			-- verses_matching dropped it (1).
+		local
+			l_builder: BIB_CONTENT_BUILDER
+			l_config: BIB_CONFIG
+			l_bible: SIMPLE_BIBLE
+			l_db: SIMPLE_SQL_DATABASE
+		do
+			remove_test_files
+			make_bible_db (Bible_file, True)
+			create l_db.make (Bible_file)
+			l_db.execute ("INSERT INTO bible_verses (version_id, book_id, chapter, verse, text) VALUES (12, 1, 1, 3, 'And God said, Let there be light.'), (12, 1, 1, 0, 'The light of creation (a heading)')")
+			l_db.close
+			create l_builder.make
+			l_builder.set_build_id ("test-build")
+			l_builder.build (Bible_file, Out_file)
+			assert_true ("built", l_builder.last_error = Void)
+			assert_integers_equal ("numbered verses indexed", 5, l_builder.verses_indexed)
+			assert_integers_equal ("the heading left out", 1, l_builder.verses_not_indexed)
+			fixture.build (Pack_file)
+			create l_config.make_with_core (Out_file)
+			l_config := l_config.set_conc_path (Pack_file)
+			create l_bible.make (l_config)
+			l_bible.open
+			assert_integers_equal ("counted as listed", l_bible.text_reader.verses_matching ("KJV", "light", 50).count, l_bible.text_reader.matching_count ("KJV", "light"))
+			assert_integers_equal ("one verse", 1, l_bible.text_reader.matching_count ("KJV", "light"))
+			assert_true ("operators are words", l_bible.text_reader.verses_matching ("KJV", "NEAR(light) OR %" AND *", 50).is_success)
+			assert_integers_equal ("a phrase ending in a prefix", 1, l_bible.text_reader.verses_matching ("KJV", "%"the ear%"*", 50).count)
+			l_bible.close
+			remove_test_files
+		end
+
 	test_rebuild_is_byte_identical
 			-- Two builds from the same inputs, build id and build time are the same bytes (FR-130's direction).
 		local

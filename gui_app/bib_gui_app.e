@@ -782,7 +782,14 @@ feature {NONE} -- Toolbar (C3-C9)
 		local
 			l_lookup: BIB_LOOKUP
 		do
-			if bible.is_open and then bible.conc_pack.is_available and then not search_box.text.is_empty then
+			if bible.is_open and then not search_box.text.is_empty and then not bible.conc_pack.is_available then
+					-- Design scan 47: the verses need no concordance, only content.db's index.
+				create choices.make (0)
+				results_grid.set_rows (choices)
+				results_note.set_text ("No concordance attached: the verses are searched, the dictionary words are not.")
+				find_verses (search_box.text)
+				show_results
+			elseif bible.is_open and then bible.conc_pack.is_available and then not search_box.text.is_empty then
 				create l_lookup.make (bible)
 				choices := l_lookup.choices_for (search_box.text)
 				results_grid.set_rows (choices)
@@ -3184,7 +3191,8 @@ feature {NONE} -- Design pills
 			window.add_reference_mark (renderings_grid, "P05.4", "Range before ruling: every rendering with its count, before any lexicon's verdict.", window.Corner_top_left)
 			window.add_reference_mark (entries_list, "P05.5", "Lexicon entries: each source in its own words (Abbott-Smith, BDB, LSJ, UBS, TBESH).", window.Corner_top_left)
 			window.add_reference_mark (search_word_button, "P05.7", "Actions: Every place of this word; Word Study comes later.", window.Corner_top_left)
-			window.add_reference_mark (results_note, "P07", "Search results, docked west only while there are results. Close collapses it.", window.Corner_top_left)
+			window.add_reference_mark (verses_heading, "P07.2", "Verses of the version read holding every search word (a %"quoted phrase%" as written, word* a prefix), in Bible order with their count; click one to read it.", window.Corner_top_left)
+			window.add_reference_mark (results_note, "P07", "Search results: the dictionary words matching the search, then (P07.2) the verses holding it. Docked west only while there are results (Simple); Close collapses it.", window.Corner_top_left)
 		end
 
 	toggle_pills

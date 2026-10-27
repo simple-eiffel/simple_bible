@@ -355,65 +355,18 @@ feature -- Access
 		end
 
 	original_search_form (a_word: READABLE_STRING_GENERAL): STRING_32
-			-- `a_word' folded as the pack's `token.search' is: Hebrew without points and cantillation,
-			-- Greek with accents and breathings gone, lowercased, final sigma as sigma; punctuation
-			-- dropped. (The spec's BIB_GREEK_NORMALIZER does this through NFD once LG-01 lands; this
-			-- precomposed table serves the click until then.)
-		local
-			c: NATURAL_32
+			-- `a_word' folded as the pack's `token.search' is (BIB_NORMALIZER_SET.pack_token_form: the
+			-- normalizers' one fold, Hebrew final letters kept, non-letters dropped).
 		do
-			create Result.make (a_word.count)
-			across a_word.to_string_32 as ic loop
-				c := ic.natural_32_code
-				if c >= 0x05D0 and c <= 0x05EA then
-					Result.append_character (ic)
-				elseif (c >= 0x0391 and c <= 0x03A9) then
-					Result.append_character ((c + 0x20).to_character_32)
-				elseif c = 0x03C2 then
-					Result.append_character ((0x03C3).to_character_32)
-				elseif c >= 0x03B1 and c <= 0x03C9 then
-					Result.append_character (ic)
-				elseif c >= 0x0386 and c <= 0x03CE or (c >= 0x1F00 and c <= 0x1FFC) then
-					if greek_base (c) > 0 then
-						Result.append_character (greek_base (c).to_character_32)
-					end
-				elseif c < 128 and then ic.is_alpha_numeric then
-					Result.append_character (ic.as_lower)
-				end
-			end
+			Result := folds.pack_token_form (a_word)
 		ensure
 			no_longer: Result.count <= a_word.count
 		end
 
-	greek_base (a_code: NATURAL_32): NATURAL_32
-			-- The lowercase base letter of a precomposed Greek letter; 0 when it is none.
-		do
-			inspect a_code
-			when 0x0386, 0x1F00 .. 0x1F0F, 0x1F70, 0x1F71, 0x1F80 .. 0x1F8F, 0x1FB0 .. 0x1FB4, 0x1FB6 .. 0x1FBC then
-				Result := 0x03B1
-			when 0x0388, 0x1F10 .. 0x1F1D, 0x1F72, 0x1F73, 0x1FC8, 0x1FC9 then
-				Result := 0x03B5
-			when 0x0389, 0x1F20 .. 0x1F2F, 0x1F74, 0x1F75, 0x1F90 .. 0x1F9F, 0x1FC2 .. 0x1FC4, 0x1FC6, 0x1FC7, 0x1FCA .. 0x1FCC then
-				Result := 0x03B7
-			when 0x038A, 0x0390, 0x03AF, 0x03CA, 0x1F30 .. 0x1F3F, 0x1F76, 0x1F77, 0x1FD0 .. 0x1FD3, 0x1FD6 .. 0x1FDB then
-				Result := 0x03B9
-			when 0x038C, 0x03CC, 0x1F40 .. 0x1F4D, 0x1F78, 0x1F79, 0x1FF8, 0x1FF9 then
-				Result := 0x03BF
-			when 0x038E, 0x03B0, 0x03CB, 0x03CD, 0x1F50 .. 0x1F5F, 0x1F7A, 0x1F7B, 0x1FE0 .. 0x1FE3, 0x1FE6 .. 0x1FEB then
-				Result := 0x03C5
-			when 0x038F, 0x03CE, 0x1F60 .. 0x1F6F, 0x1F7C, 0x1F7D, 0x1FA0 .. 0x1FAF, 0x1FF2 .. 0x1FF4, 0x1FF6, 0x1FF7, 0x1FFA .. 0x1FFC then
-				Result := 0x03C9
-			when 0x03AC then
-				Result := 0x03B1
-			when 0x03AD then
-				Result := 0x03B5
-			when 0x03AE then
-				Result := 0x03B7
-			when 0x1FE4, 0x1FE5, 0x1FEC then
-				Result := 0x03C1
-			else
-				Result := 0
-			end
+	folds: BIB_NORMALIZER_SET
+			-- The normalizers (over simple_encoding's tables, decoded once per processor).
+		once ("OBJECT")
+			create Result.make (create {BIB_SIMPLE_UNICODE}.make)
 		end
 
 	headwords_for_text (a_text: READABLE_STRING_GENERAL): BIB_LIST_RESULT [BIB_WORD_ENTRY]
