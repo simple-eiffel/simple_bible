@@ -46,6 +46,9 @@ feature -- Access
 			-- Versions the last `build' wrote.
 
 	verses_written: INTEGER
+
+	verses_indexed: INTEGER
+			-- Rows `verse_fts' holds after the last build.
 			-- Verses the last `build' wrote, across every version.
 
 	cross_references_written: INTEGER
@@ -89,6 +92,7 @@ feature -- Building
 			books_written := 0
 			versions_written := 0
 			verses_written := 0
+			verses_indexed := 0
 			cross_references_written := 0
 			if not (create {SIMPLE_FILE}.make (a_bible_db)).is_file then
 				last_error := {STRING_32} "bible.db was not found: " + a_bible_db.to_string_32
@@ -112,6 +116,7 @@ feature -- Building
 				run (l_db, "INSERT INTO cross_reference SELECT from_book_id, from_chapter, from_verse, to_book_id, to_chapter, to_verse_start, coalesce(to_verse_end, to_verse_start), coalesce(votes, 0), 2 FROM src.cross_references WHERE from_book_id BETWEEN 1 AND 66 AND to_book_id BETWEEN 1 AND 66 AND from_chapter > 0 AND from_verse > 0 AND to_chapter > 0 AND to_verse_start > 0 ORDER BY from_book_id, from_chapter, from_verse, votes DESC, to_book_id, to_chapter, to_verse_start")
 				run (l_db, "CREATE INDEX cross_reference_from ON cross_reference(from_book, from_chapter, from_verse, votes)")
 				run (l_db, "INSERT INTO verse_text SELECT v.abbreviation, b.book_id, b.chapter, b.verse, coalesce(b.text, ''), 100 + v.id FROM src.bible_verses b JOIN src.bible_versions v ON v.id = b.version_id ORDER BY v.abbreviation, b.book_id, b.chapter, b.verse")
+				write_verse_index (l_db)
 				if last_error = Void then
 					across l_db.query ("SELECT count(*) AS n FROM book_catalog").rows as ic loop
 						books_written := ic.integer_value ("n")
@@ -149,7 +154,7 @@ feature -- Building
 
 feature -- Constants
 
-	Builder_name: STRING = "bible_build 0.2.0"
+	Builder_name: STRING = "bible_build 0.3.0"
 			-- The build row's builder.
 
 	Schema: ARRAY [STRING_8]
@@ -184,6 +189,80 @@ feature {NONE} -- Implementation
 				Result := built_at
 			end
 		end
+
+	write_verse_index (a_db: SIMPLE_SQL_DATABASE)
+			-- `verse_fts': each verse's search form (D-009: one Eiffel normalizer per language; the
+			-- query folds the same way), keyed by BIB_VERSE_KEY and contentless, so the
+			-- display text is only ever read from `verse_text'. Rows go in batches of `Index_batch'.
+		local
+			l_normalizers: BIB_NORMALIZER_SET
+			l_keys: BIB_VERSE_KEY
+			l_versions: ARRAYED_LIST [TUPLE [code, language: STRING_8; order: INTEGER]]
+			l_normalizer: BIB_NORMALIZER
+			l_args: ARRAYED_LIST [detachable ANY]
+		do
+			run (a_db, Verse_index_sql)
+			if last_error = Void then
+				create l_normalizers.make (create {BIB_SIMPLE_UNICODE}.make)
+				create l_keys
+				create l_versions.make (24)
+				across a_db.query ("SELECT version_code, language, sort_order FROM version_info ORDER BY sort_order").rows as ic loop
+					l_versions.extend ([ic.string_value ("version_code").to_string_8, ic.string_value ("language").to_string_8, ic.integer_value ("sort_order")])
+				end
+				run (a_db, "BEGIN")
+				across l_versions as iv until last_error /= Void loop
+					l_normalizer := l_normalizers.for_language (iv.language)
+					create l_args.make (Index_batch * 2)
+					across a_db.query_with_args ("SELECT book_id, chapter, verse, text FROM verse_text WHERE version_code = ?", {ARRAY [detachable ANY]} <<iv.code>>).rows as ic loop
+						l_args.extend (l_keys.verse_key (iv.order, ic.integer_value ("book_id"), ic.integer_value ("chapter"), ic.integer_value ("verse")))
+						l_args.extend (l_normalizer.normalized (ic.string_value ("text")))
+						if l_args.count = Index_batch * 2 then
+							insert_index_rows (a_db, l_args)
+							l_args.wipe_out
+						end
+					end
+					if not l_args.is_empty then
+						insert_index_rows (a_db, l_args)
+					end
+				end
+				run (a_db, "COMMIT")
+				run (a_db, "INSERT INTO verse_fts(verse_fts) VALUES ('optimize')")
+				if last_error = Void then
+					across a_db.query ("SELECT count(*) AS n FROM verse_fts").rows as ic loop
+						verses_indexed := ic.integer_value ("n")
+					end
+				end
+			end
+		end
+
+	insert_index_rows (a_db: SIMPLE_SQL_DATABASE; a_args: ARRAYED_LIST [detachable ANY])
+			-- One INSERT of the (key, search form) pairs in `a_args'.
+		require
+			pairs: a_args.count \\ 2 = 0 and not a_args.is_empty
+		local
+			l_sql: STRING_8
+			i: INTEGER
+		do
+			if last_error = Void then
+				create l_sql.make (40 + a_args.count * 4)
+				l_sql.append ("INSERT INTO verse_fts(rowid, folded) VALUES ")
+				from i := 1 until i > a_args.count // 2 loop
+					if i > 1 then
+						l_sql.append (", ")
+					end
+					l_sql.append ("(?, ?)")
+					i := i + 1
+				end
+				a_db.execute_with_args (l_sql, a_args.to_array)
+				note_failure (a_db, "The verse index could not be written")
+			end
+		end
+
+	Verse_index_sql: STRING_8 = "CREATE VIRTUAL TABLE verse_fts USING fts5(folded, content='', tokenize='unicode61 remove_diacritics 2')"
+			-- Contentless (spec 07: the shipped index is declared content='').
+
+	Index_batch: INTEGER = 400
+			-- Verses per INSERT.
 
 	run (a_db: SIMPLE_SQL_DATABASE; a_sql: STRING_8)
 			-- Execute `a_sql' unless an earlier step failed; keep the first failure (simple_sql clears

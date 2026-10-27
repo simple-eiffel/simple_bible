@@ -142,8 +142,8 @@ feature {NONE} -- Suites
 			create t
 			run_test (agent t.test_pointing_marks_classified, "test_pointing_marks_classified")
 			run_test (agent t.test_script_classifier, "test_script_classifier")
-			run_skeletal (agent t.test_normalizers_idempotent, "test_normalizers_idempotent", "AC-1a-23 (LG-01)")
-			run_skeletal (agent t.test_trap_corpus_has_no_combining_mark, "test_trap_corpus_has_no_combining_mark", "AC-1a-23 (LG-01)")
+			run_test (agent t.test_normalizers_idempotent, "test_normalizers_idempotent")
+			run_test (agent t.test_trap_corpus_has_no_combining_mark, "test_trap_corpus_has_no_combining_mark")
 			run_skeletal (agent t.test_normalized_column_finds_display_phrase, "test_normalized_column_finds_display_phrase", "AC-1a-20")
 		end
 
@@ -366,6 +366,7 @@ feature {NONE} -- Suites
 			print ("TEST_CONTENT_BUILDER%N")
 			create t
 			run_test (agent t.test_builds_a_content_db_the_engine_opens, "test_builds_a_content_db_the_engine_opens")
+			run_test (agent t.test_verse_index_finds_words_phrases_and_pointed_hebrew, "test_verse_index_finds_words_phrases_and_pointed_hebrew")
 			run_test (agent t.test_rebuild_is_byte_identical, "test_rebuild_is_byte_identical")
 			run_test (agent t.test_missing_bible_is_reported, "test_missing_bible_is_reported")
 			run_test (agent t.test_failed_build_leaves_nothing_behind, "test_failed_build_leaves_nothing_behind")

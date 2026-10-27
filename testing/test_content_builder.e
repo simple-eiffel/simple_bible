@@ -48,6 +48,49 @@ feature -- Tests
 			remove_test_files
 		end
 
+	test_verse_index_finds_words_phrases_and_pointed_hebrew
+			-- bible_build 0.3.0 writes verse_fts; the reader finds every word, a quoted phrase, a
+			-- prefix, any letter case, and pointed Hebrew from unpointed typing.
+		local
+			l_builder: BIB_CONTENT_BUILDER
+			l_config: BIB_CONFIG
+			l_bible: SIMPLE_BIBLE
+			l_db: SIMPLE_SQL_DATABASE
+			l_found: BIB_LIST_RESULT [BIB_READING_VERSE]
+		do
+			remove_test_files
+			make_bible_db (Bible_file, True)
+			create l_db.make (Bible_file)
+			l_db.execute ("INSERT INTO bible_verses (version_id, book_id, chapter, verse, text) VALUES (12, 1, 1, 3, 'And God said, Let there be light: and there was light.')")
+			l_db.execute_with_args ("INSERT INTO bible_verses (version_id, book_id, chapter, verse, text) VALUES (16, 1, 1, 2, ?)", {ARRAY [detachable ANY]} <<codes (<<0x05D5, 0x05B0, 0x05D4, 0x05B8, 0x05D0, 0x05B8, 0x0597, 0x05E8, 0x05B6, 0x05E5>>)>>)
+			l_db.close
+			create l_builder.make
+			l_builder.set_build_id ("test-build")
+			l_builder.build (Bible_file, Out_file)
+			assert_true ("built", l_builder.last_error = Void)
+			assert_integers_equal ("every verse indexed", 6, l_builder.verses_indexed)
+			fixture.build (Pack_file)
+			create l_config.make_with_core (Out_file)
+			l_config := l_config.set_conc_path (Pack_file)
+			create l_bible.make (l_config)
+			l_bible.open
+			assert_true ("an index", l_bible.text_reader.has_verse_index)
+			l_found := l_bible.text_reader.verses_matching ("KJV", "light", 50)
+			assert_true ("a word", l_found.is_success and then l_found.count = 1 and then l_found.item (1).verse = 3)
+			assert_integers_equal ("every verse with the word, in order", 2, l_bible.text_reader.verses_matching ("KJV", "the", 50).count)
+			assert_integers_equal ("a phrase", 1, l_bible.text_reader.verses_matching ("KJV", "%"the earth%"", 50).count)
+			assert_integers_equal ("any case", 1, l_bible.text_reader.verses_matching ("KJV", "BEGINNING", 50).count)
+			assert_integers_equal ("a prefix", 1, l_bible.text_reader.verses_matching ("KJV", "begin*", 50).count)
+			assert_integers_equal ("every word must be there", 0, l_bible.text_reader.verses_matching ("KJV", "light beginning", 50).count)
+			assert_integers_equal ("one version only", 0, l_bible.text_reader.verses_matching ("WLC", "light", 50).count)
+			assert_integers_equal ("pointed Hebrew from unpointed typing", 1, l_bible.text_reader.verses_matching ("WLC", codes (<<0x05D5, 0x05D4, 0x05D0, 0x05E8, 0x05E5>>), 50).count)
+			assert_integers_equal ("the limit", 1, l_bible.text_reader.verses_matching ("KJV", "the", 1).count)
+			assert_integers_equal ("counted", 2, l_bible.text_reader.matching_count ("KJV", "the"))
+			assert_true ("punctuation alone finds nothing, without failing", l_bible.text_reader.verses_matching ("KJV", "?!", 50).is_success)
+			l_bible.close
+			remove_test_files
+		end
+
 	test_rebuild_is_byte_identical
 			-- Two builds from the same inputs, build id and build time are the same bytes (FR-130's direction).
 		local
@@ -146,6 +189,15 @@ feature {NONE} -- Fixture
 				l_db.execute ("CREATE TABLE other(id INTEGER)")
 			end
 			l_db.close
+		end
+
+	codes (a_codes: ARRAY [INTEGER]): STRING_32
+			-- Text from code points (the sources stay ASCII).
+		do
+			create Result.make (a_codes.count)
+			across a_codes as ic loop
+				Result.append_character (ic.to_character_32)
+			end
 		end
 
 	remove_test_files

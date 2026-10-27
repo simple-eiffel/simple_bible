@@ -27,8 +27,16 @@ feature -- Normalization
 
 	normalized (a_text: READABLE_STRING_GENERAL): STRING_32
 			-- Accentless lowercase search form.
+		local
+			i: INTEGER
 		do
-			check implemented_in_phase_4: False then end
+			Result := folded (a_text)
+			from i := 1 until i > Result.count loop
+				if Result.code (i) = 0x03C2 then
+					Result [i] := (0x03C3).to_character_32
+				end
+				i := i + 1
+			end
 		ensure then
 			lowercase: across Result as c all unicode.simple_lower (c) = c end
 			final_sigma_folded: not across Result as c some c.natural_32_code = 0x03C2 end
