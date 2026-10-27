@@ -18,6 +18,8 @@ class
 inherit
 	BIB_DATA_SOURCE
 
+	BIB_SQLITE_REPORTING
+
 create
 	make
 
@@ -176,14 +178,6 @@ feature {NONE} -- Implementation
 
 	attached_set: detachable BIB_SOURCE_SET
 			-- Where the pack is attached while open.
-
-	first_integer (a_result: SIMPLE_SQL_RESULT): INTEGER
-			-- The first column of the first row as a whole number; 0 when there is none.
-		do
-			if not a_result.rows.is_empty and then a_result.rows.first.count >= 1 then
-				Result := a_result.rows.first.integer_value (a_result.rows.first.column_name (1))
-			end
-		end
 
 	meta_value (a_db: SIMPLE_SQL_DATABASE; a_key: STRING_8): STRING_32
 			-- `meta' row `a_key' of the pack; empty when absent.

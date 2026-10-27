@@ -244,6 +244,23 @@ feature -- Tests
 			remove_test_files
 		end
 
+	test_a_claim_without_an_id_is_refused
+			-- Scan 39: a claim the text could never cite (no id) is refused by the builder, never
+			-- written and then dropped unseen by the reader.
+		local
+			l_builder: BIB_COMMENTARY_BUILDER
+			l_ok: BOOLEAN
+		do
+			close_leftovers
+			make_folder
+			l_ok := (create {SIMPLE_FILE}.make (Sidecar_file)).write_text_utf_8 (Sidecar_text_without_claim_id)
+			create l_builder.make
+			l_builder.build (<<Sidecar_file>>, Folder_other_file)
+			assert_true ("refused", attached l_builder.last_error as al_error and then al_error.has_substring ("no id"))
+			fixture.delete_file (Sidecar_file)
+			remove_test_files
+		end
+
 	test_a_pack_breaking_the_rules_is_refused_and_named
 			-- A database in the pack folder without the pack rules (no meta, no voice column) is
 			-- refused with its reason, and the Bible still opens (was: until Task 7b, every generic
@@ -323,6 +340,22 @@ feature {NONE} -- Fixture
 	Folder_pack_file: STRING = "facade_test_packs\conc.db"
 	Folder_other_file: STRING = "facade_test_packs\other.db"
 	Sidecar_file: STRING = "facade_test_sidecar.json"
+
+	Sidecar_text_without_claim_id: STRING
+			-- The test sidecar with its first claim's id emptied.
+		once
+			Result := "{%"meta%":{%"book%":%"Jude%",%"book_id%":65,%"versification%":%"kjv%",%"status%":%"TEST%"},%"sections%":[{%"section_id%":%"jude-intro%",%"heading%":%""
+				+ "Jude 1-25%",%"start%":{%"book%":65,%"chapter%":1,%"verse%":1},%"end%":{%"book%":65,%"chapter%":1,%"verse%":25},%"versification%":%"kjv%",%"voice%":nul"
+				+ "l,%"fields%":{%"teaser%":%"The whole letter [S1.1].%",%"text%":%"%",%"commentary%":%"Read it whole.%"},%"frameworks%":[%"ZAKAR%"],%"questions%":[%"Wha"
+				+ "t is Jude about?%"],%"further_reading%":[],%"terms%":[],%"claims%":[{%"id%":%"%",%"field%":%"teaser%",%"label%":%"SOURCED%",%"text%":%"The whole l"
+				+ "etter.%",%"summary%":%"whole%",%"source%":%"test:1%"}],%"restricted_quotes%":[]},{%"section_id%":%"jude-5-7%",%"heading%":%"Jude 5-7%",%"start%":{%"bo"
+				+ "ok%":65,%"chapter%":1,%"verse%":5},%"end%":{%"book%":65,%"chapter%":1,%"verse%":7},%"versification%":%"kjv%",%"voice%":null,%"fields%":{%"teaser%":%"S"
+				+ "aved, then destroyed [D5.1].%",%"variants%":%"- v5: Jesus or the Lord.%"},%"frameworks%":[],%"questions%":[%"Who saved the people?%",%"Who was destroy"
+				+ "ed?%"],%"further_reading%":[%"[Essay](https://example.org/essay)%"],%"terms%":[{%"script%":%"pistis%",%"translit%":%"pistis%",%"pron%":%"PIS-tis%",%"e"
+				+ "nglish%":%"faithfulness%",%"language%":%"grc%",%"lemma_key%":null,%"strongs%":null}],%"claims%":[{%"id%":%"D5.1%",%"field%":%"teaser%",%"label%":%"DED"
+				+ "UCED%",%"text%":%"Saved, then destroyed.%",%"summary%":%"saved%",%"source%":%"Basis: test%"}],%"restricted_quotes%":[{%"source%":%"Test edition%",%"sh"
+				+ "ip_class%":%"research_only%",%"note%":%"reference only%",%"markdown%":%"A quoted line.%"}]}]}"
+		end
 
 	Commentaries_folder: STRING = "facade_test_commentaries"
 

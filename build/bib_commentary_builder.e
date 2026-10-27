@@ -26,6 +26,9 @@ note
 class
 	BIB_COMMENTARY_BUILDER
 
+inherit
+	BIB_SQLITE_REPORTING
+
 create
 	make
 
@@ -248,7 +251,10 @@ feature {NONE} -- Writing
 		do
 			if attached a_section.array_item ("claims") as al_claims then
 				from i := 1 until i > al_claims.count or last_error /= Void loop
-					if attached al_claims.object_item (i) as al_claim then
+					if attached al_claims.object_item (i) as al_claim and then text_of (al_claim, "id").is_empty then
+							-- Scan 39: a claim without an id was written, then dropped unseen by the reader.
+						last_error := {STRING_32} "Claim " + i.out + " of " + a_id + " has no id."
+					elseif attached al_claims.object_item (i) as al_claim then
 						a_db.execute_with_args ("INSERT INTO commentary_claim VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 							<<text_of (al_claim, "id"), a_id, text_of (al_claim, "field"), i, text_of (al_claim, "label"), text_of (al_claim, "text"),
 							text_of (al_claim, "summary"), text_of (al_claim, "source"), a_voice, a_key>>)
@@ -352,11 +358,7 @@ feature {NONE} -- Implementation
 			-- When `a_db' failed: `last_error' says `a_what', with SQLite's own words.
 		do
 			if a_db.has_error and last_error = Void then
-				if attached a_db.last_error_message as al_message then
-					last_error := a_what.to_string_32 + {STRING_32} " " + al_message
-				else
-					last_error := a_what.to_string_32
-				end
+				last_error := failure_text (a_db, a_what)
 			end
 		end
 

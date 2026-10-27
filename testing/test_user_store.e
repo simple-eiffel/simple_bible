@@ -122,6 +122,35 @@ feature -- Tests
 			clean_user_file
 		end
 
+	test_a_topical_title_survives_export_and_import
+			-- Scan 39: a topical note's title is exported in its front matter; importing it into a
+			-- fresh store keeps that title. Before: the file name ("note-1") came back instead.
+		local
+			l_user: BIB_USER_STORE
+			l_notes: BIB_DB_NOTE_STORE
+			l_topic: BIB_NOTE
+		do
+			clean_user_file
+			clean_export_folder
+			create l_user.make (User_file)
+			l_user.open
+			create l_notes.make (l_user)
+			create l_topic.make_topical ("Covenant: a theme", "Notes on covenant.")
+			l_notes.add_note (l_topic)
+			l_notes.export_notes (Export_folder)
+			l_user.close
+			clean_user_file
+			create l_user.make (User_file)
+			l_user.open
+			create l_notes.make (l_user)
+			l_notes.import_notes (Export_folder)
+			assert_integers_equal ("one new note", 1, l_notes.new_notes_count)
+			assert_strings_equal ("its title kept", "Covenant: a theme", l_notes.notes_for (0).first.title)
+			l_user.close
+			clean_export_folder
+			clean_user_file
+		end
+
 	test_user_store_refuses_another_schema
 			-- A user.db of a schema this program does not read is refused and left as it is.
 		local

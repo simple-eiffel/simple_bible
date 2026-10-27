@@ -22,6 +22,11 @@ inherit
 			is_provenance_schema_valid
 		end
 
+	BIB_SQLITE_REPORTING
+		export
+			{BIB_NOTE_STORE} first_integer, first_text, failure_text
+		end
+
 create
 	make
 
@@ -94,7 +99,7 @@ feature -- Access
 			-- All note versions ever written (notes are append-only).
 		do
 			if attached database as al_db then
-				Result := count_of (al_db.query ("SELECT count(*) AS n FROM note_version"))
+				Result := first_integer (al_db.query ("SELECT count(*) AS n FROM note_version"))
 			end
 		ensure
 			non_negative: Result >= 0
@@ -219,11 +224,7 @@ feature -- Commands: settings, layouts, census
 				al_db.execute_with_args ("INSERT INTO setting(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
 					<<a_key, a_value.to_string_32>>)
 				if al_db.has_error then
-					if attached al_db.last_error_message as al_message then
-						create write_error.make ({BIB_ERROR}.Database_problem, {STRING_32} "The setting could not be saved. " + al_message)
-					else
-						create write_error.make ({BIB_ERROR}.Database_problem, {STRING_32} "The setting could not be saved.")
-					end
+					create write_error.make ({BIB_ERROR}.Database_problem, failure_text (al_db, "The setting could not be saved."))
 				end
 			end
 				-- Kept for this run even when the write failed (`write_error' says so): `last_error'
@@ -311,10 +312,10 @@ feature -- Commands: schema
 				if l_db.has_error then
 					create last_error.make ({BIB_ERROR}.Database_problem, {STRING_32} "user.db could not be opened: " + path)
 				else
-					l_version := count_of (l_db.query ("PRAGMA user_version"))
+					l_version := first_integer (l_db.query ("PRAGMA user_version"))
 					if l_version = 0 then
 						create_schema (l_db)
-						l_version := count_of (l_db.query ("PRAGMA user_version"))
+						l_version := first_integer (l_db.query ("PRAGMA user_version"))
 					end
 					if last_error = Void and l_version /= User_schema_version then
 						create last_error.make ({BIB_ERROR}.Schema_mismatch, {STRING_32} "user.db has schema version " + l_version.out
@@ -370,34 +371,6 @@ feature {BIB_NOTE_STORE} -- Connection
 			Result := (create {SIMPLE_DATE_TIME}.make_now).to_iso8601
 		end
 
-	count_of (a_result: SIMPLE_SQL_RESULT): INTEGER
-			-- The first column of the first row as a whole number; 0 when there is none.
-		do
-			if not a_result.rows.is_empty and then a_result.rows.first.count >= 1 then
-				Result := a_result.rows.first.integer_value (a_result.rows.first.column_name (1))
-			end
-		end
-
-	first_text (a_result: SIMPLE_SQL_RESULT): STRING_32
-			-- The first column of the first row as text; empty when there is none.
-		do
-			create Result.make_empty
-			if not a_result.rows.is_empty and then a_result.rows.first.count >= 1 then
-				Result := a_result.rows.first.string_value (a_result.rows.first.column_name (1))
-			end
-		end
-
-	note_failure (a_db: SIMPLE_SQL_DATABASE; a_what: READABLE_STRING_GENERAL)
-			-- When `a_db' failed: `last_error' says `a_what', with SQLite's own words.
-		do
-			if a_db.has_error then
-				if attached a_db.last_error_message as al_message then
-					create last_error.make ({BIB_ERROR}.Database_problem, a_what.to_string_32 + {STRING_32} " " + al_message)
-				else
-					create last_error.make ({BIB_ERROR}.Database_problem, a_what.to_string_32)
-				end
-			end
-		end
 
 feature {NONE} -- Schema
 
@@ -406,11 +379,29 @@ feature {NONE} -- Schema
 
 	create_schema (a_db: SIMPLE_SQL_DATABASE)
 			-- Schema version 1 (2026-10-27): notes with every version kept, the other user items,
-			-- and settings. Every row keyed to a verse carries its hub id (BIB_HUB_ID).
+			-- and settings. Every row keyed to a verse carries its hub id (BIB_HUB_ID). One
+			-- transaction: a failure leaves an empty file that the next open sets up again (scan 39:
+			-- a half-made user.db, its version still 0 but its first tables made, could never open).
+		require
+			still_closed: not is_open
 		do
+			a_db.begin_transaction
 			across Schema_statements as ic until last_error /= Void loop
 				a_db.execute (ic)
-				note_failure (a_db, "user.db could not be set up.")
+				if a_db.has_error then
+					create last_error.make ({BIB_ERROR}.Database_problem, failure_text (a_db, "user.db could not be set up."))
+				end
+			end
+			if a_db.is_in_transaction then
+				if last_error = Void then
+					a_db.commit
+					if a_db.has_error then
+						create last_error.make ({BIB_ERROR}.Database_problem, failure_text (a_db, "user.db could not be set up."))
+					end
+				end
+				if a_db.is_in_transaction then
+					a_db.rollback
+				end
 			end
 		end
 
