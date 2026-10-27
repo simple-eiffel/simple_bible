@@ -454,6 +454,22 @@ feature -- Tests
 			close_and_clean (last_pack_set, l_fixture)
 		end
 
+	test_one_door_rule_for_every_face
+			-- Scan 38: which morpheme of a joined word opens it, one rule for the Interlinear, the
+			-- Parallel click and the lookup list: the most letters with a headword, the first of
+			-- equals. A suffix after its word never takes the door (the lookup list opened Psalm
+			-- 119:105's "my" for "to my foot").
+		local
+			l_door: BIB_WORD_DOOR
+		do
+			create l_door
+			assert_true ("the first headword opens", l_door.takes_door (5, 1, 0, 0))
+			assert_true ("the word outweighs its prefix", l_door.takes_door (1, 3, 5, 1))
+			assert_false ("a suffix never outweighs its word", l_door.takes_door (4, 1, 1, 3))
+			assert_false ("no headword, no door", l_door.takes_door (0, 9, 0, 0))
+			assert_false ("the first of equals", l_door.takes_door (2, 3, 1, 3))
+		end
+
 	test_morphology_in_words
 			-- No abbreviations: Greek tags spelled out, "middlepassive" said, unknown values left out.
 		local

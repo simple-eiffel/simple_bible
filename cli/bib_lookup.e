@@ -13,6 +13,12 @@ note
 class
 	BIB_LOOKUP
 
+inherit
+	BIB_WORD_DOOR
+		export
+			{NONE} all
+		end
+
 create
 	make
 
@@ -242,7 +248,7 @@ feature {NONE} -- Kinds of lookup
 			l_corpus: STRING_8
 			l_surface, l_translit: STRING_32
 			l_lemma: INTEGER_64
-			i, l_position: INTEGER
+			i, l_position, l_letters, l_door_letters: INTEGER
 		do
 			l_corpus := corpus_for_book (a_book)
 			if not bible.conc_pack.has_corpus (l_corpus) then
@@ -258,14 +264,19 @@ feature {NONE} -- Kinds of lookup
 					create l_surface.make_empty
 					create l_translit.make_empty
 					l_lemma := 0
+					l_door_letters := 0
 					from until i > l_words.count or else l_words.item (i).position /= l_position loop
 						l_surface.append (l_words.item (i).surface)
 						if not l_translit.is_empty then
 							l_translit.append_character ('-')
 						end
 						l_translit.append (l_words.item (i).translit)
-						if l_words.item (i).has_door then
+							-- BIB_WORD_DOOR's rule (scan 38: the last morpheme with a headword opened a
+							-- suffix's "he" for Psalm 119:105's "to my foot").
+						l_letters := bible.conc_pack.original_search_form (l_words.item (i).surface).count
+						if takes_door (l_words.item (i).lemma_id, l_letters, l_lemma, l_door_letters) then
 							l_lemma := l_words.item (i).lemma_id
+							l_door_letters := l_letters
 						end
 						i := i + 1
 					end

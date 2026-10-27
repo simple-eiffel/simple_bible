@@ -1300,6 +1300,8 @@ feature {NONE} -- Two layouts (C7)
 						end
 						if attached l_words.error as al_error then
 							l_note := al_error.message.to_string_32
+								-- Not kept: the next visit reads again (scan 38).
+							interlinear_book := 0
 						elseif l_words.count = 0 then
 							l_note := place_text (reading_book, reading_chapter, 0) + {STRING_32} " is not in the tagged text."
 						else
@@ -1465,7 +1467,7 @@ feature {NONE} -- Two layouts (C7)
 			window.add_reference_mark (navigator_tree, "T1", "P11 Navigator, west: books, chapter by chapter. Bookmarks come later.", window.Corner_top_left)
 			window.add_reference_mark (dock, "T2", "P06 Notes, west below T1: comes with the notes store.", window.Corner_bottom_left)
 			window.add_reference_mark (center_tabs, "T3", "Centre tabs: the Bible text, Parallel (P02) and Interlinear (P03, Ctrl+I). More Bible tabs come later.", window.Corner_top_left)
-			window.add_reference_mark (interlinear_note, "P03", "Interlinear: word by word in the original, right to left for Hebrew; click a word and T4 follows it.", window.Corner_top_left)
+			window.add_reference_mark (interlinear_note, "P03", "Interlinear: word by word in the original, right to left for Hebrew. A click makes the word's verse the place read and opens its headword in T4.", window.Corner_top_left)
 			window.add_reference_mark (lexicon_heading, "T4", "P05 Lexicon, east: follows the clicked word.", window.Corner_top_left)
 			window.add_reference_mark (commentary_title, "T5", "P04 Commentary, east: here on Cross-refs, with OpenBible votes.", window.Corner_top_left)
 			window.add_reference_mark (results_tabs, "T6", "South results zone: Search Results; Guides, Census, Author Library and Ledger come later.", window.Corner_top_left)

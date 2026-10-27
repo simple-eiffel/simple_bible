@@ -7,7 +7,7 @@ note
 		run together as written, transliterations joined by a hyphen
 		("b-reshit"), glosses by a space, headwords, Strong's numbers and
 		morphology by " + ". The morpheme with the longest surface is the
-		word's door (`lemma_id'), as a clicked word finds it.
+		word's door (`lemma_id') by BIB_WORD_DOOR's rule, as every face finds it.
 	]"
 	author: "Larry Rix"
 	date: "$Date$"
@@ -18,6 +18,11 @@ class
 
 inherit
 	BIB_SOURCED
+
+	BIB_WORD_DOOR
+		export
+			{NONE} all
+		end
 
 create
 	make
@@ -78,14 +83,16 @@ feature -- Access
 
 feature -- Element change
 
-	add_morpheme (a_surface, a_translit, a_gloss, a_headword, a_strongs, a_morphology: READABLE_STRING_GENERAL; a_lemma_id: INTEGER_64)
-			-- Join one more morpheme of this word, in reading order.
+	add_morpheme (a_surface, a_translit, a_gloss, a_headword, a_strongs, a_morphology: READABLE_STRING_GENERAL; a_lemma_id: INTEGER_64; a_letters: INTEGER)
+			-- Join one more morpheme of this word, in reading order; `a_letters' is the length of its
+			-- search form (BIB_WORD_DOOR).
 		require
 			lemma_not_negative: a_lemma_id >= 0
+			letters_not_negative: a_letters >= 0
 		do
-			if a_lemma_id > 0 and (lemma_id = 0 or a_surface.count > longest_surface) then
+			if takes_door (a_lemma_id, a_letters, lemma_id, door_letters) then
 				lemma_id := a_lemma_id
-				longest_surface := a_surface.count
+				door_letters := a_letters
 			end
 			surface.append_string_general (a_surface)
 			append_joined (translit, a_translit, "-")
@@ -101,8 +108,8 @@ feature -- Element change
 
 feature {NONE} -- Implementation
 
-	longest_surface: INTEGER
-			-- The surface length of the morpheme `lemma_id' came from.
+	door_letters: INTEGER
+			-- The letters of the morpheme `lemma_id' came from.
 
 	append_joined (a_text: STRING_32; a_part: READABLE_STRING_GENERAL; a_separator: STRING_8)
 			-- Append `a_part' to `a_text', after `a_separator' when both have text.
