@@ -29,6 +29,11 @@ inherit
 
 	BIB_CITATIONS
 
+	BIB_MORPHOLOGY_NAMES
+		export
+			{NONE} all
+		end
+
 create
 	make
 
@@ -668,6 +673,76 @@ feature -- Access
 			fact_closure: Result.is_fact_closed
 		end
 
+	interlinear_chapter (a_book, a_chapter: INTEGER; a_corpus_code: READABLE_STRING_8): BIB_LIST_RESULT [BIB_INTERLINEAR_WORD]
+			-- Every word of chapter `a_chapter' of book `a_book' in corpus `a_corpus_code', in reading
+			-- order, one cell per word position (BIB_INTERLINEAR_WORD joins its morphemes): the written
+			-- form, transliteration, STEPBible's word-by-word English (the `Gloss_link_kind' links),
+			-- headword, Strong's number and morphology in words. The Interlinear tab (P03, C04). The
+			-- default recension only, as `verse_words'; one query (30 to 80 milliseconds a chapter on
+			-- the real pack, Psalm 119 included, measured 2026-10-27).
+		require
+			available: is_available
+			corpus_known: has_corpus (a_corpus_code)
+			book_positive: a_book > 0
+			chapter_positive: a_chapter > 0
+		local
+			l_words: ARRAYED_LIST [BIB_INTERLINEAR_WORD]
+			l_word, l_current: detachable BIB_INTERLINEAR_WORD
+			l_citations: ARRAYED_LIST [BIB_PROVENANCE]
+			l_provenance: BIB_PROVENANCE
+			l_bad: detachable STRING_8
+			l_scope: STRING_8
+			l_verse, l_position: INTEGER
+			l_glossed: BOOLEAN
+		do
+			l_scope := "book " + a_book.out + " chapter " + a_chapter.out
+			run_query (Interlinear_sql, {ARRAY [detachable ANY]} <<Gloss_link_kind, corpus_id (a_corpus_code), a_book, a_chapter.out>>)
+			l_provenance := provenance_of (a_corpus_code)
+			if attached last_rows as al_rows then
+				create l_words.make (al_rows.rows.count)
+				across al_rows.rows as ic until l_bad /= Void loop
+					l_verse := ic.integer_value ("verse")
+					l_position := ic.integer_value ("pos")
+					if l_verse < 1 or l_position < 1 or ic.integer_64_value ("lemma_id") < 0 then
+						l_bad := "A word of the chapter breaks the pack's rules (verse " + l_verse.out + ", position " + l_position.out + ")."
+					else
+						if attached l_word as al_word and then al_word.verse = l_verse and then al_word.position = l_position then
+							l_current := al_word
+						else
+							create l_current.make (l_verse, l_position, ic.string_value ("language").to_string_8, l_provenance)
+							l_words.extend (l_current)
+							l_word := l_current
+						end
+						l_current.add_morpheme (ic.string_value ("surface"), ic.string_value ("translit"), ic.string_value ("gloss"),
+							ic.string_value ("headword"), ic.string_value ("strongs"),
+							morphology_text (ic.string_value ("pos_tag"),
+								<<ic.string_value ("stem"), ic.string_value ("form"), ic.string_value ("tense"), ic.string_value ("voice"), ic.string_value ("mood")>>,
+								<<ic.string_value ("person"), ic.string_value ("gender"), ic.string_value ("number"), ic.string_value ("gcase"), ic.string_value ("gstate")>>),
+							ic.integer_64_value ("lemma_id"))
+						l_glossed := l_glossed or not ic.string_value ("gloss").is_empty
+					end
+				end
+				if attached l_bad as al_bad then
+					create Result.make_failure (method ("interlinear_chapter", Interlinear_sql, a_corpus_code, l_scope, 0), create {BIB_ERROR}.make ({BIB_ERROR}.Schema_mismatch, al_bad))
+				else
+					create l_citations.make (2)
+					l_citations.extend (l_provenance)
+					if l_glossed and then has_corpus (Gloss_corpus) then
+						l_citations.extend (provenance_of (Gloss_corpus))
+					end
+					create Result.make_success (method ("interlinear_chapter", Interlinear_sql, a_corpus_code, l_scope, l_words.count), l_citations, l_words)
+				end
+			else
+				create Result.make_failure (method ("interlinear_chapter", Interlinear_sql, a_corpus_code, l_scope, 0), query_error)
+			end
+		ensure
+			method_recorded: Result.method.engine_feature.same_string_general ("interlinear_chapter")
+			in_reading_order: across 1 |..| (Result.count - 1) as l_i all
+				Result.item (l_i).verse < Result.item (l_i + 1).verse or else
+				(Result.item (l_i).verse = Result.item (l_i + 1).verse and Result.item (l_i).position < Result.item (l_i + 1).position) end
+			fact_closure: Result.is_fact_closed
+		end
+
 feature -- Dictionary meanings (P05.5)
 
 	lexicon_entries (a_lemma_id: INTEGER_64): BIB_LIST_RESULT [BIB_LIBRARY_ENTRY]
@@ -1084,6 +1159,15 @@ feature {NONE} -- Implementation
 		end
 
 	Lexicon_sql: STRING_8 = "SELECT s.source, s.seq, coalesce(s.label, '') AS label, coalesce(s.gloss, '') AS gloss, coalesce(s.text, '') AS text, coalesce(m.name, '') AS source_name, coalesce(m.year, '') AS year, coalesce(m.license, '') AS license, coalesce(m.ship_class, '') AS ship_class, coalesce(m.credit, '') AS credit, coalesce(m.rowid, 0) AS source_row FROM conc.lex_sense s LEFT JOIN conc.meaning_source m ON m.code = s.source WHERE s.lemma_id = ? AND s.source <> 'STEP' ORDER BY CASE s.source WHEN 'AS1922' THEN 1 WHEN 'BDB1906' THEN 2 WHEN 'LSJ' THEN 3 WHEN 'ML1889' THEN 4 WHEN 'SDGNT' THEN 5 WHEN 'SDBH' THEN 6 WHEN 'TBESH' THEN 7 ELSE 9 END, s.source, s.seq"
+
+	Interlinear_sql: STRING_8 = "SELECT CAST(u.div2 AS INTEGER) AS verse, t.pos, t.token_id, coalesce(t.language, '') AS language, coalesce(t.surface, '') AS surface, coalesce(t.translit, '') AS translit, coalesce(t.lemma_id, 0) AS lemma_id, coalesce(t.pos_tag, '') AS pos_tag, coalesce(t.stem, '') AS stem, coalesce(t.form, '') AS form, coalesce(t.person, '') AS person, coalesce(t.gender, '') AS gender, coalesce(t.number, '') AS number, coalesce(t.gstate, '') AS gstate, coalesce(t.tense, '') AS tense, coalesce(t.voice, '') AS voice, coalesce(t.mood, '') AS mood, coalesce(t.gcase, '') AS gcase, coalesce(l.headword, '') AS headword, coalesce((SELECT x.value FROM conc.lemma_xref x WHERE x.lemma_id = t.lemma_id AND x.scheme = 'strongs' LIMIT 1), '') AS strongs, coalesce((SELECT group_concat(g.surface, ' ') FROM (SELECT e.surface FROM conc.link k JOIN conc.token e ON e.token_id = k.to_token WHERE k.from_token = t.token_id AND k.kind = ? ORDER BY e.token_id) g), '') AS gloss FROM conc.token t JOIN conc.unit u ON u.unit_id = t.unit_id JOIN conc.work_book wb ON wb.work_id = u.work_id LEFT JOIN conc.lemma l ON l.lemma_id = t.lemma_id WHERE t.corpus_id = ? AND wb.book_id = ? AND u.div1 = ? AND u.recension = '' ORDER BY verse, t.pos, t.token_id"
+			-- The Interlinear tab's words: one row per token, the gloss gathered from its STEPBible links.
+
+	Gloss_link_kind: STRING_8 = "translation:ENG-STEP"
+			-- The links from an original word to STEPBible's word-by-word English.
+
+	Gloss_corpus: STRING_8 = "ENG-STEP"
+			-- The corpus those English words belong to (cited when a gloss is shown).
 
 	Gloss_sql: STRING_8 = "SELECT coalesce(gloss, '') AS gloss FROM conc.lex_sense WHERE lemma_id = ? AND coalesce(gloss, '') <> '' AND source IN ('STEP', 'AS1922', 'BDB1906', 'SDGNT', 'SDBH', 'TBESH') ORDER BY CASE source WHEN 'STEP' THEN 1 WHEN 'AS1922' THEN 2 WHEN 'BDB1906' THEN 3 ELSE 4 END, seq LIMIT 1"
 

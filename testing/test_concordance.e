@@ -425,6 +425,50 @@ feature -- Tests
 			close_and_clean (last_pack_set, l_fixture)
 		end
 
+	test_interlinear_joins_a_words_morphemes
+			-- The Interlinear (P03): Genesis 1:1 in the fixture opens with the prefix B and BRA at
+			-- position 1; they make one cell, with STEPBible's English, the headwords, Strong's number
+			-- and the morphology in words, and BRA (the longer) is the door. Position 2 is a word with
+			-- no surface (ruling 1.2), still a cell.
+		local
+			l_fixture: CONC_FIXTURE
+			l_pack: BIB_CONC_PACK
+			l_words: BIB_LIST_RESULT [BIB_INTERLINEAR_WORD]
+		do
+			create l_fixture
+			l_pack := checked_pack (l_fixture)
+			l_words := l_pack.interlinear_chapter (1, 1, "WLC-MACULA")
+			assert_true ("read", l_words.is_success)
+			assert_integers_equal ("one cell per position", 2, l_words.count)
+			assert_strings_equal ("surfaces run together", "BBRA", l_words.item (1).surface)
+			assert_strings_equal ("transliterations hyphenated", "b-bara", l_words.item (1).translit)
+			assert_strings_equal ("STEPBible's English", "in he fashioned", l_words.item (1).gloss)
+			assert_strings_equal ("both headwords", "B + BRA", l_words.item (1).lemma_text)
+			assert_strings_equal ("Strong's", "H1254", l_words.item (1).strongs)
+			assert_strings_equal ("morphology in words", "preposition + verb, qal qatal, third masculine singular", l_words.item (1).morphology)
+			assert_true ("the longer morpheme is the door", l_words.item (1).lemma_id = {CONC_FIXTURE}.Create_lemma)
+			assert_true ("verse 1", l_words.item (1).verse = 1 and l_words.item (2).verse = 1)
+			assert_true ("unwritten, still a door", l_words.item (2).surface.is_empty and l_words.item (2).lemma_id = {CONC_FIXTURE}.Unwritten_lemma)
+			assert_true ("cited", l_words.is_fact_closed)
+			assert_integers_equal ("a chapter the corpus lacks", 0, l_pack.interlinear_chapter (1, 2, "WLC-MACULA").count)
+			close_and_clean (last_pack_set, l_fixture)
+		end
+
+	test_morphology_in_words
+			-- No abbreviations: Greek tags spelled out, "middlepassive" said, unknown values left out.
+		local
+			l_names: BIB_MORPHOLOGY_NAMES
+		do
+			create l_names
+			assert_strings_equal ("Greek verb", "verb, imperfect middle or passive indicative, third singular",
+				l_names.morphology_text ("verb", <<"", "", "imperfect", "middlepassive", "indicative">>, <<"third", "", "singular", "", "">>))
+			assert_strings_equal ("spelled out", "preposition", l_names.morphology_text ("prep", <<"">>, <<"">>))
+			assert_strings_equal ("article", "article, masculine singular nominative", l_names.morphology_text ("det", <<"">>, <<"", "masculine", "singular", "nominative">>))
+			assert_strings_equal ("unknown left out", "noun, feminine", l_names.morphology_text ("noun", <<"unknown: x">>, <<"feminine">>))
+			assert_strings_equal ("either gender", "noun, common, masculine or feminine singular absolute",
+				l_names.morphology_text ("noun", <<"", "common">>, <<"", "both", "singular", "", "absolute">>))
+		end
+
 	test_typed_greek_folds_as_a_clicked_word
 			-- Scan 36: typed text is folded as the pack's search forms are, the fold a clicked word uses.
 			-- The article's headword becomes "logos" in Greek (search form with sigma, no accent); typed
