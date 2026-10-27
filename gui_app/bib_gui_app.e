@@ -66,6 +66,12 @@ feature {NONE} -- Initialization
 			create remove_highlight_button.make ("Remove", Void)
 			create restore_highlight_button.make ("Restore", Void)
 			create highlights_grid.make (100.0)
+			create navigator_tabs.make
+			create bookmarks_heading.make_ui ("")
+			create bookmarks_grid.make (100.0)
+			create bookmark_rows.make (0)
+			create remove_bookmark_button.make ("Remove", Void)
+			create restore_bookmark_button.make ("Restore", Void)
 			create highlight_rows.make (0)
 			create light_theme.make_light
 			create dark_theme.make_dark
@@ -260,6 +266,9 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			elseif snapshot_tab.same_string ({STRING_32} "notes") then
 				new_note_box.set_text ("A sample note written by the snapshot run.")
 				add_note
+			elseif snapshot_tab.same_string ({STRING_32} "bookmarks") then
+				bookmark_verse
+				navigator_tabs.select_tab (Bookmarks_tab)
 			elseif snapshot_tab.same_string ({STRING_32} "highlights") then
 				highlight_reason_box.set_text ("A sample reason written by the snapshot run")
 				add_highlight
@@ -345,6 +354,9 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			remove_highlight_button.set_on_click (agent remove_highlight)
 			restore_highlight_button.set_on_click (agent restore_highlight)
 			highlights_grid.set_on_select (agent on_highlight_row)
+			bookmarks_grid.set_on_select (agent on_bookmark_row)
+			remove_bookmark_button.set_on_click (agent remove_bookmark)
+			restore_bookmark_button.set_on_click (agent restore_bookmark)
 			cross_refs_grid.set_on_select (agent on_cross_ref)
 			search_word_button.set_on_click (agent show_every_place)
 			results_grid.set_on_select (agent on_choice)
@@ -525,6 +537,7 @@ feature {NONE} -- Window
 			results_grid.add_column ((create {SW_GRID_COLUMN [BIB_LOOKUP_CHOICE]}.make ("Details", 200.0, agent {BIB_LOOKUP_CHOICE}.detail)).growing)
 			cross_refs_grid.add_column ((create {SW_GRID_COLUMN [BIB_READING_CROSS_REF]}.make ("Reference", 180.0, agent cross_ref_text)).growing)
 			highlights_grid.add_column (create {SW_GRID_COLUMN [BIB_HIGHLIGHT]}.make ("Verse", 120.0, agent highlight_place))
+			bookmarks_grid.add_column ((create {SW_GRID_COLUMN [BIB_BOOKMARK]}.make ("Verse", 140.0, agent bookmark_place)).growing)
 			highlights_grid.add_column ((create {SW_GRID_COLUMN [BIB_HIGHLIGHT]}.make ("Reason", 160.0, agent {BIB_HIGHLIGHT}.reason)).growing)
 			analysis_grid.add_column (create {SW_GRID_COLUMN [BIB_INTERLINEAR_WORD]}.make ("#", 40.0, agent analysis_position))
 			analysis_grid.add_column (create {SW_GRID_COLUMN [BIB_INTERLINEAR_WORD]}.make ("Word", 130.0, agent {BIB_INTERLINEAR_WORD}.surface))
@@ -573,6 +586,7 @@ feature {NONE} -- Menus and keys (C2)
 			window.register_accelerator (Key_minus, True, False, False, agent change_text_size (-1))
 			window.register_accelerator (Key_m, True, False, False, agent toggle_mode)
 			window.register_accelerator (Key_i, True, False, False, agent show_interlinear)
+			window.register_accelerator (Key_d, True, False, False, agent bookmark_verse)
 		end
 
 	file_menu: SW_MENU
@@ -621,6 +635,8 @@ feature {NONE} -- Menus and keys (C2)
 			Result.add_item ("Previous chapter", "", previous_button.is_enabled, agent step_chapter (-1))
 			Result.add_item ("Next chapter", "", next_button.is_enabled, agent step_chapter (1))
 			Result.add_item ("Go to reference", "Ctrl+L", True, agent focus_reference)
+			Result.add_separator
+			Result.add_item ("Bookmark this verse", "Ctrl+D", reading_verse > 0, agent bookmark_verse)
 		end
 
 	search_menu: SW_MENU
@@ -995,6 +1011,7 @@ feature {NONE} -- Reading (S1, P01)
 					end
 					fill_notes
 					fill_highlights
+					fill_bookmarks
 				end
 			end
 		end
@@ -1350,9 +1367,12 @@ feature {NONE} -- Two layouts (C7)
 		end
 
 	navigator_pane: SW_COLUMN
-			-- T1, P11 Navigator: the books, testament by testament, chapter by chapter.
+			-- T1, P11 Navigator: the books, testament by testament, chapter by chapter; and the
+			-- bookmarks.
 		local
 			l_roots: ARRAYED_LIST [BIB_NAV_NODE]
+			l_books, l_marks: SW_COLUMN
+			l_buttons: SW_ROW
 		do
 			create l_roots.make (2)
 			l_roots.extend (create {BIB_NAV_NODE}.make_testament ("Old Testament", 1, 39))
@@ -1361,10 +1381,121 @@ feature {NONE} -- Two layouts (C7)
 			navigator_tree.set_children (agent nav_children)
 			navigator_tree.set_roots (l_roots)
 			navigator_tree.set_on_select (agent on_nav)
+			create l_books.make
+			l_books := l_books.with_gap (6.0)
+			l_books.put (navigator_tree.growing)
+			create l_marks.make
+			l_marks := l_marks.with_gap (6.0)
+			l_marks.put (bookmarks_heading)
+			l_marks.put (bookmarks_grid.growing)
+			create l_buttons.make
+			l_buttons.put (remove_bookmark_button)
+			l_buttons.put (restore_bookmark_button)
+			l_marks.put (l_buttons)
+			navigator_tabs.add_page ("Books", l_books)
+			navigator_tabs.add_page ("Bookmarks", l_marks)
 			create Result.make
-			Result := Result.with_gap (6.0)
-			Result.put (create {SW_LABEL}.make_ui ("Books"))
-			Result.put (navigator_tree.growing)
+			Result.put (navigator_tabs.growing)
+		end
+
+	navigator_tabs: SW_TABS
+	bookmarks_heading: SW_LABEL
+	bookmarks_grid: SW_DATA_GRID [BIB_BOOKMARK]
+	remove_bookmark_button, restore_bookmark_button: SW_BUTTON
+			-- T1's Books and Bookmarks tabs (2026-10-27).
+
+	bookmark_rows: ARRAYED_LIST [BIB_BOOKMARK]
+			-- The rows of `bookmarks_grid', newest first.
+
+	last_removed_bookmark: INTEGER_64
+			-- The bookmark Remove took away last; Restore brings it back (0: none).
+
+	Bookmarks_tab: INTEGER = 2
+			-- T1's Bookmarks page.
+
+	fill_bookmarks
+			-- Every bookmark, newest first (a click opens its verse).
+		do
+			if user_store.is_open then
+				bookmark_rows := user_store.bookmarks
+			else
+				create bookmark_rows.make (0)
+			end
+			bookmarks_grid.set_rows (bookmark_rows)
+			if bookmark_rows.is_empty then
+				bookmarks_heading.set_text ("No bookmarks yet: Ctrl+D bookmarks the verse read.")
+			else
+				bookmarks_heading.set_text ({STRING_32} "Your bookmarks (" + bookmark_rows.count.out + {STRING_32} "), newest first. Ctrl+D adds the verse read.")
+			end
+			remove_bookmark_button.set_enabled (False)
+			restore_bookmark_button.set_enabled (last_removed_bookmark > 0)
+		end
+
+	bookmark_verse
+			-- Ctrl+D: the verse read is bookmarked.
+		do
+			if reading_verse = 0 then
+				window.toast ("Click a verse to bookmark it.", 1)
+			elseif user_store.is_open then
+				user_store.add_bookmark (create {BIB_BOOKMARK}.make ((create {BIB_HUB_ID}).hub_id (reading_book, reading_chapter, reading_verse), place_text (reading_book, reading_chapter, reading_verse)))
+				if attached user_store.write_error as al_error then
+					window.toast (al_error.message, 1)
+				else
+					fill_bookmarks
+					window.toast ({STRING_32} "Bookmarked " + place_text (reading_book, reading_chapter, reading_verse) + {STRING_32} ".", 1)
+				end
+			end
+		end
+
+	on_bookmark_row (a_row: INTEGER)
+			-- A bookmark clicked: its verse is read, and it can be removed.
+		local
+			l_hub: BIB_HUB_ID
+			l_target: INTEGER_64
+		do
+			if a_row >= 1 and a_row <= bookmark_rows.count then
+				create l_hub
+				l_target := bookmark_rows.i_th (a_row).hub_id
+				if l_hub.is_valid_hub (l_target) then
+					go_to (l_hub.book_of (l_target), l_hub.chapter_of (l_target), l_hub.verse_of (l_target))
+				end
+				remove_bookmark_button.set_enabled (True)
+			end
+		end
+
+	remove_bookmark
+			-- Take the selected bookmark away (Restore brings it back), as Remove does for highlights.
+		do
+			if attached bookmarks_grid.selected_object as al_bookmark and then al_bookmark.is_stored and then user_store.is_open then
+				user_store.remove_item ({BIB_USER_STORE}.Kind_bookmark, al_bookmark.id)
+				if attached user_store.write_error as al_error then
+					window.toast (al_error.message, 1)
+				else
+					last_removed_bookmark := al_bookmark.id
+					fill_bookmarks
+					window.toast ("Bookmark removed. Restore brings it back.", 1)
+				end
+			end
+		end
+
+	restore_bookmark
+			-- Bring back the bookmark Remove took last.
+		do
+			if last_removed_bookmark > 0 and then user_store.is_open and then user_store.is_deleted (last_removed_bookmark) then
+				user_store.restore_item ({BIB_USER_STORE}.Kind_bookmark, last_removed_bookmark)
+				if attached user_store.write_error as al_error then
+					window.toast (al_error.message, 1)
+				else
+					last_removed_bookmark := 0
+					fill_bookmarks
+				end
+			end
+		end
+
+	bookmark_place (a_bookmark: BIB_BOOKMARK): STRING_32
+			-- "Jude 1:6".
+		do
+			Result := hub_place (a_bookmark.hub_id)
 		end
 
 	notes_pane: SW_WIDGET
@@ -1685,14 +1816,21 @@ feature {NONE} -- Notes (T2, P06)
 
 	highlight_place (a_highlight: BIB_HIGHLIGHT): STRING_32
 			-- "Jude 1:6".
+		do
+			Result := hub_place (a_highlight.hub_id)
+		end
+
+	hub_place (a_hub: INTEGER_64): STRING_32
+			-- The verse `a_hub' names, "Jude 1:6" (its number when it names none): the one way every
+			-- list turns a verse identity into words.
 		local
 			l_hub: BIB_HUB_ID
 		do
 			create l_hub
-			if l_hub.is_valid_hub (a_highlight.hub_id) and then bible.books.has_book (l_hub.book_of (a_highlight.hub_id)) then
-				Result := place_text (l_hub.book_of (a_highlight.hub_id), l_hub.chapter_of (a_highlight.hub_id), l_hub.verse_of (a_highlight.hub_id))
+			if l_hub.is_valid_hub (a_hub) then
+				Result := place_text (l_hub.book_of (a_hub), l_hub.chapter_of (a_hub), l_hub.verse_of (a_hub))
 			else
-				Result := a_highlight.hub_id.out
+				Result := a_hub.out
 			end
 		end
 
@@ -2087,7 +2225,7 @@ feature {NONE} -- Notes (T2, P06)
 			add_chrome_pills
 			window.add_reference_mark (tools_strip, "C10", "Study tools strip: Parallel and Interlinear work; Guide, Word Study, Count and Ledger come later.", window.Corner_top_left)
 			window.add_reference_mark (mode_switch, "C7", "Mode switch, on Study: only the docking changes. Ctrl+M.", window.Corner_top_left)
-			window.add_reference_mark (navigator_tree, "T1", "P11 Navigator, west: books, chapter by chapter. Bookmarks come later.", window.Corner_top_left)
+			window.add_reference_mark (navigator_tree, "T1", "P11 Navigator, west: Books (chapter by chapter) and Bookmarks (Ctrl+D bookmarks the verse read; click one to read it; Remove and Restore).", window.Corner_top_left)
 			window.add_reference_mark (notes_heading, "T2", "P06 Notes, west below T1: Verse notes on the chapter read (add on the verse read; double-click to edit, each edit keeps the old version; Delete and Restore) and Highlights (a reason, not a color; washed amber in the Bible and Parallel tabs; click one to read it; Remove and Restore). Journal, Tags, Prayer and Memory come later.", window.Corner_top_left)
 			window.add_reference_mark (center_tabs, "T3", "Centre tabs: the Bible text, Parallel (P02) and Interlinear (P03, Ctrl+I). More Bible tabs come later.", window.Corner_top_left)
 			window.add_reference_mark (analysis_title, "P03.2", "Verse analysis: the verse read, a row per word with its lemma, Strong's number, morphology, gloss, and how often its headword occurs in this testament. Click a row and T4 follows it.", window.Corner_top_left)
@@ -2599,6 +2737,7 @@ feature {NONE} -- Constants
 	Key_f: INTEGER = 0x46
 	Key_m: INTEGER = 0x4D
 	Key_i: INTEGER = 0x49
+	Key_d: INTEGER = 0x44
 	Key_left: INTEGER = 0x25
 	Key_right: INTEGER = 0x27
 	Key_plus: INTEGER = 0xBB
