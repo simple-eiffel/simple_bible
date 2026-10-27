@@ -245,6 +245,10 @@ feature {NONE} -- Suites
 		do
 			print ("TEST_USER_STORE%N")
 			create t
+			run_test (agent t.test_hub_id_is_english_numbering, "test_hub_id_is_english_numbering")
+			run_test (agent t.test_notes_keep_every_version, "test_notes_keep_every_version")
+			run_test (agent t.test_user_store_refuses_another_schema, "test_user_store_refuses_another_schema")
+			run_test (agent t.test_notes_export_and_import_never_overwrite, "test_notes_export_and_import_never_overwrite")
 			run_test (agent t.test_notes_keyed_by_hub_id, "test_notes_keyed_by_hub_id")
 			run_test (agent t.test_user_items_carry_no_version, "test_user_items_carry_no_version")
 			run_test (agent t.test_user_store_is_the_only_writer, "test_user_store_is_the_only_writer")

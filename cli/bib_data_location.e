@@ -50,6 +50,15 @@ feature -- Access
 			not_empty: not Result.is_empty
 		end
 
+	user_path: STRING
+			-- The reader's own notes (user.db), always in %LOCALAPPDATA%\simple_bible, beside the
+			-- settings: never beside the program, which an installer replaces.
+		do
+			Result := local_data ("user.db")
+		ensure
+			not_empty: not Result.is_empty
+		end
+
 feature {NONE} -- Implementation
 
 	installed_data (a_name: STRING): STRING
