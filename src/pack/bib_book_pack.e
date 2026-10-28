@@ -141,7 +141,47 @@ feature -- Access
 			Result := blocks_answer ("blocks_naming", l_sql, {ARRAY [detachable ANY]} <<a_framework.to_string_32>>, a_framework)
 		end
 
+	name_links: ARRAYED_LIST [TUPLE [spelling, id: STRING_32; needs_mark: BOOLEAN]]
+			-- Every name a book or chapter goes by, with the link it opens ("JESUS (essay series)"
+			-- essay:jesus, "JESUS 06" essay:jesus/6), for a linker (BIB_FRAMEWORK_NAMES whose id is the
+			-- link: BIB_REFERENCE_LINKER.writing_names). A pack built before chapter names gives its
+			-- books' only.
+		require
+			available: is_available
+		do
+			create Result.make (64)
+			run_query ("SELECT alias, book_id FROM " + pack_alias + ".book_alias", {ARRAY [detachable ANY]} <<>>)
+			if attached last_rows as al_rows then
+				across al_rows.rows as ic loop
+					if schema.is_book_id (ic.string_value ("book_id")) and then not ic.string_value ("alias").is_empty then
+						Result.extend ([ic.string_value ("alias"), schema.link_text (ic.string_value ("book_id"), 0, 0), False])
+					end
+				end
+			end
+			if has_table ("chapter_alias") then
+				run_query ("SELECT alias, book_id, chapter FROM " + pack_alias + ".chapter_alias", {ARRAY [detachable ANY]} <<>>)
+				if attached last_rows as al_rows then
+					across al_rows.rows as ic loop
+						if schema.is_book_id (ic.string_value ("book_id")) and then not ic.string_value ("alias").is_empty
+							and then ic.integer_value ("chapter") >= 1 and then ic.integer_value ("chapter") <= schema.Max_part
+						then
+							Result.extend ([ic.string_value ("alias"), schema.link_text (ic.string_value ("book_id"), ic.integer_value ("chapter"), 0), False])
+						end
+					end
+				end
+			end
+		ensure
+			named: across Result as al_name all not al_name.spelling.is_empty end
+		end
+
 feature {NONE} -- Implementation
+
+	has_table (a_name: STRING_8): BOOLEAN
+			-- Does the pack hold table `a_name'?
+		do
+			run_query ("SELECT count(*) AS n FROM " + pack_alias + ".sqlite_master WHERE type = 'table' AND name = ?", {ARRAY [detachable ANY]} <<a_name>>)
+			Result := attached last_rows as al_rows and then not al_rows.rows.is_empty and then al_rows.rows.first.integer_value ("n") > 0
+		end
 
 	blocks_sql: STRING_8
 			-- The blocks with their book's and chapter's titles, before a WHERE.

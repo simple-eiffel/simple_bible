@@ -69,6 +69,19 @@ feature -- Access
 			-- The frameworks `linked' also links (2026-10-28): "KACC(TM)" becomes
 			-- [KACC(TM)](framework:kacc); Void links references only.
 
+	writing_names: detachable BIB_FRAMEWORK_NAMES
+			-- The names Larry's books and essays go by, each with the link it opens as its id ("JESUS 06"
+			-- essay:jesus/6): matched by the frameworks' rule (as written, a word of its own, longest
+			-- first), linked to that id (2026-10-28).
+
+	set_writing_names (a_names: detachable BIB_FRAMEWORK_NAMES)
+			-- Link the names of `a_names' too (Void: none).
+		do
+			writing_names := a_names
+		ensure
+			set: writing_names = a_names
+		end
+
 	set_framework_names (a_names: detachable BIB_FRAMEWORK_NAMES)
 			-- Link the frameworks `a_names' finds too (Void: references only).
 		do
@@ -121,7 +134,7 @@ feature -- Linking
 			i, l_end: INTEGER
 			l_in_code, l_in_label, l_in_target: BOOLEAN
 			l_found: like reference_at
-			l_framework: detachable TUPLE [last: INTEGER; id: STRING_32]
+			l_framework, l_writing: detachable TUPLE [last: INTEGER; id: STRING_32]
 		do
 			l_text := a_markdown.to_string_32
 			create Result.make (l_text.count + l_text.count // 8)
@@ -152,15 +165,23 @@ feature -- Linking
 				else
 					l_found := Void
 					l_framework := Void
+					l_writing := Void
 					if attached framework_names as al_names then
 						l_framework := al_names.match_at (l_text, i)
 					end
-					if l_framework = Void and then (i = 1 or else not is_word_character (l_text [i - 1])) then
+					if l_framework = Void and then attached writing_names as al_names then
+						l_writing := al_names.match_at (l_text, i)
+					end
+					if l_framework = Void and then l_writing = Void and then (i = 1 or else not is_word_character (l_text [i - 1])) then
 						l_found := reference_at (l_text, i)
 					end
 					if attached l_framework as al_framework then
 						Result.append ({STRING_32} "[" + l_text.substring (i, al_framework.last) + {STRING_32} "](" + {BIB_FRAMEWORK_SCHEMA}.Link_prefix + al_framework.id + {STRING_32} ")")
 						i := al_framework.last + 1
+					elseif attached l_writing as al_writing then
+							-- a book's or an essay's name: its id is the link
+						Result.append ({STRING_32} "[" + l_text.substring (i, al_writing.last) + {STRING_32} "](" + al_writing.id + {STRING_32} ")")
+						i := al_writing.last + 1
 					elseif attached l_found as al_found then
 						l_end := al_found.last
 						Result.append ({STRING_32} "[" + l_text.substring (i, l_end) + {STRING_32} "](" + range_target_text (al_found.book, al_found.chapter, al_found.verse, al_found.end_chapter, al_found.end_verse) + {STRING_32} ")")

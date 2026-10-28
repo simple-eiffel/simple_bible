@@ -124,7 +124,7 @@ feature -- Commands
 feature {NONE} -- Reading and checking
 
 	records: ARRAYED_LIST [TUPLE [file, id, title, subtitle, author, status, edition: STRING_32; year: INTEGER; description, root, source: STRING_32;
-			aliases, skip_headings: ARRAYED_LIST [STRING_32]; chapters: ARRAYED_LIST [TUPLE [title, file, kind: STRING_32]]]]
+			aliases, skip_headings: ARRAYED_LIST [STRING_32]; chapters: ARRAYED_LIST [TUPLE [title, file, kind: STRING_32; aliases: ARRAYED_LIST [STRING_32]]]]]
 			-- The manifests read, in the order given.
 
 	framework_spellings: ARRAYED_LIST [TUPLE [spelling, id: STRING_32; needs_mark: BOOLEAN]]
@@ -155,7 +155,7 @@ feature {NONE} -- Reading and checking
 		local
 			l_json: SIMPLE_JSON
 			l_object: SIMPLE_JSON_OBJECT
-			l_chapters: ARRAYED_LIST [TUPLE [title, file, kind: STRING_32]]
+			l_chapters: ARRAYED_LIST [TUPLE [title, file, kind: STRING_32; aliases: ARRAYED_LIST [STRING_32]]]
 			l_root, l_folder: STRING_32
 			l_year: INTEGER
 			i: INTEGER
@@ -174,7 +174,7 @@ feature {NONE} -- Reading and checking
 					from i := 1 until i > al_chapters.count loop
 						if al_chapters [i].is_object then
 							l_chapters.extend ([text_of (al_chapters [i].as_object, "title"), text_of (al_chapters [i].as_object, "file"),
-								text_of (al_chapters [i].as_object, "kind")])
+								text_of (al_chapters [i].as_object, "kind"), strings_of (al_chapters [i].as_object, "aliases")])
 						end
 						i := i + 1
 					end
@@ -190,6 +190,13 @@ feature {NONE} -- Reading and checking
 				end
 				fail_unless (not across records as al_r some al_r.id.same_string (text_of (l_object, "id")) end, a_file,
 					{STRING_32} "its id " + text_of (l_object, "id") + {STRING_32} " is already another manifest's")
+				across l_chapters as ic_chapter loop
+					across ic_chapter.aliases as ic loop
+						fail_unless (not is_name_taken (ic, l_chapters, ic_chapter), a_file, {STRING_32} "the name " + ic + {STRING_32} " already names another chapter or book")
+						fail_unless (not across framework_spellings as al_f some al_f.spelling.same_string (ic) end, a_file,
+							{STRING_32} "the name " + ic + {STRING_32} " is a framework's spelling")
+					end
+				end
 				across strings_of (l_object, "aliases") as ic loop
 					fail_unless (not across records as al_r some across al_r.aliases as al_a some al_a.same_string (ic) end end, a_file,
 						{STRING_32} "the alias " + ic + {STRING_32} " already names another book")
@@ -204,6 +211,20 @@ feature {NONE} -- Reading and checking
 			else
 				last_error := {STRING_32} "The manifest is not a JSON object: " + a_file
 			end
+		end
+
+feature {NONE} -- Names
+
+	is_name_taken (a_name: STRING_32; a_chapters: ARRAYED_LIST [TUPLE [title, file, kind: STRING_32; aliases: ARRAYED_LIST [STRING_32]]];
+			a_own: TUPLE [title, file, kind: STRING_32; aliases: ARRAYED_LIST [STRING_32]]): BOOLEAN
+			-- Does `a_name' already name a book, a chapter of a book read before, or another chapter of
+			-- this one (`a_chapters', `a_own' being the one naming it)?
+		do
+			Result := across records as al_r some
+					across al_r.aliases as al_a some al_a.same_string (a_name) end
+					or across al_r.chapters as al_c some across al_c.aliases as al_a some al_a.same_string (a_name) end end
+				end
+				or across a_chapters as al_c some al_c /= a_own and then across al_c.aliases as al_a some al_a.same_string (a_name) end end
 		end
 
 feature {NONE} -- Writing
@@ -222,6 +243,13 @@ feature {NONE} -- Writing
 			across a_record.aliases as ic until last_error /= Void loop
 				a_db.execute_with_args ("INSERT INTO book_alias VALUES (?, ?, 'author', 1)", <<ic, a_record.id>>)
 				check_db (a_db, {STRING_32} "An alias of " + a_record.id + {STRING_32} " could not be written.")
+			end
+			from l_chapter := 1 until l_chapter > a_record.chapters.count or last_error /= Void loop
+				across a_record.chapters.i_th (l_chapter).aliases as ic until last_error /= Void loop
+					a_db.execute_with_args ("INSERT INTO chapter_alias VALUES (?, ?, ?, 'author', 1)", <<ic, a_record.id, l_chapter>>)
+					check_db (a_db, {STRING_32} "A name of " + a_record.id + {STRING_32} "/" + l_chapter.out.to_string_32 + {STRING_32} " could not be written.")
+				end
+				l_chapter := l_chapter + 1
 			end
 			create l_blocks.make (a_record.skip_headings)
 			if schema.Starts_at_title then

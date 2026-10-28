@@ -4,6 +4,10 @@ All notable changes to simple_bible are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added (2026-10-28: the names of Larry's books and essays link; personal installer 0.7.30)
+
+- **The packs keep the names an essay goes by** (`chapter_alias`: "JESUS 06: Isaac's Word", "JESUS 06"), from the manifests' per-chapter `aliases`, checked unique across the pack and never a framework's spelling. `BIB_BOOK_PACK.name_links` gives every book's and chapter's name with the link it opens; `BIB_REFERENCE_LINKER.writing_names` links them by the frameworks' rule (as written, a word of its own, longest first). In the window every page the linker writes (the commentary, the frameworks, the books and essays) links them: 56 of the commentary's 300 Further reading items name a book or an essay.
+
 ### Changed (2026-10-28: design scan 62; packs rebuilt; personal installer 0.7.29)
 
 - **One list of text-pack kinds**, `BIB_TEXT_PACKS` (books, then essays): `SIMPLE_BIBLE.text_packs` builds every kind's readers in one loop (`book_packs`, `essay_packs` filter it), `BIB_LINK_TARGET` reads every kind's links in one loop, and the window's library uses it. One reader, `BIB_BOOK_PACK.make_with_schema`, takes its schema at creation (`BIB_ESSAY_PACK` is gone, and no schema is made a row); the builder's `make_with_schema` likewise. The schema names its kind (`Kind_noun`, `Entries_noun`) where three places compared strings.
