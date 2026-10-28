@@ -7,7 +7,7 @@ note
 		or `is_bible', so a new kind of link (essays next) is one more branch here and
 		one where it is used. Each grammar is still parsed where it is written:
 		BIB_FRAMEWORK_SCHEMA's id, BIB_BOOK_SCHEMA's `link_place',
-		BIB_REFERENCE_LINKER's `target_range'.
+		BIB_BIBLE_LINK's `target_range'.
 	]"
 	author: "Larry Rix"
 	date: "$Date$"
@@ -39,7 +39,7 @@ feature {NONE} -- Initialization
 				id := al_place.book
 				chapter := al_place.chapter
 				block := al_place.block
-			elseif attached (create {BIB_REFERENCE_LINKER}.make (a_books)).target_range (text) as al_range
+			elseif attached (create {BIB_BIBLE_LINK}).target_range (text) as al_range
 				and then a_books.has_book (al_range.book) and then al_range.chapter >= 1
 			then
 				is_bible := True

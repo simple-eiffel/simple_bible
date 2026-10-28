@@ -4,6 +4,12 @@ All notable changes to simple_bible are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Changed (2026-10-28: design scan 61; personal installer 0.7.27)
+
+- **The pack rule's exemption names the search tables only**: `writing_search` (FTS5, and it must carry `voice`), `writing_words` (its fts5vocab) and the search table's five shadow tables. Any other virtual table answers to the voice rule like a table, so a stray one is refused (test fails on the old rule, which exempted every virtual table and its shadows).
+- **One clause walk for both searches**: `BIB_CLAUSE_WALKING [G]` walks the parser's tree (OR; AND with its NOTs taken away); `BIB_VERSE_SEARCH` combines places, `BIB_WRITINGS_SEARCH` writes an FTS5 expression. The two copies had drifted.
+- The writings search says which pack's search failed (it read as nothing found) and which held more rows than it lists; fuzzy search sweeps a pack's words once, and `BIB_EDIT_DISTANCE` keeps three rows, not a table a word. `BIB_LINK_TARGET` reads `bible:` with `BIB_BIBLE_LINK`.
+
 ### Added (2026-10-28: searching Larry's writings, plain and fuzzy; personal installer 0.7.26)
 
 - **Every private pack carries a search table** (research/20-WRITINGS-SEARCH.md): FTS5 `writing_search` (the address a reading pane follows, where it stands, the text, its voice; diacritics folded) and its vocabulary `writing_words`, filled by the builders: a book's every block, a framework's hover and sections, a commentary section's fields (not the quoted Bible text). The attach rule exempts virtual tables and FTS5's shadow tables.

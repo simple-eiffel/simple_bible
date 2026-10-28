@@ -539,6 +539,7 @@ feature -- Books pack (2026-10-28)
 			l_bible: SIMPLE_BIBLE
 			l_search: BIB_WRITINGS_SEARCH
 			l_edits: BIB_EDIT_DISTANCE
+			l_db_writer: SIMPLE_SQL_DATABASE
 			l_ok: BOOLEAN
 		do
 			create l_edits
@@ -596,6 +597,23 @@ feature -- Books pack (2026-10-28)
 			l_search.search ("NOT cosmos", False, "", "")
 			assert_false ("NOT alone is told", l_search.error_message.is_empty)
 			assert_true ("and finds nothing", l_search.hits.is_empty)
+				-- Scan 61: the walk shared with the Bible search; OR inside parentheses, a NOT beside
+				-- them; a diacritic folded in the query too.
+			l_search.search ("(cosmos OR remember) NOT allegiance", False, "", "")
+			assert_integers_equal ("OR in parentheses, NOT beside", 2, l_search.hits.count)
+			assert_true ("the expression", l_search.last_expression.same_string ({STRING_32} "((%"cosmos%" OR %"remember%")) NOT %"allegiance%""))
+			l_search.search ({STRING_32} "cosm%/243/s", False, "", "")
+			assert_integers_equal ("a diacritic folds", 1, l_search.hits.count)
+			assert_true ("nothing failed or was cut short", l_search.packs_failed.is_empty and l_search.packs_cut_short.is_empty)
+			l_bible.close
+				-- Scan 61: a virtual table the search does not own answers to the voice rule like any table.
+			l_db_writer := (create {SIMPLE_SQL_DATABASE}.make (Folder_frameworks_file))
+			l_db_writer.execute ("CREATE VIRTUAL TABLE notes USING fts5(body)")
+			assert_false ("the stray table made", l_db_writer.has_error)
+			l_db_writer.close
+			l_bible := bible ("", Folder)
+			l_bible.open
+			assert_integers_equal ("the frameworks pack refused for it", 1, l_bible.pack_errors.count)
 			l_bible.close
 			fixture.delete_file (Kacc_file)
 			fixture.delete_file (Zakar_file)

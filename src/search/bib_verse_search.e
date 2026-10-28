@@ -21,6 +21,8 @@ class
 inherit
 	BIB_PLACE_SETS
 
+	BIB_CLAUSE_WALKING [ARRAYED_LIST [INTEGER_64]]
+
 create
 	make
 
@@ -85,7 +87,8 @@ feature -- Searching
 			has_greek_roots := False
 			has_moved_hebrew_roots := False
 			cursor := 1
-			places := within_scope (evaluated (a_query, a_version, False), a_query.scope)
+			walk_version := a_version.to_string_8
+			places := within_scope (walked (a_query, False), a_query.scope)
 			if has_failed then
 				create places.make (0)
 			end
@@ -153,88 +156,100 @@ feature {NONE} -- Evaluation
 			end
 		end
 
-	cursor: INTEGER
-			-- The next clause of the query being evaluated (pre-order).
+	walk_version: STRING_8
+			-- The version the query's words are read in, while `find' walks it.
+		attribute
+			create Result.make_empty
+		end
 
-	evaluated (a_query: BIB_QUERY; a_version: READABLE_STRING_8; a_negated: BOOLEAN): ARRAYED_LIST [INTEGER_64]
-			-- The places of the subtree at `cursor', which moves past it; `a_negated' when the subtree
-			-- stands under a NOT.
-		local
-			l_clause: BIB_QUERY_CLAUSE
-			l_positives, l_negatives: ARRAYED_LIST [ARRAYED_LIST [INTEGER_64]]
-			l_roots: BIB_ROOT_PLACES
-			i: INTEGER
+	nothing: ARRAYED_LIST [INTEGER_64]
+			-- No places.
 		do
 			create Result.make (0)
-			if cursor <= a_query.clause_count and not has_failed then
-				l_clause := a_query.clause (cursor)
-				cursor := cursor + 1
-				inspect l_clause.kind
-				when {BIB_QUERY_CLAUSE}.Word, {BIB_QUERY_CLAUSE}.Phrase then
-					if attached reader.verse_places_matching (a_version, l_clause.text) as al_places then
-						Result := al_places
-					else
-						error_message := {STRING_32} "The verse index could not be searched."
-					end
-				when {BIB_QUERY_CLAUSE}.Strongs, {BIB_QUERY_CLAUSE}.Lemma, {BIB_QUERY_CLAUSE}.Morph, {BIB_QUERY_CLAUSE}.Form then
-						-- Every key kind (BIB_QUERY_CLAUSE.is_key_clause); the check below keeps the two in step.
-					check key_clause: l_clause.is_key_clause end
-					if not pack.is_available then
-						error_message := {STRING_32} "No concordance is attached, so root words cannot be searched."
-					elseif attached l_clause.key as al_key then
-						l_roots := pack.key_places (al_key)
-						if l_roots.has_failed then
-								-- Design scan 48: a failed root query read as "no verse matches".
-							error_message := {STRING_32} "The concordance could not be searched for " + l_clause.text + {STRING_32} "."
-						else
-							if l_roots.has_hebrew and then map.has_hebrew_map and then reads_english_numbers (a_version) then
-									-- The version numbers verses the English way: the Hebrew side moves first.
-								Result := union (english_places (l_roots.hebrew_places), l_roots.greek_places)
-								if not a_negated then
-									has_moved_hebrew_roots := True
-								end
-							else
-								Result := l_roots.places
-								if not a_negated then
-									has_hebrew_roots := has_hebrew_roots or l_roots.has_hebrew
-								end
-							end
-							if not a_negated then
-								has_greek_roots := has_greek_roots or l_roots.has_greek
-							end
-						end
-					end
-				when {BIB_QUERY_CLAUSE}.Or_clause then
-					from i := 1 until i > l_clause.child_count loop
-						Result := union (Result, evaluated (a_query, a_version, a_negated))
-						i := i + 1
-					end
-				when {BIB_QUERY_CLAUSE}.And_clause then
-					create l_positives.make (l_clause.child_count)
-					create l_negatives.make (1)
-					from i := 1 until i > l_clause.child_count loop
-						if cursor <= a_query.clause_count and then a_query.clause (cursor).kind = {BIB_QUERY_CLAUSE}.Not_clause then
-							cursor := cursor + 1
-							l_negatives.extend (evaluated (a_query, a_version, not a_negated))
-						else
-							l_positives.extend (evaluated (a_query, a_version, a_negated))
-						end
-						i := i + 1
-					end
-					if not l_positives.is_empty then
-						Result := l_positives.first
-						from i := 2 until i > l_positives.count loop
-							Result := intersection (Result, l_positives.i_th (i))
-							i := i + 1
-						end
-						across l_negatives as ic loop
-							Result := difference (Result, ic)
-						end
-					end
+		end
+
+	leaf (a_clause: BIB_QUERY_CLAUSE; a_negated: BOOLEAN): ARRAYED_LIST [INTEGER_64]
+			-- The places a word or phrase (in `walk_version') or a key clause names; `a_negated' under
+			-- a NOT, where a root's corpus does not count toward the notes.
+		local
+			l_roots: BIB_ROOT_PLACES
+		do
+			create Result.make (0)
+			if a_clause.kind = {BIB_QUERY_CLAUSE}.Word or a_clause.kind = {BIB_QUERY_CLAUSE}.Phrase then
+				if attached reader.verse_places_matching (walk_version, a_clause.text) as al_places then
+					Result := al_places
 				else
-						-- A NOT outside an AND: the parser refuses it (`check_negations').
-					error_message := {STRING_32} "NOT needs something to take away from."
+					refuse ("The verse index could not be searched.")
 				end
+			elseif a_clause.is_key_clause then
+				if not pack.is_available then
+					refuse ("No concordance is attached, so root words cannot be searched.")
+				elseif attached a_clause.key as al_key then
+					l_roots := pack.key_places (al_key)
+					if l_roots.has_failed then
+							-- Design scan 48: a failed root query read as "no verse matches".
+						refuse ({STRING_32} "The concordance could not be searched for " + a_clause.text + {STRING_32} ".")
+					else
+						if l_roots.has_hebrew and then map.has_hebrew_map and then reads_english_numbers (walk_version) then
+								-- The version numbers verses the English way: the Hebrew side moves first.
+							Result := union (english_places (l_roots.hebrew_places), l_roots.greek_places)
+							if not a_negated then
+								has_moved_hebrew_roots := True
+							end
+						else
+							Result := l_roots.places
+							if not a_negated then
+								has_hebrew_roots := has_hebrew_roots or l_roots.has_hebrew
+							end
+						end
+						if not a_negated then
+							has_greek_roots := has_greek_roots or l_roots.has_greek
+						end
+					end
+				end
+			else
+				refuse ("This kind of search is not read yet.")
+			end
+		end
+
+	any_of (a_parts: ARRAYED_LIST [ARRAYED_LIST [INTEGER_64]]): ARRAYED_LIST [INTEGER_64]
+			-- Every place any part names.
+		local
+			i: INTEGER
+		do
+			Result := a_parts.first
+			from i := 2 until i > a_parts.count loop
+				Result := union (Result, a_parts.i_th (i))
+				i := i + 1
+			end
+		end
+
+	all_of_but (a_parts, a_taken_away: ARRAYED_LIST [ARRAYED_LIST [INTEGER_64]]): ARRAYED_LIST [INTEGER_64]
+			-- The places every part names, less those any taken-away part names.
+		local
+			i: INTEGER
+		do
+			Result := a_parts.first
+			from i := 2 until i > a_parts.count loop
+				Result := intersection (Result, a_parts.i_th (i))
+				i := i + 1
+			end
+			across a_taken_away as ic loop
+				Result := difference (Result, ic)
+			end
+		end
+
+	walk_failed: BOOLEAN
+			-- Has the search failed?
+		do
+			Result := has_failed
+		end
+
+	refuse (a_message: READABLE_STRING_GENERAL)
+			-- `error_message' says `a_message', unless a failure already stands.
+		do
+			if error_message.is_empty then
+				error_message := a_message.to_string_32
 			end
 		end
 

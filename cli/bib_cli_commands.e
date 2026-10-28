@@ -244,6 +244,12 @@ feature -- Commands
 					across l_search.packs_without_search as ic loop
 						Result.append (ic + {STRING_32} ": built before search existed; rebuild it to search it.%N")
 					end
+					across l_search.packs_failed as ic loop
+						Result.append (ic + {STRING_32} ": its search failed.%N")
+					end
+					across l_search.packs_cut_short as ic loop
+						Result.append (ic + {STRING_32} ": holds more than " + l_search.Max_rows_per_pack.out + {STRING_32} " matching rows; only the best are listed.%N")
+					end
 					across l_search.hits as ic loop
 						l_snippet := ic.snippet.twin
 						l_snippet.replace_substring_all ({STRING_32} "%N", {STRING_32} " ")
