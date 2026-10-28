@@ -183,6 +183,15 @@ feature -- Tests
 			assert_true ("Matt, Mt", l_linker.linked ("Matt 5:3 and Mt 5:4").has_substring ("](bible:40.5.3)") and l_linker.linked ("Mt 5:4").has_substring ("](bible:40.5.4)"))
 			assert_true ("Isa", l_linker.linked ("Isa 53:5").has_substring ("](bible:23.53.5)"))
 			assert_true ("an abbreviation's period", l_linker.linked ("Exod. 3:14").has_substring ("](bible:2.3.14)"))
+				-- Scan 59: the compact forms link in prose, and a box reads the short forms too.
+			assert_true ("1Pet", l_linker.linked ("as 1Pet 1:3 says").has_substring ("[1Pet 1:3](bible:60.1.3)"))
+			assert_true ("1John", l_linker.linked ("1John 1:9").has_substring ("](bible:62.1.9)"))
+			assert_true ("a box reads gn", attached (create {BIB_REFERENCE_LINKER}.make_forgiving (bible.books)).place_in ("gn 1:1") as al_gn
+				and then (al_gn.book = 1 and al_gn.chapter = 1 and al_gn.verse = 1))
+			assert_true ("a box reads Mt", attached (create {BIB_REFERENCE_LINKER}.make_forgiving (bible.books)).place_in ("Mt 5:3") as al_mt
+				and then al_mt.book = 40)
+			assert_true ("a box reads 1pet", attached (create {BIB_REFERENCE_LINKER}.make_forgiving (bible.books)).place_in ("1pet 1:3") as al_pet
+				and then (al_pet.book = 60 and al_pet.chapter = 1 and al_pet.verse = 3))
 			assert_false ("a book the content does not hold is no link", l_linker.linked ("Heb 13:8").has_substring ("bible:"))
 			assert_false ("lowercase is prose", l_linker.linked ("the gen 1:1 line").has_substring ("bible:"))
 			assert_true ("a range that runs backward is its first place", l_linker.linked ("Exodus 3:15-14").has_substring ("](bible:2.3.15)"))

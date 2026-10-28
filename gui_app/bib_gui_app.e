@@ -3327,16 +3327,26 @@ feature {NONE} -- Right-click menus and panes (Larry, 2026-10-28)
 			-- Open the Notes pane at tab `a_tab' with the typing in `a_box': where a highlight's reason,
 			-- a note, a tag or a prayer is written (Study; the pane folds open if it was folded).
 		do
+			bring_into_view (notes_panel, notes_tabs, a_tab)
+			window.give_focus (a_box)
+		end
+
+	bring_into_view (a_panel: INTEGER; a_tabs: detachable SW_TABS; a_tab: INTEGER)
+			-- Pane `a_panel' shown at tab `a_tab' of `a_tabs' (Void: none): the Study layout, another
+			-- pane's maximizing put back, a folded zone opened (scan 59: three copies had drifted).
+		do
 			if not is_study then
 				arrange (True)
 			end
-			dock.restore_maximized
-			dock.show_panel (notes_panel)
-			dock.expand_zone (dock.panels.i_th (notes_panel).zone)
-			if attached notes_tabs as al_tabs then
+			if dock.maximized_panel /= 0 and dock.maximized_panel /= a_panel then
+				dock.restore_maximized
+			end
+			dock.show_panel (a_panel)
+			dock.expand_zone (dock.panels.i_th (a_panel).zone)
+			if attached a_tabs as al_tabs then
 				al_tabs.select_tab (a_tab)
 			end
-			window.give_focus (a_box)
+			window.request_render
 		end
 
 	start_prayer
@@ -3802,18 +3812,20 @@ feature {NONE} -- Commentary held, and its references previewed (Larry, 2026-10-
 		end
 
 	link_card (a_view: SW_DOCUMENT_VIEW; a_item, a_character: INTEGER): detachable SW_HOVER_CARD
-			-- A link in `a_view' rested on: a Bible reference's passage in the version read, or a
-			-- framework's title and plain summary (2026-10-28).
+			-- A link in `a_view' rested on: a Bible reference's passage in the version read, a
+			-- framework's title and plain summary, or a book's title (2026-10-28; read once,
+			-- BIB_LINK_TARGET: scan 59).
+		local
+			l_target: BIB_LINK_TARGET
 		do
-			if a_view.is_valid_item (a_item) and then attached a_view.link_target_at (a_item, a_character) as al_target then
-				if al_target.starts_with ({BIB_FRAMEWORK_SCHEMA}.Link_prefix) then
-					Result := framework_card (al_target.substring ({BIB_FRAMEWORK_SCHEMA}.Link_prefix.count + 1, al_target.count))
-				elseif attached (create {BIB_BOOK_SCHEMA}).link_place (al_target) as al_book_place then
-					Result := book_card (al_book_place.book, al_book_place.chapter, al_book_place.block)
-				elseif attached (create {BIB_REFERENCE_LINKER}.make (bible.books)).target_range (al_target) as al_range
-					and then bible.books.has_book (al_range.book) and then al_range.chapter >= 1
-				then
-					Result := passage_card (al_range.book, al_range.chapter, al_range.verse, al_range.end_chapter, al_range.end_verse)
+			if a_view.is_valid_item (a_item) and then attached a_view.link_target_at (a_item, a_character) as al_text then
+				create l_target.make (al_text, bible.books)
+				if l_target.is_framework then
+					Result := framework_card (l_target.id)
+				elseif l_target.is_book then
+					Result := book_card (l_target.id, l_target.chapter)
+				elseif l_target.is_bible then
+					Result := passage_card (l_target.book, l_target.chapter, l_target.verse, l_target.end_chapter, l_target.end_verse)
 				end
 			end
 		end
@@ -3846,9 +3858,7 @@ feature {NONE} -- Commentary held, and its references previewed (Larry, 2026-10-
 			book_positive: a_book > 0
 			chapter_positive: a_chapter > 0
 		local
-			l_column: SW_COLUMN
-			l_title, l_body: SW_LABEL
-			l_text, l_name: STRING_32
+			l_text: STRING_32
 			l_verses: BIB_LIST_RESULT [BIB_READING_VERSE]
 			l_chapter, i, l_count, l_verse: INTEGER
 			l_more: BOOLEAN
@@ -3886,15 +3896,33 @@ feature {NONE} -- Commentary held, and its references previewed (Larry, 2026-10-
 			if l_text.is_empty then
 				l_text := {STRING_32} "Not in this version."
 			end
-			l_name := range_label (a_book, a_chapter, a_verse, a_end_chapter, a_end_verse)
-			create l_title.make (l_name + {STRING_32} " (" + reading_version.to_string_32 + {STRING_32} ")", {SW_PAINTER}.Role_ui, 13.0, True)
-			create l_body.make_body (l_text)
+			Result := card (range_label (a_book, a_chapter, a_verse, a_end_chapter, a_end_verse) + {STRING_32} " (" + reading_version.to_string_32 + {STRING_32} ")",
+				l_text, "")
+		end
+
+	Card_width: REAL_64 = 460.0
+			-- A hover card's width.
+
+	card (a_heading, a_body, a_hint: READABLE_STRING_GENERAL): SW_HOVER_CARD
+			-- A hover card: `a_heading' bold, `a_body' below, and `a_hint' muted under it when there is
+			-- one (scan 59: the passage, framework and book cards were three copies).
+		local
+			l_column: SW_COLUMN
+			l_title, l_body, l_hint: SW_LABEL
+		do
+			create l_title.make (a_heading, {SW_PAINTER}.Role_ui, 13.0, True)
+			l_title := l_title.with_wrap
+			create l_body.make_body (a_body)
 			l_body := l_body.with_wrap
 			create l_column.make
 			l_column := l_column.with_gap (6.0)
 			l_column.put (l_title)
 			l_column.put (l_body)
-			create Result.make (l_column, 460.0)
+			if not a_hint.is_empty then
+				create l_hint.make_ui (a_hint)
+				l_column.put (l_hint.as_muted)
+			end
+			create Result.make (l_column, Card_width)
 		end
 
 	snapshot_reference_card
@@ -4046,16 +4074,14 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 
 	show_book_place (a_book: READABLE_STRING_GENERAL; a_chapter, a_block: INTEGER)
 			-- Book `a_book' in T6's Author Library: its chapters listed, chapter `a_chapter' (0: the
-			-- first) read and, with `a_block' > 0, scrolled to that paragraph. Study layout; a
-			-- maximized pane put back, a folded bottom opened.
+			-- first) read and, with `a_block' > 0, scrolled to that paragraph; the pane brought into
+			-- view.
 		require
 			not_negative: a_chapter >= 0 and a_block >= 0
 		local
 			l_chapter, i: INTEGER
 		do
-			if not is_study then
-				arrange (True)
-			end
+			bring_into_view (results_panel, results_tabs, Author_library_tab)
 			l_chapter := a_chapter.max (1)
 			if attached book_pack as al_pack and then attached al_pack.book (a_book) as al_result and then al_result.is_success and then al_result.count = 1 then
 				if not listed_book.same_string_general (a_book) then
@@ -4085,12 +4111,6 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 			else
 				book_view.set_document (commentary_reader.read ({STRING_32} "No book " + a_book.to_string_32 + {STRING_32} " in the books pack."))
 			end
-			if dock.maximized_panel /= 0 and dock.maximized_panel /= results_panel then
-				dock.restore_maximized
-			end
-			dock.show_panel (results_panel)
-			dock.expand_zone (dock.panels.i_th (results_panel).zone)
-			results_tabs.select_tab (Author_library_tab)
 			window.request_render
 		end
 
@@ -4134,12 +4154,10 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 			in_books_grid.set_rows (in_books_rows)
 		end
 
-	book_card (a_book: READABLE_STRING_GENERAL; a_chapter, a_block: INTEGER): detachable SW_HOVER_CARD
-			-- A book link rested on: the book's title, the chapter's, its description; Void when the
-			-- pack has no such book.
+	book_card (a_book: READABLE_STRING_GENERAL; a_chapter: INTEGER): detachable SW_HOVER_CARD
+			-- A book link rested on: the book's title, chapter `a_chapter''s (0: none), its description;
+			-- Void when the pack has no such book.
 		local
-			l_column: SW_COLUMN
-			l_title, l_body, l_hint: SW_LABEL
 			l_heading: STRING_32
 		do
 			if attached book_pack as al_pack and then attached al_pack.book (a_book) as al_result and then al_result.is_success and then al_result.count = 1 then
@@ -4147,17 +4165,7 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 				if a_chapter > 0 and then not al_result.item (1).chapter_title (a_chapter).is_empty then
 					l_heading.append ({STRING_32} ": " + al_result.item (1).chapter_title (a_chapter))
 				end
-				create l_title.make (l_heading, {SW_PAINTER}.Role_ui, 13.0, True)
-				l_title := l_title.with_wrap
-				create l_body.make_body (al_result.item (1).description)
-				l_body := l_body.with_wrap
-				create l_hint.make_ui ("Click to read it in the Author Library.")
-				create l_column.make
-				l_column := l_column.with_gap (6.0)
-				l_column.put (l_title)
-				l_column.put (l_body)
-				l_column.put (l_hint.as_muted)
-				create Result.make (l_column, 440.0)
+				Result := card (l_heading, al_result.item (1).description, "Click to read it in the Author Library.")
 			end
 		end
 
@@ -4240,10 +4248,11 @@ feature {NONE} -- Frameworks explained (P05.8, Larry, 2026-10-28)
 
 	show_framework (a_id: READABLE_STRING_GENERAL)
 			-- Framework `a_id' in T4's Frameworks tab, the commentary left as it is: T4 brought into
-			-- view (a maximized pane put back, a folded side opened).
+			-- view.
 		local
 			i: INTEGER
 		do
+			bring_into_view (lexicon_panel, lexicon_tabs, Frameworks_tab)
 			if attached framework_pack as al_pack and then attached al_pack.framework (a_id) as al_result
 				and then al_result.is_success and then al_result.count = 1
 			then
@@ -4257,12 +4266,6 @@ feature {NONE} -- Frameworks explained (P05.8, Larry, 2026-10-28)
 			else
 				framework_view.set_document (commentary_reader.read ({STRING_32} "No framework " + a_id.to_string_32 + {STRING_32} " in the frameworks pack yet."))
 			end
-			if dock.maximized_panel /= 0 and dock.maximized_panel /= lexicon_panel then
-				dock.restore_maximized
-			end
-			dock.show_panel (lexicon_panel)
-			dock.expand_zone (dock.panels.i_th (lexicon_panel).zone)
-			lexicon_tabs.select_tab (Frameworks_tab)
 			window.request_render
 		end
 
@@ -4333,8 +4336,6 @@ feature {NONE} -- Frameworks explained (P05.8, Larry, 2026-10-28)
 			-- Framework `a_id''s name, title and plain summary, "Draft" while it is one; Void when the
 			-- pack has no such framework.
 		local
-			l_column: SW_COLUMN
-			l_title, l_body, l_hint: SW_LABEL
 			l_heading: STRING_32
 		do
 			if attached framework_pack as al_pack and then attached al_pack.framework (a_id) as al_result
@@ -4344,17 +4345,7 @@ feature {NONE} -- Frameworks explained (P05.8, Larry, 2026-10-28)
 				if al_result.item (1).is_draft then
 					l_heading.append ({STRING_32} " (Draft)")
 				end
-				create l_title.make (l_heading, {SW_PAINTER}.Role_ui, 13.0, True)
-				l_title := l_title.with_wrap
-				create l_body.make_body (al_result.item (1).hover)
-				l_body := l_body.with_wrap
-				create l_hint.make_ui ("Click to read it in the Frameworks tab.")
-				create l_column.make
-				l_column := l_column.with_gap (6.0)
-				l_column.put (l_title)
-				l_column.put (l_body)
-				l_column.put (l_hint.as_muted)
-				create Result.make (l_column, 440.0)
+				Result := card (l_heading, al_result.item (1).hover, "Click to read it in the Frameworks tab.")
 			end
 		end
 
@@ -4414,17 +4405,17 @@ feature {NONE} -- Commentary (S2, P04)
 			-- (Also the Frameworks tab's links. A "framework:<id>" link opens that framework in T4's
 			-- Frameworks tab, the commentary staying in view: Larry, 2026-10-28.)
 			-- A link in the commentary clicked: "bible:<book>.<chapter>.<verse>" opens that place
-			-- (verse 0: the chapter); another link is left alone.
+			-- (verse 0: the chapter); a "book:" link, Larry's book there; another link is left alone.
+			-- The target is read once (BIB_LINK_TARGET, scan 59).
+		local
+			l_target: BIB_LINK_TARGET
 		do
-			if a_target.starts_with ({BIB_FRAMEWORK_SCHEMA}.Link_prefix) then
-				show_framework (a_target.substring ({BIB_FRAMEWORK_SCHEMA}.Link_prefix.count + 1, a_target.count))
-			elseif attached (create {BIB_BOOK_SCHEMA}).link_place (a_target) as al_book_place then
-				show_book_place (al_book_place.book, al_book_place.chapter, al_book_place.block)
-			end
-				-- The target is read where it is written (BIB_REFERENCE_LINKER, scan 41).
-			if attached (create {BIB_REFERENCE_LINKER}.make (bible.books)).target_place (a_target) as al_place
-				and then bible.books.has_book (al_place.book) and then al_place.chapter > 0 and then al_place.verse >= 0
-			then
+			create l_target.make (a_target, bible.books)
+			if l_target.is_framework then
+				show_framework (l_target.id)
+			elseif l_target.is_book then
+				show_book_place (l_target.id, l_target.chapter, l_target.block)
+			elseif l_target.is_bible then
 					-- Larry, 2026-10-28: the passage opens in T3 and the commentary stays where it was,
 					-- until Back or a verse clicked in T3.
 				if not is_commentary_held and reading_book > 0 and reading_chapter > 0 then
@@ -4434,7 +4425,7 @@ feature {NONE} -- Commentary (S2, P04)
 					is_commentary_held := True
 				end
 				is_following_commentary := True
-				go_to (al_place.book, al_place.chapter, al_place.verse)
+				go_to (l_target.book, l_target.chapter, l_target.verse)
 				is_following_commentary := False
 				show_origin_button
 			end

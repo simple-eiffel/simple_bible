@@ -58,18 +58,8 @@ feature -- Access
 	sidecars_in (a_folder: READABLE_STRING_GENERAL): ARRAYED_LIST [STRING_32]
 			-- Every `*.framework.json' in the folder `a_folder'; or `a_folder' itself when it names a
 			-- file.
-		local
-			l_root: SIMPLE_FILE
 		do
-			create Result.make (16)
-			create l_root.make (a_folder)
-			if l_root.is_directory then
-				across l_root.files_with_extension (".framework.json") as ic_file loop
-					Result.extend (a_folder.to_string_32 + {STRING_32} "\" + ic_file)
-				end
-			elseif l_root.is_file then
-				Result.extend (a_folder.to_string_32)
-			end
+			Result := sidecars_with (a_folder, ".framework.json")
 		end
 
 feature -- Commands
@@ -98,17 +88,9 @@ feature -- Commands
 				check_related
 			end
 			if last_error = Void then
-				l_db := fresh_pack (a_pack, schema.Schema_statements)
+				l_db := begin_private_pack (a_pack, schema, "bible_build --frameworks")
+				put_private_provenance (l_db, 1, "frameworks sidecars", schema.Pack_title, "Plain-reader rewrites; a draft until Larry approves it.")
 				if last_error = Void then
-					put_meta (l_db, "pack_kind", schema.Pack_kind.to_string_32)
-					put_meta (l_db, "title", schema.Pack_title.to_string_32)
-					put_meta (l_db, "author", {STRING_32} "Larry Rix")
-					put_meta (l_db, "builder", {STRING_32} "bible_build --frameworks")
-					if last_error = Void then
-						l_db.execute_with_args ("INSERT INTO source_provenance VALUES (1, ?, ?, 'private', 1, 0, 1, 'Larry Rix', ?)",
-							<<{STRING_32} "frameworks sidecars", schema.Pack_title.to_string_32, {STRING_32} "Plain-reader rewrites; a draft until Larry approves it.">>)
-						check_db (l_db, "The pack's provenance could not be written.")
-					end
 					across records as ic until last_error /= Void loop
 						write_framework (l_db, ic)
 					end
@@ -206,14 +188,6 @@ feature {NONE} -- Reading and checking
 		ensure
 			every_related_held: across records as al_r all across al_r.related as al_id all
 				across records as al_other some al_other.id.same_string (al_id) end end end
-		end
-
-	fail_unless (a_condition: BOOLEAN; a_file, a_rule: READABLE_STRING_GENERAL)
-			-- Unless `a_condition': `last_error' names `a_file' and `a_rule' (the first failure stands).
-		do
-			if not a_condition and last_error = Void then
-				last_error := a_file.to_string_32 + {STRING_32} ": " + a_rule.to_string_32
-			end
 		end
 
 feature {NONE} -- Writing

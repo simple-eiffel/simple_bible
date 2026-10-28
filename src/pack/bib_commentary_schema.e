@@ -25,6 +25,9 @@ note
 class
 	BIB_COMMENTARY_SCHEMA
 
+inherit
+	BIB_PRIVATE_PACK_SCHEMA
+
 feature -- Constants
 
 	Pack_kind: STRING_8 = "commentary"
@@ -34,9 +37,6 @@ feature -- Constants
 			-- The one commentary pack's file in the packs folder.
 
 	Pack_title: STRING_8 = "Larry Rix: Commentaries"
-
-	Schema_version: INTEGER = 1
-			-- The pack's `user_version' (BIB_PRIVATE_SOURCE.Pack_schema_version).
 
 	Field_kinds: ARRAY [STRING_8]
 			-- A section's fields, in the order the window shows them.
@@ -50,12 +50,10 @@ feature -- Constants
 			Result := <<"framework", "question", "further_reading">>
 		end
 
-	Schema_statements: ARRAY [STRING_8]
-			-- The tables of a new commentary pack, then its version.
+	pack_tables: ARRAY [STRING_8]
+			-- The commentary pack's own tables.
 		once
 			Result := <<
-				"CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)",
-				"CREATE TABLE source_provenance(provenance_key INTEGER PRIMARY KEY, source_key TEXT NOT NULL, edition TEXT NOT NULL, license_id TEXT NOT NULL, non_commercial INTEGER NOT NULL, share_alike INTEGER NOT NULL, restricted INTEGER NOT NULL, credit TEXT NOT NULL, caveat TEXT NOT NULL)",
 				"CREATE TABLE commentary_book(book_id INTEGER PRIMARY KEY, title TEXT NOT NULL, status TEXT NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key))",
 				"CREATE TABLE commentary_section(section_id TEXT PRIMARY KEY, ordinal INTEGER NOT NULL, heading TEXT NOT NULL, start_book INTEGER NOT NULL, start_chapter INTEGER NOT NULL, start_verse INTEGER NOT NULL, end_book INTEGER NOT NULL, end_chapter INTEGER NOT NULL, end_verse INTEGER NOT NULL, start_hub INTEGER NOT NULL, end_hub INTEGER NOT NULL, versification TEXT NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key))",
 				"CREATE INDEX ix_commentary_section_hub ON commentary_section(start_hub, end_hub)",
@@ -63,8 +61,7 @@ feature -- Constants
 				"CREATE TABLE commentary_claim(claim_id TEXT NOT NULL CHECK (claim_id <> ''), section_id TEXT NOT NULL REFERENCES commentary_section(section_id), field_kind TEXT NOT NULL, ordinal INTEGER NOT NULL, label TEXT NOT NULL CHECK (label IN ('SOURCED', 'DEDUCED')), claim_text TEXT NOT NULL, summary TEXT NOT NULL, source_ref TEXT NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key), PRIMARY KEY (section_id, claim_id))",
 				"CREATE TABLE commentary_term(section_id TEXT NOT NULL REFERENCES commentary_section(section_id), ordinal INTEGER NOT NULL, script TEXT NOT NULL, translit TEXT NOT NULL, pron TEXT NOT NULL, english TEXT NOT NULL, language TEXT NOT NULL, lemma_key TEXT NOT NULL, strongs TEXT NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key), PRIMARY KEY (section_id, ordinal))",
 				"CREATE TABLE commentary_list(section_id TEXT NOT NULL REFERENCES commentary_section(section_id), list_kind TEXT NOT NULL, ordinal INTEGER NOT NULL, item_markdown TEXT NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key), PRIMARY KEY (section_id, list_kind, ordinal))",
-				"CREATE TABLE commentary_restricted_quote(section_id TEXT NOT NULL REFERENCES commentary_section(section_id), ordinal INTEGER NOT NULL, source TEXT NOT NULL, ship_class TEXT NOT NULL, note TEXT NOT NULL, body_markdown TEXT NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key), PRIMARY KEY (section_id, ordinal))",
-				"PRAGMA user_version = 1">>
+				"CREATE TABLE commentary_restricted_quote(section_id TEXT NOT NULL REFERENCES commentary_section(section_id), ordinal INTEGER NOT NULL, source TEXT NOT NULL, ship_class TEXT NOT NULL, note TEXT NOT NULL, body_markdown TEXT NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key), PRIMARY KEY (section_id, ordinal))">>
 		end
 
 end
