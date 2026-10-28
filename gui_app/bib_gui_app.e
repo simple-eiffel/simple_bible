@@ -1141,16 +1141,11 @@ feature {NONE} -- Toolbar (C3-C9)
 		end
 
 	copy_verse
-			-- Edit > Copy verse: the selected verse with its reference.
-		local
-			l_text: STRING_32
+			-- Edit > Copy verse: the selected verse with its reference (scan 56: `copy_hub_verse', the
+			-- one verse copier).
 		do
-			across reading_verses as ic loop
-				if ic.verse = reading_verse then
-					l_text := ic.display_text + {STRING_32} " (" + place_text (reading_book, reading_chapter, reading_verse) + {STRING_32} " " + reading_version.to_string_32 + {STRING_32} ")"
-					(create {SW_CLIPBOARD}).set_text (l_text)
-					window.toast ("Verse copied.", 2)
-				end
+			if reading_verse > 0 then
+				copy_hub_verse (reading_hub)
 			end
 		end
 
@@ -2705,7 +2700,7 @@ feature {NONE} -- Notes (T2, P06)
 		do
 			create Result.make (8)
 			create l_hub
-			if user_store.is_open and then a_book >= 1 and then a_book <= l_hub.Max_part and then a_chapter >= 1 and then a_chapter <= l_hub.Max_part then
+			if user_store.is_open and then l_hub.is_place (a_book, a_chapter, 1) then
 				across user_store.highlights_between (l_hub.hub_id (a_book, a_chapter, 1), l_hub.hub_id (a_book, a_chapter, l_hub.Max_part)) as ic loop
 					l_verse := l_hub.verse_of (ic.hub_id)
 					if attached Result.item (l_verse) as al_reasons then
@@ -3408,19 +3403,6 @@ feature {NONE} -- Right-click menus and panes (Larry, 2026-10-28)
 			end
 		end
 
-	place_hub (a_book, a_chapter, a_verse: INTEGER): INTEGER_64
-			-- The hub id of a place, 0 when it names no verse.
-		local
-			l_hub: BIB_HUB_ID
-		do
-			create l_hub
-			if a_book >= 1 and a_book <= l_hub.Max_part and a_chapter >= 1 and a_chapter <= l_hub.Max_part
-				and a_verse >= 1 and a_verse <= l_hub.Max_part
-			then
-				Result := l_hub.hub_id (a_book, a_chapter, a_verse)
-			end
-		end
-
 	copy_hub_verse (a_hub: INTEGER_64)
 			-- Verse `a_hub' in the version read, with its reference, onto the clipboard.
 		do
@@ -3456,7 +3438,7 @@ feature {NONE} -- Right-click menus and panes (Larry, 2026-10-28)
 			-- A cross-reference: its verse's items.
 		do
 			if attached cross_refs_grid.context_object as al_ref then
-				verse_items (a_menu, place_hub (al_ref.to_book, al_ref.to_chapter, al_ref.verse_start))
+				verse_items (a_menu, (create {BIB_HUB_ID}).hub_of_place (al_ref.to_book, al_ref.to_chapter, al_ref.verse_start))
 			end
 			pane_menu (commentary_panel, a_menu, a_px, a_py)
 		end
@@ -3475,7 +3457,7 @@ feature {NONE} -- Right-click menus and panes (Larry, 2026-10-28)
 			-- A verse the search found: its items; a larger view.
 		do
 			if attached verses_grid.context_object as al_hit then
-				verse_items (a_menu, place_hub (al_hit.book_id, al_hit.chapter, al_hit.verse))
+				verse_items (a_menu, (create {BIB_HUB_ID}).hub_of_place (al_hit.book_id, al_hit.chapter, al_hit.verse))
 			end
 			pane_menu (results_panel, a_menu, a_px, a_py)
 		end
@@ -3484,7 +3466,7 @@ feature {NONE} -- Right-click menus and panes (Larry, 2026-10-28)
 			-- A place of the word: its verse's items.
 		do
 			if attached places_grid.context_object as al_place and then al_place.is_readable then
-				verse_items (a_menu, place_hub (al_place.book_id, al_place.chapter, al_place.verse))
+				verse_items (a_menu, (create {BIB_HUB_ID}).hub_of_place (al_place.book_id, al_place.chapter, al_place.verse))
 			end
 			pane_menu (lexicon_panel, a_menu, a_px, a_py)
 		end
@@ -3523,15 +3505,20 @@ feature {NONE} -- Right-click menus and panes (Larry, 2026-10-28)
 
 	open_journal_row (a_model: INTEGER)
 			-- Entry `a_model' into the boxes, as a click on it.
+		require
+			row_listed: a_model >= 1 and a_model <= journal_rows.count
 		do
-			if a_model >= 1 and a_model <= journal_rows.count then
-				journal_grid.select_model_row (a_model)
-				on_journal_row (a_model)
-			end
+			journal_grid.select_model_row (a_model)
+			on_journal_row (a_model)
+		ensure
+			opened: journal_entry_id = journal_rows.i_th (a_model).id
 		end
 
 	delete_journal_row (a_model: INTEGER)
-			-- Soft-delete entry `a_model' (Restore brings it back).
+			-- Soft-delete entry `a_model' (Restore brings it back); scan 56: the row itself, never the
+			-- entry open before.
+		require
+			row_listed: a_model >= 1 and a_model <= journal_rows.count
 		do
 			open_journal_row (a_model)
 			delete_journal_entry

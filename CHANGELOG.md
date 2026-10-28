@@ -11,6 +11,10 @@ All notable changes to simple_bible are documented here. The format follows [Kee
 - **Larger panes**: Commentary, Dictionary and Lexicon, Notes and Search results maximize from their title bars (the button, a double click, the bar's menu or the pane's own menu) and come back the same way; every side's title bar folds it.
 - A prayer begun from a verse's menu rests on that verse. Snapshot options `focus`, `maximize`, `fold`, `versemenu`, `barmenu`, `gridmenu`.
 
+### Fixed (design scan 56)
+
+- One verse copier: Edit > Copy verse goes through `copy_hub_verse`, as the menus do. One range rule for a place: `BIB_HUB_ID.is_place` and `hub_of_place` (the window had its own copy; `hub_id`'s precondition is now `is_place`), tested in `test_hub_id_is_english_numbering`. `open_journal_row` and `delete_journal_row` require a listed row and ensure the entry opened is that row's, so a right-click's Delete can never remove the entry open before.
+
 ### Added (2026-10-27: the study tools; personal installer 0.6.0 to 0.7.6)
 
 - **Interlinear tab** (P03, Ctrl+I): the chapter word by word in Hebrew or Greek, with transliteration, gloss, Strong's number and morphology spelled out (`BIB_CONC_PACK.interlinear_chapter`, `BIB_INTERLINEAR_WORD`, `BIB_MORPHOLOGY_NAMES`); the **verse analysis** grid below it (P03.2) gives each word's count in the corpus.
