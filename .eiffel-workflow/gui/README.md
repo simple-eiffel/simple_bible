@@ -199,7 +199,7 @@ Feature IDs, names and fit classes come from `research/09-FEATURE-PARITY - e-Swo
 | I-P15 | Preflight for a topic | P06 / P10 | v2 |
 | I-P16 | The human adjudicates | AI never a source (all); P12 My ruling (v1.5); Argue the other side (v2) | v1 / v1.5 / v2 |
 | I-P17 | Reply kit | D04 | v2 |
-| I-P18 | Frameworks explained (Larry, 2026-10-28) | Every FRAMEWORK(TM) name anywhere in the window (KACC, LOTF, LOVE, THMR, FOF, ZAKAR, PRISM, the JESUS Cornerstone, CL 54, SONG ...) is a link: a hover card says what the framework is in a sentence or two; a click opens the Frameworks tool at it. `frameworks.db`, a private pack like commentary.db, holds each framework rewritten for the common Christian reader (what it is, why it matters, the key passages, where the commentary uses it), built by `bible_build` from sidecars the writing side prepares. Where the tool lives in the window: chosen with Larry | planned |
+| I-P18 | Frameworks explained (Larry, 2026-10-28) | Every FRAMEWORK(TM) name anywhere in the window (KACC, LOTF, LOVE, THMR, FOF, ZAKAR, PRISM, the JESUS Cornerstone, CL 54, SONG ...) is a link: a hover card says what the framework is in a sentence or two; a click opens the Frameworks tool at it. `frameworks.db`, a private pack like commentary.db, holds each framework rewritten for the common Christian reader (what it is, why it matters, the key passages, where the commentary uses it), built by `bible_build` from sidecars the writing side prepares. Decided with Larry 2026-10-28: the tool is a Frameworks tab in T4 (the commentary stays in view); the COMMENTARY session writes the plain-reader text, Larry reviews it; the sidecar format is research/18-FRAMEWORKS-PACK-SIDECAR.md | building |
 
 ## Where to go next
 
