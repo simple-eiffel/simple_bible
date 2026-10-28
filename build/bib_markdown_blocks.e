@@ -50,6 +50,20 @@ feature -- Access
 	skip_headings: ARRAYED_LIST [STRING_32]
 			-- Headings whose sections are left out, lowercase.
 
+	is_starting_at_title: BOOLEAN
+			-- Does a chapter begin at its first "# " title (an essay: a draft note, a status line or an
+			-- image above it left out, and an italic production line of wiki links right under it)?
+
+feature -- Settings
+
+	start_at_title
+			-- Begin each chapter at its first "# " title (the essays pack, 2026-10-28).
+		do
+			is_starting_at_title := True
+		ensure
+			set: is_starting_at_title
+		end
+
 feature -- Splitting
 
 	split (a_markdown: READABLE_STRING_GENERAL)
@@ -62,7 +76,11 @@ feature -- Splitting
 		do
 			blocks.wipe_out
 			reset_current
-			l_lines := without_comments (without_front_matter (a_markdown.to_string_32)).split ('%N')
+			if is_starting_at_title then
+				l_lines := from_title (without_comments (without_front_matter (a_markdown.to_string_32))).split ('%N')
+			else
+				l_lines := without_comments (without_front_matter (a_markdown.to_string_32)).split ('%N')
+			end
 			across l_lines as ic loop
 				l_line := ic.twin
 				l_line.prune_all ('%R')
@@ -120,6 +138,54 @@ feature -- Splitting
 			flush
 		ensure
 			no_empty_block: across blocks as al_b all not al_b.markdown.is_empty end
+		end
+
+feature {NONE} -- An essay's start
+
+	from_title (a_text: STRING_32): STRING_32
+			-- `a_text' from its first "# " title line on; and, when the first line after the title is
+			-- one italic line holding wiki links (Good Ground's production line), without it. All of
+			-- `a_text' when it has no title.
+		local
+			l_start, l_end, l_next, l_stop: INTEGER
+			l_line: STRING_32
+		do
+			if a_text.starts_with ({STRING_32} "# ") then
+				l_start := 1
+			else
+				l_start := a_text.substring_index ({STRING_32} "%N# ", 1)
+				if l_start > 0 then
+					l_start := l_start + 1
+				end
+			end
+			if l_start = 0 then
+				Result := a_text
+			else
+				Result := a_text.substring (l_start, a_text.count)
+				l_end := Result.index_of ('%N', 1)
+				if l_end > 0 then
+					from l_next := l_end + 1 until l_next > Result.count or else not (Result [l_next] = '%N' or Result [l_next] = '%R' or Result [l_next] = ' ') loop
+						l_next := l_next + 1
+					end
+					l_stop := Result.index_of ('%N', l_next.min (Result.count))
+					if l_stop = 0 then
+						l_stop := Result.count + 1
+					end
+					if l_next <= Result.count then
+						l_line := Result.substring (l_next, l_stop - 1)
+						l_line.prune_all ('%R')
+						l_line.right_adjust
+						if l_line.has_substring ({STRING_32} "[[") and then l_line.count >= 2
+							and then ((l_line [1] = '*' and l_line [l_line.count] = '*') or (l_line [1] = '_' and l_line [l_line.count] = '_'))
+						then
+							Result := Result.substring (1, l_end) + Result.substring (l_stop.min (Result.count + 1), Result.count)
+						end
+					end
+				end
+			end
+		ensure
+			not_longer: Result.count <= a_text.count
+			at_the_title: a_text.has_substring ({STRING_32} "%N# ") or a_text.starts_with ({STRING_32} "# ") implies Result.starts_with ({STRING_32} "# ")
 		end
 
 feature {NONE} -- Implementation

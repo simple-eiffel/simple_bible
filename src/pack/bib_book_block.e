@@ -1,7 +1,8 @@
 note
 	description: "[
-		One block of a book (BIB_BOOK_SCHEMA): a heading, paragraph, quote, list item
-		or code block of one chapter, its address "book:<id>/<chapter>#<block>", and
+		One block of a book or an essay (BIB_TEXT_PACK_SCHEMA): a heading, paragraph,
+		quote, list item or code block of one chapter, its address
+		"book:<id>/<chapter>#<block>" or "essay:<series>/<essay>#<block>", and
 		the names of its book and chapter, so a list of blocks from several books
 		(the paragraphs citing a verse, or naming a framework) reads on its own.
 	]"
@@ -21,8 +22,8 @@ create
 feature {NONE} -- Initialization
 
 	make (a_book: READABLE_STRING_GENERAL; a_chapter, a_block: INTEGER; a_kind: READABLE_STRING_GENERAL; a_level: INTEGER;
-			a_markdown, a_book_title, a_chapter_title: READABLE_STRING_GENERAL; a_provenance: BIB_PROVENANCE)
-			-- Block `a_block' of chapter `a_chapter' of book `a_book'.
+			a_markdown, a_book_title, a_chapter_title: READABLE_STRING_GENERAL; a_schema: BIB_TEXT_PACK_SCHEMA; a_provenance: BIB_PROVENANCE)
+			-- Block `a_block' of chapter `a_chapter' of book `a_book', in a pack of `a_schema''s kind.
 		require
 			book_usable: (create {BIB_BOOK_SCHEMA}).is_book_id (a_book)
 			placed: a_chapter >= 1 and a_block >= 1
@@ -36,6 +37,7 @@ feature {NONE} -- Initialization
 			markdown := a_markdown.to_string_32
 			book_title := a_book_title.to_string_32
 			chapter_title := a_chapter_title.to_string_32
+			schema := a_schema
 			provenance := a_provenance
 		ensure
 			placed: book.same_string_general (a_book) and chapter = a_chapter and block = a_block
@@ -57,10 +59,19 @@ feature -- Access
 
 	provenance: BIB_PROVENANCE
 
-	link: STRING_32
-			-- "book:zakar/4#12".
+	schema: BIB_TEXT_PACK_SCHEMA
+			-- The pack's kind and link grammar.
+
+	pack_kind: STRING_8
+			-- "books" or "essays".
 		do
-			Result := (create {BIB_BOOK_SCHEMA}).link_text (book, chapter, block)
+			Result := schema.Pack_kind
+		end
+
+	link: STRING_32
+			-- "book:zakar/4#12", "essay:jesus/6#3".
+		do
+			Result := schema.link_text (book, chapter, block)
 		end
 
 	snippet (a_count: INTEGER): STRING_32

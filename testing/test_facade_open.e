@@ -621,7 +621,81 @@ feature -- Books pack (2026-10-28)
 			remove_test_files
 		end
 
+	test_essays_pack_builds_attaches_and_answers
+			-- 2026-10-28: an essay series' manifest becomes the essays pack (BIB_ESSAY_SCHEMA, the books
+			-- pack's tables and builder): the essay begins at its title (the draft note above it and the
+			-- italic production line of wiki links right under it left out); its blocks are addressed
+			-- "essay:"; the pack attaches beside the books, answers a verse, reads its links back, and
+			-- is searched with the writings.
+		local
+			l_essays: BIB_BOOK_BUILDER
+			l_bible: SIMPLE_BIBLE
+			l_target: BIB_LINK_TARGET
+			l_search: BIB_WRITINGS_SEARCH
+			l_ok: BOOLEAN
+		do
+			close_leftovers
+			fixture.build_content (Content_file, {CONC_FIXTURE}.Content_version, False)
+			make_folder
+			make_book_folder
+			l_ok := (create {SIMPLE_FILE}.make (Book_folder + "\e1.md")).write_text_utf_8 (Essay_text)
+			l_ok := (create {SIMPLE_FILE}.make (Essay_manifest_file)).write_text_utf_8 (Essay_manifest_text)
+			l_bible := bible ("", "")
+			l_bible.open
+			create l_essays.make_essays (l_bible.books)
+			assert_integers_equal ("the essays' manifests found", 1, l_essays.sidecars_in (Essay_manifest_file).count)
+			l_essays.build (l_essays.sidecars_in (Essay_manifest_file), Folder_essays_file, "")
+			l_bible.close
+			assert_true ("built", l_essays.last_error = Void)
+			assert_integers_equal ("one series", 1, l_essays.book_count)
+			assert_integers_equal ("the title, the paragraph, the quote", 3, l_essays.block_count)
+			assert_integers_equal ("Jude 5 cited", 1, l_essays.passage_count)
+			l_bible := bible ("", Folder)
+			l_bible.open
+			assert_true ("open with the packs", l_bible.is_open and l_bible.pack_errors.is_empty)
+			assert_integers_equal ("one essays pack", 1, l_bible.essay_packs.count)
+			assert_integers_equal ("not a books pack", 0, l_bible.book_packs.count)
+			if attached l_bible.essay_packs.first as al_pack then
+				assert_strings_equal ("titled", "Larry Rix: Essays", al_pack.title)
+				assert_strings_equal ("a series of essays", "essays", al_pack.books.item (1).pack_kind)
+				if attached al_pack.chapter_blocks ("sr", 1) as al_blocks then
+					assert_strings_equal ("the draft note left out: the title first", "The Song", al_blocks.item (1).markdown)
+					assert_strings_equal ("the production line left out", "Remember Jude 5 here.", al_blocks.item (2).markdown)
+					assert_strings_equal ("addressed as an essay", "essay:sr/1#2", al_blocks.item (2).link)
+				end
+				assert_integers_equal ("Jude 5: the paragraph", 1, al_pack.blocks_citing (65, 1, 5).count)
+			end
+			create l_target.make ("essay:sr/1#2", l_bible.books)
+			assert_true ("an essay link reads back", l_target.is_book and l_target.book_kind.same_string ("essays") and l_target.id.same_string ("sr") and l_target.block = 2)
+			l_search := l_bible.writings_search
+			l_search.search ("remember", False, "essays", "")
+			assert_integers_equal ("searched with the writings", 1, l_search.hits.count)
+			assert_strings_equal ("at the essay's paragraph", "essay:sr/1#2", l_search.hits.first.address)
+			l_bible.close
+			fixture.delete_file (Book_folder + "\e1.md")
+			fixture.delete_file (Essay_manifest_file)
+			remove_book_folder
+			remove_test_files
+		end
+
 feature {NONE} -- Fixture
+
+	Folder_essays_file: STRING = "facade_test_packs\essays.db"
+	Essay_manifest_file: STRING = "facade_test_sr.essay.json"
+
+	Essay_manifest_text: STRING
+			-- A series of one essay.
+		once
+			Result := "{%"id%":%"sr%",%"title%":%"SONG%",%"subtitle%":%"A test series%",%"author%":%"Larry Rix%",%"status%":%"published%","
+				+ "%"aliases%":[%"SONG (essay series)%"],%"description%":%"A test series.%",%"root%":%"facade_test_book%",%"chapters%":[{%"title%":%"The Song%",%"file%":%"e1.md%",%"kind%":%"chapter%",%"aliases%":[%"SONG 01%"]}],"
+				+ "%"skip_headings%":[],%"source%":%"test%"}"
+		end
+
+	Essay_text: STRING
+			-- A draft note above the title; an italic production line of wiki links under it.
+		once
+			Result := "DRAFT NOTE for Larry: check the ending.%N%N# The Song%N%N*Frameworks: [[ZAKAR]] and [[KACC]]*%N%NRemember Jude 5 here.%N%N> A closing quote.%N"
+		end
 
 	Other_pack_file: STRING = "facade_test_other_pack.db"
 
@@ -843,6 +917,7 @@ feature {NONE} -- Fixture
 			fixture.delete_file (Folder_other_file)
 			fixture.delete_file (Folder_frameworks_file)
 			fixture.delete_file (Folder_books_file)
+			fixture.delete_file (Folder_essays_file)
 			if (create {SIMPLE_FILE}.make (Folder)).is_directory then
 				l_ok := (create {SIMPLE_FILE}.make (Folder)).delete_directory
 			end

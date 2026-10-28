@@ -36,6 +36,13 @@ feature {NONE} -- Initialization
 				end
 			elseif attached (create {BIB_BOOK_SCHEMA}).link_place (text) as al_place then
 				is_book := True
+				book_kind := {BIB_BOOK_SCHEMA}.Pack_kind
+				id := al_place.book
+				chapter := al_place.chapter
+				block := al_place.block
+			elseif attached (create {BIB_ESSAY_SCHEMA}).link_place (text) as al_place then
+				is_book := True
+				book_kind := {BIB_ESSAY_SCHEMA}.Pack_kind
 				id := al_place.book
 				chapter := al_place.chapter
 				block := al_place.block
@@ -62,7 +69,14 @@ feature -- Access
 			-- A framework: `id'.
 
 	is_book: BOOLEAN
-			-- A book (`chapter' 0), a chapter (`block' 0) or a block of Larry's books: `id'.
+			-- A book (`chapter' 0), a chapter (`block' 0) or a block of Larry's books or essays (an
+			-- essay series, an essay): `id', in the pack of kind `book_kind'.
+
+	book_kind: STRING_8
+			-- "books" or "essays" for a book link; empty otherwise.
+		attribute
+			create Result.make_empty
+		end
 
 	is_bible: BOOLEAN
 			-- A Bible passage: `book' `chapter':`verse' to `end_chapter':`end_verse' (verse 0: a
@@ -89,6 +103,7 @@ feature -- Access
 invariant
 	one_kind_at_most: not (is_framework and is_book) and not (is_framework and is_bible) and not (is_book and is_bible)
 	named_by_id: (is_framework or is_book) = not id.is_empty
+	book_kind_for_books: is_book = not book_kind.is_empty
 	bible_placed: is_bible = (book > 0)
 	bible_has_a_chapter: is_bible implies chapter >= 1
 

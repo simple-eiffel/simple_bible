@@ -28,15 +28,27 @@ inherit
 	BIB_PACK_WRITING
 
 create
-	make
+	make,
+	make_essays
 
 feature {NONE} -- Initialization
 
+	make_essays (a_catalog: BIB_BOOK_CATALOG)
+			-- A builder of the essays pack (BIB_ESSAY_SCHEMA: a series is a book, an essay a chapter),
+			-- linking references by `a_catalog''s book names.
+		do
+			make (a_catalog)
+			create {BIB_ESSAY_SCHEMA} schema
+		ensure
+			catalog_set: catalog = a_catalog
+			essays: schema.Pack_kind.same_string ({BIB_ESSAY_SCHEMA}.Pack_kind)
+		end
+
 	make (a_catalog: BIB_BOOK_CATALOG)
-			-- A builder linking references by `a_catalog''s book names.
+			-- A builder of the books pack linking references by `a_catalog''s book names.
 		do
 			catalog := a_catalog
-			create schema
+			create {BIB_BOOK_SCHEMA} schema
 			create records.make (8)
 			create framework_spellings.make (0)
 		ensure
@@ -46,15 +58,17 @@ feature {NONE} -- Initialization
 feature -- Access
 
 	catalog: BIB_BOOK_CATALOG
-	schema: BIB_BOOK_SCHEMA
+	schema: BIB_TEXT_PACK_SCHEMA
+			-- The pack built: the books' or the essays'.
 
 	book_count, chapter_count, block_count, passage_count, framework_use_count: INTEGER
 			-- What the last build wrote.
 
 	sidecars_in (a_folder: READABLE_STRING_GENERAL): ARRAYED_LIST [STRING_32]
-			-- Every `*.book.json' in the folder `a_folder'; or `a_folder' itself when it names a file.
+			-- Every manifest (`*.book.json', `*.essay.json') in the folder `a_folder'; or `a_folder'
+			-- itself when it names a file.
 		do
-			Result := sidecars_with (a_folder, ".book.json")
+			Result := sidecars_with (a_folder, schema.Manifest_extension)
 		end
 
 feature -- Commands
@@ -86,8 +100,8 @@ feature -- Commands
 				if not framework_spellings.is_empty then
 					l_linker.set_framework_names (create {BIB_FRAMEWORK_NAMES}.make (framework_spellings))
 				end
-				l_db := begin_private_pack (a_pack, schema, "bible_build --books")
-				put_private_provenance (l_db, 1, "books manifests", schema.Pack_title, "Larry's books as the manuscripts hold them, corrections included.")
+				l_db := begin_private_pack (a_pack, schema, schema.Builder_command)
+				put_private_provenance (l_db, 1, schema.Pack_kind + " manifests", schema.Pack_title, "Larry's own text as his manuscripts hold it, corrections included.")
 				if last_error = Void then
 					from i := 1 until i > records.count or last_error /= Void loop
 						write_book (l_db, records.i_th (i), i, l_linker)
@@ -203,6 +217,9 @@ feature {NONE} -- Writing
 				check_db (a_db, {STRING_32} "An alias of " + a_record.id + {STRING_32} " could not be written.")
 			end
 			create l_blocks.make (a_record.skip_headings)
+			if schema.Starts_at_title then
+				l_blocks.start_at_title
+			end
 			fail_unless (a_record.chapters.count <= schema.Max_part, a_record.file, {STRING_32} "more chapters than a link can name")
 			from l_chapter := 1 until l_chapter > a_record.chapters.count or last_error /= Void loop
 				a_db.execute_with_args ("INSERT INTO book_chapter VALUES (?, ?, ?, ?, 'author', 1)",
