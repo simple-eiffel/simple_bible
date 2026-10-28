@@ -76,6 +76,11 @@ feature {NONE} -- Initialization
 					print (ic + "%N")
 				end
 				l_failed := True
+			elseif attached l_cli.value_of ("essays") as al_both_essays and then not al_both_essays.is_empty
+				and then attached l_cli.value_of ("books") as al_both_books and then not al_both_books.is_empty
+			then
+				print ("bible_build: --books and --essays build two packs; give one at a time%N")
+				l_failed := True
 			elseif attached manifests_named (l_cli) as al_manifests
 				and then attached l_cli.value_of ("out") as al_books_pack and then not al_books_pack.is_empty
 			then
@@ -90,6 +95,7 @@ feature {NONE} -- Initialization
 					else
 						create l_books.make (l_reader.books)
 					end
+						-- (one of the two only: both are refused above)
 					if l_books.sidecars_in (al_manifests).is_empty then
 						print ("bible_build: no *" + l_books.schema.Manifest_extension + " in " + al_manifests + "%N")
 						l_failed := True
@@ -101,7 +107,7 @@ feature {NONE} -- Initialization
 							print ("%N")
 							l_failed := True
 						else
-							print ("bible_build: wrote " + al_books_pack + " (" + l_books.book_count.out + (if l_books.schema.Pack_kind.same_string ({BIB_ESSAY_SCHEMA}.Pack_kind) then " series, " else " books, " end) + l_books.chapter_count.out + " chapters, "
+							print ("bible_build: wrote " + al_books_pack + " (" + l_books.book_count.out + " " + l_books.schema.Entries_noun + ", " + l_books.chapter_count.out + " chapters, "
 								+ l_books.block_count.out + " blocks, " + l_books.passage_count.out + " passages cited, " + l_books.framework_use_count.out + " framework uses)%N")
 						end
 					end

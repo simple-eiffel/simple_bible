@@ -672,6 +672,14 @@ feature -- Books pack (2026-10-28)
 			assert_integers_equal ("searched with the writings", 1, l_search.hits.count)
 			assert_strings_equal ("at the essay's paragraph", "essay:sr/1#2", l_search.hits.first.address)
 			l_bible.close
+				-- Scan 62: an essay with no title to begin at is refused, by name (it kept its notes).
+			l_ok := (create {SIMPLE_FILE}.make (Book_folder + "\e1.md")).write_text_utf_8 ("A working note.%N%NNo title here.%N")
+			l_bible := bible ("", "")
+			l_bible.open
+			create l_essays.make_essays (l_bible.books)
+			l_essays.build (l_essays.sidecars_in (Essay_manifest_file), Folder_essays_file, "")
+			l_bible.close
+			assert_true ("an essay without a title refused", attached l_essays.last_error as al_e and then al_e.has_substring ("title"))
 			fixture.delete_file (Book_folder + "\e1.md")
 			fixture.delete_file (Essay_manifest_file)
 			remove_book_folder

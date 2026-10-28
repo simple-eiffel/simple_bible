@@ -4,6 +4,12 @@ All notable changes to simple_bible are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Changed (2026-10-28: design scan 62; packs rebuilt; personal installer 0.7.29)
+
+- **One list of text-pack kinds**, `BIB_TEXT_PACKS` (books, then essays): `SIMPLE_BIBLE.text_packs` builds every kind's readers in one loop (`book_packs`, `essay_packs` filter it), `BIB_LINK_TARGET` reads every kind's links in one loop, and the window's library uses it. One reader, `BIB_BOOK_PACK.make_with_schema`, takes its schema at creation (`BIB_ESSAY_PACK` is gone, and no schema is made a row); the builder's `make_with_schema` likewise. The schema names its kind (`Kind_noun`, `Entries_noun`) where three places compared strings.
+- An essay with no "# " title is refused by name (it kept what stood above; test fails on the old builder); a byte-order mark before a title is read past; `bible_build` refuses `--books` with `--essays`; a framework's page shows up to twelve mentions from each pack, so the essays show beside a book that names it often.
+- Packs rebuilt from COMMENTARY's latest: books.db 14 books (batch 2: *The Bible You Think You Know* v3; drafts HA-SHEM 4-6, Epilogue, Bent, *The Hebrew Recovery Toolkit*), 287 chapters, 19,922 blocks; essays.db 46 series, 378 essays (JESUS 13-33 as drafts; CREDITED held); commentary.db 4,728 claims (1 John's labelled leans); frameworks.db the revised cards.
+
 ### Added (2026-10-28: Larry's essays; personal installer 0.7.28)
 
 - **The essays pack** (`essays.db`, private): one manifest per series (`<id>.essay.json`, written by the COMMENTARY session; a series is a book, an essay a chapter), links `essay:<series>/<essay>#<block>`. Built by the books' builder and read by the books' reader: `BIB_TEXT_PACK_SCHEMA` holds the tables and link grammar, `BIB_BOOK_SCHEMA` and `BIB_ESSAY_SCHEMA` name the kind, file, title, link prefix and manifest extension; `BIB_ESSAY_PACK` is `BIB_BOOK_PACK` over the essays' schema; `bible_build --essays <folder> --out essays.db`. An essay begins at its title: a draft note above it, and an italic production line of wiki links right under it, are left out. First batch: 47 series, 363 essays, 34,308 blocks, 11,649 references.

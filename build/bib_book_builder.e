@@ -29,30 +29,37 @@ inherit
 
 create
 	make,
-	make_essays
+	make_essays,
+	make_with_schema
 
 feature {NONE} -- Initialization
 
-	make_essays (a_catalog: BIB_BOOK_CATALOG)
-			-- A builder of the essays pack (BIB_ESSAY_SCHEMA: a series is a book, an essay a chapter),
-			-- linking references by `a_catalog''s book names.
+	make (a_catalog: BIB_BOOK_CATALOG)
+			-- A builder of the books pack, linking references by `a_catalog''s book names.
 		do
-			make (a_catalog)
-			create {BIB_ESSAY_SCHEMA} schema
+			make_with_schema (a_catalog, create {BIB_BOOK_SCHEMA})
 		ensure
 			catalog_set: catalog = a_catalog
-			essays: schema.Pack_kind.same_string ({BIB_ESSAY_SCHEMA}.Pack_kind)
 		end
 
-	make (a_catalog: BIB_BOOK_CATALOG)
-			-- A builder of the books pack linking references by `a_catalog''s book names.
+	make_essays (a_catalog: BIB_BOOK_CATALOG)
+			-- A builder of the essays pack (a series is a book, an essay a chapter).
+		do
+			make_with_schema (a_catalog, create {BIB_ESSAY_SCHEMA})
+		ensure
+			catalog_set: catalog = a_catalog
+		end
+
+	make_with_schema (a_catalog: BIB_BOOK_CATALOG; a_schema: BIB_TEXT_PACK_SCHEMA)
+			-- A builder of the pack of `a_schema''s kind, linking references by `a_catalog''s book names.
 		do
 			catalog := a_catalog
-			create {BIB_BOOK_SCHEMA} schema
+			schema := a_schema
 			create records.make (8)
 			create framework_spellings.make (0)
 		ensure
 			catalog_set: catalog = a_catalog
+			schema_set: schema = a_schema
 		end
 
 feature -- Access
@@ -228,6 +235,8 @@ feature {NONE} -- Writing
 				chapter_count := chapter_count + 1
 				l_blocks.split ((create {SIMPLE_FILE}.make (chapter_path (a_record.root, a_record.chapters.i_th (l_chapter).file))).read_text_utf_8)
 				fail_unless (l_blocks.blocks.count <= schema.Max_part, a_record.chapters.i_th (l_chapter).file, {STRING_32} "more blocks than a link can name")
+				fail_unless (not schema.Starts_at_title or else (not l_blocks.blocks.is_empty and then l_blocks.blocks.first.kind.same_string ("heading") and then l_blocks.blocks.first.level = 1),
+					a_record.chapters.i_th (l_chapter).file, {STRING_32} "no %"# %" title to begin at (scan 62: what stood above it would have been kept)")
 				from l_block := 1 until l_block > l_blocks.blocks.count or last_error /= Void loop
 					a_db.execute_with_args ("INSERT INTO book_block VALUES (?, ?, ?, ?, ?, ?, 'author', 1)",
 						<<a_record.id, l_chapter, l_block, l_blocks.blocks.i_th (l_block).kind, l_blocks.blocks.i_th (l_block).level, l_blocks.blocks.i_th (l_block).markdown>>)

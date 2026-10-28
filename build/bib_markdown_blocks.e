@@ -77,9 +77,9 @@ feature -- Splitting
 			blocks.wipe_out
 			reset_current
 			if is_starting_at_title then
-				l_lines := from_title (without_comments (without_front_matter (a_markdown.to_string_32))).split ('%N')
+				l_lines := from_title (without_comments (without_front_matter (without_mark (a_markdown.to_string_32)))).split ('%N')
 			else
-				l_lines := without_comments (without_front_matter (a_markdown.to_string_32)).split ('%N')
+				l_lines := without_comments (without_front_matter (without_mark (a_markdown.to_string_32))).split ('%N')
 			end
 			across l_lines as ic loop
 				l_line := ic.twin
@@ -141,6 +141,17 @@ feature -- Splitting
 		end
 
 feature {NONE} -- An essay's start
+
+	without_mark (a_text: STRING_32): STRING_32
+			-- `a_text' without a leading byte-order mark (scan 62: a title after one was missed).
+		do
+			Result := a_text
+			if not Result.is_empty and then Result [1].code = 65279 then
+				Result := Result.substring (2, Result.count)
+			end
+		ensure
+			at_most_one_less: Result.count >= a_text.count - 1
+		end
 
 	from_title (a_text: STRING_32): STRING_32
 			-- `a_text' from its first "# " title line on; and, when the first line after the title is
