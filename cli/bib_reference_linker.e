@@ -4,7 +4,9 @@ note
 		"Numbers 14:11" becomes [Numbers 14:11](bible:4.14.11), "Jude 5" (a book
 		of one chapter: the number is the verse) [Jude 5](bible:65.1.5), and
 		"Matthew 5" the chapter, [Matthew 5](bible:40.5.0). A range keeps its
-		text and links to its first verse. Larry's rule (2026-02-15): every
+		text, and its link names where it ends too: [Galatians 2:15-21]
+		(bible:48.2.15-2.21), so a hover card can show the whole passage
+		(2026-10-28); `target_place' reads the first verse of either form. Larry's rule (2026-02-15): every
 		reference is a doorway to its content; first used on the Commentaries
 		tab (2026-10-27), whose text names references in plain words.
 
@@ -101,15 +103,58 @@ feature -- Places
 			read_back: attached target_place (Result) as r and then (r.book = a_book and r.chapter = a_chapter and r.verse = a_verse)
 		end
 
-	target_place (a_target: READABLE_STRING_GENERAL): detachable TUPLE [book, chapter, verse: INTEGER]
-			-- The place a "bible:" link target names; Void for any other target.
-		local
-			l_parts: LIST [STRING_32]
+	range_target_text (a_book, a_chapter, a_verse, a_end_chapter, a_end_verse: INTEGER): STRING_32
+			-- The link target of a passage: `target_text' when it is one place, else that and where it
+			-- ends: "bible:48.2.15-2.21".
 		do
-			if a_target.to_string_32.starts_with (Target_prefix) then
-				l_parts := a_target.to_string_32.substring (Target_prefix.count + 1, a_target.count).split ('.')
+			Result := target_text (a_book, a_chapter, a_verse)
+			if a_end_chapter /= a_chapter or a_end_verse /= a_verse then
+				Result.append ({STRING_32} "-" + a_end_chapter.out + {STRING_32} "." + a_end_verse.out)
+			end
+		ensure
+			first_place_read_back: attached target_place (Result) as r and then (r.book = a_book and r.chapter = a_chapter and r.verse = a_verse)
+		end
+
+	target_place (a_target: READABLE_STRING_GENERAL): detachable TUPLE [book, chapter, verse: INTEGER]
+			-- The place a "bible:" link target names (a passage's first); Void for any other target.
+		do
+			if attached target_range (a_target) as al_range then
+				Result := [al_range.book, al_range.chapter, al_range.verse]
+			end
+		end
+
+	target_range (a_target: READABLE_STRING_GENERAL): detachable TUPLE [book, chapter, verse, end_chapter, end_verse: INTEGER]
+			-- The passage a "bible:" link target names, where it starts and ends (one place ends where
+			-- it starts); Void for any other target.
+		local
+			l_text, l_start, l_end: STRING_32
+			l_parts, l_end_parts: LIST [STRING_32]
+			l_dash: INTEGER
+		do
+			l_text := a_target.to_string_32
+			if l_text.starts_with (Target_prefix) then
+				l_text := l_text.substring (Target_prefix.count + 1, l_text.count)
+				l_dash := l_text.index_of ('-', 1)
+				if l_dash > 0 then
+					l_start := l_text.substring (1, l_dash - 1)
+					l_end := l_text.substring (l_dash + 1, l_text.count)
+				else
+					l_start := l_text
+					create l_end.make_empty
+				end
+				l_parts := l_start.split ('.')
 				if l_parts.count = 3 and then l_parts.i_th (1).is_integer and then l_parts.i_th (2).is_integer and then l_parts.i_th (3).is_integer then
-					Result := [l_parts.i_th (1).to_integer, l_parts.i_th (2).to_integer, l_parts.i_th (3).to_integer]
+					Result := [l_parts.i_th (1).to_integer, l_parts.i_th (2).to_integer, l_parts.i_th (3).to_integer,
+						l_parts.i_th (2).to_integer, l_parts.i_th (3).to_integer]
+					if not l_end.is_empty then
+						l_end_parts := l_end.split ('.')
+						if l_end_parts.count = 2 and then l_end_parts.i_th (1).is_integer and then l_end_parts.i_th (2).is_integer then
+							Result.end_chapter := l_end_parts.i_th (1).to_integer
+							Result.end_verse := l_end_parts.i_th (2).to_integer
+						else
+							Result := Void
+						end
+					end
 				end
 			end
 		end
@@ -159,7 +204,7 @@ feature -- Linking
 					end
 					if attached l_found as al_found then
 						l_end := al_found.last
-						Result.append ({STRING_32} "[" + l_text.substring (i, l_end) + {STRING_32} "](" + target_text (al_found.book, al_found.chapter, al_found.verse) + {STRING_32} ")")
+						Result.append ({STRING_32} "[" + l_text.substring (i, l_end) + {STRING_32} "](" + range_target_text (al_found.book, al_found.chapter, al_found.verse, al_found.end_chapter, al_found.end_verse) + {STRING_32} ")")
 						i := l_end + 1
 					else
 						Result.append_character (l_text [i])
@@ -171,7 +216,7 @@ feature -- Linking
 			nothing_lost: Result.count >= a_markdown.count
 		end
 
-	reference_at (a_text: STRING_32; a_start: INTEGER): detachable TUPLE [last, book, chapter, verse: INTEGER]
+	reference_at (a_text: STRING_32; a_start: INTEGER): detachable TUPLE [last, book, chapter, verse, end_chapter, end_verse: INTEGER]
 			-- The reference starting at `a_start' (its last character, book, chapter and verse; verse 0
 			-- for a whole chapter); Void when none starts there.
 		require
@@ -233,11 +278,13 @@ feature {NONE} -- Implementation
 			end
 		end
 
-	numbers_at (a_text: STRING_32; a_start, a_book: INTEGER): detachable TUPLE [last, book, chapter, verse: INTEGER]
-			-- "14:11", "5-7", "2:4-9" or "5" at `a_start' after book `a_book'.
+	numbers_at (a_text: STRING_32; a_start, a_book: INTEGER): detachable TUPLE [last, book, chapter, verse, end_chapter, end_verse: INTEGER]
+			-- "14:11", "5-7", "2:4-9", "5:1-6:2" or "5" at `a_start' after book `a_book', with where
+			-- a range ends (a place without one ends where it starts; verse 0: a whole chapter).
 		local
-			i, l_first, l_second: INTEGER
-			l_has_colon: BOOLEAN
+			i, l_first, l_second, l_third, l_fourth: INTEGER
+			l_has_colon, l_has_range, l_range_colon: BOOLEAN
+			l_start_chapter, l_start_verse, l_end_chapter, l_end_verse: INTEGER
 		do
 			i := a_start
 			from until i > a_text.count or else not a_text [i].is_digit loop
@@ -252,24 +299,59 @@ feature {NONE} -- Implementation
 					i := i + 1
 				end
 			end
-				-- A range ("5-7", "2:4-9", "5:1-6:2") keeps its text; its link opens the first verse.
+				-- A range ("5-7", "2:4-9", "5:1-6:2") keeps its text; its end is read too.
 			if i + 1 <= a_text.count and then (a_text [i] = '-' or a_text [i].natural_32_code = 0x2013) and then a_text [i + 1].is_digit then
+				l_has_range := True
 				i := i + 1
-				from until i > a_text.count or else not (a_text [i].is_digit or (a_text [i] = ':' and then i < a_text.count and then a_text [i + 1].is_digit)) loop
+				from until i > a_text.count or else not a_text [i].is_digit loop
+					l_third := l_third * 10 + a_text [i].code - ('0').code
 					i := i + 1
+				end
+				if i + 1 <= a_text.count and then a_text [i] = ':' and then a_text [i + 1].is_digit then
+					l_range_colon := True
+					i := i + 1
+					from until i > a_text.count or else not a_text [i].is_digit loop
+						l_fourth := l_fourth * 10 + a_text [i].code - ('0').code
+						i := i + 1
+					end
 				end
 			end
 			if l_has_colon then
-				if l_first >= 1 and l_first <= Max_number and l_second >= 1 and l_second <= Max_number then
-					Result := [i - 1, a_book, l_first, l_second]
-				end
+				l_start_chapter := l_first
+				l_start_verse := l_second
 			elseif books.is_single_chapter_book (a_book) then
-				if l_first >= 1 and l_first <= Max_number then
-					Result := [i - 1, a_book, 1, l_first]
-				end
-			elseif l_first >= 1 and l_first <= Max_number then
-				Result := [i - 1, a_book, l_first, 0]
+				l_start_chapter := 1
+				l_start_verse := l_first
+			else
+				l_start_chapter := l_first
 			end
+			l_end_chapter := l_start_chapter
+			l_end_verse := l_start_verse
+			if l_has_range and l_range_colon then
+					-- "5:1-6:2"
+				l_end_chapter := l_third
+				l_end_verse := l_fourth
+			elseif l_has_range and (l_has_colon or books.is_single_chapter_book (a_book)) then
+					-- "2:4-9", "Jude 5-7": verses of the chapter
+				l_end_verse := l_third
+			elseif l_has_range then
+					-- "5-7": whole chapters
+				l_end_chapter := l_third
+			end
+			if l_end_chapter < l_start_chapter or else (l_end_chapter = l_start_chapter and l_end_verse < l_start_verse)
+				or else l_end_chapter > Max_number or else l_end_verse > Max_number
+			then
+					-- a range that runs backward or past any book is read as its first place
+				l_end_chapter := l_start_chapter
+				l_end_verse := l_start_verse
+			end
+			if l_start_chapter >= 1 and l_start_chapter <= Max_number and l_start_verse >= 0 and l_start_verse <= Max_number
+				and (l_has_colon implies l_start_verse >= 1) and (books.is_single_chapter_book (a_book) implies l_start_verse >= 1)
+			then
+				Result := [i - 1, a_book, l_start_chapter, l_start_verse, l_end_chapter, l_end_verse]
+			end
+		ensure
+			ends_after_it_starts: attached Result as r implies (r.end_chapter > r.chapter or (r.end_chapter = r.chapter and r.end_verse >= r.verse))
 		end
 
 	starts_like_a_name (a_name: STRING_32): BOOLEAN
