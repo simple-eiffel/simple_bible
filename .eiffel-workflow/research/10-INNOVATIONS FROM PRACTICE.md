@@ -1,6 +1,6 @@
 # INNOVATIONS FROM PRACTICE: simple_bible
 
-*2026-10-06. Ideas drawn from how Larry and Claude actually work in the Scholars vault: research cycles, censuses, shape.db, and an exchange with a friend's AI-generated answer. They complement `05-INNOVATIONS.md` (written by the research agent). Novelty is unverified until `09-FEATURE-PARITY` confirms whether e-Sword or Logos already have equivalents.*
+*2026-10-06. Ideas drawn from how Larry and Claude actually work in the research vault: research cycles, censuses, shape.db, and an exchange with a friend's AI-generated answer. They complement `05-INNOVATIONS.md` (written by the research agent). Novelty is unverified until `09-FEATURE-PARITY` confirms whether e-Sword or Logos already have equivalents.*
 
 > **Novelty checked (2026-10-06, `09-FEATURE-PARITY`):** 11 of the 17 have no equivalent in e-Sword or Logos. 5 are new only as a layer on an existing Logos feature: the quotation verdict (I-P06), the word's journey (I-P07), the divine-name view (I-P08, buildable in Logos with Visual Filters), per-sentence fact links (I-P11), and near-misses always shown (I-P03). 1 is NOT new: **range before ruling (I-P09)**, because Logos's Bible Word Study already shows senses with counts.
 

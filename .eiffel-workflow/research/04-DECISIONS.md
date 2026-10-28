@@ -180,7 +180,7 @@
 - **Release order:** the personal concordance edition comes before the public Release 1a. The target user of the public release (D-003) is unchanged.
 **Fit with earlier decisions:**
 - **D-014 / fork 03 (B′):** conc.db, with its research-only layers, is a private DATA pack; no private code in any build. The personal edition is the public engine plus that pack.
-- **D-020 / fork 03 item 6:** the conc.db builder (Python, `Scholars/_Tools/`) may stay Python while it builds only the private pack. conc_dist.db, which ships, needs an Eiffel builder with a differential test against the Python.
+- **D-020 / fork 03 item 6:** the conc.db builder (Python, the research vault's tools folder) may stay Python while it builds only the private pack. conc_dist.db, which ships, needs an Eiffel builder with a differential test against the Python.
 - **D-011:** unchanged. Rahlfs appears only in the personal edition; Swete is the distribution LXX.
 - **Concordance rules (Larry, 2026-10-18 to 10-22; research/14 §1):** keyed by headword (`lemma_id`), never by Strong's; "candidates," never "best"; every original-language word shows a transliteration; Hebrew lines up left in tables; never print Larry's name; at most one callout per entry.
 **Open technical forks** (settled by spikes and a budgeted /eiffel.debate, not by Larry): conc.db as its own file, a build stage or a pack; which BIB_ classes carry the word, English and reference lookups; reuse of BIB_CONCORDANCE and the search classes; precomputed `token.translit`.

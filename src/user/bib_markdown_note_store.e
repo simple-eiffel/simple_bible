@@ -1,6 +1,6 @@
 note
 	description: "[
-		Notes as Markdown files in a user folder (Obsidian-compatible), indexed
+		Notes as Markdown files in a user folder (notes-app compatible), indexed
 		into user.db for search and backlinks: the Release 1b candidate (2026-10-26
 		spec fold, debate 02 pathway A'', file-authoritative, UNTESTED, behind its
 		gates; Release 1a ships BIB_DB_NOTE_STORE with export and import). Rules: reconcile at start and on window
