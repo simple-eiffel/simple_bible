@@ -54,6 +54,18 @@ feature -- Constants
 	Reviewed: STRING_8 = "reviewed"
 			-- A framework's `status': a draft until Larry approves it.
 
+	tier_list: STRING_32
+			-- `Tiers', comma-separated, for a message.
+		do
+			create Result.make (60)
+			across Tiers as ic loop
+				if not Result.is_empty then
+					Result.append ({STRING_32} ", ")
+				end
+				Result.append_string_general (ic)
+			end
+		end
+
 	tier_rank (a_tier: READABLE_STRING_GENERAL): INTEGER
 			-- `a_tier''s place in `Tiers'; 0 for none.
 		local

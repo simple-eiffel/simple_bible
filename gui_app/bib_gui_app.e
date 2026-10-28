@@ -3791,6 +3791,24 @@ feature {NONE} -- Commentary held, and its references previewed (Larry, 2026-10-
 			end
 		end
 
+	range_label (a_book, a_chapter, a_verse, a_end_chapter, a_end_verse: INTEGER): STRING_32
+			-- "Galatians 2:15-21", "Exodus 5:1-6:2", "Matthew 5-7" (verse 0: whole chapters), or one
+			-- place: the one way a passage is named (scan 58: two copies had drifted).
+		require
+			book_positive: a_book > 0
+			chapter_positive: a_chapter > 0
+		do
+			Result := place_text (a_book, a_chapter, a_verse)
+			if a_end_chapter /= a_chapter then
+				Result.append ({STRING_32} "-" + a_end_chapter.out.to_string_32)
+				if a_end_verse > 0 then
+					Result.append ({STRING_32} ":" + a_end_verse.out.to_string_32)
+				end
+			elseif a_end_verse /= a_verse then
+				Result.append ({STRING_32} "-" + a_end_verse.out.to_string_32)
+			end
+		end
+
 	Card_verses: INTEGER = 8
 			-- The most verses a reference card shows before "...".
 
@@ -3841,15 +3859,7 @@ feature {NONE} -- Commentary held, and its references previewed (Larry, 2026-10-
 			if l_text.is_empty then
 				l_text := {STRING_32} "Not in this version."
 			end
-			l_name := place_text (a_book, a_chapter, a_verse)
-			if a_end_chapter /= a_chapter then
-				l_name.append ({STRING_32} "-" + a_end_chapter.out.to_string_32)
-				if a_end_verse > 0 then
-					l_name.append ({STRING_32} ":" + a_end_verse.out.to_string_32)
-				end
-			elseif a_end_verse /= a_verse then
-				l_name.append ({STRING_32} "-" + a_end_verse.out.to_string_32)
-			end
+			l_name := range_label (a_book, a_chapter, a_verse, a_end_chapter, a_end_verse)
 			create l_title.make (l_name + {STRING_32} " (" + reading_version.to_string_32 + {STRING_32} ")", {SW_PAINTER}.Role_ui, 13.0, True)
 			create l_body.make_body (l_text)
 			l_body := l_body.with_wrap
@@ -4042,12 +4052,7 @@ feature {NONE} -- Frameworks explained (P05.8, Larry, 2026-10-28)
 			if not a_framework.uses.is_empty then
 				Result.append ({STRING_32} "## Where the commentary uses it%N%N")
 				across a_framework.uses as ic loop
-					l_range := place_text (ic.book, ic.chapter, ic.verse)
-					if ic.end_chapter /= ic.chapter then
-						l_range.append ({STRING_32} "-" + ic.end_chapter.out.to_string_32 + {STRING_32} ":" + ic.end_verse.out.to_string_32)
-					elseif ic.end_verse /= ic.verse then
-						l_range.append ({STRING_32} "-" + ic.end_verse.out.to_string_32)
-					end
+					l_range := range_label (ic.book, ic.chapter, ic.verse, ic.end_chapter, ic.end_verse)
 					Result.append ({STRING_32} "- [" + l_range + {STRING_32} "]("
 						+ (create {BIB_REFERENCE_LINKER}.make (bible.books)).range_target_text (ic.book, ic.chapter, ic.verse, ic.end_chapter, ic.end_verse)
 						+ {STRING_32} "): " + ic.heading + {STRING_32} "%N")

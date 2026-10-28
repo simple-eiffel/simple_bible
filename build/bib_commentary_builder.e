@@ -27,7 +27,7 @@ class
 	BIB_COMMENTARY_BUILDER
 
 inherit
-	BIB_SQLITE_REPORTING
+	BIB_PACK_WRITING
 
 create
 	make
@@ -43,9 +43,6 @@ feature {NONE} -- Initialization
 		end
 
 feature -- Access
-
-	last_error: detachable STRING_32
-			-- Why the last build failed.
 
 	title: STRING_32
 			-- The pack's title, as the last build wrote it.
@@ -90,8 +87,6 @@ feature -- Commands
 		local
 			l_json: SIMPLE_JSON
 			l_db: SIMPLE_SQL_DATABASE
-			l_file: SIMPLE_FILE
-			l_ok: BOOLEAN
 		do
 			last_error := Void
 			book_count := 0
@@ -101,17 +96,8 @@ feature -- Commands
 			list_count := 0
 			restricted_count := 0
 			title := {BIB_COMMENTARY_SCHEMA}.Pack_title.to_string_32
-			create l_file.make (a_pack)
-			if l_file.exists then
-				l_ok := l_file.delete
-			end
-			create l_db.make (a_pack)
-			across schema.Schema_statements as ic until last_error /= Void loop
-				l_db.execute (ic)
-				check_db (l_db, "The pack's tables could not be made.")
-			end
+			l_db := fresh_pack (a_pack, schema.Schema_statements)
 			if last_error = Void then
-				l_db.begin_transaction
 				put_meta (l_db, "pack_kind", schema.Pack_kind.to_string_32)
 				put_meta (l_db, "title", title)
 				put_meta (l_db, "voice_status", {STRING_32} "PROVISIONAL")
@@ -126,15 +112,8 @@ feature -- Commands
 						last_error := {STRING_32} "The sidecar is not a JSON object: " + ic.to_string_32
 					end
 				end
-				if last_error = Void and then l_db.is_in_transaction then
-					l_db.commit
-					check_db (l_db, "The pack could not be committed.")
-				end
-				if l_db.is_in_transaction then
-					l_db.rollback
-				end
 			end
-			l_db.close
+			finish_pack (l_db)
 		end
 
 feature {NONE} -- Writing
@@ -320,25 +299,6 @@ feature {NONE} -- Writing
 
 feature {NONE} -- Implementation
 
-	put_meta (a_db: SIMPLE_SQL_DATABASE; a_key: STRING_8; a_value: STRING_32)
-			-- One `meta' row, unless the build already failed.
-		do
-			if last_error = Void then
-				a_db.execute_with_args ("INSERT INTO meta(key, value) VALUES (?, ?)", <<a_key, a_value>>)
-				check_db (a_db, "A meta row could not be written.")
-			end
-		end
-
-	text_of (a_object: SIMPLE_JSON_OBJECT; a_key: READABLE_STRING_GENERAL): STRING_32
-			-- The string under `a_key'; empty when absent, null or not a string.
-		do
-			if attached a_object.item (a_key.to_string_32) as al_value and then al_value.is_string then
-				Result := al_value.as_string_32
-			else
-				create Result.make_empty
-			end
-		end
-
 	non_empty (a_text: STRING_32; a_default: READABLE_STRING_GENERAL): STRING_32
 		do
 			if a_text.is_empty then
@@ -352,14 +312,6 @@ feature {NONE} -- Implementation
 			-- Can `a_number' be a book, chapter or verse of a hub id?
 		do
 			Result := a_number >= 1 and a_number <= {BIB_HUB_ID}.Max_part
-		end
-
-	check_db (a_db: SIMPLE_SQL_DATABASE; a_what: READABLE_STRING_GENERAL)
-			-- When `a_db' failed: `last_error' says `a_what', with SQLite's own words.
-		do
-			if a_db.has_error and last_error = Void then
-				last_error := failure_text (a_db, a_what)
-			end
 		end
 
 end

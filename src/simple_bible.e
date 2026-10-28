@@ -170,14 +170,26 @@ feature -- Status
 			create Result.make (0)
 		end
 
-	commentary_packs: ARRAYED_LIST [BIB_COMMENTARY_PACK]
-			-- The attached packs whose kind is "commentary" (BIB_COMMENTARY_SCHEMA).
+	packs_of_kind (a_kind: READABLE_STRING_8): ARRAYED_LIST [BIB_PRIVATE_SOURCE]
+			-- The attached private packs whose `meta.pack_kind' is `a_kind' (scan 58: one filter for
+			-- every kind).
 		do
 			create Result.make (private_packs.count)
 			across private_packs as ic loop
-				if ic.is_open and then ic.pack_kind.same_string ({BIB_COMMENTARY_SCHEMA}.Pack_kind) then
-					Result.extend (create {BIB_COMMENTARY_PACK}.make (sources, ic.alias_name, ic.pack_title))
+				if ic.is_open and then ic.pack_kind.same_string (a_kind) then
+					Result.extend (ic)
 				end
+			end
+		ensure
+			all_of_kind: across Result as al_pack all al_pack.pack_kind.same_string (a_kind) end
+		end
+
+	commentary_packs: ARRAYED_LIST [BIB_COMMENTARY_PACK]
+			-- The attached packs whose kind is "commentary" (BIB_COMMENTARY_SCHEMA).
+		do
+			create Result.make (1)
+			across packs_of_kind ({BIB_COMMENTARY_SCHEMA}.Pack_kind) as ic loop
+				Result.extend (create {BIB_COMMENTARY_PACK}.make (sources, ic.alias_name, ic.pack_title))
 			end
 		end
 
@@ -185,10 +197,8 @@ feature -- Status
 			-- The attached packs whose kind is "frameworks" (BIB_FRAMEWORK_SCHEMA, 2026-10-28).
 		do
 			create Result.make (1)
-			across private_packs as ic loop
-				if ic.is_open and then ic.pack_kind.same_string ({BIB_FRAMEWORK_SCHEMA}.Pack_kind) then
-					Result.extend (create {BIB_FRAMEWORK_PACK}.make (sources, ic.alias_name, ic.pack_title))
-				end
+			across packs_of_kind ({BIB_FRAMEWORK_SCHEMA}.Pack_kind) as ic loop
+				Result.extend (create {BIB_FRAMEWORK_PACK}.make (sources, ic.alias_name, ic.pack_title))
 			end
 		end
 
