@@ -145,6 +145,8 @@ feature {NONE} -- Initialization
 			reading_note := reading_note.with_wrap
 			create previous_button.make ("< Previous", Void)
 			create next_button.make ("Next >", Void)
+			create focus_button.make ("Focus", Void)
+			focus_button.set_tooltip ("Fold the sides so the Bible text has the window (Ctrl+Shift+F); again to bring them back.")
 			create reading_view.make (120.0)
 			create reading_verses.make (0)
 			create reading_version.make_empty
@@ -384,6 +386,24 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			elseif snapshot_tab.same_string ({STRING_32} "spelling") then
 				search_box.set_text ("lemma:ruach")
 				on_search
+			elseif snapshot_tab.same_string ({STRING_32} "focus") then
+				toggle_focus_reading
+			elseif snapshot_tab.same_string ({STRING_32} "maximize") then
+				dock.maximize_panel (commentary_panel)
+			elseif snapshot_tab.same_string ({STRING_32} "fold") then
+				dock.collapse_zone (dock.Zone_west)
+				dock.collapse_zone (dock.Zone_east)
+			elseif snapshot_tab.same_string ({STRING_32} "versemenu") then
+				snapshot_right_click_verse
+			elseif snapshot_tab.same_string ({STRING_32} "barmenu") then
+				window.request_render
+				window.simulate_context_click ((dock.zone_widget (dock.Zone_east).x + 40.0).truncated_to_integer,
+					(dock.zone_widget (dock.Zone_east).y + dock.zone_widget (dock.Zone_east).panel_slot_h + 6.0).truncated_to_integer)
+			elseif snapshot_tab.same_string ({STRING_32} "gridmenu") then
+				commentary_tabs.select_tab (2)
+				window.request_render
+				window.simulate_context_click ((cross_refs_grid.x + 40.0).truncated_to_integer,
+					(cross_refs_grid.y + cross_refs_grid.Header_h + cross_refs_grid.Row_h * 1.5).truncated_to_integer)
 			elseif snapshot_tab.same_string ({STRING_32} "history") then
 				go_to (43, 3, 16)
 				go_to (65, 1, 6)
@@ -496,6 +516,8 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			close_results_button.set_on_click (agent hide_results)
 			places_grid.set_on_select (agent on_place)
 			window.set_on_tick (agent load_more_places)
+			focus_button.set_on_click (agent toggle_focus_reading)
+			wire_menus
 		end
 
 feature {NONE} -- Window
@@ -574,6 +596,12 @@ feature {NONE} -- Window
 			commentary_panel := dock.add_panel ("COMMENTARY", commentary_pane, dock.Zone_east)
 			navigator_panel := dock.add_panel ("NAVIGATOR", navigator_pane, dock.Zone_west)
 			notes_panel := dock.add_panel ("NOTES", notes_pane, dock.Zone_west)
+				-- Panes worth reading larger (Larry, 2026-10-28): a maximize button on their bars. The
+				-- Navigator gains nothing from the room; the Bible text has Focus reading instead.
+			dock.set_maximizable (commentary_panel, True)
+			dock.set_maximizable (lexicon_panel, True)
+			dock.set_maximizable (notes_panel, True)
+			dock.set_maximizable (results_panel, True)
 			build_study_parts
 
 			status_bar.set_left ("")
@@ -605,6 +633,7 @@ feature {NONE} -- Window
 			l_bar.put (version_chip.as_muted.growing)
 			l_bar.put (previous_button)
 			l_bar.put (next_button)
+			l_bar.put (focus_button)
 			create Result.make
 			Result := Result.with_gap (6.0)
 			Result.put (l_bar)
@@ -767,6 +796,7 @@ feature {NONE} -- Menus and keys (C2)
 			window.register_accelerator (Key_m, True, False, False, agent toggle_mode)
 			window.register_accelerator (Key_i, True, False, False, agent show_interlinear)
 			window.register_accelerator (Key_d, True, False, False, agent bookmark_verse)
+			window.register_accelerator (Key_f, True, False, True, agent toggle_focus_reading)
 		end
 
 	file_menu: SW_MENU
@@ -793,6 +823,13 @@ feature {NONE} -- Menus and keys (C2)
 			Result.add_separator
 			Result.add_item ("Larger text", "Ctrl++", settings.text_scale < settings.Max_text_scale, agent change_text_size (1))
 			Result.add_item ("Smaller text", "Ctrl+-", settings.text_scale > settings.Min_text_scale, agent change_text_size (-1))
+			Result.add_separator
+			Result.add_item (focus_label, "Ctrl+Shift+F", True, agent toggle_focus_reading)
+			if dock.maximized_panel = commentary_panel then
+				Result.add_item ("Commentary back to its place", "", True, agent dock.restore_maximized)
+			else
+				Result.add_item ("Commentary in a larger view", "", dock.is_panel_visible (commentary_panel), agent dock.maximize_panel (commentary_panel))
+			end
 			if window.theme.is_dark then
 				Result.add_item ("Light theme", "", True, agent set_dark (False))
 			else
@@ -1120,7 +1157,7 @@ feature {NONE} -- Toolbar (C3-C9)
 feature {NONE} -- Reading (S1, P01)
 
 	reading_caption, reading_title, version_chip, reading_note: SW_LABEL
-	previous_button, next_button: SW_BUTTON
+	previous_button, next_button, focus_button: SW_BUTTON
 	reading_view: SW_PARALLEL_TEXT
 
 	reading_verses: ARRAYED_LIST [BIB_READING_VERSE]
@@ -1260,6 +1297,7 @@ feature {NONE} -- Reading (S1, P01)
 					fill_prayers
 					fill_memory
 				end
+				refresh_strip_marks
 			end
 		end
 
@@ -1505,6 +1543,9 @@ feature {NONE} -- Two layouts (C7)
 		local
 			l_saved: BOOLEAN
 		do
+				-- A new layout starts with every side open and no pane maximized.
+			dock.restore_maximized
+			dock.set_all_collapsed (False)
 			detach (center_holder, reading_column)
 			detach (bible_page, reading_column)
 			detach (center_holder, center_tabs)
@@ -1939,10 +1980,16 @@ feature {NONE} -- Notes (T2, P06)
 
 	delete_note
 			-- Soft-delete the selected note (Restore brings it back, with its history).
+		do
+			delete_note_at (notes_list.selected_index)
+		end
+
+	delete_note_at (a_index: INTEGER)
+			-- Soft-delete note `a_index' of the list (the Delete button's, and a right-click's).
 		local
 			l_index: INTEGER
 		do
-			l_index := notes_list.selected_index
+			l_index := a_index
 			if l_index >= 1 and l_index <= note_rows.count and then note_store.is_writable then
 				note_store.remove_note (note_rows.i_th (l_index).id)
 				if attached note_store.last_error as al_error then
@@ -2117,7 +2164,13 @@ feature {NONE} -- Notes (T2, P06)
 			if l_title.is_empty then
 				say ("Give the prayer a title first.")
 			elseif user_store.is_open then
-				create l_prayer.make (l_title, l_body, 0)
+				if prayer_hub > 0 and then l_title.same_string (prayer_hub_title) then
+						-- begun from a verse's menu, and still titled by it
+					create l_prayer.make (l_title, l_body, prayer_hub)
+				else
+					create l_prayer.make (l_title, l_body, 0)
+				end
+				prayer_hub := 0
 				user_store.add_prayer_item (l_prayer)
 				if attached user_store.write_error as al_error then
 					say (al_error.message)
@@ -2259,18 +2312,10 @@ feature {NONE} -- Notes (T2, P06)
 
 	show_memory_verse
 			-- The text of the card under review, in the version read; grading opens.
-		local
-			l_keys: BIB_VERSE_KEY
-			l_found: BIB_LIST_RESULT [BIB_READING_VERSE]
-			l_places: ARRAYED_LIST [INTEGER_64]
 		do
 			if not memory_due.is_empty and not reading_version.is_empty and then bible.text_reader.has_version (reading_version) then
-				create l_keys
-				create l_places.make (1)
-				l_places.extend (l_keys.packed_place ((create {BIB_HUB_ID}).book_of (memory_due.first.hub_id), (create {BIB_HUB_ID}).chapter_of (memory_due.first.hub_id), (create {BIB_HUB_ID}).verse_of (memory_due.first.hub_id)))
-				l_found := bible.text_reader.verses_at_places (reading_version, l_places)
-				if l_found.is_success and then l_found.count = 1 then
-					memory_text_label.set_text (l_found.item (1).display_text)
+				if attached verse_text_at_hub (memory_due.first.hub_id) as al_text then
+					memory_text_label.set_text (al_text)
 				end
 				memory_again_button.set_enabled (True)
 				memory_hard_button.set_enabled (True)
@@ -3133,6 +3178,483 @@ feature {NONE} -- Notes (T2, P06)
 			window.add_reference_mark (results_tabs, "T6", "South results zone: Search Results (word choices, then the verses holding the words; click one to read it); Guides, Census, Author Library and Ledger come later.", window.Corner_top_left)
 		end
 
+feature {NONE} -- Right-click menus and panes (Larry, 2026-10-28)
+
+	wire_menus
+			-- Each control's own right-click items, standing above the widget's Copy items.
+		do
+			reading_view.set_menu_extension (agent verse_menu (reading_view, ?, ?, ?))
+			parallel_view.set_menu_extension (agent verse_menu (parallel_view, ?, ?, ?))
+			interlinear_view.set_menu_extension (agent interlinear_menu)
+			analysis_grid.set_menu_extension (agent analysis_menu)
+			navigator_tree.set_menu_extension (agent navigator_menu)
+			commentary_view.set_menu_extension (agent pane_menu (commentary_panel, ?, ?, ?))
+			entries_list.set_menu_extension (agent pane_menu (lexicon_panel, ?, ?, ?))
+			notes_list.set_menu_extension (agent notes_menu)
+			cross_refs_grid.set_menu_extension (agent cross_ref_menu)
+			results_grid.set_menu_extension (agent choice_menu)
+			verses_grid.set_menu_extension (agent verse_hit_menu)
+			places_grid.set_menu_extension (agent place_menu)
+			renderings_grid.set_menu_extension (agent rendering_menu)
+			history_grid.set_menu_extension (agent history_menu)
+			journal_grid.set_menu_extension (agent journal_menu)
+			tag_names_grid.set_menu_extension (agent tag_name_menu)
+			bookmarks_panel.set_menu_items (agent listed_menu_items)
+			highlights_panel.set_menu_items (agent listed_menu_items)
+			tagged_panel.set_menu_items (agent listed_menu_items)
+			prayer_open_panel.set_menu_items (agent listed_menu_items)
+			prayer_answered_panel.set_menu_items (agent listed_menu_items)
+			memory_panel.set_menu_items (agent listed_menu_items)
+		end
+
+	verse_menu (a_view: SW_PARALLEL_TEXT; a_menu: SW_MENU; a_px, a_py: REAL_64)
+			-- A verse in the Bible or Parallel tab: copy it with its reference or the chapter; keep it
+			-- (bookmark, highlight, note, tag, card, prayer); open it in the other tabs; Focus reading.
+			-- Each item reads the verse first, as a click would.
+		local
+			l_row, l_verse: INTEGER
+		do
+			l_row := a_view.cell_at (a_px, a_py).row
+			if l_row >= 1 and l_row <= reading_verses.count then
+				l_verse := reading_verses.i_th (l_row).verse
+				a_menu.add_item ({STRING_32} "Copy " + place_text (reading_book, reading_chapter, l_verse) + {STRING_32} " with its reference",
+					"", True, agent on_verse_do (l_verse, agent copy_verse))
+				a_menu.add_item ({STRING_32} "Copy " + place_text (reading_book, reading_chapter, 0), "", True, agent copy_chapter)
+				a_menu.add_separator
+				a_menu.add_item ("Bookmark", "Ctrl+D", user_store.is_open, agent on_verse_do (l_verse, agent bookmark_verse))
+				a_menu.add_item ("Highlight...", "", user_store.is_open, agent on_verse_do (l_verse, agent start_in_notes (Highlights_tab, highlight_reason_box)))
+				a_menu.add_item ("Add a note...", "", user_store.is_open, agent on_verse_do (l_verse, agent start_in_notes (Verse_notes_tab, new_note_box)))
+				a_menu.add_item ("Tag...", "", user_store.is_open, agent on_verse_do (l_verse, agent start_in_notes (Tags_tab, tag_box)))
+				a_menu.add_item ("Learn it by heart", "", user_store.is_open, agent on_verse_do (l_verse, agent add_memory_card))
+				a_menu.add_item ("Pray about it...", "", user_store.is_open, agent on_verse_do (l_verse, agent start_prayer))
+				a_menu.add_separator
+				a_menu.add_item ("Open in Parallel", "", True, agent on_verse_do (l_verse, agent show_parallel))
+				a_menu.add_item ("Open in Interlinear", "Ctrl+I", True, agent on_verse_do (l_verse, agent show_interlinear))
+				a_menu.add_separator
+			end
+			a_menu.add_item (focus_label, "Ctrl+Shift+F", True, agent toggle_focus_reading)
+		end
+
+	on_verse_do (a_verse: INTEGER; a_action: PROCEDURE)
+			-- Read verse `a_verse' of the chapter (unless it is the verse read), then `a_action'.
+		do
+			if a_verse /= reading_verse and reading_book > 0 and reading_chapter > 0 and a_verse >= 0 then
+				go_to (reading_book, reading_chapter, a_verse)
+			end
+			a_action.call
+		end
+
+	copy_chapter
+			-- The chapter read onto the clipboard: its reference and version, then each verse numbered.
+		local
+			l_text: STRING_32
+		do
+			if reading_book > 0 and reading_chapter > 0 then
+				l_text := place_text (reading_book, reading_chapter, 0) + {STRING_32} " (" + reading_version.to_string_32 + {STRING_32} ")"
+				across reading_verses as ic loop
+					l_text.append ({STRING_32} "%N" + ic.verse.out.to_string_32 + {STRING_32} " " + ic.display_text)
+				end
+				copy_to_clipboard (l_text)
+				say ("Chapter copied.")
+			end
+		end
+
+	copy_to_clipboard (a_text: READABLE_STRING_GENERAL)
+			-- `a_text' onto the system clipboard.
+		do
+			(create {SW_CLIPBOARD}).set_text (a_text)
+		end
+
+	start_in_notes (a_tab: INTEGER; a_box: SW_TEXT_BOX)
+			-- Open the Notes pane at tab `a_tab' with the typing in `a_box': where a highlight's reason,
+			-- a note, a tag or a prayer is written (Study; the pane folds open if it was folded).
+		do
+			if not is_study then
+				arrange (True)
+			end
+			dock.restore_maximized
+			dock.show_panel (notes_panel)
+			dock.expand_zone (dock.panels.i_th (notes_panel).zone)
+			if attached notes_tabs as al_tabs then
+				al_tabs.select_tab (a_tab)
+			end
+			window.give_focus (a_box)
+		end
+
+	start_prayer
+			-- A prayer resting on the verse read: titled by it, the request to be written.
+		do
+			if reading_verse > 0 then
+				prayer_hub := reading_hub
+				prayer_hub_title := place_text (reading_book, reading_chapter, reading_verse)
+				prayer_title_box.set_text (prayer_hub_title)
+				prayer_tabs.select_tab (1)
+				start_in_notes (Prayer_tab, prayer_body_box)
+			end
+		end
+
+	prayer_hub: INTEGER_64
+			-- The verse a prayer begun from a verse's menu rests on (0: none).
+
+	prayer_hub_title: STRING_32
+			-- The title it was begun with; a prayer retitled rests on no verse.
+		attribute
+			create Result.make_empty
+		end
+
+	interlinear_menu (a_menu: SW_MENU; a_px, a_py: REAL_64)
+			-- A word in the Interlinear: its headword's items; Focus reading.
+		local
+			l_token: INTEGER
+		do
+			l_token := interlinear_view.context_token
+			if l_token >= 1 and l_token <= interlinear_words.count then
+				word_items (a_menu, interlinear_words.i_th (l_token))
+				if not a_menu.items.is_empty then
+					a_menu.add_separator
+				end
+			end
+			a_menu.add_item (focus_label, "Ctrl+Shift+F", True, agent toggle_focus_reading)
+		end
+
+	analysis_menu (a_menu: SW_MENU; a_px, a_py: REAL_64)
+			-- A row of the verse analysis: its headword's items.
+		do
+			if attached analysis_grid.context_object as al_word then
+				word_items (a_menu, al_word)
+			end
+		end
+
+	word_items (a_menu: SW_MENU; a_word: BIB_INTERLINEAR_WORD)
+			-- An original word: open its headword in T4, its every place, search for its Strong's
+			-- number, copy that number.
+		do
+			if a_word.has_door then
+				a_menu.add_item ({STRING_32} "Open " + a_word.surface + {STRING_32} " in the lexicon", "", True, agent open_study (a_word.lemma_id))
+				a_menu.add_item ({STRING_32} "Every place of " + a_word.lemma_text, "", True, agent show_word_places (a_word.lemma_id))
+			end
+			if not a_word.strongs.is_empty then
+				a_menu.add_item ({STRING_32} "Search the Bible for " + a_word.strongs, "", True, agent search_for (a_word.strongs))
+				a_menu.add_item ({STRING_32} "Copy " + a_word.strongs, "", True, agent copy_to_clipboard (a_word.strongs))
+			end
+		end
+
+	show_word_places (a_lemma_id: INTEGER_64)
+			-- Headword `a_lemma_id' in T4, at its Every place tab.
+		do
+			open_study (a_lemma_id)
+			show_every_place
+		end
+
+	search_for (a_text: READABLE_STRING_GENERAL)
+			-- Search the Bible for `a_text', as typed in the search box.
+		do
+			search_box.set_text (a_text)
+			on_search
+		end
+
+	navigator_menu (a_menu: SW_MENU; a_px, a_py: REAL_64)
+			-- A book or chapter in the Navigator: read it.
+		do
+			if attached navigator_tree.context_node as al_node then
+				if al_node.is_chapter and al_node.book_id > 0 and al_node.chapter > 0 then
+					a_menu.add_item ({STRING_32} "Read " + place_text (al_node.book_id, al_node.chapter, 0), "", True, agent go_to (al_node.book_id, al_node.chapter, 0))
+				elseif al_node.is_book and al_node.book_id > 0 then
+					a_menu.add_item ({STRING_32} "Read " + place_text (al_node.book_id, 1, 0), "", True, agent go_to (al_node.book_id, 1, 0))
+				end
+			end
+		end
+
+	pane_menu (a_panel: INTEGER; a_menu: SW_MENU; a_px, a_py: REAL_64)
+			-- Read pane `a_panel' in a larger view, or put it back.
+		do
+			if dock.maximized_panel = a_panel then
+				a_menu.add_item ("Back to its place", "", True, agent dock.restore_maximized)
+			elseif dock.is_panel_visible (a_panel) and then dock.is_maximizable (a_panel) then
+				a_menu.add_item ("Read in a larger view", "", True, agent dock.maximize_panel (a_panel))
+			end
+		end
+
+	notes_menu (a_menu: SW_MENU; a_px, a_py: REAL_64)
+			-- A verse note: go to its verse, edit, delete; a new note on the verse read; a larger view.
+		local
+			l_index: INTEGER
+		do
+			l_index := notes_list.context_item
+			if l_index >= 1 and l_index <= note_rows.count then
+				a_menu.add_item ({STRING_32} "Go to " + hub_place (note_rows.i_th (l_index).hub_id), "", True, agent go_to_hub (note_rows.i_th (l_index).hub_id))
+				a_menu.add_item ("Edit", "", note_store.is_writable, agent edit_note (l_index))
+				a_menu.add_item ("Delete", "", note_store.is_writable, agent delete_note_at (l_index))
+				a_menu.add_separator
+			end
+			if reading_verse > 0 then
+				a_menu.add_item ({STRING_32} "A new note on " + place_text (reading_book, reading_chapter, reading_verse) + {STRING_32} "...",
+					"", user_store.is_open, agent start_in_notes (Verse_notes_tab, new_note_box))
+			end
+			pane_menu (notes_panel, a_menu, a_px, a_py)
+		end
+
+	verse_items (a_menu: SW_MENU; a_hub: INTEGER_64)
+			-- Verse `a_hub' (nothing when it names none): go to it, copy it with its text in the version
+			-- read, copy its reference.
+		local
+			l_place: STRING_32
+		do
+			if (create {BIB_HUB_ID}).is_valid_hub (a_hub) then
+				l_place := hub_place (a_hub)
+				a_menu.add_item ({STRING_32} "Go to " + l_place, "", True, agent go_to_hub (a_hub))
+				a_menu.add_item ({STRING_32} "Copy " + l_place + {STRING_32} " with its text", "", True, agent copy_hub_verse (a_hub))
+				a_menu.add_item ("Copy the reference", "", True, agent copy_to_clipboard (l_place))
+			end
+		end
+
+	place_hub (a_book, a_chapter, a_verse: INTEGER): INTEGER_64
+			-- The hub id of a place, 0 when it names no verse.
+		local
+			l_hub: BIB_HUB_ID
+		do
+			create l_hub
+			if a_book >= 1 and a_book <= l_hub.Max_part and a_chapter >= 1 and a_chapter <= l_hub.Max_part
+				and a_verse >= 1 and a_verse <= l_hub.Max_part
+			then
+				Result := l_hub.hub_id (a_book, a_chapter, a_verse)
+			end
+		end
+
+	copy_hub_verse (a_hub: INTEGER_64)
+			-- Verse `a_hub' in the version read, with its reference, onto the clipboard.
+		do
+			if attached verse_text_at_hub (a_hub) as al_text then
+				copy_to_clipboard (al_text + {STRING_32} " (" + hub_place (a_hub) + {STRING_32} " " + reading_version.to_string_32 + {STRING_32} ")")
+				say ("Verse copied.")
+			else
+				say (hub_place (a_hub) + {STRING_32} " is not in " + reading_version.to_string_32 + {STRING_32} ".")
+			end
+		end
+
+	verse_text_at_hub (a_hub: INTEGER_64): detachable STRING_32
+			-- Verse `a_hub''s text in the version read; Void when that version lacks it.
+		local
+			l_hub: BIB_HUB_ID
+			l_keys: BIB_VERSE_KEY
+			l_found: BIB_LIST_RESULT [BIB_READING_VERSE]
+			l_places: ARRAYED_LIST [INTEGER_64]
+		do
+			create l_hub
+			if l_hub.is_valid_hub (a_hub) and not reading_version.is_empty and then bible.text_reader.has_version (reading_version) then
+				create l_keys
+				create l_places.make (1)
+				l_places.extend (l_keys.packed_place (l_hub.book_of (a_hub), l_hub.chapter_of (a_hub), l_hub.verse_of (a_hub)))
+				l_found := bible.text_reader.verses_at_places (reading_version, l_places)
+				if l_found.is_success and then l_found.count = 1 then
+					Result := l_found.item (1).display_text
+				end
+			end
+		end
+
+	cross_ref_menu (a_menu: SW_MENU; a_px, a_py: REAL_64)
+			-- A cross-reference: its verse's items.
+		do
+			if attached cross_refs_grid.context_object as al_ref then
+				verse_items (a_menu, place_hub (al_ref.to_book, al_ref.to_chapter, al_ref.verse_start))
+			end
+			pane_menu (commentary_panel, a_menu, a_px, a_py)
+		end
+
+	choice_menu (a_menu: SW_MENU; a_px, a_py: REAL_64)
+			-- A dictionary word in the results: open it, its every place; a larger view.
+		do
+			if attached results_grid.context_object as al_choice and then al_choice.opens_a_word then
+				a_menu.add_item ({STRING_32} "Open " + al_choice.label + {STRING_32} " in the lexicon", "", True, agent open_study (al_choice.lemma_id))
+				a_menu.add_item ({STRING_32} "Every place of " + al_choice.label, "", True, agent show_word_places (al_choice.lemma_id))
+			end
+			pane_menu (results_panel, a_menu, a_px, a_py)
+		end
+
+	verse_hit_menu (a_menu: SW_MENU; a_px, a_py: REAL_64)
+			-- A verse the search found: its items; a larger view.
+		do
+			if attached verses_grid.context_object as al_hit then
+				verse_items (a_menu, place_hub (al_hit.book_id, al_hit.chapter, al_hit.verse))
+			end
+			pane_menu (results_panel, a_menu, a_px, a_py)
+		end
+
+	place_menu (a_menu: SW_MENU; a_px, a_py: REAL_64)
+			-- A place of the word: its verse's items.
+		do
+			if attached places_grid.context_object as al_place and then al_place.is_readable then
+				verse_items (a_menu, place_hub (al_place.book_id, al_place.chapter, al_place.verse))
+			end
+			pane_menu (lexicon_panel, a_menu, a_px, a_py)
+		end
+
+	rendering_menu (a_menu: SW_MENU; a_px, a_py: REAL_64)
+			-- An English rendering: search the Bible for it.
+		do
+			if attached renderings_grid.context_object as al_row then
+				a_menu.add_item ({STRING_32} "Search the Bible for %"" + al_row.english + {STRING_32} "%"", "", True, agent search_for ({STRING_32} "%"" + al_row.english + {STRING_32} "%""))
+			end
+			pane_menu (lexicon_panel, a_menu, a_px, a_py)
+		end
+
+	history_menu (a_menu: SW_MENU; a_px, a_py: REAL_64)
+			-- A chapter read before: its verse's items.
+		do
+			if attached history_grid.context_object as al_visit then
+				verse_items (a_menu, al_visit.hub_id)
+			end
+		end
+
+	journal_menu (a_menu: SW_MENU; a_px, a_py: REAL_64)
+			-- A journal entry: open it, delete it; a new entry.
+		local
+			l_model: INTEGER
+		do
+			l_model := journal_grid.context_model
+			if l_model >= 1 and l_model <= journal_rows.count then
+				a_menu.add_item ("Open the entry", "", True, agent open_journal_row (l_model))
+				a_menu.add_item ("Delete the entry", "", note_store.is_writable, agent delete_journal_row (l_model))
+				a_menu.add_separator
+			end
+			a_menu.add_item ("A new entry", "", True, agent new_journal_entry)
+			pane_menu (notes_panel, a_menu, a_px, a_py)
+		end
+
+	open_journal_row (a_model: INTEGER)
+			-- Entry `a_model' into the boxes, as a click on it.
+		do
+			if a_model >= 1 and a_model <= journal_rows.count then
+				journal_grid.select_model_row (a_model)
+				on_journal_row (a_model)
+			end
+		end
+
+	delete_journal_row (a_model: INTEGER)
+			-- Soft-delete entry `a_model' (Restore brings it back).
+		do
+			open_journal_row (a_model)
+			delete_journal_entry
+		end
+
+	tag_name_menu (a_menu: SW_MENU; a_px, a_py: REAL_64)
+			-- A tag: list its verses; tag the verse read with it.
+		local
+			l_model: INTEGER
+			l_tag: STRING_32
+		do
+			l_model := tag_names_grid.context_model
+			if l_model >= 1 and l_model <= tag_name_rows.count then
+				l_tag := tag_name_rows.i_th (l_model).tag.twin
+				a_menu.add_item ("Show its verses", "", True, agent show_tag_row (l_model))
+				if reading_verse > 0 then
+					a_menu.add_item ({STRING_32} "Tag " + place_text (reading_book, reading_chapter, reading_verse) + {STRING_32} " with it",
+						"", user_store.is_open, agent tag_read_verse_with (l_tag))
+				end
+			end
+		end
+
+	show_tag_row (a_model: INTEGER)
+			-- Tag `a_model''s verses listed, as a click on it.
+		do
+			if a_model >= 1 and a_model <= tag_name_rows.count then
+				tag_names_grid.select_model_row (a_model)
+				on_tag_name (a_model)
+			end
+		end
+
+	tag_read_verse_with (a_tag: READABLE_STRING_GENERAL)
+			-- The verse read gets tag `a_tag'.
+		do
+			tag_box.set_text (a_tag)
+			tag_verse
+		end
+
+	listed_menu_items (a_menu: SW_MENU; a_item: BIB_LISTED)
+			-- A bookmark, highlight, tagged verse, prayer or card: its verse's items; an open prayer
+			-- can be marked answered.
+		do
+			verse_items (a_menu, a_item.hub_id)
+			if attached {BIB_PRAYER} a_item as al_prayer and then not al_prayer.is_answered then
+				a_menu.add_item ("Mark answered...", "", user_store.is_open, agent start_answer (al_prayer.id))
+			end
+		end
+
+	start_answer (a_id: INTEGER_64)
+			-- Open prayer `a_id' chosen, and the typing in the box for how it was answered.
+		local
+			i: INTEGER
+		do
+			from i := 1 until i > prayer_open_rows.count loop
+				if prayer_open_rows.i_th (i).id = a_id then
+					prayer_open_grid.select_model_row (i)
+				end
+				i := i + 1
+			end
+			prayer_tabs.select_tab (1)
+			start_in_notes (Prayer_tab, prayer_answer_box)
+			say ("Write how it was answered, then press Answered.")
+		end
+
+	Verse_notes_tab: INTEGER = 1
+			-- P06's Verse notes page.
+
+	focus_label: STRING_32
+			-- What the Focus reading item says now.
+		do
+			if dock.is_focused_on_center then
+				Result := "Leave focus reading"
+			else
+				Result := "Focus reading"
+			end
+		end
+
+	toggle_focus_reading
+			-- Fold every side so the Bible text has the window, or bring the sides back (Larry,
+			-- 2026-10-28). A folded side still names its panes, with a dot where one has something for
+			-- the verse read (`refresh_strip_marks').
+		do
+			dock.restore_maximized
+			if dock.is_focused_on_center then
+				dock.set_all_collapsed (False)
+			else
+				dock.set_all_collapsed (True)
+				say ("Focus reading. Ctrl+Shift+F brings the panes back.")
+			end
+			keep_verse_in_view
+			window.request_render
+		end
+
+	has_commentary: BOOLEAN
+			-- Did the last `show_commentary' find a section on the verse read?
+
+	refresh_strip_marks
+			-- The dots on folded sides: Commentary when a pack covers the verse read, Notes when the
+			-- chapter has notes, the Lexicon when a word is open, Search results when there are some.
+		do
+			dock.set_panel_marked (commentary_panel, has_commentary)
+			dock.set_panel_marked (notes_panel, not note_rows.is_empty)
+			dock.set_panel_marked (lexicon_panel, study_lemma > 0)
+			dock.set_panel_marked (results_panel, not choices.is_empty or not verse_hits.is_empty)
+		end
+
+	snapshot_right_click_verse
+			-- For a snapshot: a right-click on the verse read, so the picture shows its menu.
+		local
+			u, l_row: INTEGER
+		do
+			window.request_render
+			from l_row := 1 until l_row > reading_verses.count or else reading_verses.i_th (l_row).verse = reading_verse loop
+				l_row := l_row + 1
+			end
+			from u := 1 until u > reading_view.unit_count or else (reading_view.unit_block (u) = l_row and reading_view.unit_column (u) = 1) loop
+				u := u + 1
+			end
+			if u <= reading_view.unit_count then
+				window.simulate_context_click ((reading_view.unit_origin_x (u) + 60.0).truncated_to_integer, (reading_view.unit_origin_y (u) + 6.0).truncated_to_integer)
+			end
+		end
+
 feature {NONE} -- Commentary (S2, P04)
 
 	commentary_title: SW_LABEL
@@ -3194,6 +3716,7 @@ feature {NONE} -- Commentary (S2, P04)
 		do
 			create l_text
 			create l_page.make_empty
+			has_commentary := False
 			if not bible.is_open or else bible.commentary_packs.is_empty then
 				l_page := {STRING_32} "**No commentary yet**%N%NA commentary pack in the packs folder shows here, verse by verse."
 				across bible.pack_errors as ic loop
@@ -3217,6 +3740,7 @@ feature {NONE} -- Commentary (S2, P04)
 						end
 					end
 				end
+				has_commentary := not l_page.is_empty
 				if l_page.is_empty then
 					l_page := {STRING_32} "No commentary on " + place_text (reading_book, reading_chapter, reading_verse) + {STRING_32} " yet."
 				end
@@ -3321,6 +3845,7 @@ feature {NONE} -- Dictionary and lexicon (S3, P05)
 				lexicon_tabs.select_tab (1)
 				dock.show_panel (lexicon_panel)
 			end
+			refresh_strip_marks
 		end
 
 	study_corpus_for (a_lemma_id: INTEGER_64; a_most: STRING_8): STRING_8
@@ -3562,6 +4087,7 @@ feature {NONE} -- Search results (P07)
 	show_results
 			-- Dock P07 west (Simple), or bring Search Results to the front of T6 (Study).
 		do
+			refresh_strip_marks
 			dock.show_panel (results_panel)
 			if is_study then
 				results_tabs.select_tab (1)
@@ -3686,6 +4212,7 @@ feature {NONE} -- Design pills
 			window.add_reference_mark (progress, "C14", "Job progress: a long every-place list loading.", window.Corner_top_left)
 			window.add_reference_mark (editions_label, "C15", "Database editions: which data files are loaded.", window.Corner_top_right)
 			window.add_reference_mark (status_bar, "C11", "Status: the reference and version read.", window.Corner_top_left)
+			window.add_reference_mark (focus_button, "S1.1", "Focus reading: fold every side so the Bible text has the window; again (or Ctrl+Shift+F) brings them back. A folded side is a strip naming its panes, a dot where one has something for the verse read; click a name to open it.", window.Corner_top_right)
 		end
 
 	add_pills
@@ -3742,6 +4269,7 @@ feature {NONE} -- Constants
 	Key_p: INTEGER = 0x50
 	Key_l: INTEGER = 0x4C
 	Key_f: INTEGER = 0x46
+			-- Ctrl+F search, Ctrl+Shift+F Focus reading.
 	Key_m: INTEGER = 0x4D
 	Key_i: INTEGER = 0x49
 	Key_d: INTEGER = 0x44

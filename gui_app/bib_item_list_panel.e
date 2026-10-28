@@ -75,6 +75,16 @@ feature -- Element change
 			set: say = a_say and refresh = a_refresh and open = a_open
 		end
 
+	set_menu_items (a_items: PROCEDURE [SW_MENU, BIB_LISTED])
+			-- A right-click on a row offers the host's `a_items' for that item (go to its verse, copy
+			-- it), then Remove and Restore (2026-10-28).
+		do
+			menu_items := a_items
+			grid.set_menu_extension (agent offer_menu)
+		ensure
+			set: menu_items = a_items
+		end
+
 	set_rows (a_rows: ARRAYED_LIST [G])
 			-- List `a_rows', the chosen item kept selected when it is still among them.
 		local
@@ -120,17 +130,41 @@ feature {NONE} -- Commands
 	remove
 			-- Take the chosen item away (Restore brings it back).
 		do
-			if chosen_id > 0 and then store.is_open then
-				store.remove_item (kind, chosen_id)
+			remove_id (chosen_id)
+		end
+
+	remove_id (a_id: INTEGER_64)
+			-- Take item `a_id' away (Restore brings it back); the Remove button's and a right-click's.
+		do
+			if a_id > 0 and then store.is_open then
+				store.remove_item (kind, a_id)
 				if attached store.write_error as al_error then
 					tell (al_error.message)
 				else
-					last_removed := chosen_id
-					chosen_id := 0
+					last_removed := a_id
+					if chosen_id = a_id then
+						chosen_id := 0
+					end
 					redraw
 					tell (noun + {STRING_32} " removed. Restore brings it back.")
 				end
 			end
+		end
+
+	offer_menu (a_menu: SW_MENU; a_px, a_py: REAL_64)
+			-- The row right-clicked: the host's items for it, then Remove; Restore while there is
+			-- something to bring back.
+		do
+			if attached grid.context_object as al_item then
+				if attached menu_items as al_items then
+					al_items.call ([a_menu, al_item])
+					if not a_menu.items.is_empty then
+						a_menu.add_separator
+					end
+				end
+				a_menu.add_item ({STRING_32} "Remove this " + noun.as_lower, "", store.is_open, agent remove_id (al_item.id))
+			end
+			a_menu.add_item ("Restore", "", last_removed > 0, agent restore)
 		end
 
 	restore
@@ -151,6 +185,9 @@ feature {NONE} -- Implementation
 
 	is_refilling: BOOLEAN
 			-- Is `set_rows' selecting a row (no click to answer)?
+
+	menu_items: detachable PROCEDURE [SW_MENU, BIB_LISTED]
+			-- The host's right-click items for one row (`set_menu_items').
 
 	say: detachable PROCEDURE [READABLE_STRING_GENERAL]
 	refresh: detachable PROCEDURE

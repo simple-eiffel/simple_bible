@@ -4,6 +4,13 @@ All notable changes to simple_bible are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added (2026-10-28: right-click menus, Focus reading, larger panes; personal installer 0.7.19)
+
+- **Right-click menus** on every control one can do something with (simple_widgets 0.46.1 gives each its Copy items; the window adds its own above them): a verse in the Bible or Parallel tab (copy it with its reference or the chapter; bookmark, highlight, note, tag, learn it by heart, pray about it; open it in Parallel or Interlinear; Focus reading); a word in the Interlinear or the verse analysis (open it in the lexicon, every place, search for its Strong's number, copy it); a book or chapter in the Navigator (read it); a row of bookmarks, history, highlights, tagged verses, prayers, cards, cross-references, places or found verses (go to it, copy it with its text, copy the reference; Remove and Restore where the list has them; Mark answered for an open prayer); journal entries, tags, renderings and verse notes their own. `BIB_ITEM_LIST_PANEL.set_menu_items`.
+- **Focus reading** (View, Ctrl+Shift+F, the Focus button in the reading bar, S1.1): every side folds to a strip naming its panes, so the Bible text has the window; a dot marks a pane with something for the verse read (Larry's commentary covering it, notes on the chapter, a word open, search results); a click on a name opens that side at that pane.
+- **Larger panes**: Commentary, Dictionary and Lexicon, Notes and Search results maximize from their title bars (the button, a double click, the bar's menu or the pane's own menu) and come back the same way; every side's title bar folds it.
+- A prayer begun from a verse's menu rests on that verse. Snapshot options `focus`, `maximize`, `fold`, `versemenu`, `barmenu`, `gridmenu`.
+
 ### Added (2026-10-27: the study tools; personal installer 0.6.0 to 0.7.6)
 
 - **Interlinear tab** (P03, Ctrl+I): the chapter word by word in Hebrew or Greek, with transliteration, gloss, Strong's number and morphology spelled out (`BIB_CONC_PACK.interlinear_chapter`, `BIB_INTERLINEAR_WORD`, `BIB_MORPHOLOGY_NAMES`); the **verse analysis** grid below it (P03.2) gives each word's count in the corpus.
