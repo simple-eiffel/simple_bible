@@ -61,6 +61,18 @@ feature -- Access
 
 	books: BIB_BOOK_CATALOG
 
+	framework_names: detachable BIB_FRAMEWORK_NAMES
+			-- The frameworks `linked' also links (2026-10-28): "KACC(TM)" becomes
+			-- [KACC(TM)](framework:kacc); Void links references only.
+
+	set_framework_names (a_names: detachable BIB_FRAMEWORK_NAMES)
+			-- Link the frameworks `a_names' finds too (Void: references only).
+		do
+			framework_names := a_names
+		ensure
+			set: framework_names = a_names
+		end
+
 	is_forgiving: BOOLEAN
 			-- Does a book name a prefix or lowercase may give (the reference box)?
 
@@ -189,6 +201,7 @@ feature -- Linking
 			i, l_end: INTEGER
 			l_in_code, l_in_label, l_in_target: BOOLEAN
 			l_found: like reference_at
+			l_framework: detachable TUPLE [last: INTEGER; id: STRING_32]
 		do
 			l_text := a_markdown.to_string_32
 			create Result.make (l_text.count + l_text.count // 8)
@@ -218,10 +231,17 @@ feature -- Linking
 					i := i + 1
 				else
 					l_found := Void
-					if i = 1 or else not is_word_character (l_text [i - 1]) then
+					l_framework := Void
+					if attached framework_names as al_names then
+						l_framework := al_names.match_at (l_text, i)
+					end
+					if l_framework = Void and then (i = 1 or else not is_word_character (l_text [i - 1])) then
 						l_found := reference_at (l_text, i)
 					end
-					if attached l_found as al_found then
+					if attached l_framework as al_framework then
+						Result.append ({STRING_32} "[" + l_text.substring (i, al_framework.last) + {STRING_32} "](" + {BIB_FRAMEWORK_SCHEMA}.Link_prefix + al_framework.id + {STRING_32} ")")
+						i := al_framework.last + 1
+					elseif attached l_found as al_found then
 						l_end := al_found.last
 						Result.append ({STRING_32} "[" + l_text.substring (i, l_end) + {STRING_32} "](" + range_target_text (al_found.book, al_found.chapter, al_found.verse, al_found.end_chapter, al_found.end_verse) + {STRING_32} ")")
 						i := l_end + 1

@@ -5,6 +5,7 @@ note
 		(2026-10-27). Usage:
 			bible_build --bible <bible.db> --out <content.db> [--tvtms <TVTMS file>] [--build-id <id>] [--built-at <ISO time>]
 			bible_build --commentary <Commentaries folder, or one sidecar.json> --out <commentary.db>
+			bible_build --frameworks <folder of *.framework.json, or one> --out <frameworks.db> [--uses <commentary.db>]
 		Exit code 0 on success, 1 on failure (the reason is printed).
 	]"
 	author: "Larry Rix"
@@ -25,6 +26,7 @@ feature {NONE} -- Initialization
 			l_cli: SIMPLE_CLI
 			l_builder: BIB_CONTENT_BUILDER
 			l_commentary: BIB_COMMENTARY_BUILDER
+			l_frameworks: BIB_FRAMEWORK_BUILDER
 			l_build_id: STRING
 			l_failed: BOOLEAN
 		do
@@ -32,6 +34,8 @@ feature {NONE} -- Initialization
 			l_cli.set_app_info ("bible_build", "Writes content.db v2 (books, versions, every verse) from the vault's bible.db.", {BIB_CONTENT_BUILDER}.Builder_name)
 			l_cli.add_option_with_default ("b|bible", "The vault's bible.db", "path", "")
 			l_cli.add_option_with_default ("c|commentary", "The Commentaries folder (every book's _build sidecar) or one sidecar JSON: write the commentary pack instead", "path", "")
+			l_cli.add_option_with_default ("f|frameworks", "A folder of *.framework.json sidecars, or one: write the frameworks pack instead", "path", "")
+			l_cli.add_option_with_default ("u|uses", "With --frameworks: the commentary pack whose Frameworks at work lists give each framework's uses (empty: none)", "path", "")
 			l_cli.add_required_option ("o|out", "The content.db to write", "path")
 			l_cli.add_option_with_default ("i|build-id", "The build id (the edition)", "id", "content-v2")
 			l_cli.add_option_with_default ("t|built-at", "The build time, for a byte-identical rebuild (empty: now)", "ISO time", "")
@@ -42,6 +46,30 @@ feature {NONE} -- Initialization
 					print (ic + "%N")
 				end
 				l_failed := True
+			elseif attached l_cli.value_of ("frameworks") as al_folder and then not al_folder.is_empty
+				and then attached l_cli.value_of ("out") as al_frameworks_pack and then not al_frameworks_pack.is_empty
+			then
+				create l_frameworks.make
+				if l_frameworks.sidecars_in (al_folder).is_empty then
+					print ("bible_build: no *.framework.json in " + al_folder + "%N")
+					l_failed := True
+				else
+					l_frameworks.build (l_frameworks.sidecars_in (al_folder), al_frameworks_pack, l_cli.option_value_or_default ("uses", ""))
+					if attached l_frameworks.last_error as al_error then
+						print ("bible_build failed: ")
+						print (al_error)
+						print ("%N")
+						l_failed := True
+					else
+						across l_frameworks.warnings as ic_warning loop
+							print ("bible_build: warning: ")
+							print (ic_warning)
+							print ("%N")
+						end
+						print ("bible_build: wrote " + al_frameworks_pack + " (" + l_frameworks.framework_count.out + " frameworks, " + l_frameworks.alias_count.out + " spellings, "
+							+ l_frameworks.section_count.out + " sections, " + l_frameworks.related_count.out + " related, " + l_frameworks.use_count.out + " commentary uses)%N")
+					end
+				end
 			elseif attached l_cli.value_of ("commentary") as al_sidecar and then not al_sidecar.is_empty
 				and then attached l_cli.value_of ("out") as al_pack and then not al_pack.is_empty
 			then

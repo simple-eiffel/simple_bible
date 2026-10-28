@@ -330,6 +330,109 @@ feature -- Tests
 			remove_test_files
 		end
 
+feature -- Frameworks pack (2026-10-28)
+
+	test_framework_pack_builds_attaches_and_answers
+			-- Two framework sidecars become a frameworks pack (BIB_FRAMEWORK_BUILDER) whose uses come
+			-- from the commentary pack's "Frameworks at work"; the pack folder's packs attach with
+			-- their rules checked; the reader lists them by tier, reads one whole, and gives the
+			-- spellings, which link: a marked name only with its mark.
+		local
+			l_commentary: BIB_COMMENTARY_BUILDER
+			l_frameworks: BIB_FRAMEWORK_BUILDER
+			l_bible: SIMPLE_BIBLE
+			l_linker: BIB_REFERENCE_LINKER
+			l_out: STRING_32
+			l_ok: BOOLEAN
+		do
+			close_leftovers
+			fixture.build_content (Content_file, {CONC_FIXTURE}.Content_version, False)
+			make_folder
+			l_ok := (create {SIMPLE_FILE}.make (Sidecar_file)).write_text_utf_8 (Sidecar_text)
+			create l_commentary.make
+			l_commentary.build (<<Sidecar_file>>, Folder_other_file)
+			assert_true ("the commentary built", l_commentary.last_error = Void)
+			l_ok := (create {SIMPLE_FILE}.make (Kacc_file)).write_text_utf_8 (Kacc_text)
+			l_ok := (create {SIMPLE_FILE}.make (Zakar_file)).write_text_utf_8 (Zakar_text)
+			create l_frameworks.make
+			l_frameworks.build (<<Kacc_file, Zakar_file>>, Folder_frameworks_file, Folder_other_file)
+			assert_true ("built", l_frameworks.last_error = Void)
+			assert_true ("counts", l_frameworks.framework_count = 2 and l_frameworks.alias_count = 3 and l_frameworks.section_count = 6
+				and l_frameworks.related_count = 2)
+			assert_integers_equal ("ZAKAR is named in the introduction's Frameworks at work", 1, l_frameworks.use_count)
+			l_bible := bible ("", Folder)
+			l_bible.open
+			assert_true ("open with both packs", l_bible.is_open and l_bible.pack_errors.is_empty and l_bible.private_packs.count = 2)
+			assert_integers_equal ("one frameworks pack", 1, l_bible.framework_packs.count)
+			if attached l_bible.framework_packs.first as al_pack then
+				assert_strings_equal ("titled", "Larry Rix: Frameworks", al_pack.title)
+				assert_integers_equal ("both listed", 2, al_pack.frameworks.count)
+				assert_strings_equal ("a master lens before a recovery framework", "kacc", al_pack.frameworks.item (1).id)
+				assert_true ("KACC is a draft", al_pack.frameworks.item (1).is_draft)
+				assert_true ("marked", al_pack.frameworks.item (1).has_mark and al_pack.frameworks.item (1).display_name.ends_with ({STRING_32} "%/8482/"))
+				if attached al_pack.framework ("zakar") as al_one and then al_one.count = 1 then
+					assert_integers_equal ("its sections", 3, al_one.item (1).sections.count)
+					assert_strings_equal ("in order", "What it is", al_one.item (1).sections.first.heading)
+					assert_strings_equal ("related", "kacc", al_one.item (1).related.first)
+					assert_integers_equal ("one use", 1, al_one.item (1).uses.count)
+					assert_strings_equal ("the introduction", "jude-intro", al_one.item (1).uses.first.section_id)
+					assert_integers_equal ("its verses", 25, al_one.item (1).uses.first.end_verse)
+				else
+					assert_true ("ZAKAR read whole", False)
+				end
+				assert_integers_equal ("no such framework", 0, al_pack.framework ("none").count)
+				assert_integers_equal ("three spellings", 3, al_pack.aliases.count)
+				assert_strings_equal ("the longest first", "the Kingdom lens", al_pack.aliases.item (1).spelling)
+				create l_linker.make (l_bible.books)
+				l_linker.set_framework_names (create {BIB_FRAMEWORK_NAMES}.make_from_spellings (al_pack.aliases))
+				l_out := l_linker.linked ({STRING_32} "KACC%/8482/ and ZAKAR, not KACC alone; see the Kingdom lens and Jude 9.")
+				assert_true ("a marked name with its mark", l_out.has_substring ({STRING_32} "[KACC%/8482/](framework:kacc)"))
+				assert_true ("an unmarked name as written", l_out.has_substring ("[ZAKAR](framework:zakar)"))
+				assert_true ("a marked name without its mark stays prose", l_out.has_substring ("not KACC alone"))
+				assert_true ("an alias", l_out.has_substring ("[the Kingdom lens](framework:kacc)"))
+				assert_true ("references still link", l_out.has_substring ("[Jude 9](bible:65.1.9)"))
+					-- COMMENTARY, 2026-10-28: a mark inside a spelling; an essay title is not a framework.
+				l_out := l_linker.linked ({STRING_32} "see the Kingdom%/8482/ lens; KACC 09: an essay.")
+				assert_true ("a mark after a word inside a spelling", l_out.has_substring ({STRING_32} "[the Kingdom%/8482/ lens](framework:kacc)"))
+				assert_true ("a marked name without its mark is an essay title", l_out.has_substring ("KACC 09: an essay"))
+			end
+			l_bible.close
+			fixture.delete_file (Sidecar_file)
+			fixture.delete_file (Kacc_file)
+			fixture.delete_file (Zakar_file)
+			remove_test_files
+		end
+
+	test_framework_sidecar_breaking_a_rule_is_refused
+			-- A hover longer than 280 characters, a spelling another framework has: each refuses the
+			-- build, naming the file and the rule, and no pack is written. A related id the pack does
+			-- not hold yet is left out with a warning (frameworks come in batches).
+		local
+			l_frameworks: BIB_FRAMEWORK_BUILDER
+			l_ok: BOOLEAN
+		do
+			close_leftovers
+			make_folder
+			create l_frameworks.make
+			l_ok := (create {SIMPLE_FILE}.make (Kacc_file)).write_text_utf_8 (Kacc_text_with_long_hover)
+			l_ok := (create {SIMPLE_FILE}.make (Zakar_file)).write_text_utf_8 (Zakar_text)
+			l_frameworks.build (<<Kacc_file, Zakar_file>>, Folder_frameworks_file, "")
+			assert_true ("a long hover refused, by file", attached l_frameworks.last_error as al_e and then al_e.has_substring (Kacc_file) and then al_e.has_substring ("hover"))
+			assert_false ("no pack written", (create {SIMPLE_FILE}.make (Folder_frameworks_file)).exists)
+			l_ok := (create {SIMPLE_FILE}.make (Kacc_file)).write_text_utf_8 (Kacc_text)
+			l_ok := (create {SIMPLE_FILE}.make (Zakar_file)).write_text_utf_8 (Zakar_text_with_kacc_alias)
+			l_frameworks.build (<<Kacc_file, Zakar_file>>, Folder_frameworks_file, "")
+			assert_true ("a spelling taken refused", attached l_frameworks.last_error as al_e and then al_e.has_substring (Zakar_file) and then al_e.has_substring ("already names"))
+			l_ok := (create {SIMPLE_FILE}.make (Zakar_file)).write_text_utf_8 (Zakar_text_relating_none)
+			l_frameworks.build (<<Kacc_file, Zakar_file>>, Folder_frameworks_file, "")
+			assert_true ("an unknown related id does not refuse the build", l_frameworks.last_error = Void)
+			assert_true ("it is left out, with a warning", l_frameworks.related_count = 1 and l_frameworks.warnings.count = 1
+				and then l_frameworks.warnings.first.has_substring ("none"))
+			fixture.delete_file (Kacc_file)
+			fixture.delete_file (Zakar_file)
+			remove_test_files
+		end
+
 feature {NONE} -- Fixture
 
 	Other_pack_file: STRING = "facade_test_other_pack.db"
@@ -367,6 +470,52 @@ feature {NONE} -- Fixture
 				+ "on%":%"kjv%",%"voice%":null,%"fields%":{%"teaser%":%"The unveiling [S1.1].%"},%"frameworks%":[],%"questions%":[],%"further_reading%":[],%"te"
 				+ "rms%":[],%"claims%":[{%"id%":%"S1.1%",%"field%":%"teaser%",%"label%":%"SOURCED%",%"text%":%"The unveiling.%",%"summary%":%"unveiling%",%"sou"
 				+ "rce%":%"test:2%"}],%"restricted_quotes%":[]}]}"
+		end
+
+	Folder_frameworks_file: STRING = "facade_test_packs\frameworks.db"
+	Kacc_file: STRING = "facade_test_kacc.framework.json"
+	Zakar_file: STRING = "facade_test_zakar.framework.json"
+
+	Kacc_text: STRING
+			-- A marked master framework with one alias, related to ZAKAR.
+		once
+			Result := "{%"id%":%"kacc%",%"name%":%"KACC%",%"mark%":true,%"title%":%"Kingdom Allegiance in Contested Cosmos%",%"aliases%":[%"the Kingdom lens%"],"
+				+ "%"tier%":%"master%",%"status%":%"draft%",%"hover%":%"HOVER%",%"sections%":[{%"heading%":%"What it is%",%"markdown%":%"A contested cosmos.%"},"
+				+ "{%"heading%":%"Why it matters%",%"markdown%":%"Allegiance.%"},{%"heading%":%"The question it asks of a passage%",%"markdown%":%"Who rules here?%"}],"
+				+ "%"related%":[%"zakar%"],%"source%":%"KACC test.md%"}"
+		end
+
+	Zakar_text: STRING
+			-- An unmarked recovery framework, related to KACC.
+		once
+			Result := "{%"id%":%"zakar%",%"name%":%"ZAKAR%",%"mark%":false,%"title%":%"Governance-Memory%",%"aliases%":[],%"tier%":%"recovery%",%"status%":%"reviewed%","
+				+ "%"hover%":%"Remembering as keeping covenant.%",%"sections%":[{%"heading%":%"What it is%",%"markdown%":%"Memory as governance.%"},"
+				+ "{%"heading%":%"Why it matters%",%"markdown%":%"Identity.%"},{%"heading%":%"The question it asks of a passage%",%"markdown%":%"Who remembers?%"}],"
+				+ "%"related%":[%"kacc%"],%"source%":%"ZAKAR test.md%"}"
+		end
+
+	Zakar_text_with_kacc_alias: STRING
+			-- ZAKAR claiming KACC's alias.
+		once
+			Result := Zakar_text.twin
+			Result.replace_substring_all ("%"aliases%":[]", "%"aliases%":[%"the Kingdom lens%"]")
+		end
+
+	Zakar_text_relating_none: STRING
+			-- ZAKAR related to a framework the pack does not hold.
+		once
+			Result := Zakar_text.twin
+			Result.replace_substring_all ("%"related%":[%"kacc%"]", "%"related%":[%"none%"]")
+		end
+
+	Kacc_text_with_long_hover: STRING
+			-- KACC with a hover of 281 characters.
+		local
+			l_long: STRING
+		once
+			create l_long.make_filled ('a', 281)
+			Result := Kacc_text.twin
+			Result.replace_substring_all ("%"HOVER%"", "%"" + l_long + "%"")
 		end
 
 	Sidecar_text: STRING
@@ -429,6 +578,7 @@ feature {NONE} -- Fixture
 		do
 			fixture.delete_file (Folder_pack_file)
 			fixture.delete_file (Folder_other_file)
+			fixture.delete_file (Folder_frameworks_file)
 			if not (create {SIMPLE_FILE}.make (Folder)).is_directory then
 				l_ok := (create {SIMPLE_FILE}.make (Folder)).create_directory
 			end
@@ -444,6 +594,7 @@ feature {NONE} -- Fixture
 			fixture.delete_file (Pack_file)
 			fixture.delete_file (Folder_pack_file)
 			fixture.delete_file (Folder_other_file)
+			fixture.delete_file (Folder_frameworks_file)
 			if (create {SIMPLE_FILE}.make (Folder)).is_directory then
 				l_ok := (create {SIMPLE_FILE}.make (Folder)).delete_directory
 			end

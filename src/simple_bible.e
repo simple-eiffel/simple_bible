@@ -181,6 +181,17 @@ feature -- Status
 			end
 		end
 
+	framework_packs: ARRAYED_LIST [BIB_FRAMEWORK_PACK]
+			-- The attached packs whose kind is "frameworks" (BIB_FRAMEWORK_SCHEMA, 2026-10-28).
+		do
+			create Result.make (1)
+			across private_packs as ic loop
+				if ic.is_open and then ic.pack_kind.same_string ({BIB_FRAMEWORK_SCHEMA}.Pack_kind) then
+					Result.extend (create {BIB_FRAMEWORK_PACK}.make (sources, ic.alias_name, ic.pack_title))
+				end
+			end
+		end
+
 	packs_found: INTEGER
 			-- `pack_count' as the last `open' counted it, once (design scan 29: the folder was
 			-- scanned up to five times per open, and the postconditions rescanned it).
