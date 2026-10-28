@@ -14,7 +14,7 @@
 | Q-08 | TUI face | **None.** |
 | Q-09 | Withdrawn author documents | **Excluded from search by default**, with an "Include withdrawn" switch. Always labeled. |
 | Q-10 | Primary first user | **The lay reader who outgrew e-Sword.** The Simple layout is the default. |
-| Q-11 | Notes storage | **A Markdown folder (Obsidian-compatible) as the store, with user.db as its index**, if Release 1 can carry it. Otherwise user.db first. Both sit behind `BIB_NOTE_STORE`. |
+| Q-11 | Notes storage | **A Markdown folder (notes-app compatible) as the store, with user.db as its index**, if Release 1 can carry it. Otherwise user.db first. Both sit behind `BIB_NOTE_STORE`. |
 | Q-12 | MCP face for users' own AIs | **v1.5, stdio only** (`bible_mcp`, opt-in; new fleet library LG-06). |
 | Q-13 | Screen-reader access | **v1**, if the simple_shell and simple_widgets owners can schedule GW-14 (the UI Automation bridge). It is a real reason to choose the tool. |
 | Q-14 | Trust rules (A-029) | **RATIFIED.** No tiers, ads, store, prompts, accounts, telemetry or activation. AI is off by default, never in plain search, and never pasted unlabeled. No persona chatbots or sermon generator. A donation link on the About page only. |

@@ -170,7 +170,7 @@ Release column: R1 = Release 1 (1a/1b split per Q-01 noted where relevant), v1.5
 - Two counters, each stating its key kind and scope: `BIB_CONCORDANCE` (core keys) and `BIB_CONC_PACK.place_total` (`lemma_id`). Where FR-023's headword counts live: **in core, unchanged** (fold plan conflict 1; rekeying is overturn trigger 3).
 - Melt-compiled skeletons do not predict runtime, final size or Phase 4 line counts (do not assume 5).
 
-**Builder side (not engine classes):** the conc.db builder (Python, `Scholars/_Tools/`) may stay Python while it builds only the private pack (D-021, D-020 fork 03 item 6). It gains `token.translit` (precomputed; debate 05a fork 4, PREFERRED) and per-corpus counts plus the English-at-a-glance summary per headword (debate 05b addendum). conc_dist.db, which ships, needs an Eiffel builder and a port of the transliteration rules (`BIB_TRANSLITERATOR`) with a differential test against `conc_translit.py` over the 158,342 distinct written forms.
+**Builder side (not engine classes):** the conc.db builder (Python, the research vault's tools folder) may stay Python while it builds only the private pack (D-021, D-020 fork 03 item 6). It gains `token.translit` (precomputed; debate 05a fork 4, PREFERRED) and per-corpus counts plus the English-at-a-glance summary per headword (debate 05b addendum). conc_dist.db, which ships, needs an Eiffel builder and a port of the transliteration rules (`BIB_TRANSLITERATOR`) with a differential test against `conc_translit.py` over the 158,342 distinct written forms.
 
 **census (5)**
 

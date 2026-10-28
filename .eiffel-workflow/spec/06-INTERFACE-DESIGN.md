@@ -31,7 +31,7 @@
 | `set_user_path (p)` | like Current | `user.db` |
 | `set_default_version (code)` | like Current | the reader's default version (BSB unless changed) |
 | `with_reading_options (o)` | like Current | fluent alias grouping display options (pointing level, transliteration scheme) |
-| `set_note_store_folder (p)` | like Current | **moves to Release 1b**: notes as Markdown files in a user folder (`BIB_MARKDOWN_NOTE_STORE`, the gated A″ candidate; Q-11). Release 1a gets an export command instead (the export and exit-snapshot folder, outside the Obsidian vault by default, labeled a read-only copy; the user may point it into the vault) (fold 2026-10-26, debate 02) |
+| `set_note_store_folder (p)` | like Current | **moves to Release 1b**: notes as Markdown files in a user folder (`BIB_MARKDOWN_NOTE_STORE`, the gated A″ candidate; Q-11). Release 1a gets an export command instead (the export and exit-snapshot folder, outside the reader's notes vault by default, labeled a read-only copy; the user may point it into the vault) (fold 2026-10-26, debate 02) |
 | `{BIB_CONFIG}.make_portable` | creation | every path beside the executable; no registry writes (13 T14) |
 
 **Removed from `BIB_CONFIG` (fold 2026-10-26):** the AI-data and author-library path setters, because those stages ship inside `content.db` as tables, empty when absent (debate 01); the plug-in registry setter, because Release 1 has no plug-in facade features and uses the generic pack reader instead (debate 03). The old rows are quoted in the Fold log of `00-FOLD-2026-10-26.md`.

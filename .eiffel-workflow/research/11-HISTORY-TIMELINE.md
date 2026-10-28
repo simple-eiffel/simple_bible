@@ -42,7 +42,7 @@ The two `_YouTube` folders are a **seed corpus, not the boundary**. Leads may co
 | Grade | Meaning | Can anchor a shipped event? |
 |---|---|---|
 | **P1** | Primary witness: an ancient text, inscription, papyrus, coin or archive, in an identified edition or translation (e.g., Josephus *Ant.* 18.89 in Whiston; the Babylonian Chronicle BM 21946; Suetonius *Claudius* 25.4) | Yes |
-| **P2** | Scholarship of record: peer-reviewed work, academic handbooks, museum and university object pages, encyclopedias of record (Britannica), named scholars' positions with a fetched URL | Yes |
+| **P2** | Research of record: peer-reviewed work, academic handbooks, museum and university object pages, encyclopedias of record (Britannica), named scholars' positions with a fetched URL | Yes |
 | **P3** | Larry's verified writing: the two histories' appendices and ledgers, Controversy Lab verdicts. Ships under D-019 (rix.db ships). P3 anchors only where it itself names its P1/P2 basis; a P3 line resting on recall does not anchor | Yes, with its basis carried |
 | **P4** | Lead: YouTube transcripts, Wikipedia, Wikidata, Theographic and other secondary datasets, AI extraction output | **Never alone** |
 

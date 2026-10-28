@@ -1,6 +1,6 @@
 # 14 — Concordance (conc.db): Handoff into simple_bible (2026-10-22)
 
-**From:** the CONC session (vault `Obsidian Vault\Scholars`), which built conc.db and its printed-concordance pilot, 2026-10-18 to 2026-10-22.
+**From:** the CONC session (vault the research vault), which built conc.db and its printed-concordance pilot, 2026-10-18 to 2026-10-22.
 **To:** whichever session picks up simple_bible next.
 **Status:** research input. Nothing in simple_bible's spec, contracts or code has been changed.
 
@@ -85,7 +85,7 @@ Larry approved this layout over five pilot rounds. A single word is small, which
 
 **Browse lists, already built:** `Rix/Data/conc pilot/Planned Headwords/` holds one TSV per language (9,341 Hebrew/Aramaic; 5,396 NT; 14,175 LXX; 12,965 English), with headword, transliteration, pronunciation, part of speech, STEP gloss, usual English and count. They come from `_Tools/conc_headword_plan.py`.
 
-## 4. Reference implementations (Python, in `Scholars/_Tools/`)
+## 4. Reference implementations (Python, in the research vault's tools folder)
 
 Under simple_bible's **D-020 (no Python in the final product),** these are reference implementations only:
 

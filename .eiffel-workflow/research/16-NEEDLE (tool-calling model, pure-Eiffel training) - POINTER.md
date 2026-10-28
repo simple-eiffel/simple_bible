@@ -31,4 +31,4 @@
 ## Pointers
 
 - simple_needle (binding, spike, parity tests), simple_tensor (README milestone table; `.eiffel-workflow/` plan), simple_rixgpt, simple_vulkan: fleet libraries beside simple_bible.
-- NEEDLE session transcript (Scholars vault project), 2026-10-25 21:39 onward.
+- NEEDLE session transcript (research vault project), 2026-10-25 21:39 onward.

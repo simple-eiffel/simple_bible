@@ -134,7 +134,7 @@ Library dependencies of the base target: base, time, simple_ai_client, simple_da
 | S-09 | `SCHOLAR_BIBLE` (core sections) | ~1,150 | Schema, ingestion, query, lookup, reference parsing, book resolution, word-level Strong's, raw verse query, formatting, version resolution, book-id remap, cross-references (l. 2461), proper names (l. 2491), edit distance (l. 2776) | {simple_sql} | HARVEST-REWRITE: written against the February monolith and scrollmapper per-version .db files; must target `core.db` (D-015) with the versification map applied before pairing | [ ] |
 | S-10 | `SCHOLAR_BIBLE` (corpus sections) | ~2,740 | Scholarly corpus/NBP (l. 1042), DDD + classification (l. 1519, 1872), ANE texts (l. 2569), Dead Sea Scrolls (l. 2644), cuneiform (l. 2819), prehistory (l. 3027), Traced (l. 3376), research corpus (l. 3707) | {simple_sql} | PRIVATE-PLUGIN: reads tables that now live in scholars.db (renamed `nbp_*`, `ddd_*`) and primary_evidence.db; queries must be rewritten for the split | [ ] |
 | S-11 | `SCHOLAR_CONFIG` | 145 | Builder-style configuration (vault path, DB path, tier) | — | HARVEST-REWRITE: becomes core/ai/user DB paths + plug-in path | [ ] |
-| S-12 | `SCHOLAR_DOCUMENT` | 216 | Parsed Obsidian document (title, tags, wikilinks, headers) | — | HARVEST-REWRITE: the document model for the Eiffel rix.db builder (D-019, D-020) | [ ] |
+| S-12 | `SCHOLAR_DOCUMENT` | 216 | Parsed Markdown vault document (title, tags, wikilinks, headers) | — | HARVEST-REWRITE: the document model for the Eiffel rix.db builder (D-019, D-020) | [ ] |
 | S-13 | `SCHOLAR_EMBEDDER` | 114 | Tier router for embeddings. **Stub.** | {simple_math, SIMPLE_VECTOR} | DROP: D-008 / D-013 design this fresh | — |
 | S-14 | `SCHOLAR_ENTITY` | 58 | Regex-extracted named entity | — | ARCHIVE-ONLY | — |
 | S-15 | `SCHOLAR_FRAME_ANCIENT` | 196 | Ancient-sources lens | SCHOLAR_FRAME_BASE | PRIVATE-PLUGIN | [ ] |
@@ -149,7 +149,7 @@ Library dependencies of the base target: base, time, simple_ai_client, simple_da
 | S-24 | `SCHOLAR_INFERENCE_TIER` | 71 | Probe for embedded runtime / Ollama. **Stub.** | — | HARVEST-REWRITE: the capability probe that keeps AI off on low-memory machines (design §2, §5) | [ ] |
 | S-25 | `SCHOLAR_MODEL_BASE` | 58 | Deferred model load/unload lifecycle | — | HARVEST-AS-IS | [ ] |
 | S-26 | `SCHOLAR_ONNX_ENGINE` | 414 | Working ONNX Runtime engine for Opus-MT translation | {simple_onnx}, S-25 | HARVEST-REWRITE: Keep the session and tokenizer plumbing for bge-m3 (build-time, then query-time); drop the translation use (D-004) | [ ] |
-| S-27 | `SCHOLAR_PARSER` | 592 | Obsidian markdown parser (title, tags, wikilinks, headers, code-block stripping) | S-12 | HARVEST-REWRITE: the parser for the Eiffel rix.db builder port, checked by differential test against the Python builder (D-020) | [ ] |
+| S-27 | `SCHOLAR_PARSER` | 592 | Markdown vault parser (title, tags, wikilinks, headers, code-block stripping) | S-12 | HARVEST-REWRITE: the parser for the Eiffel rix.db builder port, checked by differential test against the Python builder (D-020) | [ ] |
 | S-28 | `SCHOLAR_QUERY` | 115 | Query with facet filters | — | HARVEST-REWRITE: Facets become version / testament / book / voice | [ ] |
 | S-29 | `SCHOLAR_RESULT` | 112 | Ranked result set | {simple_sorter} | HARVEST-REWRITE: Results must carry provenance (source DB, voice label) | [ ] |
 | S-30 | `SCHOLAR_SEARCH` | 155 | Query processing; Levenshtein | — | HARVEST-REWRITE: Fuzzy book/term matching survives; assembly over the old store does not | [ ] |
@@ -375,7 +375,7 @@ License column per `Rix/Data/_Text Credits (paste-ready).md` and design §7. "Re
 
 | ID | Script | Size | Purpose | Class |
 |---|---|---:|---|---|
-| SC-27 | `export_to_obsidian.py` (wip branch only) | 10 KB | bible.db → Obsidian markdown | ARCHIVE-ONLY (preserved by the branch merge, §8 step 2) |
+| SC-27 | `export_to_obsidian.py` (wip branch only) | 10 KB | bible.db → vault Markdown | ARCHIVE-ONLY (preserved by the branch merge, §8 step 2) |
 | SC-56 | `patch_repl.py` | 30 KB | Patch bible_repl.e (cuneiform commands) | DROP |
 | SC-57 | `patch_localappdata.py` | 8 KB | Patch bible_repl.e (LOCALAPPDATA) | DROP |
 | SC-58 | `patch_rescue.py` | 3 KB | Patch rescue clause | DROP |

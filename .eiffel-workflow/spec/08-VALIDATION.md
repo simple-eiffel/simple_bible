@@ -207,7 +207,7 @@
 | V-22 | Export contract | Every failure is reported; `files_written + failures = live notes`; file names are id-based or sanitized, never a raw title; atomic write; folder created by the exporter; import never overwrites a row | debate 02, 5 item 2, section 8.2 |
 | V-23 | Exit snapshot and start backup (DS-B′, DS-B-S8) | Pass required before adoption: after an unclean exit, a start, then `user.db` deleted and restored from backup, note bytes lost outside the crash-to-next-start window: 0 | debate 02, OT-2, gate item 2 |
 | V-24 | Notes cold-start share | Store share of cold start on the reference machine, cold cache, at 10,000 and 100,000 notes: not above 1 s (38-43 ms measured at 100,000 notes, dev machine); NFR-017 states whether store start-up work is inside the 3 s | debate 02, OT-6, 8.2 |
-| V-25 | A″ gates (Release 1b only) | DS-3c (0 editor edits lost with Obsidian as the outside writer, every refused save retried or reported; one GUI test on a scratch vault, a time Larry chooses), DS-10, DS-2″, DS-1/DS-8 on the reference machine, DS-R1, DS-R2, and F-1″, F-3b, F-11 shipped | debate 02, OT-3, gate item 5 |
+| V-25 | A″ gates (Release 1b only) | DS-3c (0 editor edits lost with a notes app as the outside writer, every refused save retried or reported; one GUI test on a scratch vault, a time Larry chooses), DS-10, DS-2″, DS-1/DS-8 on the reference machine, DS-R1, DS-R2, and F-1″, F-3b, F-11 shipped | debate 02, OT-3, gate item 5 |
 
 ### Private packs (debate 03)
 
@@ -290,7 +290,7 @@
 | Q-08 | TUI face (ledger L-3): the design has none; confirm | None |
 | Q-09 | Withdrawn author documents excluded from search by default with an "Include withdrawn" switch, always labeled (GUI open point 3) | Confirm |
 | Q-10 | Primary first user (13 Q1): the lay reader who outgrew e-Sword, or the pastor who left BibleWorks? It sets the default screen and the Release 1a/1b order | Lay reader (13: trust themes come mostly from lay readers; the Simple layout is the default) |
-| Q-11 | Notes: user.db (default) or Markdown files in a user folder (Obsidian-compatible) first? The design supports both behind `BIB_NOTE_STORE` (13 Q3) | Markdown folder as the store, user.db as its index, if Release 1 can carry it; otherwise user.db first. **Answered by fallback (fold 2026-10-26, debate 02): Release 1a cannot carry it, so user.db first (pathway B, PREFERRED 0.70 / 0.80); A″ stays the gated 1b candidate** |
+| Q-11 | Notes: user.db (default) or Markdown files in a user folder (notes-app compatible) first? The design supports both behind `BIB_NOTE_STORE` (13 Q3) | Markdown folder as the store, user.db as its index, if Release 1 can carry it; otherwise user.db first. **Answered by fallback (fold 2026-10-26, debate 02): Release 1a cannot carry it, so user.db first (pathway B, PREFERRED 0.70 / 0.80); A″ stays the gated 1b candidate** |
 | Q-12 | MCP face for users' own AIs (13 S6): build `bible_mcp` (stdio, opt-in, new fleet library LG-06), and when? | v1.5, stdio only |
 | Q-13 | Screen-reader access (13 S14, T23): pull GW-14 (UI Automation bridge) into v1? Panels are bridge-ready either way | v1 if the simple_shell/simple_widgets owners can schedule it; it is a real reason to choose the tool |
 | Q-14 | Ratify the trust rules (03 A-029): no tiers/ads/store/prompts/account/telemetry/activation; AI off by default, never in plain search, never pasted unlabeled; no persona chatbots or sermon generator; donation link on About only | Ratify |

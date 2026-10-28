@@ -90,7 +90,7 @@ Each criterion names the test that proves it. **Reference machine** = 8 GB RAM, 
 - [ ] **AC-1a-39** Notes, highlights, bookmarks, tags and history are keyed to canonical hub ids: A highlight made on John 3:16 in the BSB shows on John 3:16 in every version (`test_user_store`).
 - [ ] **AC-1a-40** User data is append-only: An edit writes a new version, a delete is soft, and both can be restored; a rotating backup (simple_sql online backup) is written on exit and restores from Settings (`test_user_store`).
 - [ ] **AC-1a-41** A previous-schema `user.db` fixture migrates with every setting, layout and note preserved (`test_user_store`).
-- [ ] **AC-1a-42** Notes go through `BIB_NOTE_STORE`. The Markdown-folder store is the default, with `user.db` as its index; verse links are plain references found by `BIB_REFERENCE_DETECTOR`, so the files read naturally in Obsidian or any editor (RQ-06) **[conditional: the RQ-06 gate]**.
+- [ ] **AC-1a-42** Notes go through `BIB_NOTE_STORE`. The Markdown-folder store is the default, with `user.db` as its index; verse links are plain references found by `BIB_REFERENCE_DETECTOR`, so the files read naturally in any notes app or editor (RQ-06) **[conditional: the RQ-06 gate]**.
 - [ ] **AC-1a-43** Markdown store edge cases: An external edit is picked up at the next start or window focus; a file changed outside the program since its last read is never overwritten (the program writes a conflict copy); a renamed or deleted file leaves no dangling index row; a second instance opens read-only (`test_user_store`; RQ-06) **[conditional, with AC-1a-42]**.
 
 ### 4.4 Release 1a: faces
@@ -202,11 +202,11 @@ Twelve probing questions across the ten attack angles, followed by the seven def
 2. Panels enabled as their gaps close (A-011 staging), with no minimum.
 3. A named 1a minimum: P01 Bible Text, P02 Parallel, P03 Original Language, P05 Dictionary and Lexicon (Strong's and the range of renderings), P06 Notes, P07 Search, P08 Guides (They Chose, Word's Journey), P09 Census and Checks, P10 Author Library, P11 Navigator, and P04 showing cross-references and related passages only. Notes and author documents show as wrapped Markdown source text in 1a, so GW-13 (rich text) moves to 1b, where the library packs need it.
 
-**Recommended:** Option 3. That puts GW-01 to GW-12, GW-24 and GW-26 on the 1a path, and GW-13 on 1b. Plain Markdown is legible and is exactly what an Obsidian user expects to see, and no other technology stands in. It is Larry's call whether wrapped Markdown is acceptable for the lay reader in 1a.
+**Recommended:** Option 3. That puts GW-01 to GW-12, GW-24 and GW-26 on the 1a path, and GW-13 on 1b. Plain Markdown is legible and is exactly what a Markdown notes-app user expects to see, and no other technology stands in. It is Larry's call whether wrapped Markdown is acceptable for the lay reader in 1a.
 
 ### RQ-06 (edge cases; integration seam) Can Release 1 carry the Markdown note store (Q-11), and what are its rules?
 
-**Why it matters:** "Lost or scrambled notes" is the trust failure users do not forgive (13 gotcha 3). A folder that Obsidian, OneDrive and simple_bible all touch has edge cases a database never sees: external edits while the program is open, OneDrive conflict copies, renames, two instances, and an index that drifts from the files.
+**Why it matters:** "Lost or scrambled notes" is the trust failure users do not forgive (13 gotcha 3). A folder that a notes app, OneDrive and simple_bible all touch has edge cases a database never sees: external edits while the program is open, OneDrive conflict copies, renames, two instances, and an index that drifts from the files.
 
 **Alternatives:**
 1. `user.db` store first; the Markdown store in 1b.
