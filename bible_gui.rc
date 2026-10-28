@@ -4,6 +4,28 @@
 // rc runs in EIFGENs/bible_gui/F_code, hence the path (drawn by tools/make_icons.py).
 1 ICON "../../../assets/icons/bible_gui.ico"
 
+// The program's version (BIB_RELEASE.Program_version; a test holds the two equal). The installer
+// reads ProductVersion from the built exe, so one bump here and there sets all three.
+1 VERSIONINFO
+FILEVERSION 0,7,21,0
+PRODUCTVERSION 0,7,21,0
+BEGIN
+	BLOCK "StringFileInfo"
+	BEGIN
+		BLOCK "040904B0"
+		BEGIN
+			VALUE "ProductName", "simple_bible"
+			VALUE "FileDescription", "simple_bible"
+			VALUE "ProductVersion", "0.7.21"
+			VALUE "FileVersion", "0.7.21"
+		END
+	END
+	BLOCK "VarFileInfo"
+	BEGIN
+		VALUE "Translation", 0x409, 1200
+	END
+END
+
 STRINGTABLE
 BEGIN
 	1 "This Program was made using EiffelStudio using Visual Studio C++"

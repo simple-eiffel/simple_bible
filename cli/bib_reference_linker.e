@@ -143,12 +143,14 @@ feature -- Places
 					create l_end.make_empty
 				end
 				l_parts := l_start.split ('.')
-				if l_parts.count = 3 and then l_parts.i_th (1).is_integer and then l_parts.i_th (2).is_integer and then l_parts.i_th (3).is_integer then
+				if l_parts.count = 3 and then is_small_number (l_parts.i_th (1)) and then is_small_number (l_parts.i_th (2))
+					and then is_small_number (l_parts.i_th (3))
+				then
 					Result := [l_parts.i_th (1).to_integer, l_parts.i_th (2).to_integer, l_parts.i_th (3).to_integer,
 						l_parts.i_th (2).to_integer, l_parts.i_th (3).to_integer]
 					if not l_end.is_empty then
 						l_end_parts := l_end.split ('.')
-						if l_end_parts.count = 2 and then l_end_parts.i_th (1).is_integer and then l_end_parts.i_th (2).is_integer then
+						if l_end_parts.count = 2 and then is_small_number (l_end_parts.i_th (1)) and then is_small_number (l_end_parts.i_th (2)) then
 							Result.end_chapter := l_end_parts.i_th (1).to_integer
 							Result.end_verse := l_end_parts.i_th (2).to_integer
 						else
@@ -156,7 +158,24 @@ feature -- Places
 						end
 					end
 				end
+				if attached Result as al_range and then not (al_range.book >= 1 and al_range.chapter >= 1
+					and al_range.end_chapter >= al_range.chapter and (al_range.end_chapter > al_range.chapter or al_range.end_verse >= al_range.verse))
+				then
+						-- scan 57: a target no reference writes (a book 0, a passage running backward) is none
+					Result := Void
+				end
 			end
+		ensure
+			a_passage: attached Result as r implies (r.book >= 1 and r.chapter >= 1 and r.chapter <= Max_number
+				and r.verse >= 0 and r.verse <= Max_number and r.end_chapter <= Max_number and r.end_verse <= Max_number
+				and (r.end_chapter > r.chapter or (r.end_chapter = r.chapter and r.end_verse >= r.verse)))
+		end
+
+	is_small_number (a_part: READABLE_STRING_32): BOOLEAN
+			-- Is `a_part' digits only, at most `Max_number' (a book number too: 66 books)?
+		do
+			Result := not a_part.is_empty and then a_part.count <= 3 and then across a_part as al_c all al_c.is_digit end
+				and then a_part.to_integer <= Max_number
 		end
 
 	Target_prefix: STRING_32 = "bible:"
@@ -285,35 +304,28 @@ feature {NONE} -- Implementation
 			i, l_first, l_second, l_third, l_fourth: INTEGER
 			l_has_colon, l_has_range, l_range_colon: BOOLEAN
 			l_start_chapter, l_start_verse, l_end_chapter, l_end_verse: INTEGER
+			l_number: TUPLE [value, next: INTEGER]
 		do
-			i := a_start
-			from until i > a_text.count or else not a_text [i].is_digit loop
-				l_first := l_first * 10 + a_text [i].code - ('0').code
-				i := i + 1
-			end
+			l_number := number_at (a_text, a_start)
+			l_first := l_number.value
+			i := l_number.next
 			if i + 1 <= a_text.count and then a_text [i] = ':' and then a_text [i + 1].is_digit then
 				l_has_colon := True
-				i := i + 1
-				from until i > a_text.count or else not a_text [i].is_digit loop
-					l_second := l_second * 10 + a_text [i].code - ('0').code
-					i := i + 1
-				end
+				l_number := number_at (a_text, i + 1)
+				l_second := l_number.value
+				i := l_number.next
 			end
 				-- A range ("5-7", "2:4-9", "5:1-6:2") keeps its text; its end is read too.
 			if i + 1 <= a_text.count and then (a_text [i] = '-' or a_text [i].natural_32_code = 0x2013) and then a_text [i + 1].is_digit then
 				l_has_range := True
-				i := i + 1
-				from until i > a_text.count or else not a_text [i].is_digit loop
-					l_third := l_third * 10 + a_text [i].code - ('0').code
-					i := i + 1
-				end
+				l_number := number_at (a_text, i + 1)
+				l_third := l_number.value
+				i := l_number.next
 				if i + 1 <= a_text.count and then a_text [i] = ':' and then a_text [i + 1].is_digit then
 					l_range_colon := True
-					i := i + 1
-					from until i > a_text.count or else not a_text [i].is_digit loop
-						l_fourth := l_fourth * 10 + a_text [i].code - ('0').code
-						i := i + 1
-					end
+					l_number := number_at (a_text, i + 1)
+					l_fourth := l_number.value
+					i := l_number.next
 				end
 			end
 			if l_has_colon then
@@ -352,6 +364,24 @@ feature {NONE} -- Implementation
 			end
 		ensure
 			ends_after_it_starts: attached Result as r implies (r.end_chapter > r.chapter or (r.end_chapter = r.chapter and r.end_verse >= r.verse))
+		end
+
+	number_at (a_text: STRING_32; a_start: INTEGER): TUPLE [value, next: INTEGER]
+			-- The digits from `a_start' read as a number, held at `Max_number' + 1 once past it (a long
+			-- run never overflows: scan 57), and the index after them.
+		require
+			in_text: a_start >= 1 and a_start <= a_text.count + 1
+		local
+			i, l_value: INTEGER
+		do
+			from i := a_start until i > a_text.count or else not a_text [i].is_digit loop
+				l_value := (l_value * 10 + a_text [i].code - ('0').code).min (Max_number + 1)
+				i := i + 1
+			end
+			Result := [l_value, i]
+		ensure
+			bounded: Result.value >= 0 and Result.value <= Max_number + 1
+			after_the_digits: Result.next >= a_start and Result.next <= a_text.count + 1
 		end
 
 	starts_like_a_name (a_name: STRING_32): BOOLEAN

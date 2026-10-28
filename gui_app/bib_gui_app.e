@@ -915,7 +915,7 @@ feature {NONE} -- Menus and keys (C2)
 	show_about
 			-- Which build and data are open.
 		do
-			window.toast ({STRING_32} "simple_bible, engine " + {BIB_RELEASE}.Engine_version + {STRING_32} ".  " + status_text, 1)
+			window.toast ({STRING_32} "simple_bible " + {BIB_RELEASE}.Program_version + {STRING_32} " (engine " + {BIB_RELEASE}.Engine_version + {STRING_32} ").  " + status_text, 1)
 		end
 
 feature {NONE} -- Toolbar (C3-C9)
@@ -3665,7 +3665,7 @@ feature {NONE} -- Commentary held, and its references previewed (Larry, 2026-10-
 
 	is_commentary_held: BOOLEAN
 			-- Is T5 kept on `held_book' `held_chapter':`held_verse' while T3 shows a passage a
-			-- commentary link opened?
+			-- commentary link opened? (The invariant `hold_is_a_place'.)
 
 	held_book, held_chapter, held_verse: INTEGER
 			-- The verse the commentary is kept on.
@@ -4395,7 +4395,7 @@ feature {NONE} -- Start and status (C1, C11-C15)
 	window_title: STRING_32
 			-- C1: the app, the chapter and version read, and the edition the pack names (FR-157).
 		do
-			Result := {STRING_32} "simple_bible"
+			Result := {STRING_32} "simple_bible " + {BIB_RELEASE}.Program_version
 			if reading_book > 0 then
 				Result.append ({STRING_32} "   " + place_text (reading_book, reading_chapter, 0) + {STRING_32} " (" + reading_version.to_string_32 + {STRING_32} ")")
 			end
@@ -4524,5 +4524,9 @@ feature {NONE} -- Constants
 
 	Pages_per_tick: INTEGER = 15
 			-- Pages a tick loads (about 3,000 places, a few milliseconds each page).
+
+
+invariant
+	hold_is_a_place: is_commentary_held implies (held_book > 0 and held_chapter > 0 and held_verse >= 0)
 
 end

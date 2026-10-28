@@ -9,6 +9,11 @@ All notable changes to simple_bible are documented here. The format follows [Kee
 - **A reference's passage on hover**: resting on a Bible reference in the commentary opens a card with its text in the version read, each verse numbered, up to 8 verses ("Galatians 2:15-21 (KJV)"). `BIB_REFERENCE_LINKER` now writes where a range ends into its link (`bible:48.2.15-2.21`; one place keeps `bible:48.2.15`), read by `target_range`; `target_place` still reads the first verse of either form.
 - **Following a reference keeps the commentary**: a click on one opens the passage in the Bible text while the commentary stays on its verse, its heading saying what is read meanwhile; "Back to Galatians 2:20" in the reading bar (and the Go menu) returns, and any other way of moving (a verse clicked, the reference box, Back and Forward) lets the commentary follow again. The commentary is redrawn only when its verse changes, so a long one keeps its scroll.
 - Snapshot options `hold` and `refcard`. The personal concordance carries two covering indexes (first English lookup cold 5.3 s -> 0.9 s; built by the vault's builder).
+- **The version in the caption and Help > About** ("simple_bible 0.7.21"): `BIB_RELEASE.Program_version`, the same as `bible_gui.rc`'s new version block (Windows shows it in the file's properties; the installer reads it from the built exe); `test_program_version_is_the_resource_version` holds the two equal.
+
+### Fixed (design scan 57)
+
+- The commentary hold is a place by invariant (`hold_is_a_place`). The reference reader reads digits through one `number_at`, held at 177 so a long run never overflows; `target_range` answers Void for a target no reference writes (book 0, a sign, a part past 176, a passage running backward), with a postcondition, so a hover can never walk thousands of chapters. Before: `test_references_become_links` FAILED ("a passage past any book is none"); after: 193 passed, 0 failed.
 
 ### Added (2026-10-28: right-click menus, Focus reading, larger panes; personal installer 0.7.19)
 
