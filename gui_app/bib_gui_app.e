@@ -169,6 +169,9 @@ feature {NONE} -- Initialization
 			create renderings_grid.make (60.0)
 			create entries_title.make_ui ("Lexicon entries")
 			create entries_list.make (60.0)
+			create frameworks_grid.make (60.0)
+			create framework_rows.make (0)
+			create framework_view.make (200.0)
 			create places_title.make_ui ("Every place")
 			create places_grid.make (60.0)
 			create results_note.make_ui ("")
@@ -393,6 +396,14 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 				on_commentary_link ({STRING_32} "bible:48.2.16")
 			elseif snapshot_tab.same_string ({STRING_32} "refcard") then
 				snapshot_reference_card
+			elseif snapshot_tab.same_string ({STRING_32} "frameworks") then
+				if not framework_rows.is_empty then
+					show_framework (framework_rows.first.id)
+				else
+					show_framework ({STRING_32} "kacc")
+				end
+			elseif snapshot_tab.same_string ({STRING_32} "fwcard") then
+				snapshot_framework_card
 			elseif snapshot_tab.same_string ({STRING_32} "focus") then
 				toggle_focus_reading
 			elseif snapshot_tab.same_string ({STRING_32} "maximize") then
@@ -525,7 +536,11 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			window.set_on_tick (agent load_more_places)
 			focus_button.set_on_click (agent toggle_focus_reading)
 			origin_button.set_on_click (agent back_to_commentary_verse)
-			commentary_view.set_hover_card_builder (agent commentary_card)
+			commentary_view.set_hover_card_builder (agent link_card (commentary_view, ?, ?))
+			framework_view.set_hover_card_builder (agent link_card (framework_view, ?, ?))
+			framework_view.set_on_link_click (agent on_commentary_link)
+			framework_view.set_menu_extension (agent pane_menu (lexicon_panel, ?, ?, ?))
+			frameworks_grid.set_on_select (agent on_framework_row)
 			wire_menus
 		end
 
@@ -703,6 +718,7 @@ feature {NONE} -- Window
 
 			lexicon_tabs.add_page ("Word", l_word)
 			lexicon_tabs.add_page ("Every place", l_places)
+			lexicon_tabs.add_page ("Frameworks", frameworks_page)
 			lexicon_tabs.add_page ("Compare", create {SW_EMPTY_STATE}.make ("Compare comes later",
 				"Two to four lexicon entries side by side (P05.6) is planned."))
 			lexicon_tabs.add_page ("Bible Dictionaries", create {SW_EMPTY_STATE}.make ("No Bible dictionaries yet",
@@ -772,6 +788,9 @@ feature {NONE} -- Window
 			places_grid.add_column (create {SW_GRID_COLUMN [BIB_PLACE_ROW]}.make ("Word", 150.0, agent {BIB_PLACE_ROW}.surface))
 			places_grid.add_column ((create {SW_GRID_COLUMN [BIB_PLACE_ROW]}.make ("Transliteration", 160.0, agent {BIB_PLACE_ROW}.translit)).growing)
 			reading_view.add_column ("").do_nothing
+			frameworks_grid.add_column ((create {SW_GRID_COLUMN [BIB_FRAMEWORK]}.make ("Framework", 120.0, agent {BIB_FRAMEWORK}.display_name)).growing)
+			frameworks_grid.add_column (create {SW_GRID_COLUMN [BIB_FRAMEWORK]}.make ("Tier", 90.0, agent {BIB_FRAMEWORK}.tier))
+			frameworks_grid.add_column (create {SW_GRID_COLUMN [BIB_FRAMEWORK]}.make ("Status", 80.0, agent {BIB_FRAMEWORK}.status))
 		end
 
 feature {NONE} -- Menus and keys (C2)
@@ -3187,7 +3206,7 @@ feature {NONE} -- Notes (T2, P06)
 			window.add_reference_mark (center_tabs, "T3", "Centre tabs: the Bible text, Parallel (P02) and Interlinear (P03, Ctrl+I). More Bible tabs come later.", window.Corner_top_left)
 			window.add_reference_mark (analysis_title, "P03.2", "Verse analysis: the verse read, a row per word with its lemma, Strong's number, morphology, gloss, and how often its headword occurs in this testament. Click a row and T4 follows it.", window.Corner_top_left)
 			window.add_reference_mark (interlinear_note, "P03", "Interlinear: word by word in the original, right to left for Hebrew. A click makes the word's verse the place read and opens its headword in T4.", window.Corner_top_left)
-			window.add_reference_mark (lexicon_heading, "T4", "P05 Lexicon, east: follows the clicked word.", window.Corner_top_left)
+			window.add_reference_mark (lexicon_heading, "T4", "P05 Lexicon, east: follows the clicked word. Its Frameworks tab (P05.8) explains each FRAMEWORK(TM) for the common reader; a framework named anywhere is a link: rest on it for a summary, click it to open it here.", window.Corner_top_left)
 			window.add_reference_mark (commentary_title, "T5", "P04 Commentary, east: Commentaries (Larry's commentary packs, verse by verse, every claim labelled SOURCED or DEDUCED), Cross-refs with OpenBible votes.", window.Corner_top_left)
 			window.add_reference_mark (results_tabs, "T6", "South results zone: Search Results (word choices, then the verses holding the words; click one to read it); Guides, Census, Author Library and Ledger come later.", window.Corner_top_left)
 		end
@@ -3757,14 +3776,18 @@ feature {NONE} -- Commentary held, and its references previewed (Larry, 2026-10-
 			shown_while_held: reading_bar.children.has (origin_button) = is_commentary_held
 		end
 
-	commentary_card (a_item, a_character: INTEGER): detachable SW_HOVER_CARD
-			-- A Bible reference in the commentary rested on: its passage in the version read.
+	link_card (a_view: SW_DOCUMENT_VIEW; a_item, a_character: INTEGER): detachable SW_HOVER_CARD
+			-- A link in `a_view' rested on: a Bible reference's passage in the version read, or a
+			-- framework's title and plain summary (2026-10-28).
 		do
-			if commentary_view.is_valid_item (a_item) and then attached commentary_view.link_target_at (a_item, a_character) as al_target
-				and then attached (create {BIB_REFERENCE_LINKER}.make (bible.books)).target_range (al_target) as al_range
-				and then bible.books.has_book (al_range.book) and then al_range.chapter >= 1
-			then
-				Result := passage_card (al_range.book, al_range.chapter, al_range.verse, al_range.end_chapter, al_range.end_verse)
+			if a_view.is_valid_item (a_item) and then attached a_view.link_target_at (a_item, a_character) as al_target then
+				if al_target.starts_with ({BIB_FRAMEWORK_SCHEMA}.Link_prefix) then
+					Result := framework_card (al_target.substring ({BIB_FRAMEWORK_SCHEMA}.Link_prefix.count + 1, al_target.count))
+				elseif attached (create {BIB_REFERENCE_LINKER}.make (bible.books)).target_range (al_target) as al_range
+					and then bible.books.has_book (al_range.book) and then al_range.chapter >= 1
+				then
+					Result := passage_card (al_range.book, al_range.chapter, al_range.verse, al_range.end_chapter, al_range.end_verse)
+				end
 			end
 		end
 
@@ -3840,6 +3863,14 @@ feature {NONE} -- Commentary held, and its references previewed (Larry, 2026-10-
 	snapshot_reference_card
 			-- For a snapshot: the card of the first passage linked in the commentary (the first range
 			-- when there is one), as a rest on it would open it.
+		do
+			snapshot_link_card ({STRING_32} "bible:")
+		end
+
+	snapshot_link_card (a_prefix: READABLE_STRING_GENERAL)
+			-- For a snapshot: the commentary scrolled to its first link whose target starts with
+			-- `a_prefix' (for a passage, the first range when there is one), and that link's card up,
+			-- as a rest on it would open it.
 		local
 			u, c, l_unit, l_char, l_range_unit, l_range_char: INTEGER
 			g: SW_TEXT_GEOMETRY
@@ -3848,7 +3879,7 @@ feature {NONE} -- Commentary held, and its references previewed (Larry, 2026-10-
 			from u := 1 until u > commentary_view.unit_count or l_range_unit > 0 loop
 				g := commentary_view.unit_geometry (u)
 				from c := 1 until c > g.count or l_range_unit > 0 loop
-					if attached commentary_view.link_target_at (u, c) as al_target and then al_target.starts_with ({STRING_32} "bible:") then
+					if attached commentary_view.link_target_at (u, c) as al_target and then al_target.starts_with (a_prefix.to_string_32) then
 						if l_unit = 0 then
 							l_unit := u
 							l_char := c
@@ -3867,6 +3898,8 @@ feature {NONE} -- Commentary held, and its references previewed (Larry, 2026-10-
 				l_char := l_range_char
 			end
 			if l_unit > 0 then
+				commentary_view.scroll_to (commentary_view.stacked_scroll_for (commentary_view.unit_block (l_unit)))
+				window.request_render
 				g := commentary_view.unit_geometry (l_unit)
 				if attached commentary_view.hover_card_at (commentary_view.unit_origin_x (l_unit) + g.x_of (l_char) + 2.0,
 					commentary_view.unit_origin_y (l_unit) + g.top_of_line (g.line_of (l_char)) + 3.0) as al_card
@@ -3874,6 +3907,201 @@ feature {NONE} -- Commentary held, and its references previewed (Larry, 2026-10-
 					window.show_hover_card (al_card)
 				end
 			end
+		end
+
+feature {NONE} -- Frameworks explained (P05.8, Larry, 2026-10-28)
+
+	frameworks_grid: SW_DATA_GRID [BIB_FRAMEWORK]
+	framework_rows: ARRAYED_LIST [BIB_FRAMEWORK]
+	framework_view: SW_DOCUMENT_VIEW
+			-- T4's Frameworks tab: every framework by tier, and the one chosen, explained.
+
+	Frameworks_tab: INTEGER = 3
+			-- T4's Frameworks page.
+
+	frameworks_page: SW_SPLITTER
+			-- The list beside the framework read.
+		local
+			l_list: SW_COLUMN
+		do
+			create l_list.make
+			l_list.put (frameworks_grid.growing)
+			create Result.make (l_list, framework_view)
+			Result.set_ratio (0.32)
+			fill_frameworks
+		end
+
+	framework_pack: detachable BIB_FRAMEWORK_PACK
+			-- The frameworks pack, when one is attached.
+		do
+			if bible.is_open and then not bible.framework_packs.is_empty and then bible.framework_packs.first.is_available then
+				Result := bible.framework_packs.first
+			end
+		end
+
+	page_linker: BIB_REFERENCE_LINKER
+			-- Links a page's references and, when a frameworks pack is attached, its framework names.
+		do
+			create Result.make (bible.books)
+			if attached framework_names as al_names then
+				Result.set_framework_names (al_names)
+			end
+		end
+
+	framework_names: detachable BIB_FRAMEWORK_NAMES
+			-- The pack's spellings, read once.
+		do
+			if attached framework_names_cache as al_cache then
+				Result := al_cache
+			elseif attached framework_pack as al_pack and then attached al_pack.aliases as al_spellings and then al_spellings.is_success then
+				create Result.make_from_spellings (al_spellings)
+				framework_names_cache := Result
+			end
+		end
+
+	framework_names_cache: detachable BIB_FRAMEWORK_NAMES
+			-- `framework_names' once read.
+
+	fill_frameworks
+			-- The list: every framework of the pack, or the page saying there is no pack yet.
+		do
+			create framework_rows.make (0)
+			if attached framework_pack as al_pack and then attached al_pack.frameworks as al_result and then al_result.is_success then
+				create framework_rows.make (al_result.count)
+				across 1 |..| al_result.count as al_i loop
+					framework_rows.extend (al_result.item (al_i))
+				end
+				framework_view.set_document (commentary_reader.read ({STRING_32} "Choose a framework on the left, or click a framework's name wherever it appears."))
+			else
+				framework_view.set_document (commentary_reader.read ({STRING_32} "**No frameworks pack yet**%N%NA frameworks pack in the packs folder explains each FRAMEWORK, for the common reader, here."))
+			end
+			frameworks_grid.set_rows (framework_rows)
+		end
+
+	on_framework_row (a_model: INTEGER)
+			-- A framework chosen in the list: read it.
+		do
+			if not is_reselecting and then a_model >= 1 and then a_model <= framework_rows.count then
+				show_framework (framework_rows.i_th (a_model).id)
+			end
+		end
+
+	show_framework (a_id: READABLE_STRING_GENERAL)
+			-- Framework `a_id' in T4's Frameworks tab, the commentary left as it is: T4 brought into
+			-- view (a maximized pane put back, a folded side opened).
+		local
+			i: INTEGER
+		do
+			if attached framework_pack as al_pack and then attached al_pack.framework (a_id) as al_result
+				and then al_result.is_success and then al_result.count = 1
+			then
+				framework_view.set_document (commentary_reader.read (framework_page (al_result.item (1))))
+				from i := 1 until i > framework_rows.count loop
+					if framework_rows.i_th (i).id.same_string_general (a_id) then
+						reselect (frameworks_grid, i)
+					end
+					i := i + 1
+				end
+			else
+				framework_view.set_document (commentary_reader.read ({STRING_32} "No framework " + a_id.to_string_32 + {STRING_32} " in the frameworks pack yet."))
+			end
+			if dock.maximized_panel /= 0 and dock.maximized_panel /= lexicon_panel then
+				dock.restore_maximized
+			end
+			dock.show_panel (lexicon_panel)
+			dock.expand_zone (dock.panels.i_th (lexicon_panel).zone)
+			lexicon_tabs.select_tab (Frameworks_tab)
+			window.request_render
+		end
+
+	framework_page (a_framework: BIB_FRAMEWORK): STRING_32
+			-- `a_framework' as a page: its name and title, a draft's label, its summary, its sections
+			-- (their references and other frameworks' names linked; the heading never links to
+			-- itself), the frameworks related to it and where the commentary uses it.
+		local
+			l_range: STRING_32
+			l_linker: BIB_REFERENCE_LINKER
+		do
+			l_linker := page_linker
+			create Result.make (2000)
+			Result.append ({STRING_32} "# " + a_framework.display_name + {STRING_32} "%N%N*" + a_framework.title + {STRING_32} "*%N%N")
+			if a_framework.is_draft then
+				Result.append ({STRING_32} "**Draft:** written for Larry's review; not yet approved.%N%N")
+			end
+			Result.append ({STRING_32} "> " + a_framework.hover + {STRING_32} "%N%N")
+			across a_framework.sections as ic loop
+				Result.append ({STRING_32} "## " + ic.heading + {STRING_32} "%N%N" + l_linker.linked (ic.markdown) + {STRING_32} "%N%N")
+			end
+			if not a_framework.related.is_empty then
+				Result.append ({STRING_32} "## Related frameworks%N%N")
+				across a_framework.related as ic loop
+					Result.append ({STRING_32} "- [" + framework_display_name (ic) + {STRING_32} "](" + {BIB_FRAMEWORK_SCHEMA}.Link_prefix + ic + {STRING_32} ")%N")
+				end
+				Result.append ({STRING_32} "%N")
+			end
+			if not a_framework.uses.is_empty then
+				Result.append ({STRING_32} "## Where the commentary uses it%N%N")
+				across a_framework.uses as ic loop
+					l_range := place_text (ic.book, ic.chapter, ic.verse)
+					if ic.end_chapter /= ic.chapter then
+						l_range.append ({STRING_32} "-" + ic.end_chapter.out.to_string_32 + {STRING_32} ":" + ic.end_verse.out.to_string_32)
+					elseif ic.end_verse /= ic.verse then
+						l_range.append ({STRING_32} "-" + ic.end_verse.out.to_string_32)
+					end
+					Result.append ({STRING_32} "- [" + l_range + {STRING_32} "]("
+						+ (create {BIB_REFERENCE_LINKER}.make (bible.books)).range_target_text (ic.book, ic.chapter, ic.verse, ic.end_chapter, ic.end_verse)
+						+ {STRING_32} "): " + ic.heading + {STRING_32} "%N")
+				end
+			end
+		end
+
+	framework_display_name (a_id: READABLE_STRING_GENERAL): STRING_32
+			-- The listed framework `a_id''s name with its mark; the id when it is not listed.
+		local
+			i: INTEGER
+		do
+			Result := a_id.to_string_32
+			from i := 1 until i > framework_rows.count loop
+				if framework_rows.i_th (i).id.same_string_general (a_id) then
+					Result := framework_rows.i_th (i).display_name
+				end
+				i := i + 1
+			end
+		end
+
+	framework_card (a_id: READABLE_STRING_GENERAL): detachable SW_HOVER_CARD
+			-- Framework `a_id''s name, title and plain summary, "Draft" while it is one; Void when the
+			-- pack has no such framework.
+		local
+			l_column: SW_COLUMN
+			l_title, l_body, l_hint: SW_LABEL
+			l_heading: STRING_32
+		do
+			if attached framework_pack as al_pack and then attached al_pack.framework (a_id) as al_result
+				and then al_result.is_success and then al_result.count = 1
+			then
+				l_heading := al_result.item (1).display_name + {STRING_32} ": " + al_result.item (1).title
+				if al_result.item (1).is_draft then
+					l_heading.append ({STRING_32} " (Draft)")
+				end
+				create l_title.make (l_heading, {SW_PAINTER}.Role_ui, 13.0, True)
+				l_title := l_title.with_wrap
+				create l_body.make_body (al_result.item (1).hover)
+				l_body := l_body.with_wrap
+				create l_hint.make_ui ("Click to read it in the Frameworks tab.")
+				create l_column.make
+				l_column := l_column.with_gap (6.0)
+				l_column.put (l_title)
+				l_column.put (l_body)
+				l_column.put (l_hint.as_muted)
+				create Result.make (l_column, 440.0)
+			end
+		end
+
+	snapshot_framework_card
+			-- For a snapshot: the card of the first framework linked in the commentary.
+		do
+			snapshot_link_card ({BIB_FRAMEWORK_SCHEMA}.Link_prefix)
 		end
 
 feature {NONE} -- Commentary (S2, P04)
@@ -3922,9 +4150,14 @@ feature {NONE} -- Commentary (S2, P04)
 			-- Markdown into the view's document model.
 
 	on_commentary_link (a_target: STRING_32)
+			-- (Also the Frameworks tab's links. A "framework:<id>" link opens that framework in T4's
+			-- Frameworks tab, the commentary staying in view: Larry, 2026-10-28.)
 			-- A link in the commentary clicked: "bible:<book>.<chapter>.<verse>" opens that place
 			-- (verse 0: the chapter); another link is left alone.
 		do
+			if a_target.starts_with ({BIB_FRAMEWORK_SCHEMA}.Link_prefix) then
+				show_framework (a_target.substring ({BIB_FRAMEWORK_SCHEMA}.Link_prefix.count + 1, a_target.count))
+			end
 				-- The target is read where it is written (BIB_REFERENCE_LINKER, scan 41).
 			if attached (create {BIB_REFERENCE_LINKER}.make (bible.books)).target_place (a_target) as al_place
 				and then bible.books.has_book (al_place.book) and then al_place.chapter > 0 and then al_place.verse >= 0
@@ -3976,7 +4209,7 @@ feature {NONE} -- Commentary (S2, P04)
 								l_list.extend (l_sections.item (i))
 								i := i + 1
 							end
-							l_page.append ((create {BIB_REFERENCE_LINKER}.make (bible.books)).linked (l_text.page (ic.title, l_list)))
+							l_page.append (page_linker.linked (l_text.page (ic.title, l_list)))
 						end
 					end
 				end

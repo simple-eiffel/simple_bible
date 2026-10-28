@@ -4,6 +4,12 @@ All notable changes to simple_bible are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added (2026-10-28: Frameworks explained; personal installer 0.7.22)
+
+- **The frameworks pack** (`frameworks.db`, private like commentary.db): Larry's FRAMEWORKS(TM) rewritten for the common Christian reader by the COMMENTARY session (research/18-FRAMEWORKS-PACK-SIDECAR.md), drafts until Larry approves them. `BIB_FRAMEWORK_SCHEMA`, `BIB_FRAMEWORK_PACK` (by tier, one whole, the spellings), `BIB_FRAMEWORK`, `BIB_FRAMEWORK_SPELLING`; `SIMPLE_BIBLE.framework_packs`. `bible_build --frameworks <folder> --out frameworks.db --uses commentary.db` checks every sidecar (ids, spellings unique, tier, status, hover at most 280 characters, the first three sections) and works out where the commentary uses each framework from its "Frameworks at work" lists; a related framework not written yet is a warning. Tiers: cornerstone, bedrock, master, recovery, sub.
+- **A framework named anywhere in the commentary is a link** (`BIB_FRAMEWORK_NAMES`, one rule for the builder and the linker; `BIB_REFERENCE_LINKER.set_framework_names`): a framework prose marks (TM) links by its name only with the mark, so essay titles and capitalized words stay prose; a mark may follow a word inside a spelling ("the JESUS(TM) Cornerstone"). Hover shows its title and plain summary ("Draft" while it is one); a click opens it in T4's new **Frameworks** tab (P05.8): every framework by tier beside the one read, its sections with their references and other frameworks linked, the frameworks related to it, and where the commentary uses it. The commentary stays in view; a maximized pane or a folded side makes way.
+- The commentary pack now holds 11 books (Colossians, Ephesians); frameworks.db 17 frameworks, 606 commentary uses. Snapshot options `frameworks`, `fwcard`.
+
 ### Added (2026-10-28: the commentary's references previewed and followed; personal installer 0.7.21)
 
 - **A reference's passage on hover**: resting on a Bible reference in the commentary opens a card with its text in the version read, each verse numbered, up to 8 verses ("Galatians 2:15-21 (KJV)"). `BIB_REFERENCE_LINKER` now writes where a range ends into its link (`bible:48.2.15-2.21`; one place keeps `bible:48.2.15`), read by `target_range`; `target_place` still reads the first verse of either form.
