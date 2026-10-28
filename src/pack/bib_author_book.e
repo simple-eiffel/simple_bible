@@ -19,8 +19,8 @@ create
 
 feature {NONE} -- Initialization
 
-	make (a_id, a_title, a_subtitle, a_status, a_edition: READABLE_STRING_GENERAL; a_year: INTEGER; a_description: READABLE_STRING_GENERAL; a_provenance: BIB_PROVENANCE)
-			-- Book `a_id', titled `a_title'.
+	make (a_id, a_title, a_subtitle, a_status, a_edition: READABLE_STRING_GENERAL; a_year: INTEGER; a_description, a_pack_kind: READABLE_STRING_GENERAL; a_provenance: BIB_PROVENANCE)
+			-- Book `a_id', titled `a_title', in a pack of kind `a_pack_kind' ("books", "essays": a series).
 		require
 			id_usable: (create {BIB_BOOK_SCHEMA}).is_book_id (a_id)
 			titled: not a_title.is_empty
@@ -32,6 +32,7 @@ feature {NONE} -- Initialization
 			edition := a_edition.to_string_32
 			year := a_year
 			description := a_description.to_string_32
+			pack_kind := a_pack_kind.to_string_32
 			provenance := a_provenance
 			create chapters.make (16)
 		ensure
@@ -41,6 +42,9 @@ feature {NONE} -- Initialization
 		end
 
 feature -- Access
+
+	pack_kind: STRING_32
+			-- "books", or "essays" for an essay series.
 
 	id: STRING_32
 	title: STRING_32

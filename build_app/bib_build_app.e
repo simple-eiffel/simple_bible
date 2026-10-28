@@ -7,6 +7,7 @@ note
 			bible_build --commentary <Commentaries folder, or one sidecar.json> --out <commentary.db>
 			bible_build --frameworks <folder of *.framework.json, or one> --out <frameworks.db> [--uses <commentary.db>]
 			bible_build --books <folder of *.book.json, or one> --out <books.db> [--content <content.db>] [--frameworks-pack <frameworks.db>]
+			bible_build --essays <folder of *.essay.json, or one> --out <essays.db> [--content <content.db>] [--frameworks-pack <frameworks.db>]
 		Exit code 0 on success, 1 on failure (the reason is printed).
 	]"
 	author: "Larry Rix"
@@ -20,6 +21,16 @@ create
 	make
 
 feature {NONE} -- Implementation
+
+	manifests_named (a_cli: SIMPLE_CLI): detachable STRING
+			-- The folder of manifests --books or --essays names; Void when neither does.
+		do
+			if attached a_cli.value_of ("essays") as al_essays and then not al_essays.is_empty then
+				Result := al_essays
+			elseif attached a_cli.value_of ("books") as al_books and then not al_books.is_empty then
+				Result := al_books
+			end
+		end
 
 	content_path (a_given: READABLE_STRING_GENERAL): STRING_32
 			-- `a_given', or the installed content.db when it is empty.
@@ -52,6 +63,7 @@ feature {NONE} -- Initialization
 			l_cli.add_option_with_default ("f|frameworks", "A folder of *.framework.json sidecars, or one: write the frameworks pack instead", "path", "")
 			l_cli.add_option_with_default ("u|uses", "With --frameworks: the commentary pack whose Frameworks at work lists give each framework's uses (empty: none)", "path", "")
 			l_cli.add_option_with_default ("k|books", "A folder of *.book.json manifests, or one: write the books pack instead", "path", "")
+			l_cli.add_option_with_default ("e|essays", "A folder of *.essay.json manifests, or one: write the essays pack instead", "path", "")
 			l_cli.add_option_with_default ("n|content", "With --books: the content.db whose book names link references (empty: the installed one)", "path", "")
 			l_cli.add_option_with_default ("p|frameworks-pack", "With --books: the frameworks pack whose names link and index (empty: none)", "path", "")
 			l_cli.add_required_option ("o|out", "The content.db to write", "path")
@@ -64,7 +76,7 @@ feature {NONE} -- Initialization
 					print (ic + "%N")
 				end
 				l_failed := True
-			elseif attached l_cli.value_of ("books") as al_manifests and then not al_manifests.is_empty
+			elseif attached manifests_named (l_cli) as al_manifests
 				and then attached l_cli.value_of ("out") as al_books_pack and then not al_books_pack.is_empty
 			then
 				create l_reader.make (create {BIB_CONFIG}.make_with_core (content_path (l_cli.option_value_or_default ("content", ""))))
@@ -73,9 +85,13 @@ feature {NONE} -- Initialization
 					print ("bible_build: content.db could not be opened, so references cannot be linked%N")
 					l_failed := True
 				else
-					create l_books.make (l_reader.books)
+					if attached l_cli.value_of ("essays") as al_essays and then not al_essays.is_empty then
+						create l_books.make_essays (l_reader.books)
+					else
+						create l_books.make (l_reader.books)
+					end
 					if l_books.sidecars_in (al_manifests).is_empty then
-						print ("bible_build: no *.book.json in " + al_manifests + "%N")
+						print ("bible_build: no *" + l_books.schema.Manifest_extension + " in " + al_manifests + "%N")
 						l_failed := True
 					else
 						l_books.build (l_books.sidecars_in (al_manifests), al_books_pack, l_cli.option_value_or_default ("frameworks-pack", ""))
@@ -85,7 +101,7 @@ feature {NONE} -- Initialization
 							print ("%N")
 							l_failed := True
 						else
-							print ("bible_build: wrote " + al_books_pack + " (" + l_books.book_count.out + " books, " + l_books.chapter_count.out + " chapters, "
+							print ("bible_build: wrote " + al_books_pack + " (" + l_books.book_count.out + (if l_books.schema.Pack_kind.same_string ({BIB_ESSAY_SCHEMA}.Pack_kind) then " series, " else " books, " end) + l_books.chapter_count.out + " chapters, "
 								+ l_books.block_count.out + " blocks, " + l_books.passage_count.out + " passages cited, " + l_books.framework_use_count.out + " framework uses)%N")
 						end
 					end

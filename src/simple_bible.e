@@ -203,7 +203,7 @@ feature -- Status
 		end
 
 	writings_search: BIB_WRITINGS_SEARCH
-			-- Search across the attached commentary, frameworks and books packs, in that order
+			-- Search across the attached commentary, frameworks, books and essays packs, in that order
 			-- (research/20, 2026-10-28).
 		do
 			create Result.make (query_parser)
@@ -215,6 +215,18 @@ feature -- Status
 			end
 			across book_packs as ic loop
 				Result.add_pack (ic, {BIB_BOOK_SCHEMA}.Pack_kind)
+			end
+			across essay_packs as ic loop
+				Result.add_pack (ic, {BIB_ESSAY_SCHEMA}.Pack_kind)
+			end
+		end
+
+	essay_packs: ARRAYED_LIST [BIB_ESSAY_PACK]
+			-- The attached packs whose kind is "essays" (BIB_ESSAY_SCHEMA, 2026-10-28).
+		do
+			create Result.make (1)
+			across packs_of_kind ({BIB_ESSAY_SCHEMA}.Pack_kind) as ic loop
+				Result.extend (create {BIB_ESSAY_PACK}.make (sources, ic.alias_name, ic.pack_title))
 			end
 		end
 

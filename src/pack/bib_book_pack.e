@@ -14,6 +14,7 @@ note
 
 class
 	BIB_BOOK_PACK
+		-- (Also the essays pack's reader: BIB_ESSAY_PACK names its schema, 2026-10-28.)
 
 inherit
 	BIB_PRIVATE_PACK_READER
@@ -153,7 +154,7 @@ feature {NONE} -- Implementation
 					then
 						l_list.extend (create {BIB_BOOK_BLOCK}.make (ic.string_value ("book_id"), ic.integer_value ("chapter"), ic.integer_value ("block"),
 							ic.string_value ("kind"), ic.integer_value ("level"), ic.string_value ("body_markdown"), ic.string_value ("book_title"),
-							ic.string_value ("chapter_title"), l_provenance))
+							ic.string_value ("chapter_title"), schema, l_provenance))
 					end
 				end
 				create Result.make_success (method (a_feature, a_sql, pack_alias, a_scope, l_list.count), {ARRAY [BIB_PROVENANCE]} <<l_provenance>>, l_list)
@@ -167,16 +168,31 @@ feature {NONE} -- Implementation
 		do
 			if (create {BIB_BOOK_SCHEMA}).is_book_id (a_row.string_value ("book_id")) and then not a_row.string_value ("title").is_empty then
 				create Result.make (a_row.string_value ("book_id"), a_row.string_value ("title"), a_row.string_value ("subtitle"), a_row.string_value ("status"),
-					a_row.string_value ("edition"), a_row.integer_value ("year"), a_row.string_value ("description"), a_provenance)
+					a_row.string_value ("edition"), a_row.integer_value ("year"), a_row.string_value ("description"), schema.Pack_kind, a_provenance)
 			end
 		end
 
-	query_failed_message: STRING_8 = "A books query failed."
-	not_open_message: STRING_8 = "The books pack is not attached."
+	query_failed_message: STRING_8
+		do
+			Result := "A " + schema.Pack_kind + " query failed."
+		end
+
+	not_open_message: STRING_8
+		do
+			Result := "The " + schema.Pack_kind + " pack is not attached."
+		end
 
 	pack_noun: STRING_32
-		once
-			Result := {STRING_32} "books pack"
+		do
+			Result := schema.Pack_kind.to_string_32 + {STRING_32} " pack"
+		end
+
+feature -- Kind
+
+	schema: BIB_TEXT_PACK_SCHEMA
+			-- The pack's kind and link grammar: the books'.
+		do
+			create {BIB_BOOK_SCHEMA} Result
 		end
 
 end

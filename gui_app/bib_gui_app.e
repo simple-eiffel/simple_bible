@@ -172,6 +172,7 @@ feature {NONE} -- Initialization
 			writings_note := writings_note.with_wrap
 			create in_books_rows.make (0)
 			create listed_book.make_empty
+			create listed_kind.make_empty
 			create cross_refs.make (0)
 			create lexicon_heading.make ("", {SW_PAINTER}.Role_ui, 20.0, True)
 			create lexicon_subtitle.make_ui ("")
@@ -424,7 +425,13 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 				snapshot_framework_card
 			elseif snapshot_tab.same_string ({STRING_32} "books") then
 				if not book_rows.is_empty then
-					show_book_place (book_rows.first.id, 2, 0)
+					show_book_place (book_rows.first.pack_kind, book_rows.first.id, 2, 0)
+				end
+			elseif snapshot_tab.same_string ({STRING_32} "essays") then
+				across book_rows as ic loop
+					if ic.pack_kind.same_string ({BIB_ESSAY_SCHEMA}.Pack_kind) and listed_kind.is_empty then
+						show_book_place (ic.pack_kind, ic.id, 1, 0)
+					end
 				end
 			elseif snapshot_tab.same_string ({STRING_32} "inbooks") then
 				commentary_tabs.select_tab (In_books_tab)
@@ -703,7 +710,7 @@ feature {NONE} -- Window
 		do
 			commentary_tabs.add_page ("Commentaries", commentary_view)
 			commentary_tabs.add_page ("Cross-refs", cross_refs_grid)
-			commentary_tabs.add_page ("In the books", in_books_grid)
+			commentary_tabs.add_page ("Books & essays", in_books_grid)
 			commentary_tabs.add_page ("Related", create {SW_EMPTY_STATE}.make ("Related passages come later",
 				"AI-made related passages are planned for a later release, always marked as AI-made."))
 				-- Larry's commentary first when a pack holds one (2026-10-27), else the cross-references.
@@ -825,6 +832,7 @@ feature {NONE} -- Window
 			reading_view.add_column ("").do_nothing
 			frameworks_grid.add_column ((create {SW_GRID_COLUMN [BIB_FRAMEWORK]}.make ("Framework", 120.0, agent {BIB_FRAMEWORK}.display_name)).growing)
 			books_grid.add_column ((create {SW_GRID_COLUMN [BIB_AUTHOR_BOOK]}.make ("Book", 160.0, agent {BIB_AUTHOR_BOOK}.full_title)).growing)
+			books_grid.add_column (create {SW_GRID_COLUMN [BIB_AUTHOR_BOOK]}.make ("Kind", 70.0, agent library_kind_name))
 			books_grid.add_column (create {SW_GRID_COLUMN [BIB_AUTHOR_BOOK]}.make ("Status", 90.0, agent {BIB_AUTHOR_BOOK}.status))
 			chapters_grid.add_column ((create {SW_GRID_COLUMN [TUPLE [chapter: INTEGER; title, kind: STRING_32]]}.make ("Chapter", 200.0, agent chapter_row_title)).growing)
 			in_books_grid.add_column (create {SW_GRID_COLUMN [BIB_BOOK_BLOCK]}.make ("Book", 120.0, agent {BIB_BOOK_BLOCK}.book_title))
@@ -3845,7 +3853,7 @@ feature {NONE} -- Commentary held, and its references previewed (Larry, 2026-10-
 				if l_target.is_framework then
 					Result := framework_card (l_target.id)
 				elseif l_target.is_book then
-					Result := book_card (l_target.id, l_target.chapter)
+					Result := book_card (l_target.book_kind, l_target.id, l_target.chapter)
 				elseif l_target.is_bible then
 					Result := passage_card (l_target.book, l_target.chapter, l_target.verse, l_target.end_chapter, l_target.end_verse)
 				end
@@ -4006,7 +4014,10 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 			-- T6's Author Library: the books, the chosen book's chapters, the chapter read.
 
 	listed_book: STRING_32
-			-- The book whose chapters are listed; empty for none.
+			-- The book (or essay series) whose chapters are listed; empty for none.
+
+	listed_kind: STRING_32
+			-- Its pack's kind: "books" or "essays"; empty for none.
 
 	in_books_grid: SW_DATA_GRID [BIB_BOOK_BLOCK]
 	in_books_rows: ARRAYED_LIST [BIB_BOOK_BLOCK]
@@ -4034,35 +4045,68 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 			fill_books
 		end
 
-	book_pack: detachable BIB_BOOK_PACK
-			-- The books pack, when one is attached.
+	library_packs: ARRAYED_LIST [BIB_BOOK_PACK]
+			-- The attached books pack, then the essays pack (2026-10-28): the Author Library's.
 		do
-			if bible.is_open and then not bible.book_packs.is_empty and then bible.book_packs.first.is_available then
-				Result := bible.book_packs.first
+			create Result.make (2)
+			if bible.is_open then
+				across bible.book_packs as ic loop
+					if ic.is_available then
+						Result.extend (ic)
+					end
+				end
+				across bible.essay_packs as ic loop
+					if ic.is_available then
+						Result.extend (ic)
+					end
+				end
+			end
+		end
+
+	library_pack (a_kind: READABLE_STRING_GENERAL): detachable BIB_BOOK_PACK
+			-- The attached pack of kind `a_kind' ("books", "essays"); Void when none is.
+		do
+			across library_packs as ic loop
+				if Result = Void and then ic.schema.Pack_kind.same_string_general (a_kind) then
+					Result := ic
+				end
 			end
 		end
 
 	fill_books
-			-- The books list, or the page saying there is no pack yet.
+			-- The books, then the essay series, or the page saying there is no pack yet.
 		do
 			create book_rows.make (0)
-			if attached book_pack as al_pack and then attached al_pack.books as al_result and then al_result.is_success then
-				create book_rows.make (al_result.count)
-				across 1 |..| al_result.count as al_i loop
-					book_rows.extend (al_result.item (al_i))
+			across library_packs as ic loop
+				if attached ic.books as al_result and then al_result.is_success then
+					across 1 |..| al_result.count as al_i loop
+						book_rows.extend (al_result.item (al_i))
+					end
 				end
-				book_view.set_document (commentary_reader.read ({STRING_32} "Choose a book, then a chapter. A Bible reference in the text shows its passage; a framework's name, its summary."))
+			end
+			if book_rows.is_empty then
+				book_view.set_document (commentary_reader.read ({STRING_32} "**No books or essays pack yet**%N%NA books or essays pack in the packs folder brings Larry's writing here, chapter by chapter."))
 			else
-				book_view.set_document (commentary_reader.read ({STRING_32} "**No books pack yet**%N%NA books pack in the packs folder brings Larry's books here, chapter by chapter."))
+				book_view.set_document (commentary_reader.read ({STRING_32} "Choose a book or an essay series, then a chapter or an essay. A Bible reference in the text shows its passage; a framework's name, its summary."))
 			end
 			books_grid.set_rows (book_rows)
+		end
+
+	library_kind_name (a_book: BIB_AUTHOR_BOOK): STRING_32
+			-- "Book" or "Essays".
+		do
+			if a_book.pack_kind.same_string_general ({BIB_ESSAY_SCHEMA}.Pack_kind) then
+				Result := {STRING_32} "Essays"
+			else
+				Result := {STRING_32} "Book"
+			end
 		end
 
 	on_book_row (a_model: INTEGER)
 			-- A book chosen: its chapters listed and its first one read.
 		do
 			if not is_reselecting and then a_model >= 1 and then a_model <= book_rows.count then
-				show_book_place (book_rows.i_th (a_model).id, 1, 0)
+				show_book_place (book_rows.i_th (a_model).pack_kind, book_rows.i_th (a_model).id, 1, 0)
 			end
 		end
 
@@ -4070,7 +4114,7 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 			-- A chapter chosen: read it.
 		do
 			if not is_reselecting and then a_model >= 1 and then a_model <= chapter_rows.count and then not listed_book.is_empty then
-				show_book_place (listed_book, chapter_rows.i_th (a_model).chapter, 0)
+				show_book_place (listed_kind, listed_book, chapter_rows.i_th (a_model).chapter, 0)
 			end
 		end
 
@@ -4078,7 +4122,7 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 			-- A paragraph citing the verse chosen: read it where it stands.
 		do
 			if a_model >= 1 and then a_model <= in_books_rows.count then
-				show_book_place (in_books_rows.i_th (a_model).book, in_books_rows.i_th (a_model).chapter, in_books_rows.i_th (a_model).block)
+				show_book_place (in_books_rows.i_th (a_model).pack_kind, in_books_rows.i_th (a_model).book, in_books_rows.i_th (a_model).chapter, in_books_rows.i_th (a_model).block)
 			end
 		end
 
@@ -4094,10 +4138,10 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 			Result := a_block.snippet (140)
 		end
 
-	show_book_place (a_book: READABLE_STRING_GENERAL; a_chapter, a_block: INTEGER)
-			-- Book `a_book' in T6's Author Library: its chapters listed, chapter `a_chapter' (0: the
-			-- first) read and, with `a_block' > 0, scrolled to that paragraph; the pane brought into
-			-- view.
+	show_book_place (a_kind, a_book: READABLE_STRING_GENERAL; a_chapter, a_block: INTEGER)
+			-- Book (or essay series) `a_book' of the `a_kind' pack in T6's Author Library: its chapters
+			-- listed, chapter `a_chapter' (0: the first) read and, with `a_block' > 0, scrolled to that
+			-- paragraph; the pane brought into view.
 		require
 			not_negative: a_chapter >= 0 and a_block >= 0
 		local
@@ -4105,15 +4149,16 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 		do
 			bring_into_view (results_panel, results_tabs, Author_library_tab)
 			l_chapter := a_chapter.max (1)
-			if attached book_pack as al_pack and then attached al_pack.book (a_book) as al_result and then al_result.is_success and then al_result.count = 1 then
-				if not listed_book.same_string_general (a_book) then
+			if attached library_pack (a_kind) as al_pack and then attached al_pack.book (a_book) as al_result and then al_result.is_success and then al_result.count = 1 then
+				if not listed_book.same_string_general (a_book) or not listed_kind.same_string_general (a_kind) then
 					listed_book := a_book.to_string_32
+					listed_kind := a_kind.to_string_32
 					create chapter_rows.make (al_result.item (1).chapters.count)
 					chapter_rows.append (al_result.item (1).chapters)
 					chapters_grid.set_rows (chapter_rows)
 				end
 				from i := 1 until i > book_rows.count loop
-					if book_rows.i_th (i).id.same_string_general (a_book) then
+					if book_rows.i_th (i).id.same_string_general (a_book) and book_rows.i_th (i).pack_kind.same_string_general (a_kind) then
 						reselect (books_grid, i)
 					end
 					i := i + 1
@@ -4131,7 +4176,7 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 					book_view.scroll_to (book_view.stacked_scroll_for ((a_block + 1).min (book_view.document.count)))
 				end
 			else
-				book_view.set_document (commentary_reader.read ({STRING_32} "No book " + a_book.to_string_32 + {STRING_32} " in the books pack."))
+				book_view.set_document (commentary_reader.read ({STRING_32} "No " + a_book.to_string_32 + {STRING_32} " in the " + a_kind.to_string_32 + {STRING_32} " pack."))
 			end
 			window.request_render
 		end
@@ -4161,28 +4206,29 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 		end
 
 	fill_in_books
-			-- T5's In the books: the paragraphs of the books citing the commentary's verse.
+			-- T5's Books & essays: the paragraphs of the books, then of the essays, citing the
+			-- commentary's verse.
 		do
 			create in_books_rows.make (0)
-			if commentary_verse > 0 and then attached book_pack as al_pack
-				and then (create {BIB_HUB_ID}).is_place (commentary_book, commentary_chapter, commentary_verse)
-				and then attached al_pack.blocks_citing (commentary_book, commentary_chapter, commentary_verse) as al_result and then al_result.is_success
-			then
-				create in_books_rows.make (al_result.count)
-				across 1 |..| al_result.count as al_i loop
-					in_books_rows.extend (al_result.item (al_i))
+			if commentary_verse > 0 and then (create {BIB_HUB_ID}).is_place (commentary_book, commentary_chapter, commentary_verse) then
+				across library_packs as ic loop
+					if attached ic.blocks_citing (commentary_book, commentary_chapter, commentary_verse) as al_result and then al_result.is_success then
+						across 1 |..| al_result.count as al_i loop
+							in_books_rows.extend (al_result.item (al_i))
+						end
+					end
 				end
 			end
 			in_books_grid.set_rows (in_books_rows)
 		end
 
-	book_card (a_book: READABLE_STRING_GENERAL; a_chapter: INTEGER): detachable SW_HOVER_CARD
-			-- A book link rested on: the book's title, chapter `a_chapter''s (0: none), its description;
-			-- Void when the pack has no such book.
+	book_card (a_kind, a_book: READABLE_STRING_GENERAL; a_chapter: INTEGER): detachable SW_HOVER_CARD
+			-- A book or essay link rested on: the book's (series') title, chapter `a_chapter''s (0:
+			-- none), its description; Void when the `a_kind' pack has no such book.
 		local
 			l_heading: STRING_32
 		do
-			if attached book_pack as al_pack and then attached al_pack.book (a_book) as al_result and then al_result.is_success and then al_result.count = 1 then
+			if attached library_pack (a_kind) as al_pack and then attached al_pack.book (a_book) as al_result and then al_result.is_success and then al_result.count = 1 then
 				l_heading := al_result.item (1).full_title
 				if a_chapter > 0 and then not al_result.item (1).chapter_title (a_chapter).is_empty then
 					l_heading.append ({STRING_32} ": " + al_result.item (1).chapter_title (a_chapter))
@@ -4396,10 +4442,12 @@ feature {NONE} -- Frameworks explained (P05.8, Larry, 2026-10-28)
 	framework_page (a_framework: BIB_FRAMEWORK): STRING_32
 			-- `a_framework' as a page: its name and title, a draft's label, its summary, its sections
 			-- (their references and other frameworks' names linked; the heading never links to
-			-- itself), the frameworks related to it and where the commentary uses it.
+			-- itself), the frameworks related to it, where the books and essays discuss it and where
+			-- the commentary uses it.
 		local
 			l_range: STRING_32
 			l_linker: BIB_REFERENCE_LINKER
+			l_mentions: ARRAYED_LIST [BIB_BOOK_BLOCK]
 		do
 			l_linker := page_linker
 			create Result.make (2000)
@@ -4418,16 +4466,22 @@ feature {NONE} -- Frameworks explained (P05.8, Larry, 2026-10-28)
 				end
 				Result.append ({STRING_32} "%N")
 			end
-			if attached book_pack as al_books and then attached al_books.blocks_naming (a_framework.id) as al_blocks
-				and then al_blocks.is_success and then al_blocks.count > 0
-			then
-				Result.append ({STRING_32} "## Where the books discuss it%N%N")
-				across 1 |..| al_blocks.count.min (Book_mentions_shown) as al_i loop
-					Result.append ({STRING_32} "- [" + al_blocks.item (al_i).book_title + {STRING_32} ", " + al_blocks.item (al_i).chapter_title + {STRING_32} "]("
-						+ al_blocks.item (al_i).link + {STRING_32} "): " + al_blocks.item (al_i).snippet (90) + {STRING_32} "%N")
+			create l_mentions.make (0)
+			across library_packs as ic loop
+				if attached ic.blocks_naming (a_framework.id) as al_blocks and then al_blocks.is_success then
+					across 1 |..| al_blocks.count as al_i loop
+						l_mentions.extend (al_blocks.item (al_i))
+					end
 				end
-				if al_blocks.count > Book_mentions_shown then
-					Result.append ({STRING_32} "- ... and " + (al_blocks.count - Book_mentions_shown).out.to_string_32 + {STRING_32} " more%N")
+			end
+			if not l_mentions.is_empty then
+				Result.append ({STRING_32} "## Where the books and essays discuss it%N%N")
+				across 1 |..| l_mentions.count.min (Book_mentions_shown) as al_i loop
+					Result.append ({STRING_32} "- [" + l_mentions.i_th (al_i).book_title + {STRING_32} ", " + l_mentions.i_th (al_i).chapter_title + {STRING_32} "]("
+						+ l_mentions.i_th (al_i).link + {STRING_32} "): " + l_mentions.i_th (al_i).snippet (90) + {STRING_32} "%N")
+				end
+				if l_mentions.count > Book_mentions_shown then
+					Result.append ({STRING_32} "- ... and " + (l_mentions.count - Book_mentions_shown).out.to_string_32 + {STRING_32} " more%N")
 				end
 				Result.append ({STRING_32} "%N")
 			end
@@ -4538,7 +4592,7 @@ feature {NONE} -- Commentary (S2, P04)
 			if l_target.is_framework then
 				show_framework (l_target.id)
 			elseif l_target.is_book then
-				show_book_place (l_target.id, l_target.chapter, l_target.block)
+				show_book_place (l_target.book_kind, l_target.id, l_target.chapter, l_target.block)
 			elseif l_target.is_bible then
 					-- Larry, 2026-10-28: the passage opens in T3 and the commentary stays where it was,
 					-- until Back or a verse clicked in T3.

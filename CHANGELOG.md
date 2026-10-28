@@ -4,6 +4,12 @@ All notable changes to simple_bible are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added (2026-10-28: Larry's essays; personal installer 0.7.28)
+
+- **The essays pack** (`essays.db`, private): one manifest per series (`<id>.essay.json`, written by the COMMENTARY session; a series is a book, an essay a chapter), links `essay:<series>/<essay>#<block>`. Built by the books' builder and read by the books' reader: `BIB_TEXT_PACK_SCHEMA` holds the tables and link grammar, `BIB_BOOK_SCHEMA` and `BIB_ESSAY_SCHEMA` name the kind, file, title, link prefix and manifest extension; `BIB_ESSAY_PACK` is `BIB_BOOK_PACK` over the essays' schema; `bible_build --essays <folder> --out essays.db`. An essay begins at its title: a draft note above it, and an italic production line of wiki links right under it, are left out. First batch: 47 series, 363 essays, 34,308 blocks, 11,649 references.
+- **In the window**: the Author Library lists the books, then the essay series (a Kind column); T5's tab, now **Books & essays**, lists both for the verse; a framework's page lists **Where the books and essays discuss it**; `essay:` links open and show a card; the writings search covers the essays. Snapshot option `essays`.
+- commentary.db 14 books (1 John: 207 sections, 4,719 claims).
+
 ### Changed (2026-10-28: design scan 61; personal installer 0.7.27)
 
 - **The pack rule's exemption names the search tables only**: `writing_search` (FTS5, and it must carry `voice`), `writing_words` (its fts5vocab) and the search table's five shadow tables. Any other virtual table answers to the voice rule like a table, so a stray one is refused (test fails on the old rule, which exempted every virtual table and its shadows).
