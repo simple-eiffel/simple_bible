@@ -81,8 +81,9 @@ feature -- Commands
 			-- `source_provenance' present; every other table carries NOT NULL `voice' and
 			-- `provenance_key'. A pack that breaks a rule is detached again and `last_error' says which.
 		local
-			l_tables, l_virtual: ARRAYED_LIST [STRING_8]
-			l_voiced, l_sourced: BOOLEAN
+			l_tables: ARRAYED_LIST [STRING_8]
+			l_name, l_sql: STRING_8
+			l_voiced, l_sourced, l_searchable, l_search_voiced: BOOLEAN
 		do
 			last_error := Void
 			has_required_tables := False
@@ -94,20 +95,30 @@ feature -- Commands
 			elseif attached a_set.database as al_db then
 				schema_version := first_integer (al_db.query ("PRAGMA " + alias_name + ".user_version"))
 				create l_tables.make (8)
-				create l_virtual.make (2)
+					-- The search table (FTS5), its vocabulary (fts5vocab) and FTS5's shadow tables of the
+					-- search table hold no row a result shows by itself: the rule is not theirs
+					-- (research/20). Scan 61: only those, by name and module; any other virtual table
+					-- answers to the rule like a table, and the search table must carry `voice'.
 				across al_db.query ("SELECT name, sql FROM " + alias_name + ".sqlite_master WHERE type = 'table'").rows as ic loop
-					if ic.string_value ("sql").as_upper.starts_with ("CREATE VIRTUAL TABLE") then
-						l_virtual.extend (ic.string_value ("name").to_string_8)
-					else
-						l_tables.extend (ic.string_value ("name").to_string_8)
+					l_name := ic.string_value ("name").to_string_8
+					l_sql := ic.string_value ("sql").to_string_8.as_lower
+					if l_name.same_string ({BIB_BOOK_SCHEMA}.Search_table) and then l_sql.starts_with ("create virtual table") and then l_sql.has_substring ("using fts5(") then
+						l_searchable := True
+						across al_db.query ("PRAGMA " + alias_name + ".table_info(" + l_name + ")").rows as ic_column loop
+							if ic_column.string_value ("name").same_string ("voice") then
+								l_search_voiced := True
+							end
+						end
+					elseif not (l_name.same_string ({BIB_BOOK_SCHEMA}.Words_table) and then l_sql.starts_with ("create virtual table")
+						and then l_sql.has_substring ("using fts5vocab(" + {BIB_BOOK_SCHEMA}.Search_table + ","))
+					then
+						l_tables.extend (l_name)
 					end
 				end
 				l_tables.compare_objects
-					-- A virtual table (the search table, its vocabulary) and FTS5's own shadow tables
-					-- hold no rows a result shows by themselves: the rule is not theirs (research/20).
-				across l_virtual as ic_virtual loop
+				if l_searchable then
 					across Shadow_suffixes as ic_suffix loop
-						l_tables.prune_all (ic_virtual + ic_suffix)
+						l_tables.prune_all ({BIB_BOOK_SCHEMA}.Search_table + ic_suffix)
 					end
 				end
 				has_required_tables := l_tables.has ("meta") and l_tables.has ("source_provenance")
@@ -132,6 +143,9 @@ feature -- Commands
 							tables_without_provenance_column := tables_without_provenance_column + 1
 						end
 					end
+				end
+				if l_searchable and not l_search_voiced then
+					pack_voice_column_present := False
 				end
 				if schema_version /= expected_schema_version then
 					create last_error.make_with_details ({BIB_ERROR}.Schema_mismatch, "The pack's version is " + schema_version.out + "; this program reads version " + expected_schema_version.out + ".", path)

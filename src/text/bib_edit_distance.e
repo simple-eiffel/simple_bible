@@ -19,8 +19,9 @@ feature -- Measurement
 			-- The edits between `a_first' and `a_second'; `a_limit' + 1 once it is past `a_limit'.
 		require
 			limit_not_negative: a_limit >= 0
+			-- Three rows, not the whole table (scan 61: a table a word made the fuzzy sweep slow).
 		local
-			l_rows: ARRAY [ARRAY [INTEGER]]
+			l_before, l_previous, l_current, l_spare: SPECIAL [INTEGER]
 			l_n, l_m, i, j, l_cost, l_row_best: INTEGER
 		do
 			l_n := a_first.count
@@ -28,38 +29,40 @@ feature -- Measurement
 			if (l_n - l_m).abs > a_limit then
 				Result := a_limit + 1
 			else
-				create l_rows.make_filled (create {ARRAY [INTEGER]}.make_empty, 0, l_n)
-				from i := 0 until i > l_n loop
-					l_rows [i] := create {ARRAY [INTEGER]}.make_filled (0, 0, l_m)
-					l_rows [i] [0] := i
-					i := i + 1
-				end
+				create l_before.make_filled (0, l_m + 1)
+				create l_previous.make_filled (0, l_m + 1)
+				create l_current.make_filled (0, l_m + 1)
 				from j := 0 until j > l_m loop
-					l_rows [0] [j] := j
+					l_previous [j] := j
 					j := j + 1
 				end
 				from i := 1 until i > l_n or Result > a_limit loop
-					l_row_best := l_rows [i] [0]
+					l_current [0] := i
+					l_row_best := i
 					from j := 1 until j > l_m loop
 						if a_first [i] = a_second [j] then
 							l_cost := 0
 						else
 							l_cost := 1
 						end
-						l_rows [i] [j] := (l_rows [i - 1] [j] + 1).min (l_rows [i] [j - 1] + 1).min (l_rows [i - 1] [j - 1] + l_cost)
+						l_current [j] := (l_previous [j] + 1).min (l_current [j - 1] + 1).min (l_previous [j - 1] + l_cost)
 						if i > 1 and j > 1 and then a_first [i] = a_second [j - 1] and then a_first [i - 1] = a_second [j] then
-							l_rows [i] [j] := l_rows [i] [j].min (l_rows [i - 2] [j - 2] + 1)
+							l_current [j] := l_current [j].min (l_before [j - 2] + 1)
 						end
-						l_row_best := l_row_best.min (l_rows [i] [j])
+						l_row_best := l_row_best.min (l_current [j])
 						j := j + 1
 					end
 					if l_row_best > a_limit then
 						Result := a_limit + 1
 					end
+					l_spare := l_before
+					l_before := l_previous
+					l_previous := l_current
+					l_current := l_spare
 					i := i + 1
 				end
 				if Result = 0 then
-					Result := l_rows [l_n] [l_m].min (a_limit + 1)
+					Result := l_previous [l_m].min (a_limit + 1)
 				end
 			end
 		ensure

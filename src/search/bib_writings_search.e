@@ -3,15 +3,17 @@ note
 		Search across Larry's writings (research/20, 2026-10-28): the commentary,
 		frameworks and books packs, each through its own FTS5 table. A query in
 		the Bible search's grammar (BIB_QUERY_PARSER: words, "phrases", word*,
-		AND, OR, NOT, parentheses) becomes one FTS5 expression per pack; with
-		`fuzzy', every plain word is widened to the pack's own words within an
-		edit or two (BIB_EDIT_DISTANCE). `search' leaves the hits in `hits',
-		packs in the order added and best first within each, one hit a place a
-		reader can open (a commentary section's fields, a framework's sections:
-		the best of them, 2026-10-28); a query that does
-		not read is `error_message' at `error_position'. A pack built before its
-		search table existed is passed over and named in `packs_without_search'.
-		The contract NEEDLE asked for: search_writings(query, pack?, within?).
+		AND, OR, NOT, parentheses) is walked once (BIB_CLAUSE_WALKING, shared with
+		the Bible search) into one FTS5 expression per pack; with `fuzzy', every
+		plain word is widened to the pack's own words within an edit or two
+		(BIB_EDIT_DISTANCE). `search' leaves the hits in `hits', packs in the order
+		added and best first within each, one hit a place a reader can open (a
+		commentary section's fields, a framework's sections: the best of them); a
+		query that does not read is `error_message' at `error_position'. A pack
+		built before its search table existed is named in `packs_without_search',
+		one whose search failed in `packs_failed', one that gave its most rows in
+		`packs_cut_short'. The contract NEEDLE asked for: search_writings(query,
+		pack?, within?).
 	]"
 	author: "Larry Rix"
 	date: "$Date$"
@@ -19,6 +21,9 @@ note
 
 class
 	BIB_WRITINGS_SEARCH
+
+inherit
+	BIB_CLAUSE_WALKING [STRING_32]
 
 create
 	make
@@ -33,6 +38,8 @@ feature {NONE} -- Initialization
 			create hits.make (0)
 			create error_message.make_empty
 			create packs_without_search.make (0)
+			create packs_failed.make (0)
+			create packs_cut_short.make (0)
 			create edits
 		ensure
 			no_packs: pack_count = 0
@@ -70,14 +77,20 @@ feature -- Access
 	packs_without_search: ARRAYED_LIST [STRING_32]
 			-- The titles of the packs the last `search' passed over: built without a search table.
 
+	packs_failed: ARRAYED_LIST [STRING_32]
+			-- The titles of the packs whose search failed (design scan 61: it read as nothing found).
+
+	packs_cut_short: ARRAYED_LIST [STRING_32]
+			-- The titles of the packs that gave `Max_rows_per_pack' rows: they hold more.
+
 	last_expression: STRING_32
 			-- The last pack's FTS5 expression, for the method record and the tests.
 		attribute
 			create Result.make_empty
 		end
 
-	Max_hits_per_pack: INTEGER = 200
-			-- The most hits one pack gives.
+	Max_rows_per_pack: INTEGER = 200
+			-- The most rows one pack gives, before one hit a place.
 
 	Max_widening: INTEGER = 12
 			-- The most words fuzzy search puts in a plain word's place.
@@ -99,8 +112,11 @@ feature -- Searching
 		do
 			create hits.make (0)
 			create packs_without_search.make (0)
+			create packs_failed.make (0)
+			create packs_cut_short.make (0)
 			create error_message.make_empty
 			error_position := 0
+			fuzzy := a_fuzzy
 			l_query := parser.parsed (a_query, scope)
 			if not l_query.is_valid then
 				error_message := l_query.error_message.twin
@@ -109,17 +125,23 @@ feature -- Searching
 				end
 				error_position := l_query.error_position.max (1)
 			else
-				across packs as ic until not error_message.is_empty loop
+				across packs as ic until walk_failed loop
 					if (a_pack_kind.is_empty or else ic.kind.same_string_general (a_pack_kind)) and then ic.pack.is_available then
 						if not ic.pack.has_search then
 							packs_without_search.extend (ic.pack.title)
 						else
-							index := 1
-							l_expression := expression (l_query, a_fuzzy, ic.pack)
+							walk_pack := ic.pack
+							cursor := 1
+							l_expression := walked (l_query, False)
 							last_expression := l_expression
-							if error_message.is_empty and then not l_expression.is_empty then
-								l_result := ic.pack.searched (l_expression, a_within, ic.kind, Max_hits_per_pack)
-								if l_result.is_success then
+							if not walk_failed and then not l_expression.is_empty then
+								l_result := ic.pack.searched (l_expression, a_within, ic.kind, Max_rows_per_pack)
+								if not l_result.is_success then
+									packs_failed.extend (ic.pack.title)
+								else
+									if l_result.count = Max_rows_per_pack then
+										packs_cut_short.extend (ic.pack.title)
+									end
 									create l_seen.make (l_result.count)
 									l_seen.compare_objects
 									from i := 1 until i > l_result.count loop
@@ -134,108 +156,116 @@ feature -- Searching
 						end
 					end
 				end
+				walk_pack := Void
 			end
 		ensure
 			read_or_said: error_message.is_empty = (error_position = 0)
 			nothing_on_error: not error_message.is_empty implies hits.is_empty
 		end
 
-feature {NONE} -- The FTS5 expression
+feature {NONE} -- The FTS5 expression (BIB_CLAUSE_WALKING)
 
-	expression (a_query: BIB_QUERY; a_fuzzy: BOOLEAN; a_pack: BIB_PRIVATE_PACK_READER): STRING_32
-			-- `a_query''s clauses (pre-order, from `index') as one FTS5 expression for `a_pack'.
-		require
-			valid: a_query.is_valid
-		local
-			l_clause: BIB_QUERY_CLAUSE
-			l_positives, l_negatives: ARRAYED_LIST [STRING_32]
-			l_part: STRING_32
-			k: INTEGER
+	nothing: STRING_32
+			-- No expression.
 		do
 			create Result.make_empty
-			if index <= a_query.clause_count then
-				l_clause := a_query.clause (index)
-				index := index + 1
-				if l_clause.kind = {BIB_QUERY_CLAUSE}.Or_clause then
-					Result.append_character ('(')
-					from k := 1 until k > l_clause.child_count loop
-						if k > 1 then
-							Result.append ({STRING_32} " OR ")
-						end
-						Result.append (expression (a_query, a_fuzzy, a_pack))
-						k := k + 1
-					end
-					Result.append_character (')')
-				elseif l_clause.kind = {BIB_QUERY_CLAUSE}.And_clause then
-					create l_positives.make (l_clause.child_count)
-					create l_negatives.make (1)
-					from k := 1 until k > l_clause.child_count loop
-						if index <= a_query.clause_count and then a_query.clause (index).kind = {BIB_QUERY_CLAUSE}.Not_clause then
-							index := index + 1
-							l_negatives.extend (expression (a_query, a_fuzzy, a_pack))
-						else
-							l_positives.extend (expression (a_query, a_fuzzy, a_pack))
-						end
-						k := k + 1
-					end
-					if l_positives.is_empty then
-						fail ("NOT takes away from a word beside it: give it one.")
-					else
-						Result.append_character ('(')
-						across l_positives as ic loop
-							if not ic.is_empty then
-								if Result.count > 1 then
-									Result.append ({STRING_32} " AND ")
-								end
-								Result.append (ic)
-							end
-						end
-						Result.append_character (')')
-						across l_negatives as ic loop
-							Result.append ({STRING_32} " NOT " + ic)
-						end
-					end
-				elseif l_clause.kind = {BIB_QUERY_CLAUSE}.Not_clause then
-					fail ("NOT takes away from a word beside it: give it one.")
-				elseif l_clause.kind = {BIB_QUERY_CLAUSE}.Phrase then
-					Result := quoted (l_clause.text)
-				elseif l_clause.kind = {BIB_QUERY_CLAUSE}.Word then
-					l_part := l_clause.text.twin
-					if l_part.ends_with ({STRING_32} "*") then
-						l_part.remove_tail (1)
-						Result := quoted (l_part) + {STRING_32} "*"
-					elseif a_fuzzy then
-						Result := widened (l_part, a_pack)
-					else
-						Result := quoted (l_part)
-					end
+		end
+
+	leaf (a_clause: BIB_QUERY_CLAUSE; a_negated: BOOLEAN): STRING_32
+			-- A word (a prefix with *; widened when `fuzzy'), a phrase, or a Strong's number, lemma
+			-- or morphology code searched as it is written, as one quoted FTS5 term.
+		local
+			l_word: STRING_32
+		do
+			if a_clause.kind = {BIB_QUERY_CLAUSE}.Word then
+				l_word := a_clause.text.twin
+				if l_word.ends_with ({STRING_32} "*") then
+					l_word.remove_tail (1)
+					Result := quoted (l_word) + {STRING_32} "*"
+				elseif fuzzy and then attached walk_pack as al_pack then
+					Result := widened (l_word, al_pack)
 				else
-						-- A Strong's number, a lemma, a morphology code: searched as written.
-					Result := quoted (l_clause.text)
+					Result := quoted (l_word)
 				end
+			else
+				Result := quoted (a_clause.text)
 			end
+		end
+
+	any_of (a_parts: ARRAYED_LIST [STRING_32]): STRING_32
+			-- "(a OR b)".
+		do
+			Result := joined (a_parts, " OR ")
+		end
+
+	all_of_but (a_parts, a_taken_away: ARRAYED_LIST [STRING_32]): STRING_32
+			-- "(a AND b) NOT c NOT d": FTS5's NOT takes away from what stands before it.
+		do
+			Result := joined (a_parts, " AND ")
+			across a_taken_away as ic loop
+				Result.append ({STRING_32} " NOT " + ic)
+			end
+		end
+
+	walk_failed: BOOLEAN
+			-- Has the query failed to become an expression?
+		do
+			Result := not error_message.is_empty
+		end
+
+	refuse (a_message: READABLE_STRING_GENERAL)
+			-- The query does not read as a writings search: `a_message' (the first failure stands).
+		do
+			if error_message.is_empty then
+				error_message := a_message.to_string_32
+				error_position := 1
+			end
+		end
+
+feature {NONE} -- Terms
+
+	joined (a_parts: ARRAYED_LIST [STRING_32]; a_operator: STRING_8): STRING_32
+			-- `a_parts' in parentheses, `a_operator' between them.
+		do
+			create Result.make (40)
+			Result.append_character ('(')
+			across a_parts as ic loop
+				if Result.count > 1 then
+					Result.append_string_general (a_operator)
+				end
+				Result.append (ic)
+			end
+			Result.append_character (')')
 		end
 
 	widened (a_word: STRING_32; a_pack: BIB_PRIVATE_PACK_READER): STRING_32
 			-- `a_word' or the pack's words up to `limit_for' edits from it, closest first, at most
-			-- `Max_widening': "(%"remember%" OR %"remembers%")".
+			-- `Max_widening': "(%"remember%" OR %"remembers%")". One sweep of the vocabulary.
 		local
 			l_word: STRING_32
 			l_limit, l_distance, d: INTEGER
 			l_near: ARRAYED_LIST [STRING_32]
+			l_by_distance: ARRAY [ARRAYED_LIST [STRING_32]]
 		do
 			l_word := a_word.as_lower
 			l_limit := edits.limit_for (l_word)
 			create l_near.make (Max_widening)
-			l_near.compare_objects
 			l_near.extend (l_word)
 			if l_limit > 0 then
-				from d := 0 until d > l_limit or l_near.count >= Max_widening loop
-					across a_pack.words as ic until l_near.count >= Max_widening loop
-						l_distance := edits.distance (l_word, ic, l_limit)
-						if l_distance = d and then not l_near.has (ic) then
-							l_near.extend (ic)
-						end
+				create l_by_distance.make_filled (create {ARRAYED_LIST [STRING_32]}.make (0), 1, l_limit)
+				from d := 1 until d > l_limit loop
+					l_by_distance [d] := create {ARRAYED_LIST [STRING_32]}.make (8)
+					d := d + 1
+				end
+				across a_pack.words as ic loop
+					l_distance := edits.distance (l_word, ic, l_limit)
+					if l_distance >= 1 and l_distance <= l_limit then
+						l_by_distance [l_distance].extend (ic)
+					end
+				end
+				from d := 1 until d > l_limit loop
+					across l_by_distance [d] as ic until l_near.count >= Max_widening loop
+						l_near.extend (ic)
 					end
 					d := d + 1
 				end
@@ -271,15 +301,6 @@ feature {NONE} -- The FTS5 expression
 			in_quotes: Result.starts_with ({STRING_32} "%"") and Result.ends_with ({STRING_32} "%"")
 		end
 
-	fail (a_message: READABLE_STRING_GENERAL)
-			-- The query does not read as a writings search: `a_message' (the first failure stands).
-		do
-			if error_message.is_empty then
-				error_message := a_message.to_string_32
-				error_position := 1
-			end
-		end
-
 feature {NONE} -- Implementation
 
 	parser: BIB_QUERY_PARSER
@@ -290,8 +311,11 @@ feature {NONE} -- Implementation
 
 	edits: BIB_EDIT_DISTANCE
 
-	index: INTEGER
-			-- The next clause `expression' reads.
+	fuzzy: BOOLEAN
+			-- Does the search under way widen plain words?
+
+	walk_pack: detachable BIB_PRIVATE_PACK_READER
+			-- The pack whose expression is being written (its words widen a fuzzy word).
 
 	scope: BIB_SEARCH_SCOPE
 			-- The parser's scope: the writings are not a Bible version.

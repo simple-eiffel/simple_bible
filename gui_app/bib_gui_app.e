@@ -4252,6 +4252,12 @@ feature {NONE} -- Searching Larry's writings (T6 Writings; research/20, 2026-10-
 						across l_search.packs_without_search as ic loop
 							l_note.append ({STRING_32} "; " + ic + {STRING_32} " was built before search and is not searched")
 						end
+						across l_search.packs_failed as ic loop
+							l_note.append ({STRING_32} "; the search of " + ic + {STRING_32} " failed")
+						end
+						across l_search.packs_cut_short as ic loop
+							l_note.append ({STRING_32} "; " + ic + {STRING_32} " holds more, only the best are listed")
+						end
 						writings_note.set_text (l_note + {STRING_32} ".")
 					end
 				end
