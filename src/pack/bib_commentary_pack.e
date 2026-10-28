@@ -16,36 +16,12 @@ class
 	BIB_COMMENTARY_PACK
 
 inherit
-	BIB_SQLITE_QUERYING
+	BIB_PRIVATE_PACK_READER
 
 create
 	make
 
-feature {NONE} -- Initialization
-
-	make (a_sources: BIB_SOURCE_SET; a_alias: READABLE_STRING_8; a_title: READABLE_STRING_GENERAL)
-			-- The commentary pack attached as `a_alias' on `a_sources', titled `a_title'.
-		require
-			alias_not_empty: not a_alias.is_empty
-		do
-			sources := a_sources
-			pack_alias := a_alias.to_string_8
-			title := a_title.to_string_32
-		ensure
-			alias_set: pack_alias.same_string (a_alias)
-		end
-
 feature -- Access
-
-	pack_alias: STRING_8
-	title: STRING_32
-			-- The pack's `meta.title' ("Jude: A Commentary").
-
-	is_available: BOOLEAN
-			-- Is the pack attached?
-		do
-			Result := sources.is_open and then sources.is_attached_alias (pack_alias)
-		end
 
 	sections_for_verse (a_book, a_chapter, a_verse: INTEGER): BIB_LIST_RESULT [BIB_COMMENTARY_SECTION]
 			-- The sections covering `a_book' `a_chapter':`a_verse' (English numbering), the narrowest
@@ -60,7 +36,6 @@ feature -- Access
 			l_sections: ARRAYED_LIST [BIB_COMMENTARY_SECTION]
 			l_citations: ARRAYED_LIST [BIB_PROVENANCE]
 			l_section: BIB_COMMENTARY_SECTION
-			l_license: BIB_LICENSE
 			l_provenance: BIB_PROVENANCE
 			l_rows: ARRAYED_LIST [SIMPLE_SQL_ROW]
 			l_failed: BOOLEAN
@@ -76,10 +51,7 @@ feature -- Access
 				create l_sections.make (l_rows.count)
 				create l_citations.make (2)
 				across l_rows as ic loop
-					create l_license.make (non_empty (ic.string_value ("license_id")), ic.integer_value ("non_commercial") /= 0,
-						ic.integer_value ("share_alike") /= 0, ic.integer_value ("restricted") /= 0, ic.string_value ("credit"))
-					create l_provenance.make (ic.integer_64_value ("provenance_key").max (1), non_empty (ic.string_value ("source_key")),
-						non_empty (ic.string_value ("edition")), l_license, ic.string_value ("caveat"))
+					l_provenance := provenance_of_row (ic)
 					if not across l_citations as ic_seen some ic_seen.key = l_provenance.key end then
 						l_citations.extend (l_provenance)
 					end
@@ -187,33 +159,12 @@ feature {NONE} -- Implementation
 			end
 		end
 
-	pack_provenance: BIB_PROVENANCE
-			-- The pack itself, cited when a verse has no section.
-		do
-			create Result.make (1, method_edition, method_edition, create {BIB_LICENSE}.make ({STRING_32} "private", True, False, True, {STRING_32} "Larry Rix"), {STRING_32} "")
-		end
-
-	non_empty (a_text: STRING_32): STRING_32
-			-- `a_text', or "unknown" when it is empty.
-		do
-			if a_text.is_empty then
-				Result := {STRING_32} "unknown"
-			else
-				Result := a_text
-			end
-		end
-
-	sources: BIB_SOURCE_SET
-
 	query_failed_message: STRING_8 = "A commentary query failed."
 	not_open_message: STRING_8 = "The commentary pack is not attached."
 
-	method_edition: STRING_32
-		do
-			Result := title
-			if Result.is_empty then
-				Result := {STRING_32} "commentary pack"
-			end
+	pack_noun: STRING_32
+		once
+			Result := {STRING_32} "commentary pack"
 		end
 
 end

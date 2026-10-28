@@ -16,36 +16,12 @@ class
 	BIB_FRAMEWORK_PACK
 
 inherit
-	BIB_SQLITE_QUERYING
+	BIB_PRIVATE_PACK_READER
 
 create
 	make
 
-feature {NONE} -- Initialization
-
-	make (a_sources: BIB_SOURCE_SET; a_alias: READABLE_STRING_8; a_title: READABLE_STRING_GENERAL)
-			-- The frameworks pack attached as `a_alias' on `a_sources', titled `a_title'.
-		require
-			alias_not_empty: not a_alias.is_empty
-		do
-			sources := a_sources
-			pack_alias := a_alias.to_string_8
-			title := a_title.to_string_32
-		ensure
-			alias_set: pack_alias.same_string (a_alias)
-		end
-
 feature -- Access
-
-	pack_alias: STRING_8
-	title: STRING_32
-			-- The pack's `meta.title'.
-
-	is_available: BOOLEAN
-			-- Is the pack attached?
-		do
-			Result := sources.is_open and then sources.is_attached_alias (pack_alias)
-		end
 
 	frameworks: BIB_LIST_RESULT [BIB_FRAMEWORK]
 			-- Every framework, without its sections: cornerstone, master, recovery, then sub, each
@@ -55,7 +31,9 @@ feature -- Access
 		local
 			l_sql: STRING_8
 			l_list: ARRAYED_LIST [BIB_FRAMEWORK]
+			l_provenance: BIB_PROVENANCE
 		do
+			l_provenance := pack_provenance
 			l_sql := "SELECT framework_id, name, mark, title, tier, status, hover FROM " + pack_alias + ".framework ORDER BY tier_rank, name"
 			run_query (l_sql, {ARRAY [detachable ANY]} <<>>)
 			if attached last_rows as al_rows then
@@ -65,7 +43,7 @@ feature -- Access
 						l_list.extend (al_framework)
 					end
 				end
-				create Result.make_success (method ("frameworks", l_sql, pack_alias, "all", l_list.count), {ARRAY [BIB_PROVENANCE]} <<pack_provenance>>, l_list)
+				create Result.make_success (method ("frameworks", l_sql, pack_alias, "all", l_list.count), {ARRAY [BIB_PROVENANCE]} <<l_provenance>>, l_list)
 			else
 				create Result.make_failure (method ("frameworks", l_sql, pack_alias, "all", 0), query_error)
 			end
@@ -83,7 +61,9 @@ feature -- Access
 			l_sql: STRING_8
 			l_list: ARRAYED_LIST [BIB_FRAMEWORK]
 			l_ok: BOOLEAN
+			l_provenance: BIB_PROVENANCE
 		do
+			l_provenance := pack_provenance
 			l_sql := "SELECT framework_id, name, mark, title, tier, status, hover FROM " + pack_alias + ".framework WHERE framework_id = ?"
 			run_query (l_sql, {ARRAY [detachable ANY]} <<a_id.to_string_32>>)
 			if attached last_rows as al_rows then
@@ -96,7 +76,7 @@ feature -- Access
 					end
 				end
 				if l_ok then
-					create Result.make_success (method ("framework", l_sql, pack_alias, a_id, l_list.count), {ARRAY [BIB_PROVENANCE]} <<pack_provenance>>, l_list)
+					create Result.make_success (method ("framework", l_sql, pack_alias, a_id, l_list.count), {ARRAY [BIB_PROVENANCE]} <<l_provenance>>, l_list)
 				else
 					create Result.make_failure (method ("framework", l_sql, pack_alias, a_id, 0), query_error)
 				end
@@ -116,17 +96,19 @@ feature -- Access
 		local
 			l_sql: STRING_8
 			l_list: ARRAYED_LIST [BIB_FRAMEWORK_SPELLING]
+			l_provenance: BIB_PROVENANCE
 		do
+			l_provenance := pack_provenance
 			l_sql := "SELECT alias, framework_id, needs_mark FROM " + pack_alias + ".framework_alias ORDER BY length(alias) DESC, alias"
 			run_query (l_sql, {ARRAY [detachable ANY]} <<>>)
 			if attached last_rows as al_rows then
 				create l_list.make (al_rows.rows.count)
 				across al_rows.rows as ic loop
 					if not ic.string_value ("alias").is_empty and then (create {BIB_FRAMEWORK_SCHEMA}).is_framework_id (ic.string_value ("framework_id")) then
-						l_list.extend (create {BIB_FRAMEWORK_SPELLING}.make (ic.string_value ("alias"), ic.string_value ("framework_id"), ic.integer_value ("needs_mark") /= 0, pack_provenance))
+						l_list.extend (create {BIB_FRAMEWORK_SPELLING}.make (ic.string_value ("alias"), ic.string_value ("framework_id"), ic.integer_value ("needs_mark") /= 0, l_provenance))
 					end
 				end
-				create Result.make_success (method ("aliases", l_sql, pack_alias, "all", l_list.count), {ARRAY [BIB_PROVENANCE]} <<pack_provenance>>, l_list)
+				create Result.make_success (method ("aliases", l_sql, pack_alias, "all", l_list.count), {ARRAY [BIB_PROVENANCE]} <<l_provenance>>, l_list)
 			else
 				create Result.make_failure (method ("aliases", l_sql, pack_alias, "all", 0), query_error)
 			end
@@ -182,23 +164,12 @@ feature {NONE} -- Implementation
 			end
 		end
 
-	pack_provenance: BIB_PROVENANCE
-			-- The pack itself, cited by every answer.
-		do
-			create Result.make (1, method_edition, method_edition, create {BIB_LICENSE}.make ({STRING_32} "private", True, False, True, {STRING_32} "Larry Rix"), {STRING_32} "")
-		end
-
-	sources: BIB_SOURCE_SET
-
 	query_failed_message: STRING_8 = "A frameworks query failed."
 	not_open_message: STRING_8 = "The frameworks pack is not attached."
 
-	method_edition: STRING_32
-		do
-			Result := title
-			if Result.is_empty then
-				Result := {STRING_32} "frameworks pack"
-			end
+	pack_noun: STRING_32
+		once
+			Result := {STRING_32} "frameworks pack"
 		end
 
 end

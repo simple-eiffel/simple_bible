@@ -369,6 +369,9 @@ feature -- Frameworks pack (2026-10-28)
 				assert_integers_equal ("both listed", 2, al_pack.frameworks.count)
 				assert_strings_equal ("a master lens before a recovery framework", "kacc", al_pack.frameworks.item (1).id)
 				assert_true ("KACC is a draft", al_pack.frameworks.item (1).is_draft)
+					-- Design scan 58: the answer cites the pack's own provenance row, as written.
+				assert_strings_equal ("cited from the pack's own provenance", "frameworks sidecars", al_pack.frameworks.citation (1).source_key)
+				assert_true ("with its caveat", al_pack.frameworks.citation (1).caveat.has_substring ("draft until Larry approves"))
 				assert_true ("marked", al_pack.frameworks.item (1).has_mark and al_pack.frameworks.item (1).display_name.ends_with ({STRING_32} "%/8482/"))
 				if attached al_pack.framework ("zakar") as al_one and then al_one.count = 1 then
 					assert_integers_equal ("its sections", 3, al_one.item (1).sections.count)

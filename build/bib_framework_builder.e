@@ -26,7 +26,7 @@ class
 	BIB_FRAMEWORK_BUILDER
 
 inherit
-	BIB_SQLITE_REPORTING
+	BIB_PACK_WRITING
 
 create
 	make
@@ -42,9 +42,6 @@ feature {NONE} -- Initialization
 		end
 
 feature -- Access
-
-	last_error: detachable STRING_32
-			-- Why the last build failed.
 
 	warnings: ARRAYED_LIST [STRING_32]
 			-- What the last build left out without failing (a related id not in the pack).
@@ -85,8 +82,6 @@ feature -- Commands
 			pack_named: not a_pack.is_empty
 		local
 			l_db: SIMPLE_SQL_DATABASE
-			l_file: SIMPLE_FILE
-			l_ok: BOOLEAN
 		do
 			last_error := Void
 			framework_count := 0
@@ -103,17 +98,8 @@ feature -- Commands
 				check_related
 			end
 			if last_error = Void then
-				create l_file.make (a_pack)
-				if l_file.exists then
-					l_ok := l_file.delete
-				end
-				create l_db.make (a_pack)
-				across schema.Schema_statements as ic until last_error /= Void loop
-					l_db.execute (ic)
-					check_db (l_db, "The pack's tables could not be made.")
-				end
+				l_db := fresh_pack (a_pack, schema.Schema_statements)
 				if last_error = Void then
-					l_db.begin_transaction
 					put_meta (l_db, "pack_kind", schema.Pack_kind.to_string_32)
 					put_meta (l_db, "title", schema.Pack_title.to_string_32)
 					put_meta (l_db, "author", {STRING_32} "Larry Rix")
@@ -129,15 +115,8 @@ feature -- Commands
 					if last_error = Void and then not a_commentary_pack.is_empty then
 						write_uses (l_db, a_commentary_pack)
 					end
-					if last_error = Void and then l_db.is_in_transaction then
-						l_db.commit
-						check_db (l_db, "The pack could not be committed.")
-					end
-					if l_db.is_in_transaction then
-						l_db.rollback
-					end
 				end
-				l_db.close
+				finish_pack (l_db)
 			end
 		ensure
 			counted_on_success: last_error = Void implies framework_count = records.count
@@ -185,7 +164,7 @@ feature {NONE} -- Reading and checking
 				end
 				fail_unless (schema.is_framework_id (text_of (l_object, "id")), a_file, "its id is not lowercase letters and digits")
 				fail_unless (not text_of (l_object, "name").is_empty, a_file, "it has no name")
-				fail_unless (schema.tier_rank (text_of (l_object, "tier")) > 0, a_file, "its tier is not cornerstone, master, recovery or sub")
+				fail_unless (schema.tier_rank (text_of (l_object, "tier")) > 0, a_file, {STRING_32} "its tier is not one of " + schema.tier_list)
 				fail_unless (schema.is_status (text_of (l_object, "status")), a_file, "its status is not draft or reviewed")
 				fail_unless (not text_of (l_object, "hover").is_empty and text_of (l_object, "hover").count <= schema.Max_hover, a_file,
 					{STRING_32} "its hover text is empty or longer than " + schema.Max_hover.out.to_string_32 + {STRING_32} " characters")
@@ -252,7 +231,7 @@ feature {NONE} -- Writing
 			from i := 1 until i > a_record.aliases.count or last_error /= Void loop
 					-- The name of a marked framework links only with its mark; an alias as written.
 				a_db.execute_with_args ("INSERT INTO framework_alias VALUES (?, ?, ?, 'author', 1)",
-					<<a_record.aliases.i_th (i), a_record.id, (if i = 1 and a_record.mark then 1 else 0 end)>>)
+					<<a_record.aliases.i_th (i), a_record.id, (if needs_mark (a_record, a_record.aliases.i_th (i)) then 1 else 0 end)>>)
 				check_db (a_db, {STRING_32} "A spelling of " + a_record.id + {STRING_32} " could not be written.")
 				alias_count := alias_count + 1
 				i := i + 1
@@ -288,7 +267,7 @@ feature {NONE} -- Writing
 				create l_spellings.make (32)
 				across records as ic loop
 					across ic.aliases as ic_alias loop
-						l_spellings.extend ([ic_alias.twin, ic.id, ic.mark and then ic_alias.same_string (ic.name)])
+						l_spellings.extend ([ic_alias.twin, ic.id, needs_mark (ic, ic_alias)])
 					end
 				end
 				create l_names.make (l_spellings)
@@ -319,47 +298,11 @@ feature {NONE} -- Writing
 
 feature {NONE} -- Implementation
 
-	put_meta (a_db: SIMPLE_SQL_DATABASE; a_key: STRING_8; a_value: STRING_32)
-			-- One `meta' row, unless the build already failed.
+	needs_mark (a_record: like records.item; a_spelling: READABLE_STRING_GENERAL): BOOLEAN
+			-- Does `a_spelling' of `a_record' link only with (TM): is it the name of a framework prose
+			-- marks? (An alias links as written.)
 		do
-			if last_error = Void then
-				a_db.execute_with_args ("INSERT INTO meta(key, value) VALUES (?, ?)", <<a_key, a_value>>)
-				check_db (a_db, "A meta row could not be written.")
-			end
-		end
-
-	text_of (a_object: SIMPLE_JSON_OBJECT; a_key: READABLE_STRING_GENERAL): STRING_32
-			-- The string under `a_key'; empty when absent, null or not a string.
-		do
-			if attached a_object.item (a_key.to_string_32) as al_value and then al_value.is_string then
-				Result := al_value.as_string_32
-			else
-				create Result.make_empty
-			end
-		end
-
-	strings_of (a_object: SIMPLE_JSON_OBJECT; a_key: READABLE_STRING_GENERAL): ARRAYED_LIST [STRING_32]
-			-- The strings of the array under `a_key'; empty when absent or not an array.
-		local
-			i: INTEGER
-		do
-			create Result.make (4)
-			if attached a_object.array_item (a_key.to_string_32) as al_array then
-				from i := 1 until i > al_array.count loop
-					if al_array [i].is_string then
-						Result.extend (al_array [i].as_string_32)
-					end
-					i := i + 1
-				end
-			end
-		end
-
-	check_db (a_db: SIMPLE_SQL_DATABASE; a_what: READABLE_STRING_GENERAL)
-			-- When `a_db' failed: `last_error' says `a_what', with SQLite's own words.
-		do
-			if a_db.has_error and last_error = Void then
-				last_error := failure_text (a_db, a_what)
-			end
+			Result := a_record.mark and then a_spelling.same_string (a_record.name)
 		end
 
 end
