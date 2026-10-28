@@ -146,6 +146,9 @@ feature {NONE} -- Initialization
 			create previous_button.make ("< Previous", Void)
 			create next_button.make ("Next >", Void)
 			create focus_button.make ("Focus", Void)
+			create origin_button.make ("Back", Void)
+			origin_button.set_tooltip ("Back to the verse the commentary is on; the commentary follows the Bible text again.")
+			create reading_bar.make
 			focus_button.set_tooltip ("Fold the sides so the Bible text has the window (Ctrl+Shift+F); again to bring them back.")
 			create reading_view.make (120.0)
 			create reading_verses.make (0)
@@ -386,6 +389,10 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			elseif snapshot_tab.same_string ({STRING_32} "spelling") then
 				search_box.set_text ("lemma:ruach")
 				on_search
+			elseif snapshot_tab.same_string ({STRING_32} "hold") then
+				on_commentary_link ({STRING_32} "bible:48.2.16")
+			elseif snapshot_tab.same_string ({STRING_32} "refcard") then
+				snapshot_reference_card
 			elseif snapshot_tab.same_string ({STRING_32} "focus") then
 				toggle_focus_reading
 			elseif snapshot_tab.same_string ({STRING_32} "maximize") then
@@ -517,6 +524,8 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			places_grid.set_on_select (agent on_place)
 			window.set_on_tick (agent load_more_places)
 			focus_button.set_on_click (agent toggle_focus_reading)
+			origin_button.set_on_click (agent back_to_commentary_verse)
+			commentary_view.set_hover_card_builder (agent commentary_card)
 			wire_menus
 		end
 
@@ -626,8 +635,7 @@ feature {NONE} -- Window
 		local
 			l_bar: SW_ROW
 		do
-			create l_bar.make
-			l_bar := l_bar.with_gap (10.0)
+			l_bar := reading_bar.with_gap (10.0)
 			l_bar.put (reading_caption.as_muted)
 			l_bar.put (reading_title)
 			l_bar.put (version_chip.as_muted.growing)
@@ -852,6 +860,9 @@ feature {NONE} -- Menus and keys (C2)
 			Result.add_item ("Previous chapter", "", previous_button.is_enabled, agent step_chapter (-1))
 			Result.add_item ("Next chapter", "", next_button.is_enabled, agent step_chapter (1))
 			Result.add_item ("Go to reference", "Ctrl+L", True, agent focus_reference)
+			if is_commentary_held then
+				Result.add_item ({STRING_32} "Back to " + place_text (held_book, held_chapter, held_verse), "", True, agent back_to_commentary_verse)
+			end
 			Result.add_separator
 			Result.add_item ("Bookmark this verse", "Ctrl+D", reading_verse > 0, agent bookmark_verse)
 		end
@@ -1152,7 +1163,10 @@ feature {NONE} -- Toolbar (C3-C9)
 feature {NONE} -- Reading (S1, P01)
 
 	reading_caption, reading_title, version_chip, reading_note: SW_LABEL
-	previous_button, next_button, focus_button: SW_BUTTON
+	previous_button, next_button, focus_button, origin_button: SW_BUTTON
+
+	reading_bar: SW_ROW
+			-- S1's header row; `origin_button' stands at its end while the commentary is held.
 	reading_view: SW_PARALLEL_TEXT
 
 	reading_verses: ARRAYED_LIST [BIB_READING_VERSE]
@@ -1199,6 +1213,10 @@ feature {NONE} -- Reading (S1, P01)
 			chapter_positive: a_chapter > 0
 			verse_not_negative: a_verse >= 0
 		do
+			if not is_following_commentary then
+					-- Anything but a commentary link: the commentary follows the Bible text again.
+				release_commentary
+			end
 			from until history.count <= history_index loop
 				history.finish
 				history.remove
@@ -1213,6 +1231,7 @@ feature {NONE} -- Reading (S1, P01)
 			-- C3: Back (-1) or Forward (1).
 		do
 			if history_index + a_step >= 1 and history_index + a_step <= history.count then
+				release_commentary
 				history_index := history_index + a_step
 				open_reading (history.i_th (history_index).book, history.i_th (history_index).chapter, history.i_th (history_index).verse)
 			end
@@ -3642,6 +3661,221 @@ feature {NONE} -- Right-click menus and panes (Larry, 2026-10-28)
 			end
 		end
 
+feature {NONE} -- Commentary held, and its references previewed (Larry, 2026-10-28)
+
+	is_commentary_held: BOOLEAN
+			-- Is T5 kept on `held_book' `held_chapter':`held_verse' while T3 shows a passage a
+			-- commentary link opened?
+
+	held_book, held_chapter, held_verse: INTEGER
+			-- The verse the commentary is kept on.
+
+	is_following_commentary: BOOLEAN
+			-- Is a commentary link being followed (`go_to' keeps the hold)?
+
+	shown_book, shown_chapter, shown_verse: INTEGER
+			-- The place T5 was last drawn for.
+
+	commentary_book: INTEGER
+			-- The book T5 is on: the held verse's, else the one read.
+		do
+			if is_commentary_held then
+				Result := held_book
+			else
+				Result := reading_book
+			end
+		end
+
+	commentary_chapter: INTEGER
+		do
+			if is_commentary_held then
+				Result := held_chapter
+			else
+				Result := reading_chapter
+			end
+		end
+
+	commentary_verse: INTEGER
+		do
+			if is_commentary_held then
+				Result := held_verse
+			else
+				Result := reading_verse
+			end
+		end
+
+	held_note: STRING_32
+			-- After T5's heading while it is held: what T3 shows meanwhile.
+		do
+			if is_commentary_held then
+				Result := {STRING_32} "   (kept while you read " + place_text (reading_book, reading_chapter, reading_verse) + {STRING_32} ")"
+			else
+				create Result.make_empty
+			end
+		end
+
+	release_commentary
+			-- T5 follows the Bible text again.
+		do
+			if is_commentary_held then
+				is_commentary_held := False
+				show_origin_button
+			end
+		ensure
+			released: not is_commentary_held
+		end
+
+	back_to_commentary_verse
+			-- T3 back to the verse T5 is kept on, selected; T5 follows again.
+		local
+			l_book, l_chapter, l_verse: INTEGER
+		do
+			if is_commentary_held then
+				l_book := held_book
+				l_chapter := held_chapter
+				l_verse := held_verse
+				release_commentary
+				go_to (l_book, l_chapter, l_verse)
+			end
+		ensure
+			released: not is_commentary_held
+		end
+
+	show_origin_button
+			-- "Back to Galatians 2:20" at the end of S1's header while T5 is held; gone otherwise.
+		do
+			if is_commentary_held then
+				origin_button.set_label ({STRING_32} "Back to " + place_text (held_book, held_chapter, held_verse))
+				if not reading_bar.children.has (origin_button) then
+					reading_bar.put (origin_button)
+				end
+			elseif reading_bar.children.has (origin_button) then
+				reading_bar.remove (origin_button)
+			end
+			window.request_render
+		ensure
+			shown_while_held: reading_bar.children.has (origin_button) = is_commentary_held
+		end
+
+	commentary_card (a_item, a_character: INTEGER): detachable SW_HOVER_CARD
+			-- A Bible reference in the commentary rested on: its passage in the version read.
+		do
+			if commentary_view.is_valid_item (a_item) and then attached commentary_view.link_target_at (a_item, a_character) as al_target
+				and then attached (create {BIB_REFERENCE_LINKER}.make (bible.books)).target_range (al_target) as al_range
+				and then bible.books.has_book (al_range.book) and then al_range.chapter >= 1
+			then
+				Result := passage_card (al_range.book, al_range.chapter, al_range.verse, al_range.end_chapter, al_range.end_verse)
+			end
+		end
+
+	Card_verses: INTEGER = 8
+			-- The most verses a reference card shows before "...".
+
+	passage_card (a_book, a_chapter, a_verse, a_end_chapter, a_end_verse: INTEGER): SW_HOVER_CARD
+			-- The passage `a_book' `a_chapter':`a_verse' to `a_end_chapter':`a_end_verse' (verse 0: from
+			-- or to a chapter's end) in the version read, each verse numbered, at most `Card_verses'.
+		require
+			book_positive: a_book > 0
+			chapter_positive: a_chapter > 0
+		local
+			l_column: SW_COLUMN
+			l_title, l_body: SW_LABEL
+			l_text, l_name: STRING_32
+			l_verses: BIB_LIST_RESULT [BIB_READING_VERSE]
+			l_chapter, i, l_count, l_verse: INTEGER
+			l_more: BOOLEAN
+		do
+			create l_text.make (600)
+			if bible.text_reader.has_version (reading_version) then
+				from l_chapter := a_chapter until l_chapter > a_end_chapter or l_more loop
+					l_verses := bible.text_reader.chapter (reading_version, a_book, l_chapter)
+					from i := 1 until i > l_verses.count or l_more loop
+						l_verse := l_verses.item (i).verse
+						if (l_chapter > a_chapter or a_verse = 0 or l_verse >= a_verse)
+							and (l_chapter < a_end_chapter or a_end_verse = 0 or l_verse <= a_end_verse)
+						then
+							if l_count = Card_verses then
+								l_more := True
+							else
+								if not l_text.is_empty then
+									l_text.append_character (' ')
+								end
+								if a_end_chapter > a_chapter then
+									l_text.append (l_chapter.out.to_string_32 + {STRING_32} ":")
+								end
+								l_text.append (l_verse.out.to_string_32 + {STRING_32} " " + l_verses.item (i).display_text)
+								l_count := l_count + 1
+							end
+						end
+						i := i + 1
+					end
+					l_chapter := l_chapter + 1
+				end
+			end
+			if l_more then
+				l_text.append ({STRING_32} " ...")
+			end
+			if l_text.is_empty then
+				l_text := {STRING_32} "Not in this version."
+			end
+			l_name := place_text (a_book, a_chapter, a_verse)
+			if a_end_chapter /= a_chapter then
+				l_name.append ({STRING_32} "-" + a_end_chapter.out.to_string_32)
+				if a_end_verse > 0 then
+					l_name.append ({STRING_32} ":" + a_end_verse.out.to_string_32)
+				end
+			elseif a_end_verse /= a_verse then
+				l_name.append ({STRING_32} "-" + a_end_verse.out.to_string_32)
+			end
+			create l_title.make (l_name + {STRING_32} " (" + reading_version.to_string_32 + {STRING_32} ")", {SW_PAINTER}.Role_ui, 13.0, True)
+			create l_body.make_body (l_text)
+			l_body := l_body.with_wrap
+			create l_column.make
+			l_column := l_column.with_gap (6.0)
+			l_column.put (l_title)
+			l_column.put (l_body)
+			create Result.make (l_column, 460.0)
+		end
+
+	snapshot_reference_card
+			-- For a snapshot: the card of the first passage linked in the commentary (the first range
+			-- when there is one), as a rest on it would open it.
+		local
+			u, c, l_unit, l_char, l_range_unit, l_range_char: INTEGER
+			g: SW_TEXT_GEOMETRY
+		do
+			window.request_render
+			from u := 1 until u > commentary_view.unit_count or l_range_unit > 0 loop
+				g := commentary_view.unit_geometry (u)
+				from c := 1 until c > g.count or l_range_unit > 0 loop
+					if attached commentary_view.link_target_at (u, c) as al_target and then al_target.starts_with ({STRING_32} "bible:") then
+						if l_unit = 0 then
+							l_unit := u
+							l_char := c
+						end
+						if al_target.has ('-') then
+							l_range_unit := u
+							l_range_char := c
+						end
+					end
+					c := c + 1
+				end
+				u := u + 1
+			end
+			if l_range_unit > 0 then
+				l_unit := l_range_unit
+				l_char := l_range_char
+			end
+			if l_unit > 0 then
+				g := commentary_view.unit_geometry (l_unit)
+				if attached commentary_view.hover_card_at (commentary_view.unit_origin_x (l_unit) + g.x_of (l_char) + 2.0,
+					commentary_view.unit_origin_y (l_unit) + g.top_of_line (g.line_of (l_char)) + 3.0) as al_card
+				then
+					window.show_hover_card (al_card)
+				end
+			end
+		end
+
 feature {NONE} -- Commentary (S2, P04)
 
 	commentary_title: SW_LABEL
@@ -3657,20 +3891,28 @@ feature {NONE} -- Commentary (S2, P04)
 			l_result: BIB_LIST_RESULT [BIB_READING_CROSS_REF]
 			i: INTEGER
 		do
-			create cross_refs.make (0)
-			if reading_verse > 0 then
-				commentary_title.set_text (place_text (reading_book, reading_chapter, reading_verse))
-				l_result := bible.text_reader.cross_references (reading_book, reading_chapter, reading_verse)
-				create cross_refs.make (l_result.count)
-				from i := 1 until i > l_result.count loop
-					cross_refs.extend (l_result.item (i))
-					i := i + 1
-				end
+			if commentary_verse > 0 then
+				commentary_title.set_text (place_text (commentary_book, commentary_chapter, commentary_verse) + held_note)
 			else
-				commentary_title.set_text (place_text (reading_book, reading_chapter, 0) + {STRING_32} ": click a verse for its cross-references")
+				commentary_title.set_text (place_text (commentary_book, commentary_chapter, 0) + {STRING_32} ": click a verse for its cross-references")
 			end
-			cross_refs_grid.set_rows (cross_refs)
-			show_commentary
+			if commentary_book /= shown_book or commentary_chapter /= shown_chapter or commentary_verse /= shown_verse then
+					-- Redrawn only when its verse changes, so a held commentary keeps its scroll.
+				shown_book := commentary_book
+				shown_chapter := commentary_chapter
+				shown_verse := commentary_verse
+				create cross_refs.make (0)
+				if commentary_verse > 0 then
+					l_result := bible.text_reader.cross_references (commentary_book, commentary_chapter, commentary_verse)
+					create cross_refs.make (l_result.count)
+					from i := 1 until i > l_result.count loop
+						cross_refs.extend (l_result.item (i))
+						i := i + 1
+					end
+				end
+				cross_refs_grid.set_rows (cross_refs)
+				show_commentary
+			end
 		end
 
 	commentary_view: SW_DOCUMENT_VIEW
@@ -3687,7 +3929,18 @@ feature {NONE} -- Commentary (S2, P04)
 			if attached (create {BIB_REFERENCE_LINKER}.make (bible.books)).target_place (a_target) as al_place
 				and then bible.books.has_book (al_place.book) and then al_place.chapter > 0 and then al_place.verse >= 0
 			then
+					-- Larry, 2026-10-28: the passage opens in T3 and the commentary stays where it was,
+					-- until Back or a verse clicked in T3.
+				if not is_commentary_held and reading_book > 0 and reading_chapter > 0 then
+					held_book := reading_book
+					held_chapter := reading_chapter
+					held_verse := reading_verse
+					is_commentary_held := True
+				end
+				is_following_commentary := True
 				go_to (al_place.book, al_place.chapter, al_place.verse)
+				is_following_commentary := False
+				show_origin_button
 			end
 		end
 
@@ -3709,12 +3962,12 @@ feature {NONE} -- Commentary (S2, P04)
 				across bible.pack_errors as ic loop
 					l_page.append ({STRING_32} "%N%N*A pack was refused: " + ic.message + {STRING_32} "*")
 				end
-			elseif reading_verse = 0 then
+			elseif commentary_verse = 0 then
 				l_page := {STRING_32} "Click a verse for its commentary."
 			else
 				across bible.commentary_packs as ic loop
 					if ic.is_available then
-						l_sections := ic.sections_for_verse (reading_book, reading_chapter, reading_verse)
+						l_sections := ic.sections_for_verse (commentary_book, commentary_chapter, commentary_verse)
 						if attached l_sections.error as al_error then
 							l_page.append ({STRING_32} "*" + ic.title + {STRING_32} ": " + al_error.message + {STRING_32} "*%N%N")
 						elseif l_sections.count > 0 then
@@ -3729,7 +3982,7 @@ feature {NONE} -- Commentary (S2, P04)
 				end
 				has_commentary := not l_page.is_empty
 				if l_page.is_empty then
-					l_page := {STRING_32} "No commentary on " + place_text (reading_book, reading_chapter, reading_verse) + {STRING_32} " yet."
+					l_page := {STRING_32} "No commentary on " + place_text (commentary_book, commentary_chapter, commentary_verse) + {STRING_32} " yet."
 				end
 			end
 			commentary_view.set_document (commentary_reader.read (l_page))

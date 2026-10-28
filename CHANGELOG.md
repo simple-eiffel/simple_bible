@@ -4,6 +4,12 @@ All notable changes to simple_bible are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added (2026-10-28: the commentary's references previewed and followed; personal installer 0.7.21)
+
+- **A reference's passage on hover**: resting on a Bible reference in the commentary opens a card with its text in the version read, each verse numbered, up to 8 verses ("Galatians 2:15-21 (KJV)"). `BIB_REFERENCE_LINKER` now writes where a range ends into its link (`bible:48.2.15-2.21`; one place keeps `bible:48.2.15`), read by `target_range`; `target_place` still reads the first verse of either form.
+- **Following a reference keeps the commentary**: a click on one opens the passage in the Bible text while the commentary stays on its verse, its heading saying what is read meanwhile; "Back to Galatians 2:20" in the reading bar (and the Go menu) returns, and any other way of moving (a verse clicked, the reference box, Back and Forward) lets the commentary follow again. The commentary is redrawn only when its verse changes, so a long one keeps its scroll.
+- Snapshot options `hold` and `refcard`. The personal concordance carries two covering indexes (first English lookup cold 5.3 s -> 0.9 s; built by the vault's builder).
+
 ### Added (2026-10-28: right-click menus, Focus reading, larger panes; personal installer 0.7.19)
 
 - **Right-click menus** on every control one can do something with (simple_widgets 0.46.1 gives each its Copy items; the window adds its own above them): a verse in the Bible or Parallel tab (copy it with its reference or the chapter; bookmark, highlight, note, tag, learn it by heart, pray about it; open it in Parallel or Interlinear; Focus reading); a word in the Interlinear or the verse analysis (open it in the lexicon, every place, search for its Strong's number, copy it); a book or chapter in the Navigator (read it); a row of bookmarks, history, highlights, tagged verses, prayers, cards, cross-references, places or found verses (go to it, copy it with its text, copy the reference; Remove and Restore where the list has them; Mark answered for an open prayer); journal entries, tags, renderings and verse notes their own. `BIB_ITEM_LIST_PANEL.set_menu_items`.

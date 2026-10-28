@@ -157,7 +157,27 @@ feature -- Tests
 			create l_linker.make (bible.books)
 			l_out := l_linker.linked ("See Genesis 1:1 and Exodus 3:14-15, Matthew 5, Jude 9; it is 5 words.")
 			assert_true ("verse", l_out.has_substring ("[Genesis 1:1](bible:1.1.1)"))
-			assert_true ("range keeps its text, opens its first verse", l_out.has_substring ("[Exodus 3:14-15](bible:2.3.14)"))
+			assert_true ("range keeps its text and names its end", l_out.has_substring ("[Exodus 3:14-15](bible:2.3.14-3.15)"))
+			if attached l_linker.target_place ("bible:2.3.14-3.15") as al_first then
+				assert_true ("a range opens its first verse", al_first.book = 2 and al_first.chapter = 3 and al_first.verse = 14)
+			else
+				assert_true ("a range's first verse is read", False)
+			end
+				-- 2026-10-28: where a passage ends, for the commentary's hover card.
+			if attached l_linker.target_range ("bible:2.3.14-3.15") as al_range then
+				assert_true ("Exodus 3:14-15 ends at 3:15", al_range.end_chapter = 3 and al_range.end_verse = 15)
+			else
+				assert_true ("a range is read", False)
+			end
+			if attached l_linker.target_range ("bible:1.1.1") as al_one then
+				assert_true ("one verse ends where it starts", al_one.end_chapter = 1 and al_one.end_verse = 1)
+			else
+				assert_true ("one verse is read", False)
+			end
+			assert_true ("verses across chapters", l_linker.linked ("Exodus 5:1-6:2").has_substring ("](bible:2.5.1-6.2)"))
+			assert_true ("whole chapters", l_linker.linked ("Matthew 5-7").has_substring ("](bible:40.5.0-7.0)"))
+			assert_true ("a range in a book of one chapter", l_linker.linked ("Jude 5-7").has_substring ("](bible:65.1.5-1.7)"))
+			assert_true ("a range that runs backward is its first place", l_linker.linked ("Exodus 3:15-14").has_substring ("](bible:2.3.15)"))
 			assert_true ("a chapter", l_out.has_substring ("[Matthew 5](bible:40.5.0)"))
 			assert_true ("one chapter: the number is the verse", l_out.has_substring ("[Jude 9](bible:65.1.9)"))
 			assert_true ("prose untouched", l_out.has_substring ("it is 5 words"))
