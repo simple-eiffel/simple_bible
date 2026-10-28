@@ -139,6 +139,7 @@ Feature IDs, names and fit classes come from `research/09-FEATURE-PARITY - e-Swo
 | E12 | Workflows | - | Y | P08 Workflows | v2 |
 | E13 | Citation tool | - | Y | D06 Cite | v2 |
 | E14 | Print-library catalog | - | Y | Not placed in 09's lists; proposed v3 | v3 (proposed) |
+| E15 | User commentary (Larry, 2026-10-28) | Y | - | P04 "My commentary": the reader writes sections on a passage range (Markdown, edited in place in the Commentaries view, `SW_DOCUMENT_VIEW` live preview), kept in user.db with versions and a draft/final status, shown verse by verse beside the commentary packs (narrowest first), exported as a commentary pack to share with a class or church. Notes stay what they are: verse jottings for oneself. For the teacher or preacher who builds lessons passage by passage | planned |
 
 ### F. Teaching and preaching
 
@@ -198,6 +199,7 @@ Feature IDs, names and fit classes come from `research/09-FEATURE-PARITY - e-Swo
 | I-P15 | Preflight for a topic | P06 / P10 | v2 |
 | I-P16 | The human adjudicates | AI never a source (all); P12 My ruling (v1.5); Argue the other side (v2) | v1 / v1.5 / v2 |
 | I-P17 | Reply kit | D04 | v2 |
+| I-P18 | Frameworks explained (Larry, 2026-10-28) | Every FRAMEWORK(TM) name anywhere in the window (KACC, LOTF, LOVE, THMR, FOF, ZAKAR, PRISM, the JESUS Cornerstone, CL 54, SONG ...) is a link: a hover card says what the framework is in a sentence or two; a click opens the Frameworks tool at it. `frameworks.db`, a private pack like commentary.db, holds each framework rewritten for the common Christian reader (what it is, why it matters, the key passages, where the commentary uses it), built by `bible_build` from sidecars the writing side prepares. Where the tool lives in the window: chosen with Larry | planned |
 
 ## Where to go next
 
