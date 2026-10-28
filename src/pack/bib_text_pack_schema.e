@@ -12,7 +12,8 @@ note
 		`source_provenance' in the same file; every other table carries a NOT NULL
 		`voice' and a NOT NULL `provenance_key'.
 
-		WHAT IT HOLDS: each book and the spellings that link to it, its chapters in
+		WHAT IT HOLDS: each book and the spellings that link to it, its chapters (and
+		the names a chapter goes by: an essay's "JESUS 06: Isaac's Word") in
 		reading order, every chapter as BLOCKS (heading, paragraph, quote, list
 		item, code) - the unit a link points at, "book:<id>/<chapter>#<block>" or
 		"essay:<series>/<essay>#<block>" -
@@ -172,6 +173,7 @@ feature -- Constants
 			Result := <<
 				"CREATE TABLE book(book_id TEXT PRIMARY KEY, ordinal INTEGER NOT NULL, title TEXT NOT NULL, subtitle TEXT NOT NULL, author TEXT NOT NULL, status TEXT NOT NULL CHECK (status IN ('published', 'manuscript', 'draft')), edition TEXT NOT NULL, year INTEGER NOT NULL, description TEXT NOT NULL, source TEXT NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key))",
 				"CREATE TABLE book_alias(alias TEXT PRIMARY KEY, book_id TEXT NOT NULL REFERENCES book(book_id), voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key))",
+				"CREATE TABLE chapter_alias(alias TEXT PRIMARY KEY, book_id TEXT NOT NULL REFERENCES book(book_id), chapter INTEGER NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key))",
 				"CREATE TABLE book_chapter(book_id TEXT NOT NULL REFERENCES book(book_id), chapter INTEGER NOT NULL, title TEXT NOT NULL, kind TEXT NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key), PRIMARY KEY (book_id, chapter))",
 				"CREATE TABLE book_block(book_id TEXT NOT NULL, chapter INTEGER NOT NULL, block INTEGER NOT NULL, kind TEXT NOT NULL, level INTEGER NOT NULL, body_markdown TEXT NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key), PRIMARY KEY (book_id, chapter, block))",
 				"CREATE TABLE book_passage(book_id TEXT NOT NULL, chapter INTEGER NOT NULL, block INTEGER NOT NULL, ordinal INTEGER NOT NULL, start_book INTEGER NOT NULL, start_chapter INTEGER NOT NULL, start_verse INTEGER NOT NULL, end_chapter INTEGER NOT NULL, end_verse INTEGER NOT NULL, start_hub INTEGER NOT NULL, end_hub INTEGER NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key), PRIMARY KEY (book_id, chapter, block, ordinal))",

@@ -4367,13 +4367,35 @@ feature {NONE} -- Frameworks explained (P05.8, Larry, 2026-10-28)
 		end
 
 	page_linker: BIB_REFERENCE_LINKER
-			-- Links a page's references and, when a frameworks pack is attached, its framework names.
+			-- Links a page's references and, when the packs are attached, its framework names and the
+			-- names of Larry's books and essays ("JESUS 06: Isaac's Word", 2026-10-28).
 		do
 			create Result.make (bible.books)
 			if attached framework_names as al_names then
 				Result.set_framework_names (al_names)
 			end
+			Result.set_writing_names (writing_names)
 		end
+
+	writing_names: BIB_FRAMEWORK_NAMES
+			-- The names the books and essays go by, each with its link, read once.
+		local
+			l_names: ARRAYED_LIST [TUPLE [spelling, id: STRING_32; needs_mark: BOOLEAN]]
+		do
+			if attached writing_names_cache as al_cache then
+				Result := al_cache
+			else
+				create l_names.make (256)
+				across library_packs as ic loop
+					l_names.append (ic.name_links)
+				end
+				create Result.make (l_names)
+				writing_names_cache := Result
+			end
+		end
+
+	writing_names_cache: detachable BIB_FRAMEWORK_NAMES
+			-- `writing_names' once read.
 
 	framework_names: detachable BIB_FRAMEWORK_NAMES
 			-- The pack's spellings, read once.

@@ -631,6 +631,7 @@ feature -- Books pack (2026-10-28)
 			l_essays: BIB_BOOK_BUILDER
 			l_bible: SIMPLE_BIBLE
 			l_target: BIB_LINK_TARGET
+			l_linker: BIB_REFERENCE_LINKER
 			l_search: BIB_WRITINGS_SEARCH
 			l_ok: BOOLEAN
 		do
@@ -664,6 +665,13 @@ feature -- Books pack (2026-10-28)
 					assert_strings_equal ("addressed as an essay", "essay:sr/1#2", al_blocks.item (2).link)
 				end
 				assert_integers_equal ("Jude 5: the paragraph", 1, al_pack.blocks_citing (65, 1, 5).count)
+					-- The names a series and an essay go by link to them (the commentary's "Further reading").
+				assert_true ("the essay's name", across al_pack.name_links as al_n some al_n.spelling.same_string ("SONG 01") and al_n.id.same_string ("essay:sr/1") end)
+				assert_true ("the series' name", across al_pack.name_links as al_n some al_n.spelling.same_string ("SONG (essay series)") and al_n.id.same_string ("essay:sr") end)
+				l_linker := (create {BIB_REFERENCE_LINKER}.make (l_bible.books))
+				l_linker.set_writing_names (create {BIB_FRAMEWORK_NAMES}.make (al_pack.name_links))
+				assert_strings_equal ("linked as written", "Read [SONG 01](essay:sr/1) next.", l_linker.linked ("Read SONG 01 next."))
+				assert_false ("not inside a word", l_linker.linked ("XSONG 01").has_substring ("essay:"))
 			end
 			create l_target.make ("essay:sr/1#2", l_bible.books)
 			assert_true ("an essay link reads back", l_target.is_book and l_target.book_kind.same_string ("essays") and l_target.id.same_string ("sr") and l_target.block = 2)
