@@ -4,6 +4,14 @@ All notable changes to simple_bible are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added (2026-10-28: searching Larry's writings, plain and fuzzy; personal installer 0.7.26)
+
+- **Every private pack carries a search table** (research/20-WRITINGS-SEARCH.md): FTS5 `writing_search` (the address a reading pane follows, where it stands, the text, its voice; diacritics folded) and its vocabulary `writing_words`, filled by the builders: a book's every block, a framework's hover and sections, a commentary section's fields (not the quoted Bible text). The attach rule exempts virtual tables and FTS5's shadow tables.
+- **`BIB_WRITINGS_SEARCH`** (`SIMPLE_BIBLE.writings_search`): the Bible search's grammar (words, "phrases", word*, AND, OR, NOT, parentheses) as one FTS5 expression per pack; **fuzzy** widens each plain word to the pack's own words within one edit (up to five letters) or two (`BIB_EDIT_DISTANCE`, transpositions counting one, which fills the old unimplemented stub); by pack kind and within an address ("book:beacon", "framework:prism"); one hit a place a reader can open, best first; a pack built before search is named, not failed. The contract NEEDLE asked for: search_writings(query, pack?, within?).
+- **In the window**: the search box's scope list ends with **My writings** and **My writings (fuzzy)**; the hits fill T6's new **Writings** tab (pack, where, the words with the matches marked); a hit opens where it stands. **Command line**: `bible writings "<query>" [--fuzzy] [--pack KIND] [--within PREFIX] [--packs FOLDER]`, one hit a line.
+- `BIB_BIBLE_LINK`: the "bible:" link grammar, out of the linker (which inherits it), so a builder writes passage addresses without a book catalog.
+- Packs rebuilt with search: commentary 9.9 MB, frameworks 0.45 MB, books 10.5 MB. Snapshot option `writings`.
+
 ### Changed (2026-10-28: design scan 59, the seven HIGH findings; personal installer 0.7.25)
 
 - **The reference reader's two faces ask for a book in one order** (exact name, then a standard short form, then, in the reference box only, a prefix): the box now reads "gn 1:1", "Mt 5:3", "1pet 1:3", and prose links the compact forms ("1Pet 1:3", "1John 1:9"), which the short-form table held but never reached. Test first: the old reader fails it.

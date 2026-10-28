@@ -216,6 +216,8 @@ feature {NONE} -- Writing
 						<<a_record.id, l_chapter, l_block, l_blocks.blocks.i_th (l_block).kind, l_blocks.blocks.i_th (l_block).level, l_blocks.blocks.i_th (l_block).markdown>>)
 					check_db (a_db, {STRING_32} "A block of " + a_record.id + {STRING_32} " could not be written.")
 					block_count := block_count + 1
+					put_search_row (a_db, schema.link_text (a_record.id, l_chapter, l_block), a_record.title + {STRING_32} ", " + a_record.chapters.i_th (l_chapter).title,
+						l_blocks.blocks.i_th (l_block).markdown, "author")
 					write_indexes (a_db, a_record.id, l_chapter, l_block, a_linker.linked (l_blocks.blocks.i_th (l_block).markdown))
 					l_block := l_block + 1
 				end

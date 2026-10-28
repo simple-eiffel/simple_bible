@@ -132,6 +132,8 @@ feature {NONE} -- Initialization
 				scope_select.add_option (ic)
 			end
 			scope_select.add_option (Scope_this_book_name)
+			scope_select.add_option (Scope_writings_name)
+			scope_select.add_option (Scope_writings_fuzzy_name)
 			scope_select.select_index (1)
 			create search_box.make_lookup
 			create mode_switch.make
@@ -164,6 +166,10 @@ feature {NONE} -- Initialization
 			create chapter_rows.make (0)
 			create book_view.make (200.0)
 			create in_books_grid.make (60.0)
+			create writings_grid.make (60.0)
+			create writing_rows.make (0)
+			create writings_note.make_ui ("Choose My writings in the search scope, then search: your commentary, frameworks and books.")
+			writings_note := writings_note.with_wrap
 			create in_books_rows.make (0)
 			create listed_book.make_empty
 			create cross_refs.make (0)
@@ -372,6 +378,10 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 				scope_select.select_index (3)
 				search_box.set_text ("grace")
 				on_search
+			elseif snapshot_tab.same_string ({STRING_32} "writings") then
+				scope_select.select_index (Writings_scope_index)
+				search_box.set_text ("covenant memory")
+				on_search
 			elseif snapshot_tab.same_string ({STRING_32} "form") then
 				search_box.set_text ("G3056@N-NSM")
 				on_search
@@ -558,6 +568,7 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			books_grid.set_on_select (agent on_book_row)
 			chapters_grid.set_on_select (agent on_chapter_row)
 			in_books_grid.set_on_select (agent on_in_books_row)
+			writings_grid.set_on_select (agent on_writing_row)
 			book_view.set_on_link_click (agent on_commentary_link)
 			book_view.set_hover_card_builder (agent link_card (book_view, ?, ?))
 			book_view.set_menu_extension (agent pane_menu (results_panel, ?, ?, ?))
@@ -594,9 +605,12 @@ feature {NONE} -- Window
 		end
 
 	on_scope_change
-			-- C6.1 changed: search again in the new scope when there is a search.
+			-- C6.1 changed: search again in the new scope when there is a search (My writings: the
+			-- writings, research/20).
 		do
-			if bible.is_open and then not search_box.text.is_empty then
+			if is_writings_scope then
+				search_writings
+			elseif bible.is_open and then not search_box.text.is_empty then
 				find_verses (search_box.text)
 			end
 		end
@@ -816,6 +830,9 @@ feature {NONE} -- Window
 			in_books_grid.add_column (create {SW_GRID_COLUMN [BIB_BOOK_BLOCK]}.make ("Book", 120.0, agent {BIB_BOOK_BLOCK}.book_title))
 			in_books_grid.add_column (create {SW_GRID_COLUMN [BIB_BOOK_BLOCK]}.make ("Chapter", 140.0, agent {BIB_BOOK_BLOCK}.chapter_title))
 			in_books_grid.add_column ((create {SW_GRID_COLUMN [BIB_BOOK_BLOCK]}.make ("Text", 300.0, agent block_snippet)).growing)
+			writings_grid.add_column (create {SW_GRID_COLUMN [BIB_WRITING_HIT]}.make ("In", 110.0, agent writing_pack_name))
+			writings_grid.add_column (create {SW_GRID_COLUMN [BIB_WRITING_HIT]}.make ("Where", 240.0, agent {BIB_WRITING_HIT}.place))
+			writings_grid.add_column ((create {SW_GRID_COLUMN [BIB_WRITING_HIT]}.make ("Text", 400.0, agent writing_text)).growing)
 			frameworks_grid.add_column (create {SW_GRID_COLUMN [BIB_FRAMEWORK]}.make ("Tier", 90.0, agent {BIB_FRAMEWORK}.tier))
 			frameworks_grid.add_column (create {SW_GRID_COLUMN [BIB_FRAMEWORK]}.make ("Status", 80.0, agent {BIB_FRAMEWORK}.status))
 		end
@@ -992,11 +1009,14 @@ feature {NONE} -- Toolbar (C3-C9)
 		end
 
 	on_search
-			-- C6: a word, verse or Strong's number; several choices open P07, one word opens S3.
+			-- C6: a word, verse or Strong's number; several choices open P07, one word opens S3. With
+			-- My writings as the scope, Larry's writings are searched instead (research/20).
 		local
 			l_lookup: BIB_LOOKUP
 		do
-			if bible.is_open and then not search_box.text.is_empty and then not bible.conc_pack.is_available then
+			if is_writings_scope then
+				search_writings
+			elseif bible.is_open and then not search_box.text.is_empty and then not bible.conc_pack.is_available then
 					-- Design scan 47: the verses need no concordance, only content.db's index.
 				create choices.make (0)
 				results_grid.set_rows (choices)
@@ -1705,6 +1725,7 @@ feature {NONE} -- Two layouts (C7)
 			results_tabs.add_page ("Guides", create {SW_EMPTY_STATE}.make ("Guides come later", "A guide assembles passages, notes and word studies on one subject (P08)."))
 			results_tabs.add_page ("Census and Checks", create {SW_EMPTY_STATE}.make ("Census comes later", "Counts across books and corpora with their controls (P09)."))
 			results_tabs.add_page ("Author Library", books_page)
+			results_tabs.add_page ("Writings", writings_page)
 			results_tabs.add_page ("Study Ledger v1.5", create {SW_EMPTY_STATE}.make ("Study ledger is version 1.5", "Planned for version 1.5."))
 
 			tools_strip.add_tool ("Parallel", "Versions side by side (P02)", True, agent show_parallel)
@@ -3233,7 +3254,8 @@ feature {NONE} -- Notes (T2, P06)
 			window.add_reference_mark (interlinear_note, "P03", "Interlinear: word by word in the original, right to left for Hebrew. A click makes the word's verse the place read and opens its headword in T4.", window.Corner_top_left)
 			window.add_reference_mark (lexicon_heading, "T4", "P05 Lexicon, east: follows the clicked word. Its Frameworks tab (P05.8) explains each FRAMEWORK(TM) for the common reader; a framework named anywhere is a link: rest on it for a summary, click it to open it here.", window.Corner_top_left)
 			window.add_reference_mark (commentary_title, "T5", "P04 Commentary, east: Commentaries (Larry's commentary packs, verse by verse, every claim labelled SOURCED or DEDUCED), Cross-refs with OpenBible votes.", window.Corner_top_left)
-			window.add_reference_mark (results_tabs, "T6", "South results zone: Search Results (word choices, then the verses holding the words; click one to read it); Guides, Census, Author Library and Ledger come later.", window.Corner_top_left)
+			window.add_reference_mark (results_tabs, "T6", "South results zone: Search Results (word choices, then the verses holding the words; click one to read it); Author Library (Larry's books); Writings (the search box with My writings as its scope); Guides, Census and Ledger come later.", window.Corner_top_left)
+			window.add_reference_mark (writings_grid, "T6.5", "Writings: what the search box found in your commentary, frameworks and books (scope My writings; My writings (fuzzy) forgives a misspelt word). Click one to open it.", window.Corner_top_right)
 		end
 
 feature {NONE} -- Right-click menus and panes (Larry, 2026-10-28)
@@ -4167,6 +4189,102 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 				end
 				Result := card (l_heading, al_result.item (1).description, "Click to read it in the Author Library.")
 			end
+		end
+
+feature {NONE} -- Searching Larry's writings (T6 Writings; research/20, 2026-10-28)
+
+	Scope_writings_name: STRING_32 = "My writings"
+	Scope_writings_fuzzy_name: STRING_32 = "My writings (fuzzy)"
+			-- `scope_select''s last two choices: Larry's commentary, frameworks and books, the second
+			-- forgiving a misspelt word.
+
+	Writings_scope_index: INTEGER
+			-- `scope_select''s index of `Scope_writings_name'; the fuzzy choice follows it.
+		do
+			Result := (create {BIB_SCOPE_NAMES}).names.count + 3
+		end
+
+	is_writings_scope: BOOLEAN
+			-- Does the search box search Larry's writings?
+		do
+			Result := scope_select.selected_index >= Writings_scope_index
+		end
+
+	Writings_tab: INTEGER = 5
+			-- T6's Writings page.
+
+	writings_grid: SW_DATA_GRID [BIB_WRITING_HIT]
+	writing_rows: ARRAYED_LIST [BIB_WRITING_HIT]
+	writings_note: SW_LABEL
+			-- T6's Writings: what the search found in the writings, and how many.
+
+	writings_page: SW_COLUMN
+			-- The note over the hits.
+		do
+			create Result.make
+			Result := Result.with_gap (6.0)
+			Result.put (writings_note)
+			Result.put (writings_grid.growing)
+		end
+
+	search_writings
+			-- The search box's query over Larry's writings, the hits in T6's Writings, the pane brought
+			-- into view; "(fuzzy)" widens a plain word to the writings' words an edit or two from it.
+		local
+			l_search: BIB_WRITINGS_SEARCH
+			l_note: STRING_32
+		do
+			create writing_rows.make (0)
+			if bible.is_open and then not search_box.text.is_empty then
+				l_search := bible.writings_search
+				if l_search.pack_count = 0 then
+					writings_note.set_text ("No commentary, frameworks or books pack yet: nothing of yours to search.")
+				else
+					l_search.search (search_box.text, scope_select.selected_index > Writings_scope_index, "", "")
+					if not l_search.error_message.is_empty then
+						writings_note.set_text ({STRING_32} "The search does not read: " + l_search.error_message)
+					else
+						writing_rows.append (l_search.hits)
+						l_note := l_search.hits.count.out.to_string_32 + {STRING_32} " found in your writings for " + search_box.text.to_string_32
+						if l_search.hits.count = 1 then
+							l_note.replace_substring_all ({STRING_32} " found", {STRING_32} " place found")
+						end
+						across l_search.packs_without_search as ic loop
+							l_note.append ({STRING_32} "; " + ic + {STRING_32} " was built before search and is not searched")
+						end
+						writings_note.set_text (l_note + {STRING_32} ".")
+					end
+				end
+			end
+			writings_grid.set_rows (writing_rows)
+			bring_into_view (results_panel, results_tabs, Writings_tab)
+		end
+
+	on_writing_row (a_model: INTEGER)
+			-- A hit chosen: open it where it stands (a passage with its commentary, a framework, a
+			-- book's paragraph).
+		do
+			if a_model >= 1 and then a_model <= writing_rows.count then
+				on_commentary_link (writing_rows.i_th (a_model).address)
+			end
+		end
+
+	writing_pack_name (a_hit: BIB_WRITING_HIT): STRING_32
+			-- "Commentary", "Frameworks", "Books".
+		do
+			Result := a_hit.pack_kind.twin
+			if not Result.is_empty then
+				Result.put (Result [1].as_upper, 1)
+			end
+		end
+
+	writing_text (a_hit: BIB_WRITING_HIT): STRING_32
+			-- The hit's words on one line, its emphasis marks gone, the matched words still marked.
+		do
+			Result := a_hit.snippet.twin
+			Result.replace_substring_all ({STRING_32} "%N", {STRING_32} " ")
+			Result.prune_all ('*')
+			Result.prune_all ('`')
 		end
 
 feature {NONE} -- Frameworks explained (P05.8, Larry, 2026-10-28)

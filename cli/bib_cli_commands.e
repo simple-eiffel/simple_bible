@@ -222,6 +222,40 @@ feature -- Commands
 			not_empty: not Result.is_empty
 		end
 
+	writings (a_query: READABLE_STRING_GENERAL; a_fuzzy: BOOLEAN; a_kind, a_within: READABLE_STRING_GENERAL): STRING_32
+			-- What `a_query' finds in Larry's writings (research/20): one line a hit, its pack, address,
+			-- where it stands and its words, tab-separated; then how many.
+		require
+			query_given: not a_query.is_empty
+		local
+			l_search: BIB_WRITINGS_SEARCH
+			l_snippet: STRING_32
+		do
+			create Result.make (4000)
+			l_search := bible.writings_search
+			if l_search.pack_count = 0 then
+				Result.append_string_general ("No commentary, frameworks or books pack is attached (--packs).")
+			else
+				l_search.search (a_query, a_fuzzy, a_kind, a_within)
+				if not l_search.error_message.is_empty then
+					Result.append_string_general ("The query does not read at " + l_search.error_position.out + ": ")
+					Result.append (l_search.error_message)
+				else
+					across l_search.packs_without_search as ic loop
+						Result.append (ic + {STRING_32} ": built before search existed; rebuild it to search it.%N")
+					end
+					across l_search.hits as ic loop
+						l_snippet := ic.snippet.twin
+						l_snippet.replace_substring_all ({STRING_32} "%N", {STRING_32} " ")
+						Result.append (ic.pack_kind + {STRING_32} "%T" + ic.address + {STRING_32} "%T" + ic.place + {STRING_32} "%T" + l_snippet + {STRING_32} "%N")
+					end
+					Result.append_string_general (l_search.hits.count.out + " found.")
+				end
+			end
+		ensure
+			not_empty: not Result.is_empty
+		end
+
 feature -- Constants
 
 	Places_shown: INTEGER = 20

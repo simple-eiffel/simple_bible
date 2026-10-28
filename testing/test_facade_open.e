@@ -528,6 +528,81 @@ feature -- Books pack (2026-10-28)
 			remove_test_files
 		end
 
+	test_writings_search_finds_plain_and_fuzzy
+			-- Research/20: the frameworks and books packs carry a search table their builders fill and
+			-- the attach rule lets pass; one query grammar finds words, prefixes, phrases, AND and NOT,
+			-- within a pack kind or an address; fuzzy search finds a misspelt word from the pack's own
+			-- vocabulary; a NOT with nothing beside it is told.
+		local
+			l_frameworks: BIB_FRAMEWORK_BUILDER
+			l_books: BIB_BOOK_BUILDER
+			l_bible: SIMPLE_BIBLE
+			l_search: BIB_WRITINGS_SEARCH
+			l_edits: BIB_EDIT_DISTANCE
+			l_ok: BOOLEAN
+		do
+			create l_edits
+			assert_integers_equal ("a swap is one edit", 1, l_edits.distance ("remmeber", "remember", 2))
+			assert_integers_equal ("a missing letter is one", 1, l_edits.distance ("sabath", "sabbath", 2))
+			assert_integers_equal ("past the limit stops counting", 3, l_edits.distance ("kitten", "sitting", 2))
+			assert_integers_equal ("the same word is none", 0, l_edits.distance ("word", "word", 1))
+			close_leftovers
+			fixture.build_content (Content_file, {CONC_FIXTURE}.Content_version, False)
+			make_folder
+			make_book_folder
+			l_ok := (create {SIMPLE_FILE}.make (Kacc_file)).write_text_utf_8 (Kacc_text)
+			l_ok := (create {SIMPLE_FILE}.make (Zakar_file)).write_text_utf_8 (Zakar_text)
+			create l_frameworks.make
+			l_frameworks.build (<<Kacc_file, Zakar_file>>, Folder_frameworks_file, "")
+			assert_true ("the frameworks built", l_frameworks.last_error = Void)
+			assert_integers_equal ("two hovers and six sections searchable", 8, l_frameworks.search_row_count)
+			l_bible := bible ("", "")
+			l_bible.open
+			create l_books.make (l_bible.books)
+			l_books.build (<<Book_manifest_file>>, Folder_books_file, Folder_frameworks_file)
+			l_bible.close
+			assert_true ("the books built", l_books.last_error = Void)
+			assert_integers_equal ("every block searchable", l_books.block_count, l_books.search_row_count)
+			l_bible := bible ("", Folder)
+			l_bible.open
+			assert_true ("packs with search tables attach", l_bible.is_open and l_bible.pack_errors.is_empty)
+			l_search := l_bible.writings_search
+			assert_integers_equal ("two packs searched", 2, l_search.pack_count)
+			l_search.search ("remember", False, "", "")
+			assert_integers_equal ("a word: the one paragraph", 1, l_search.hits.count)
+			assert_strings_equal ("its address", "book:zk/1#2", l_search.hits.first.address)
+			assert_strings_equal ("its pack", "books", l_search.hits.first.pack_kind)
+			assert_true ("its words marked", l_search.hits.first.snippet.has_substring ({STRING_32} "%/171/Remember%/187/"))
+			l_search.search ("remember*", False, "", "")
+			assert_integers_equal ("a prefix: ZAKAR (its hover and question, one place) and the paragraph", 2, l_search.hits.count)
+			assert_strings_equal ("frameworks before books", "frameworks", l_search.hits.first.pack_kind)
+			l_search.search ("remember*", False, "books", "")
+			assert_integers_equal ("one pack kind", 1, l_search.hits.count)
+			l_search.search ("remember*", False, "", "framework:zakar")
+			assert_integers_equal ("within an address", 1, l_search.hits.count)
+			l_search.search ("%"contested cosmos%"", False, "", "")
+			assert_integers_equal ("a phrase", 1, l_search.hits.count)
+			assert_strings_equal ("in KACC", "framework:kacc", l_search.hits.first.address)
+			l_search.search ("cosmos NOT allegiance", False, "", "")
+			assert_integers_equal ("NOT takes away", 1, l_search.hits.count)
+			l_search.search ("contested AND allegiance", False, "", "")
+			assert_integers_equal ("AND: no one row holds both", 0, l_search.hits.count)
+			l_search.search ("remmeber", False, "", "")
+			assert_integers_equal ("misspelt, plain: nothing", 0, l_search.hits.count)
+			l_search.search ("remmeber", True, "", "")
+			assert_integers_equal ("misspelt, fuzzy: the paragraph and ZAKAR's %"remembers%" (two edits)", 2, l_search.hits.count)
+			assert_strings_equal ("ZAKAR first, then the paragraph", "book:zk/1#2", l_search.hits.last.address)
+			assert_true ("widened from the pack's words", l_search.last_expression.has_substring ("%"remember%""))
+			l_search.search ("NOT cosmos", False, "", "")
+			assert_false ("NOT alone is told", l_search.error_message.is_empty)
+			assert_true ("and finds nothing", l_search.hits.is_empty)
+			l_bible.close
+			fixture.delete_file (Kacc_file)
+			fixture.delete_file (Zakar_file)
+			remove_book_folder
+			remove_test_files
+		end
+
 feature {NONE} -- Fixture
 
 	Other_pack_file: STRING = "facade_test_other_pack.db"

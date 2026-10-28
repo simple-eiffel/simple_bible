@@ -5,6 +5,7 @@ note
 			bible english <word>
 			bible verse <book> <chapter> <verse> [--corpus CODE]
 			bible strongs <H1234 or G3056>
+			bible writings <query> [--fuzzy] [--pack KIND] [--within PREFIX]
 		--content names content.db and --conc the concordance pack. Without them, bible
 		looks in the data folder beside itself (where the installer puts both), then in
 		%LOCALAPPDATA%\simple_bible (where bible_build writes content.db); for the pack it
@@ -33,10 +34,14 @@ feature {NONE} -- Initialization
 			l_content: STRING
 		do
 			create l_cli.make
-			l_cli.set_app_info ("bible", "simple_bible from the command line: word, english, verse, strongs.", {BIB_RELEASE}.Engine_version)
+			l_cli.set_app_info ("bible", "simple_bible from the command line: word, english, verse, strongs, writings.", {BIB_RELEASE}.Engine_version)
 			l_cli.add_option_with_default ("d|content", "The content database", "path", default_content)
 			l_cli.add_option_with_default ("c|conc", "The concordance pack (conc.db)", "path", default_conc)
 			l_cli.add_option_with_default ("p|corpus", "Corpus code for word and verse (word: empty = where it occurs most)", "code", "")
+			l_cli.add_option_with_default ("k|packs", "The folder of private packs (commentary, frameworks, books)", "path", default_packs)
+			l_cli.add_flag ("f|fuzzy", "writings: a plain word also finds the packs' words an edit or two from it")
+			l_cli.add_option_with_default ("pack", "writings: one kind of pack (commentary, frameworks, books)", "kind", "")
+			l_cli.add_option_with_default ("within", "writings: addresses beginning so (book:beacon, framework:prism)", "prefix", "")
 			l_cli.parse
 			if l_cli.has_errors or l_cli.positional_args.is_empty then
 				across l_cli.errors as ic loop
@@ -52,6 +57,7 @@ feature {NONE} -- Initialization
 				else
 					create l_config.make_with_core (l_content)
 					l_config := l_config.set_conc_path (l_cli.option_value_or_default ("conc", default_conc))
+					l_config := l_config.set_pack_folder (l_cli.option_value_or_default ("packs", default_packs))
 					create l_bible.make (l_config)
 					l_bible.open
 					if attached l_bible.last_error as al_error then
@@ -63,7 +69,7 @@ feature {NONE} -- Initialization
 						create l_commands.make (l_bible)
 						print (l_commands.banner)
 						print ("%N")
-						run (l_commands, l_cli.positional_args, l_cli.option_value_or_default ("corpus", ""))
+						run (l_commands, l_cli.positional_args, l_cli.option_value_or_default ("corpus", ""), l_cli)
 						l_bible.close
 					end
 				end
@@ -76,15 +82,18 @@ feature {NONE} -- Initialization
 
 feature {NONE} -- Commands
 
-	run (a_commands: BIB_CLI_COMMANDS; a_args: LIST [STRING]; a_corpus: STRING)
-			-- Run the command `a_args' names.
+	run (a_commands: BIB_CLI_COMMANDS; a_args: LIST [STRING]; a_corpus: STRING; a_cli: SIMPLE_CLI)
+			-- Run the command `a_args' names, with the options `a_cli' read.
 		require
 			command_given: not a_args.is_empty
 		local
 			l_command: STRING
 		do
 			l_command := a_args.first.as_lower
-			if not a_commands.bible.conc_pack.is_available then
+			if l_command.same_string ("writings") and a_args.count >= 2 and then not joined (a_args).is_empty then
+					-- Larry's writings need no concordance (research/20)
+				print (a_commands.writings (joined (a_args), a_cli.has_flag ("fuzzy"), a_cli.option_value_or_default ("pack", ""), a_cli.option_value_or_default ("within", "")))
+			elseif not a_commands.bible.conc_pack.is_available then
 				print ("The concordance is not available, so there is nothing to look up.%N")
 				fail
 			elseif l_command.same_string ("word") and a_args.count = 2 and then a_args.i_th (2).is_integer_64 and then a_args.i_th (2).to_integer_64 > 0 then
@@ -142,6 +151,12 @@ feature {NONE} -- Defaults
 			Result := (create {BIB_DATA_LOCATION}).content_path
 		end
 
+	default_packs: STRING
+			-- The private packs' folder every face reads (BIB_DATA_LOCATION).
+		do
+			Result := (create {BIB_DATA_LOCATION}).pack_folder
+		end
+
 	default_conc: STRING
 			-- conc.db where every face looks for it (BIB_DATA_LOCATION); empty when none exists.
 		do
@@ -154,7 +169,8 @@ feature {NONE} -- Defaults
 		  bible english <word>
 		  bible verse <book> <chapter> <verse> [--corpus CODE]
 		  bible strongs <H1234 or G3056>
-		Options: --content <content.db>  --conc <conc.db>
+		  bible writings <query> [--fuzzy] [--pack commentary|frameworks|books] [--within book:beacon]
+		Options: --content <content.db>  --conc <conc.db>  --packs <folder>
 
 		]"
 

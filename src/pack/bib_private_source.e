@@ -81,7 +81,7 @@ feature -- Commands
 			-- `source_provenance' present; every other table carries NOT NULL `voice' and
 			-- `provenance_key'. A pack that breaks a rule is detached again and `last_error' says which.
 		local
-			l_tables: ARRAYED_LIST [STRING_8]
+			l_tables, l_virtual: ARRAYED_LIST [STRING_8]
 			l_voiced, l_sourced: BOOLEAN
 		do
 			last_error := Void
@@ -94,10 +94,22 @@ feature -- Commands
 			elseif attached a_set.database as al_db then
 				schema_version := first_integer (al_db.query ("PRAGMA " + alias_name + ".user_version"))
 				create l_tables.make (8)
-				across al_db.query ("SELECT name FROM " + alias_name + ".sqlite_master WHERE type = 'table'").rows as ic loop
-					l_tables.extend (ic.string_value ("name").to_string_8)
+				create l_virtual.make (2)
+				across al_db.query ("SELECT name, sql FROM " + alias_name + ".sqlite_master WHERE type = 'table'").rows as ic loop
+					if ic.string_value ("sql").as_upper.starts_with ("CREATE VIRTUAL TABLE") then
+						l_virtual.extend (ic.string_value ("name").to_string_8)
+					else
+						l_tables.extend (ic.string_value ("name").to_string_8)
+					end
 				end
 				l_tables.compare_objects
+					-- A virtual table (the search table, its vocabulary) and FTS5's own shadow tables
+					-- hold no rows a result shows by themselves: the rule is not theirs (research/20).
+				across l_virtual as ic_virtual loop
+					across Shadow_suffixes as ic_suffix loop
+						l_tables.prune_all (ic_virtual + ic_suffix)
+					end
+				end
 				has_required_tables := l_tables.has ("meta") and l_tables.has ("source_provenance")
 				pack_voice_column_present := True
 				across l_tables as ic loop
@@ -169,6 +181,12 @@ feature -- Commands
 		end
 
 feature -- Constants
+
+	Shadow_suffixes: ARRAY [STRING_8]
+			-- The tables FTS5 keeps for a virtual table, after its name.
+		once
+			Result := <<"_data", "_idx", "_content", "_docsize", "_config">>
+		end
 
 	Pack_schema_version: INTEGER = 1
 
