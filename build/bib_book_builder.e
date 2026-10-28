@@ -216,14 +216,14 @@ feature {NONE} -- Writing
 						<<a_record.id, l_chapter, l_block, l_blocks.blocks.i_th (l_block).kind, l_blocks.blocks.i_th (l_block).level, l_blocks.blocks.i_th (l_block).markdown>>)
 					check_db (a_db, {STRING_32} "A block of " + a_record.id + {STRING_32} " could not be written.")
 					block_count := block_count + 1
-					write_indexes (a_db, a_record.id, l_chapter, l_block, a_linker.linked (l_blocks.blocks.i_th (l_block).markdown), a_linker)
+					write_indexes (a_db, a_record.id, l_chapter, l_block, a_linker.linked (l_blocks.blocks.i_th (l_block).markdown))
 					l_block := l_block + 1
 				end
 				l_chapter := l_chapter + 1
 			end
 		end
 
-	write_indexes (a_db: SIMPLE_SQL_DATABASE; a_book: STRING_32; a_chapter, a_block: INTEGER; a_linked: STRING_32; a_linker: BIB_REFERENCE_LINKER)
+	write_indexes (a_db: SIMPLE_SQL_DATABASE; a_book: STRING_32; a_chapter, a_block: INTEGER; a_linked: STRING_32)
 			-- The block's passages and frameworks, read back from the links the linker wrote into it.
 		local
 			l_ordinal: INTEGER

@@ -19,9 +19,10 @@ note
 
 		ONE READER FOR BOTH FACES (scan 41): the reference box reads with
 		`make_forgiving' and `place_in' - the same numbers, ranges, one-chapter
-		books and bounds (1 to 176, never verse 0) - and differs only in naming
-		a book: a box forgives a prefix or lowercase ("rom 8"), prose needs the
-		exact name. The link target is written and read here only (`target_text',
+		books and bounds (1 to 176, never verse 0) - and both name a book in one
+		order (`book_named', scan 59): the catalog's exact name, then a standard
+		short form ("Heb", "1Cor"), then, for a box only, a prefix in any case
+		("rom 8", "gn 1"); prose needs a name written as a name is written. The link target is written and read here only (`target_text',
 		`target_place'). An interim reader until the reference grammar
 		(research/15) is vendored.
 	]"

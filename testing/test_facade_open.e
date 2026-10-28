@@ -448,6 +448,7 @@ feature -- Books pack (2026-10-28)
 			l_frameworks: BIB_FRAMEWORK_BUILDER
 			l_books: BIB_BOOK_BUILDER
 			l_bible: SIMPLE_BIBLE
+			l_db_writer: SIMPLE_SQL_DATABASE
 			l_ok: BOOLEAN
 		do
 			close_leftovers
@@ -500,6 +501,20 @@ feature -- Books pack (2026-10-28)
 				assert_integers_equal ("KACC: one paragraph", 1, al_pack.blocks_naming ("kacc").count)
 			end
 			l_bible.close
+				-- Scan 60: a row whose block no link can name (past 9999) is passed over, not a
+				-- broken precondition; and every private schema writes the version the attach reads.
+			l_db_writer := (create {SIMPLE_SQL_DATABASE}.make (Folder_books_file))
+			l_db_writer.execute ("INSERT INTO book_block VALUES ('zk', 1, 10000, 'paragraph', 0, 'far', 'author', 1)")
+			assert_false ("the far row written", l_db_writer.has_error)
+			l_db_writer.close
+			l_bible := bible ("", Folder)
+			l_bible.open
+			if attached l_bible.book_packs.first as al_pack then
+				assert_integers_equal ("still chapter one's seven blocks", 7, al_pack.chapter_blocks ("zk", 1).count)
+			end
+			l_bible.close
+			assert_integers_equal ("the books schema's version is the one read", {BIB_PRIVATE_SOURCE}.Pack_schema_version, (create {BIB_BOOK_SCHEMA}).Schema_version)
+			assert_true ("and the version statement says it", (create {BIB_BOOK_SCHEMA}).schema_statements.item ((create {BIB_BOOK_SCHEMA}).schema_statements.upper).same_string ("PRAGMA user_version = " + {BIB_PRIVATE_SOURCE}.Pack_schema_version.out))
 			l_ok := (create {SIMPLE_FILE}.make (Book_manifest_file)).write_text_utf_8 (Book_manifest_text_missing_file)
 			l_bible := bible ("", "")
 			l_bible.open
