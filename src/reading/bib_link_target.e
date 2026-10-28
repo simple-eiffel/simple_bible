@@ -4,8 +4,8 @@ note
 		"book:<id>[/<chapter>[#<block>]]" or "bible:<book>.<chapter>.<verse>[-<chapter>.<verse>]",
 		or none of these. Whatever acts on a link - the window's click and hover card,
 		the books builder's indexes - reads it here and asks `is_framework', `is_book'
-		or `is_bible', so a new kind of link (essays next) is one more branch here and
-		one where it is used. Each grammar is still parsed where it is written:
+		(a book or an essay, `book_kind' saying which: BIB_TEXT_PACKS) or `is_bible',
+		so a new kind of text pack needs nothing here. Each grammar is still parsed where it is written:
 		BIB_FRAMEWORK_SCHEMA's id, BIB_BOOK_SCHEMA's `link_place',
 		BIB_BIBLE_LINK's `target_range'.
 	]"
@@ -34,27 +34,26 @@ feature {NONE} -- Initialization
 					is_framework := True
 					id := l_rest
 				end
-			elseif attached (create {BIB_BOOK_SCHEMA}).link_place (text) as al_place then
-				is_book := True
-				book_kind := {BIB_BOOK_SCHEMA}.Pack_kind
-				id := al_place.book
-				chapter := al_place.chapter
-				block := al_place.block
-			elseif attached (create {BIB_ESSAY_SCHEMA}).link_place (text) as al_place then
-				is_book := True
-				book_kind := {BIB_ESSAY_SCHEMA}.Pack_kind
-				id := al_place.book
-				chapter := al_place.chapter
-				block := al_place.block
-			elseif attached (create {BIB_BIBLE_LINK}).target_range (text) as al_range
-				and then a_books.has_book (al_range.book) and then al_range.chapter >= 1
-			then
-				is_bible := True
-				book := al_range.book
-				chapter := al_range.chapter
-				verse := al_range.verse
-				end_chapter := al_range.end_chapter
-				end_verse := al_range.end_verse
+			else
+				across (create {BIB_TEXT_PACKS}).schemas as ic until is_book loop
+					if attached ic.link_place (text) as al_place then
+						is_book := True
+						book_kind := ic.Pack_kind
+						id := al_place.book
+						chapter := al_place.chapter
+						block := al_place.block
+					end
+				end
+				if not is_book and then attached (create {BIB_BIBLE_LINK}).target_range (text) as al_range
+					and then a_books.has_book (al_range.book) and then al_range.chapter >= 1
+				then
+					is_bible := True
+					book := al_range.book
+					chapter := al_range.chapter
+					verse := al_range.verse
+					end_chapter := al_range.end_chapter
+					end_verse := al_range.end_verse
+				end
 			end
 		ensure
 			text_kept: text.same_string_general (a_target)
@@ -106,5 +105,6 @@ invariant
 	book_kind_for_books: is_book = not book_kind.is_empty
 	bible_placed: is_bible = (book > 0)
 	bible_has_a_chapter: is_bible implies chapter >= 1
+	book_placed: is_book implies (chapter >= 0 and block >= 0 and (block > 0 implies chapter > 0))
 
 end

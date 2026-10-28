@@ -57,6 +57,20 @@ feature -- Constants
 		deferred
 		end
 
+	Kind_noun: STRING_32
+			-- What the library calls one entry's kind: "Book", "Essays".
+		deferred
+		ensure
+			named: not Result.is_empty
+		end
+
+	Entries_noun: STRING_8
+			-- What a build report calls the entries: "books", "series".
+		deferred
+		ensure
+			named: not Result.is_empty
+		end
+
 	Statuses: ARRAY [STRING_8]
 			-- A book's status: in print, finished but unpublished, or still being written.
 		once

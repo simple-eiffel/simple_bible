@@ -4046,16 +4046,11 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 		end
 
 	library_packs: ARRAYED_LIST [BIB_BOOK_PACK]
-			-- The attached books pack, then the essays pack (2026-10-28): the Author Library's.
+			-- The attached text packs, books then essays (2026-10-28): the Author Library's.
 		do
 			create Result.make (2)
 			if bible.is_open then
-				across bible.book_packs as ic loop
-					if ic.is_available then
-						Result.extend (ic)
-					end
-				end
-				across bible.essay_packs as ic loop
+				across bible.text_packs as ic loop
 					if ic.is_available then
 						Result.extend (ic)
 					end
@@ -4071,6 +4066,8 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 					Result := ic
 				end
 			end
+		ensure
+			of_kind: attached Result as r implies r.schema.Pack_kind.same_string_general (a_kind)
 		end
 
 	fill_books
@@ -4093,12 +4090,12 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 		end
 
 	library_kind_name (a_book: BIB_AUTHOR_BOOK): STRING_32
-			-- "Book" or "Essays".
+			-- "Book" or "Essays": its pack's kind as the library names it.
 		do
-			if a_book.pack_kind.same_string_general ({BIB_ESSAY_SCHEMA}.Pack_kind) then
-				Result := {STRING_32} "Essays"
+			if attached (create {BIB_TEXT_PACKS}).schema_of_kind (a_book.pack_kind) as al_schema then
+				Result := al_schema.Kind_noun
 			else
-				Result := {STRING_32} "Book"
+				Result := a_book.pack_kind
 			end
 		end
 
@@ -4207,7 +4204,7 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 
 	fill_in_books
 			-- T5's Books & essays: the paragraphs of the books, then of the essays, citing the
-			-- commentary's verse.
+			-- commentary's verse, the narrowest passage first within each.
 		do
 			create in_books_rows.make (0)
 			if commentary_verse > 0 and then (create {BIB_HUB_ID}).is_place (commentary_book, commentary_chapter, commentary_verse) then
@@ -4448,6 +4445,7 @@ feature {NONE} -- Frameworks explained (P05.8, Larry, 2026-10-28)
 			l_range: STRING_32
 			l_linker: BIB_REFERENCE_LINKER
 			l_mentions: ARRAYED_LIST [BIB_BOOK_BLOCK]
+			l_more: INTEGER
 		do
 			l_linker := page_linker
 			create Result.make (2000)
@@ -4466,22 +4464,27 @@ feature {NONE} -- Frameworks explained (P05.8, Larry, 2026-10-28)
 				end
 				Result.append ({STRING_32} "%N")
 			end
+				-- At most `Book_mentions_shown' from each pack, so the essays show beside a book that
+				-- names it often (scan 62).
 			create l_mentions.make (0)
 			across library_packs as ic loop
 				if attached ic.blocks_naming (a_framework.id) as al_blocks and then al_blocks.is_success then
 					across 1 |..| al_blocks.count as al_i loop
-						l_mentions.extend (al_blocks.item (al_i))
+						if al_i <= Book_mentions_shown then
+							l_mentions.extend (al_blocks.item (al_i))
+						else
+							l_more := l_more + 1
+						end
 					end
 				end
 			end
 			if not l_mentions.is_empty then
 				Result.append ({STRING_32} "## Where the books and essays discuss it%N%N")
-				across 1 |..| l_mentions.count.min (Book_mentions_shown) as al_i loop
-					Result.append ({STRING_32} "- [" + l_mentions.i_th (al_i).book_title + {STRING_32} ", " + l_mentions.i_th (al_i).chapter_title + {STRING_32} "]("
-						+ l_mentions.i_th (al_i).link + {STRING_32} "): " + l_mentions.i_th (al_i).snippet (90) + {STRING_32} "%N")
+				across l_mentions as ic loop
+					Result.append ({STRING_32} "- [" + ic.book_title + {STRING_32} ", " + ic.chapter_title + {STRING_32} "](" + ic.link + {STRING_32} "): " + ic.snippet (90) + {STRING_32} "%N")
 				end
-				if l_mentions.count > Book_mentions_shown then
-					Result.append ({STRING_32} "- ... and " + (l_mentions.count - Book_mentions_shown).out.to_string_32 + {STRING_32} " more%N")
+				if l_more > 0 then
+					Result.append ({STRING_32} "- ... and " + l_more.out.to_string_32 + {STRING_32} " more%N")
 				end
 				Result.append ({STRING_32} "%N")
 			end

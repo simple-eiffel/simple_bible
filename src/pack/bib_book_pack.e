@@ -14,13 +14,27 @@ note
 
 class
 	BIB_BOOK_PACK
-		-- (Also the essays pack's reader: BIB_ESSAY_PACK names its schema, 2026-10-28.)
+		-- (The reader of every text pack, books or essays: its schema is given at creation, scan 62.)
 
 inherit
 	BIB_PRIVATE_PACK_READER
 
 create
-	make
+	make_with_schema
+
+feature {NONE} -- Initialization
+
+	make_with_schema (a_sources: BIB_SOURCE_SET; a_alias: READABLE_STRING_8; a_title: READABLE_STRING_GENERAL; a_schema: BIB_TEXT_PACK_SCHEMA)
+			-- The pack of `a_schema''s kind attached as `a_alias' on `a_sources', titled `a_title'.
+		require
+			alias_not_empty: not a_alias.is_empty
+		do
+			schema := a_schema
+			make (a_sources, a_alias, a_title)
+		ensure
+			schema_set: schema = a_schema
+			alias_set: pack_alias.same_string (a_alias)
+		end
 
 feature -- Access
 
@@ -190,9 +204,6 @@ feature {NONE} -- Implementation
 feature -- Kind
 
 	schema: BIB_TEXT_PACK_SCHEMA
-			-- The pack's kind and link grammar: the books'.
-		do
-			create {BIB_BOOK_SCHEMA} Result
-		end
+			-- The pack's kind and link grammar.
 
 end

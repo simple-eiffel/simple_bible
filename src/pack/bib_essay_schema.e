@@ -37,4 +37,8 @@ feature -- Constants
 	Starts_at_title: BOOLEAN = True
 			-- An essay begins at its "# " title.
 
+	Kind_noun: STRING_32 = "Essays"
+
+	Entries_noun: STRING_8 = "series"
+
 end

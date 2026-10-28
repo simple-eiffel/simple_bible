@@ -213,30 +213,46 @@ feature -- Status
 			across framework_packs as ic loop
 				Result.add_pack (ic, {BIB_FRAMEWORK_SCHEMA}.Pack_kind)
 			end
-			across book_packs as ic loop
-				Result.add_pack (ic, {BIB_BOOK_SCHEMA}.Pack_kind)
-			end
-			across essay_packs as ic loop
-				Result.add_pack (ic, {BIB_ESSAY_SCHEMA}.Pack_kind)
+			across text_packs as ic loop
+				Result.add_pack (ic, ic.schema.Pack_kind)
 			end
 		end
 
-	essay_packs: ARRAYED_LIST [BIB_ESSAY_PACK]
-			-- The attached packs whose kind is "essays" (BIB_ESSAY_SCHEMA, 2026-10-28).
+	text_packs: ARRAYED_LIST [BIB_BOOK_PACK]
+			-- The attached packs of Larry's long texts, books then essays (BIB_TEXT_PACKS: one loop for
+			-- every kind, scan 62).
+		do
+			create Result.make (2)
+			across (create {BIB_TEXT_PACKS}).schemas as ic_schema loop
+				across packs_of_kind (ic_schema.Pack_kind) as ic loop
+					Result.extend (create {BIB_BOOK_PACK}.make_with_schema (sources, ic.alias_name, ic.pack_title, ic_schema))
+				end
+			end
+		end
+
+	text_packs_of_kind (a_kind: READABLE_STRING_GENERAL): ARRAYED_LIST [BIB_BOOK_PACK]
+			-- `text_packs' of kind `a_kind' ("books", "essays").
 		do
 			create Result.make (1)
-			across packs_of_kind ({BIB_ESSAY_SCHEMA}.Pack_kind) as ic loop
-				Result.extend (create {BIB_ESSAY_PACK}.make (sources, ic.alias_name, ic.pack_title))
+			across text_packs as ic loop
+				if ic.schema.Pack_kind.same_string_general (a_kind) then
+					Result.extend (ic)
+				end
 			end
+		ensure
+			all_of_kind: across Result as al_pack all al_pack.schema.Pack_kind.same_string_general (a_kind) end
 		end
 
 	book_packs: ARRAYED_LIST [BIB_BOOK_PACK]
-			-- The attached packs whose kind is "books" (BIB_BOOK_SCHEMA, 2026-10-28).
+			-- The attached books packs (2026-10-28).
 		do
-			create Result.make (1)
-			across packs_of_kind ({BIB_BOOK_SCHEMA}.Pack_kind) as ic loop
-				Result.extend (create {BIB_BOOK_PACK}.make (sources, ic.alias_name, ic.pack_title))
-			end
+			Result := text_packs_of_kind ({BIB_BOOK_SCHEMA}.Pack_kind)
+		end
+
+	essay_packs: ARRAYED_LIST [BIB_BOOK_PACK]
+			-- The attached essays packs (2026-10-28).
+		do
+			Result := text_packs_of_kind ({BIB_ESSAY_SCHEMA}.Pack_kind)
 		end
 
 	packs_found: INTEGER

@@ -34,4 +34,8 @@ feature -- Constants
 	Starts_at_title: BOOLEAN = False
 			-- A book's chapter is read whole (its front matter and status line aside).
 
+	Kind_noun: STRING_32 = "Book"
+
+	Entries_noun: STRING_8 = "books"
+
 end
