@@ -202,6 +202,15 @@ feature -- Status
 			end
 		end
 
+	book_packs: ARRAYED_LIST [BIB_BOOK_PACK]
+			-- The attached packs whose kind is "books" (BIB_BOOK_SCHEMA, 2026-10-28).
+		do
+			create Result.make (1)
+			across packs_of_kind ({BIB_BOOK_SCHEMA}.Pack_kind) as ic loop
+				Result.extend (create {BIB_BOOK_PACK}.make (sources, ic.alias_name, ic.pack_title))
+			end
+		end
+
 	packs_found: INTEGER
 			-- `pack_count' as the last `open' counted it, once (design scan 29: the folder was
 			-- scanned up to five times per open, and the postconditions rescanned it).

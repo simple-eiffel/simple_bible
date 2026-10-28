@@ -436,6 +436,83 @@ feature -- Frameworks pack (2026-10-28)
 			remove_test_files
 		end
 
+feature -- Books pack (2026-10-28)
+
+	test_book_pack_builds_attaches_and_answers
+			-- A book manifest and its two chapter files become a books pack (BIB_BOOK_BUILDER): the
+			-- chapters split into blocks with the inventory's cleaning (front matter, a draft status
+			-- line, rules, a skipped section, an image and a typesetting placeholder left out; a
+			-- footnote and a wiki link read plainly), every reference and framework name indexed by
+			-- the linker's own links; the pack attaches and answers a verse and a framework.
+		local
+			l_frameworks: BIB_FRAMEWORK_BUILDER
+			l_books: BIB_BOOK_BUILDER
+			l_bible: SIMPLE_BIBLE
+			l_ok: BOOLEAN
+		do
+			close_leftovers
+			fixture.build_content (Content_file, {CONC_FIXTURE}.Content_version, False)
+			make_folder
+			make_book_folder
+			l_ok := (create {SIMPLE_FILE}.make (Kacc_file)).write_text_utf_8 (Kacc_text)
+			l_ok := (create {SIMPLE_FILE}.make (Zakar_file)).write_text_utf_8 (Zakar_text)
+			create l_frameworks.make
+			l_frameworks.build (<<Kacc_file, Zakar_file>>, Folder_frameworks_file, "")
+			assert_true ("the frameworks built", l_frameworks.last_error = Void)
+			l_bible := bible ("", "")
+			l_bible.open
+			create l_books.make (l_bible.books)
+			l_books.build (<<Book_manifest_file>>, Folder_books_file, Folder_frameworks_file)
+			l_bible.close
+			assert_true ("built", l_books.last_error = Void)
+			assert_integers_equal ("one book", 1, l_books.book_count)
+			assert_integers_equal ("two chapters", 2, l_books.chapter_count)
+			assert_integers_equal ("seven blocks, then two", 9, l_books.block_count)
+			assert_integers_equal ("Jude 5-7 and Jude 9 cited", 2, l_books.passage_count)
+			assert_integers_equal ("KACC named once", 1, l_books.framework_use_count)
+			l_bible := bible ("", Folder)
+			l_bible.open
+			assert_true ("open with the packs", l_bible.is_open and l_bible.pack_errors.is_empty)
+			assert_integers_equal ("one books pack", 1, l_bible.book_packs.count)
+			if attached l_bible.book_packs.first as al_pack then
+				assert_strings_equal ("titled", "Larry Rix: Books", al_pack.title)
+				assert_integers_equal ("one book listed", 1, al_pack.books.count)
+				assert_strings_equal ("its title", "Remember", al_pack.books.item (1).title)
+				if attached al_pack.book ("zk") as al_book and then al_book.count = 1 then
+					assert_integers_equal ("its chapters", 2, al_book.item (1).chapters.count)
+					assert_strings_equal ("in order", "Two", al_book.item (1).chapter_title (2))
+				else
+					assert_true ("the book read whole", False)
+				end
+				if attached al_pack.chapter_blocks ("zk", 1) as al_blocks then
+					assert_integers_equal ("chapter one's blocks", 7, al_blocks.count)
+					assert_strings_equal ("the status line and rule left out: the heading first", "The Word", al_blocks.item (1).markdown)
+					assert_strings_equal ("a footnote marker read plainly", {STRING_32} "Remember Jude 5-7 and KACC%/8482/ here.[1]", al_blocks.item (2).markdown)
+					assert_strings_equal ("the working notes left out", "Real", al_blocks.item (3).markdown)
+					assert_strings_equal ("a quote is a quote", "quote", al_blocks.item (4).kind)
+					assert_strings_equal ("as written", "> A quote from Jude 9.", al_blocks.item (4).markdown)
+					assert_strings_equal ("the note read plainly, its wiki link as its label", "[1] A note on the book.", al_blocks.item (7).markdown)
+				end
+				assert_integers_equal ("Jude 6: the paragraph citing Jude 5-7", 1, al_pack.blocks_citing (65, 1, 6).count)
+				assert_strings_equal ("its address", "book:zk/1#2", al_pack.blocks_citing (65, 1, 6).item (1).link)
+				assert_integers_equal ("Jude 9: the quote", 1, al_pack.blocks_citing (65, 1, 9).count)
+				assert_integers_equal ("John 3:16: nothing", 0, al_pack.blocks_citing (43, 3, 16).count)
+				assert_integers_equal ("KACC: one paragraph", 1, al_pack.blocks_naming ("kacc").count)
+			end
+			l_bible.close
+			l_ok := (create {SIMPLE_FILE}.make (Book_manifest_file)).write_text_utf_8 (Book_manifest_text_missing_file)
+			l_bible := bible ("", "")
+			l_bible.open
+			create l_books.make (l_bible.books)
+			l_books.build (<<Book_manifest_file>>, Folder_books_file, "")
+			l_bible.close
+			assert_true ("a missing chapter file refused, by name", attached l_books.last_error as al_e and then al_e.has_substring ("no chapter file"))
+			fixture.delete_file (Kacc_file)
+			fixture.delete_file (Zakar_file)
+			remove_book_folder
+			remove_test_files
+		end
+
 feature {NONE} -- Fixture
 
 	Other_pack_file: STRING = "facade_test_other_pack.db"
@@ -476,6 +553,64 @@ feature {NONE} -- Fixture
 		end
 
 	Folder_frameworks_file: STRING = "facade_test_packs\frameworks.db"
+	Folder_books_file: STRING = "facade_test_packs\books.db"
+	Book_folder: STRING = "facade_test_book"
+	Book_manifest_file: STRING = "facade_test_zk.book.json"
+
+	Book_manifest_text: STRING
+			-- A book of two chapters, one section of working notes to skip.
+		once
+			Result := "{%"id%":%"zk%",%"title%":%"Remember%",%"subtitle%":%"A test%",%"author%":%"Larry Rix%",%"status%":%"published%",%"edition%":%"test%",%"year%":2026,"
+				+ "%"aliases%":[%"Remember (the book)%"],%"description%":%"A test book.%",%"root%":%"facade_test_book%",%"chapters%":[{%"title%":%"The Word%",%"file%":%"ch1.md%",%"kind%":%"chapter%"},"
+				+ "{%"title%":%"Two%",%"file%":%"ch2.md%",%"kind%":%"back%"}],%"skip_headings%":[%"Working notes%"],%"source%":%"test%"}"
+		end
+
+	Book_manifest_text_missing_file: STRING
+			-- The same, naming a chapter file that is not there.
+		once
+			Result := Book_manifest_text.twin
+			Result.replace_substring_all ("ch2.md", "nowhere.md")
+		end
+
+	Chapter_one_text: STRING_32
+			-- Front matter, a draft status line and a rule before the heading; a reference range and a
+			-- framework with a footnote; working notes to skip; a quote citing a verse; two items; an
+			-- image and a placeholder to leave out; the footnote's note with a wiki link.
+		once
+			Result := {STRING_32} "---%Ntitle: test%N---%N*Draft %/8212/ first draft*%N%N---%N%N# The Word%N%NRemember Jude 5-7 and KACC%/8482/ here.[^1]%N%N## Working notes%N%Nsecret%N%N"
+				+ {STRING_32} "## Real%N%N> A quote from Jude 9.%N%N- item one%N- item two%N%N![pic](a.png)%N%N*[Copyright page %/8212/ to be supplied.]*%N%N[^1]: A note on [[ZAKAR|the book]].%N"
+		end
+
+	Chapter_two_text: STRING_32
+		once
+			Result := {STRING_32} "# Two%N%NNothing cited.%N"
+		end
+
+	make_book_folder
+			-- The test book's folder, chapters and manifest.
+		local
+			l_ok: BOOLEAN
+		do
+			if not (create {SIMPLE_FILE}.make (Book_folder)).is_directory then
+				l_ok := (create {SIMPLE_FILE}.make (Book_folder)).create_directory
+			end
+			l_ok := (create {SIMPLE_FILE}.make (Book_folder + "\ch1.md")).write_text_utf_8 (Chapter_one_text)
+			l_ok := (create {SIMPLE_FILE}.make (Book_folder + "\ch2.md")).write_text_utf_8 (Chapter_two_text)
+			l_ok := (create {SIMPLE_FILE}.make (Book_manifest_file)).write_text_utf_8 (Book_manifest_text)
+		end
+
+	remove_book_folder
+			-- The test book's files and folder gone.
+		local
+			l_ok: BOOLEAN
+		do
+			fixture.delete_file (Book_folder + "\ch1.md")
+			fixture.delete_file (Book_folder + "\ch2.md")
+			fixture.delete_file (Book_manifest_file)
+			if (create {SIMPLE_FILE}.make (Book_folder)).is_directory then
+				l_ok := (create {SIMPLE_FILE}.make (Book_folder)).delete_directory
+			end
+		end
 	Kacc_file: STRING = "facade_test_kacc.framework.json"
 	Zakar_file: STRING = "facade_test_zakar.framework.json"
 
@@ -582,6 +717,7 @@ feature {NONE} -- Fixture
 			fixture.delete_file (Folder_pack_file)
 			fixture.delete_file (Folder_other_file)
 			fixture.delete_file (Folder_frameworks_file)
+			fixture.delete_file (Folder_books_file)
 			if not (create {SIMPLE_FILE}.make (Folder)).is_directory then
 				l_ok := (create {SIMPLE_FILE}.make (Folder)).create_directory
 			end
@@ -598,6 +734,7 @@ feature {NONE} -- Fixture
 			fixture.delete_file (Folder_pack_file)
 			fixture.delete_file (Folder_other_file)
 			fixture.delete_file (Folder_frameworks_file)
+			fixture.delete_file (Folder_books_file)
 			if (create {SIMPLE_FILE}.make (Folder)).is_directory then
 				l_ok := (create {SIMPLE_FILE}.make (Folder)).delete_directory
 			end
