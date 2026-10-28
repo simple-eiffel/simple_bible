@@ -178,12 +178,36 @@ feature -- Tests
 			assert_true ("whole chapters", l_linker.linked ("Matthew 5-7").has_substring ("](bible:40.5.0-7.0)"))
 			assert_true ("a range in a book of one chapter", l_linker.linked ("Jude 5-7").has_substring ("](bible:65.1.5-1.7)"))
 			assert_true ("a range that runs backward is its first place", l_linker.linked ("Exodus 3:15-14").has_substring ("](bible:2.3.15)"))
+				-- Design scan 57: a target no reference writes reads as none, so a hover never walks
+				-- a thousand chapters; a long digit run never overflows into a link.
+			assert_true ("a passage past any book is none", l_linker.target_range ("bible:1.1.1-999999999.1") = Void)
+			assert_true ("a signed number is none", l_linker.target_range ("bible:-1.1.1") = Void)
+			assert_true ("a passage running backward is none", l_linker.target_range ("bible:2.3.15-3.14") = Void)
+			assert_true ("book 0 is none", l_linker.target_range ("bible:0.1.1") = Void)
+			assert_false ("a long digit run is no reference", l_linker.linked ("Genesis 99999999999:1").has_substring ("bible:"))
 			assert_true ("a chapter", l_out.has_substring ("[Matthew 5](bible:40.5.0)"))
 			assert_true ("one chapter: the number is the verse", l_out.has_substring ("[Jude 9](bible:65.1.9)"))
 			assert_true ("prose untouched", l_out.has_substring ("it is 5 words"))
 			l_out := l_linker.linked ("[Genesis 1:1](https://example.org) and `Genesis 1:2`")
 			assert_strings_equal ("links and code untouched", "[Genesis 1:1](https://example.org) and `Genesis 1:2`", l_out)
 			finish
+		end
+
+	test_program_version_is_the_resource_version
+			-- 2026-10-28: the caption and Help > About show BIB_RELEASE.Program_version; the installer
+			-- reads bible_gui.rc's ProductVersion. One version, or the test says which one moved.
+		local
+			s: SOURCE_SCAN
+			l_rc, l_numbers: STRING_8
+		do
+			l_numbers := {BIB_RELEASE}.Program_version.twin
+			l_numbers.replace_substring_all (".", ",")
+			create s
+			l_rc := s.file_text ("bible_gui.rc")
+			assert_true ("bible_gui.rc read", not l_rc.is_empty)
+			assert_true ("ProductVersion is Program_version", l_rc.has_substring ("VALUE %"ProductVersion%", %"" + {BIB_RELEASE}.Program_version + "%""))
+			assert_true ("FileVersion is Program_version", l_rc.has_substring ("VALUE %"FileVersion%", %"" + {BIB_RELEASE}.Program_version + "%""))
+			assert_true ("PRODUCTVERSION numbers are Program_version", l_rc.has_substring ("PRODUCTVERSION " + l_numbers + ",0"))
 		end
 
 	test_reference_box_reads_ranges_and_one_chapter_books
