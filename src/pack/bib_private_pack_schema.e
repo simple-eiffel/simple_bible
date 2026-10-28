@@ -68,7 +68,4 @@ feature -- Constants
 		deferred
 		end
 
-invariant
-	the_version_read: Schema_version = {BIB_PRIVATE_SOURCE}.Pack_schema_version
-
 end

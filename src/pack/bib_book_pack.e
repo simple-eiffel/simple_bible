@@ -147,7 +147,10 @@ feature {NONE} -- Implementation
 			if attached last_rows as al_rows then
 				create l_list.make (al_rows.rows.count)
 				across al_rows.rows as ic loop
-					if (create {BIB_BOOK_SCHEMA}).is_book_id (ic.string_value ("book_id")) and then ic.integer_value ("chapter") >= 1 and then ic.integer_value ("block") >= 1 then
+						-- BIB_BOOK_BLOCK's preconditions, so a row a link could not name is passed over (scan 60)
+					if (create {BIB_BOOK_SCHEMA}).is_book_id (ic.string_value ("book_id")) and then ic.integer_value ("chapter") >= 1 and then ic.integer_value ("block") >= 1
+						and then ic.integer_value ("chapter") <= {BIB_BOOK_SCHEMA}.Max_part and then ic.integer_value ("block") <= {BIB_BOOK_SCHEMA}.Max_part
+					then
 						l_list.extend (create {BIB_BOOK_BLOCK}.make (ic.string_value ("book_id"), ic.integer_value ("chapter"), ic.integer_value ("block"),
 							ic.string_value ("kind"), ic.integer_value ("level"), ic.string_value ("body_markdown"), ic.string_value ("book_title"),
 							ic.string_value ("chapter_title"), l_provenance))
