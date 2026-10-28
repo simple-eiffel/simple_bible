@@ -53,18 +53,8 @@ feature -- Access
 
 	sidecars_in (a_folder: READABLE_STRING_GENERAL): ARRAYED_LIST [STRING_32]
 			-- Every `*.book.json' in the folder `a_folder'; or `a_folder' itself when it names a file.
-		local
-			l_root: SIMPLE_FILE
 		do
-			create Result.make (8)
-			create l_root.make (a_folder)
-			if l_root.is_directory then
-				across l_root.files_with_extension (".book.json") as ic_file loop
-					Result.extend (a_folder.to_string_32 + {STRING_32} "\" + ic_file)
-				end
-			elseif l_root.is_file then
-				Result.extend (a_folder.to_string_32)
-			end
+			Result := sidecars_with (a_folder, ".book.json")
 		end
 
 feature -- Commands
@@ -96,17 +86,9 @@ feature -- Commands
 				if not framework_spellings.is_empty then
 					l_linker.set_framework_names (create {BIB_FRAMEWORK_NAMES}.make (framework_spellings))
 				end
-				l_db := fresh_pack (a_pack, schema.Schema_statements)
+				l_db := begin_private_pack (a_pack, schema, "bible_build --books")
+				put_private_provenance (l_db, 1, "books manifests", schema.Pack_title, "Larry's books as the manuscripts hold them, corrections included.")
 				if last_error = Void then
-					put_meta (l_db, "pack_kind", schema.Pack_kind.to_string_32)
-					put_meta (l_db, "title", schema.Pack_title.to_string_32)
-					put_meta (l_db, "author", {STRING_32} "Larry Rix")
-					put_meta (l_db, "builder", {STRING_32} "bible_build --books")
-					if last_error = Void then
-						l_db.execute_with_args ("INSERT INTO source_provenance VALUES (1, ?, ?, 'private', 1, 0, 1, 'Larry Rix', ?)",
-							<<{STRING_32} "books manifests", schema.Pack_title.to_string_32, {STRING_32} "Larry's books as the manuscripts hold them, corrections included.">>)
-						check_db (l_db, "The pack's provenance could not be written.")
-					end
 					from i := 1 until i > records.count or last_error /= Void loop
 						write_book (l_db, records.i_th (i), i, l_linker)
 						i := i + 1
@@ -203,14 +185,6 @@ feature {NONE} -- Reading and checking
 			end
 		end
 
-	fail_unless (a_condition: BOOLEAN; a_file, a_rule: READABLE_STRING_GENERAL)
-			-- Unless `a_condition': `last_error' names `a_file' and `a_rule' (the first failure stands).
-		do
-			if not a_condition and last_error = Void then
-				last_error := a_file.to_string_32 + {STRING_32} ": " + a_rule.to_string_32
-			end
-		end
-
 feature {NONE} -- Writing
 
 	write_book (a_db: SIMPLE_SQL_DATABASE; a_record: like records.item; a_ordinal: INTEGER; a_linker: BIB_REFERENCE_LINKER)
@@ -229,12 +203,14 @@ feature {NONE} -- Writing
 				check_db (a_db, {STRING_32} "An alias of " + a_record.id + {STRING_32} " could not be written.")
 			end
 			create l_blocks.make (a_record.skip_headings)
+			fail_unless (a_record.chapters.count <= schema.Max_part, a_record.file, {STRING_32} "more chapters than a link can name")
 			from l_chapter := 1 until l_chapter > a_record.chapters.count or last_error /= Void loop
 				a_db.execute_with_args ("INSERT INTO book_chapter VALUES (?, ?, ?, ?, 'author', 1)",
 					<<a_record.id, l_chapter, a_record.chapters.i_th (l_chapter).title, a_record.chapters.i_th (l_chapter).kind>>)
 				check_db (a_db, {STRING_32} "A chapter of " + a_record.id + {STRING_32} " could not be written.")
 				chapter_count := chapter_count + 1
 				l_blocks.split ((create {SIMPLE_FILE}.make (chapter_path (a_record.root, a_record.chapters.i_th (l_chapter).file))).read_text_utf_8)
+				fail_unless (l_blocks.blocks.count <= schema.Max_part, a_record.chapters.i_th (l_chapter).file, {STRING_32} "more blocks than a link can name")
 				from l_block := 1 until l_block > l_blocks.blocks.count or last_error /= Void loop
 					a_db.execute_with_args ("INSERT INTO book_block VALUES (?, ?, ?, ?, ?, ?, 'author', 1)",
 						<<a_record.id, l_chapter, l_block, l_blocks.blocks.i_th (l_block).kind, l_blocks.blocks.i_th (l_block).level, l_blocks.blocks.i_th (l_block).markdown>>)
@@ -254,26 +230,27 @@ feature {NONE} -- Writing
 			l_hub: BIB_HUB_ID
 			l_start, l_end: INTEGER_64
 			l_seen: ARRAYED_LIST [STRING_32]
+			l_target: BIB_LINK_TARGET
 		do
 			create l_hub
 			create l_seen.make (4)
 			l_seen.compare_objects
 			across link_targets (a_linked) as ic until last_error /= Void loop
-				if attached a_linker.target_range (ic) as al_range and then catalog.has_book (al_range.book) then
-					l_start := l_hub.hub_of_place (al_range.book, al_range.chapter, al_range.verse.max (1))
-					l_end := l_hub.hub_of_place (al_range.book, al_range.end_chapter,
-						(if al_range.end_verse = 0 then l_hub.Max_part else al_range.end_verse end))
+				create l_target.make (ic, catalog)
+				if l_target.is_bible then
+					l_start := l_hub.hub_of_place (l_target.book, l_target.chapter, l_target.verse.max (1))
+					l_end := l_hub.hub_of_place (l_target.book, l_target.end_chapter,
+						(if l_target.end_verse = 0 then l_hub.Max_part else l_target.end_verse end))
 					if l_start > 0 and l_end >= l_start then
 						l_ordinal := l_ordinal + 1
 						a_db.execute_with_args ("INSERT INTO book_passage VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'author', 1)",
-							<<a_book, a_chapter, a_block, l_ordinal, al_range.book, al_range.chapter, al_range.verse, al_range.end_chapter, al_range.end_verse, l_start, l_end>>)
+							<<a_book, a_chapter, a_block, l_ordinal, l_target.book, l_target.chapter, l_target.verse, l_target.end_chapter, l_target.end_verse, l_start, l_end>>)
 						check_db (a_db, "A passage could not be indexed.")
 						passage_count := passage_count + 1
 					end
-				elseif ic.starts_with ({BIB_FRAMEWORK_SCHEMA}.Link_prefix) and then not l_seen.has (ic) then
-					l_seen.extend (ic)
-					a_db.execute_with_args ("INSERT INTO book_framework VALUES (?, ?, ?, ?, 'author', 1)",
-						<<a_book, a_chapter, a_block, ic.substring ({BIB_FRAMEWORK_SCHEMA}.Link_prefix.count + 1, ic.count)>>)
+				elseif l_target.is_framework and then not l_seen.has (l_target.id) then
+					l_seen.extend (l_target.id)
+					a_db.execute_with_args ("INSERT INTO book_framework VALUES (?, ?, ?, ?, 'author', 1)", <<a_book, a_chapter, a_block, l_target.id>>)
 					check_db (a_db, "A framework could not be indexed.")
 					framework_use_count := framework_use_count + 1
 				end

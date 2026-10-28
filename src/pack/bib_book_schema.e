@@ -23,6 +23,12 @@ note
 class
 	BIB_BOOK_SCHEMA
 
+inherit
+	BIB_PRIVATE_PACK_SCHEMA
+		rename
+			is_lowercase_id as is_book_id
+		end
+
 feature -- Constants
 
 	Pack_kind: STRING_8 = "books"
@@ -32,9 +38,6 @@ feature -- Constants
 			-- The books pack's file in the packs folder.
 
 	Pack_title: STRING_8 = "Larry Rix: Books"
-
-	Schema_version: INTEGER = 1
-			-- The pack's `user_version'.
 
 	Link_prefix: STRING_32 = "book:"
 			-- A link to a book, a chapter or a block: "book:zakar", "book:zakar/4", "book:zakar/4#12".
@@ -63,17 +66,16 @@ feature -- Constants
 			Result := across a_words as ic some ic.same_string_general (a_word) end
 		end
 
-	is_book_id (a_id: READABLE_STRING_GENERAL): BOOLEAN
-			-- Lowercase ASCII letters and digits, at least one.
-		do
-			Result := not a_id.is_empty and then across a_id.to_string_32 as al_c all (al_c >= 'a' and al_c <= 'z') or (al_c >= '0' and al_c <= '9') end
-		end
+	Max_part: INTEGER = 9999
+			-- The highest chapter or block number a link names (four digits; blocks restart at 1 in
+			-- each chapter, so this is generous: scan 59).
 
 	link_text (a_book: READABLE_STRING_GENERAL; a_chapter, a_block: INTEGER): STRING_32
 			-- "book:zakar", "book:zakar/4" (`a_block' 0) or "book:zakar/4#12" (`a_chapter' 0: the book).
 		require
 			book_usable: is_book_id (a_book)
 			not_negative: a_chapter >= 0 and a_block >= 0
+			within_four_digits: a_chapter <= Max_part and a_block <= Max_part
 			block_in_a_chapter: a_block > 0 implies a_chapter > 0
 		do
 			Result := Link_prefix + a_book.to_string_32
@@ -124,22 +126,21 @@ feature -- Constants
 				end
 			end
 		ensure
-			sane: attached Result as r implies (is_book_id (r.book) and r.chapter >= 0 and r.block >= 0 and (r.block > 0 implies r.chapter > 0))
+			sane: attached Result as r implies (is_book_id (r.book) and r.chapter >= 0 and r.block >= 0 and r.chapter <= Max_part and r.block <= Max_part
+				and (r.block > 0 implies r.chapter > 0))
 		end
 
 	is_count (a_text: READABLE_STRING_32): BOOLEAN
-			-- Is `a_text' 1 to 4 digits, not zero?
+			-- Is `a_text' 1 to 4 digits, 1 to `Max_part'?
 		do
 			Result := not a_text.is_empty and then a_text.count <= 4 and then across a_text as al_c all al_c.is_digit end
-				and then a_text.to_integer > 0
+				and then a_text.to_integer > 0 and then a_text.to_integer <= Max_part
 		end
 
-	Schema_statements: ARRAY [STRING_8]
-			-- The tables of a new books pack, then its version.
+	pack_tables: ARRAY [STRING_8]
+			-- The books pack's own tables.
 		once
 			Result := <<
-				"CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)",
-				"CREATE TABLE source_provenance(provenance_key INTEGER PRIMARY KEY, source_key TEXT NOT NULL, edition TEXT NOT NULL, license_id TEXT NOT NULL, non_commercial INTEGER NOT NULL, share_alike INTEGER NOT NULL, restricted INTEGER NOT NULL, credit TEXT NOT NULL, caveat TEXT NOT NULL)",
 				"CREATE TABLE book(book_id TEXT PRIMARY KEY, ordinal INTEGER NOT NULL, title TEXT NOT NULL, subtitle TEXT NOT NULL, author TEXT NOT NULL, status TEXT NOT NULL CHECK (status IN ('published', 'manuscript', 'draft')), edition TEXT NOT NULL, year INTEGER NOT NULL, description TEXT NOT NULL, source TEXT NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key))",
 				"CREATE TABLE book_alias(alias TEXT PRIMARY KEY, book_id TEXT NOT NULL REFERENCES book(book_id), voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key))",
 				"CREATE TABLE book_chapter(book_id TEXT NOT NULL REFERENCES book(book_id), chapter INTEGER NOT NULL, title TEXT NOT NULL, kind TEXT NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key), PRIMARY KEY (book_id, chapter))",
@@ -147,8 +148,7 @@ feature -- Constants
 				"CREATE TABLE book_passage(book_id TEXT NOT NULL, chapter INTEGER NOT NULL, block INTEGER NOT NULL, ordinal INTEGER NOT NULL, start_book INTEGER NOT NULL, start_chapter INTEGER NOT NULL, start_verse INTEGER NOT NULL, end_chapter INTEGER NOT NULL, end_verse INTEGER NOT NULL, start_hub INTEGER NOT NULL, end_hub INTEGER NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key), PRIMARY KEY (book_id, chapter, block, ordinal))",
 				"CREATE INDEX ix_book_passage_hub ON book_passage(start_hub, end_hub)",
 				"CREATE TABLE book_framework(book_id TEXT NOT NULL, chapter INTEGER NOT NULL, block INTEGER NOT NULL, framework_id TEXT NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key), PRIMARY KEY (book_id, chapter, block, framework_id))",
-				"CREATE INDEX ix_book_framework ON book_framework(framework_id)",
-				"PRAGMA user_version = 1">>
+				"CREATE INDEX ix_book_framework ON book_framework(framework_id)">>
 		end
 
 end

@@ -23,6 +23,12 @@ note
 class
 	BIB_FRAMEWORK_SCHEMA
 
+inherit
+	BIB_PRIVATE_PACK_SCHEMA
+		rename
+			is_lowercase_id as is_framework_id
+		end
+
 feature -- Constants
 
 	Pack_kind: STRING_8 = "frameworks"
@@ -32,9 +38,6 @@ feature -- Constants
 			-- The frameworks pack's file in the packs folder.
 
 	Pack_title: STRING_8 = "Larry Rix: Frameworks"
-
-	Schema_version: INTEGER = 1
-			-- The pack's `user_version' (BIB_PRIVATE_SOURCE.Pack_schema_version).
 
 	Max_hover: INTEGER = 280
 			-- The most characters a hover text may hold.
@@ -87,27 +90,18 @@ feature -- Constants
 			Result := Draft.same_string_general (a_status) or Reviewed.same_string_general (a_status)
 		end
 
-	is_framework_id (a_id: READABLE_STRING_GENERAL): BOOLEAN
-			-- Lowercase ASCII letters and digits, at least one: a `framework:' link target's id.
-		do
-			Result := not a_id.is_empty and then across a_id.to_string_32 as al_c all (al_c >= 'a' and al_c <= 'z') or (al_c >= '0' and al_c <= '9') end
-		end
-
 	Link_prefix: STRING_32 = "framework:"
 			-- A link to a framework: "framework:kacc".
 
-	Schema_statements: ARRAY [STRING_8]
-			-- The tables of a new frameworks pack, then its version.
+	pack_tables: ARRAY [STRING_8]
+			-- The frameworks pack's own tables.
 		once
 			Result := <<
-				"CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)",
-				"CREATE TABLE source_provenance(provenance_key INTEGER PRIMARY KEY, source_key TEXT NOT NULL, edition TEXT NOT NULL, license_id TEXT NOT NULL, non_commercial INTEGER NOT NULL, share_alike INTEGER NOT NULL, restricted INTEGER NOT NULL, credit TEXT NOT NULL, caveat TEXT NOT NULL)",
 				"CREATE TABLE framework(framework_id TEXT PRIMARY KEY, name TEXT NOT NULL, mark INTEGER NOT NULL, title TEXT NOT NULL, tier TEXT NOT NULL, tier_rank INTEGER NOT NULL, status TEXT NOT NULL CHECK (status IN ('draft', 'reviewed')), hover TEXT NOT NULL, source TEXT NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key))",
 				"CREATE TABLE framework_alias(alias TEXT PRIMARY KEY, framework_id TEXT NOT NULL REFERENCES framework(framework_id), needs_mark INTEGER NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key))",
 				"CREATE TABLE framework_section(framework_id TEXT NOT NULL REFERENCES framework(framework_id), ordinal INTEGER NOT NULL, heading TEXT NOT NULL, body_markdown TEXT NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key), PRIMARY KEY (framework_id, ordinal))",
 				"CREATE TABLE framework_related(framework_id TEXT NOT NULL REFERENCES framework(framework_id), ordinal INTEGER NOT NULL, related_id TEXT NOT NULL REFERENCES framework(framework_id), voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key), PRIMARY KEY (framework_id, ordinal))",
-				"CREATE TABLE framework_use(framework_id TEXT NOT NULL REFERENCES framework(framework_id), ordinal INTEGER NOT NULL, section_id TEXT NOT NULL, heading TEXT NOT NULL, start_book INTEGER NOT NULL, start_chapter INTEGER NOT NULL, start_verse INTEGER NOT NULL, end_chapter INTEGER NOT NULL, end_verse INTEGER NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key), PRIMARY KEY (framework_id, ordinal))",
-				"PRAGMA user_version = 1">>
+				"CREATE TABLE framework_use(framework_id TEXT NOT NULL REFERENCES framework(framework_id), ordinal INTEGER NOT NULL, section_id TEXT NOT NULL, heading TEXT NOT NULL, start_book INTEGER NOT NULL, start_chapter INTEGER NOT NULL, start_verse INTEGER NOT NULL, end_chapter INTEGER NOT NULL, end_verse INTEGER NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key), PRIMARY KEY (framework_id, ordinal))">>
 		end
 
 end

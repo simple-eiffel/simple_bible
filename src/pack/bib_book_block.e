@@ -26,6 +26,7 @@ feature {NONE} -- Initialization
 		require
 			book_usable: (create {BIB_BOOK_SCHEMA}).is_book_id (a_book)
 			placed: a_chapter >= 1 and a_block >= 1
+			within_four_digits: a_chapter <= {BIB_BOOK_SCHEMA}.Max_part and a_block <= {BIB_BOOK_SCHEMA}.Max_part
 		do
 			book := a_book.to_string_32
 			chapter := a_chapter
@@ -86,5 +87,6 @@ feature -- Access
 invariant
 	book_present: not book.is_empty
 	placed: chapter >= 1 and block >= 1
+	within_four_digits: chapter <= {BIB_BOOK_SCHEMA}.Max_part and block <= {BIB_BOOK_SCHEMA}.Max_part
 
 end

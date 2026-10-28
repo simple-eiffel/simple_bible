@@ -4,6 +4,14 @@ All notable changes to simple_bible are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Changed (2026-10-28: design scan 59, the seven HIGH findings; personal installer 0.7.25)
+
+- **The reference reader's two faces ask for a book in one order** (exact name, then a standard short form, then, in the reference box only, a prefix): the box now reads "gn 1:1", "Mt 5:3", "1pet 1:3", and prose links the compact forms ("1Pet 1:3", "1John 1:9"), which the short-form table held but never reached. Test first: the old reader fails it.
+- **One link reader**, `BIB_LINK_TARGET` (framework, book or Bible passage, read once): the window's click and hover card and the books builder's indexes ask it, so the essays' links will be one more branch.
+- **One private-pack schema ancestor**, `BIB_PRIVATE_PACK_SCHEMA` (the kind, file, title, version, author, the `meta` and `source_provenance` tables, lowercase ids), inherited by the commentary, frameworks and books schemas; `BIB_PACK_WRITING` gains `begin_private_pack`, `put_private_provenance`, `sidecars_with` and `fail_unless`, which the builders had copied. The rebuilt packs are the same: identical tables, meta, provenance and counts.
+- **Book links name at most chapter and block 9999** (`BIB_BOOK_SCHEMA.Max_part`), in the contracts and the builder, where the link postcondition could fail before.
+- In the window: one hover-card builder (passage, framework, book) and one way a pane comes into view (`bring_into_view`: Study layout, another pane's maximizing put back, a folded zone opened); the Frameworks tab now switches to Study like the others.
+
 ### Added (2026-10-28: Larry's books; personal installer 0.7.24)
 
 - **The books pack** (`books.db`, private): Larry's books from one manifest per book, which the COMMENTARY session writes (it chooses the canonical manuscript and chapter order; research/19-BOOKS-PACK.md). `bible_build --books <folder> --out books.db [--content content.db] [--frameworks-pack frameworks.db]` reads the Markdown chapters itself and splits them into BLOCKS (`BIB_MARKDOWN_BLOCKS`: heading, paragraph, quote, list item, code; front matter, comments, images, rules, typesetting placeholders, draft status lines and skipped sections left out; wiki links and footnote markers read plainly), each addressed `book:<id>/<chapter>#<block>`. Every block is linked by the window's own linker and the `bible:` and `framework:` targets it wrote become the block's passage and framework indexes. `BIB_BOOK_SCHEMA`, `BIB_BOOK_PACK` (books, one book, a chapter's blocks, the blocks citing a verse narrowest first, the blocks naming a framework), `BIB_AUTHOR_BOOK`, `BIB_BOOK_BLOCK`, `BIB_BOOK_BUILDER`; `SIMPLE_BIBLE.book_packs`. First batch: 7 books, 151 chapters, 7,092 blocks, 2,519 references.

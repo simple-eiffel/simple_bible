@@ -305,20 +305,55 @@ feature -- Linking
 feature {NONE} -- Implementation
 
 	book_named (a_name: STRING_32): INTEGER
-			-- The book `a_name' names: exactly, written as a name is written (prose); or by a prefix
-			-- or in any case, the first candidate (`is_forgiving'); 0 when none.
+			-- The book `a_name' names, or 0: the catalog's exact name or code, else a standard short
+			-- form ("Heb", "1 Kgs", "1Cor", "Psalm": BIB_BOOK_ABBREVIATIONS, 2026-10-28), else, for a
+			-- box only (`is_forgiving'), the first book it begins, in any case. Prose must write a name
+			-- as a name is written; a box may write "gn 1" or "rom 8". Scan 59: both faces ask in this
+			-- one order (before, a box never asked the short forms).
+		local
+			l_short: INTEGER
 		do
-			if is_forgiving then
-				if not a_name.is_empty and then attached books.candidates_for_name (a_name) as al_candidates and then not al_candidates.is_empty then
-					Result := al_candidates.first
-				end
-			elseif starts_like_a_name (a_name) then
+			if is_forgiving or else starts_like_a_name (a_name) then
 				Result := books.book_named_exactly (a_name)
-				if Result = 0 and then books.has_book ((create {BIB_BOOK_ABBREVIATIONS}).book_of (a_name)) then
-						-- "Heb", "1 Kgs", "Psalm": the standard short forms (2026-10-28)
-					Result := (create {BIB_BOOK_ABBREVIATIONS}).book_of (a_name)
+				if Result = 0 then
+					if is_forgiving then
+						l_short := abbreviations.book_of (capitalized (a_name))
+					else
+						l_short := abbreviations.book_of (a_name)
+					end
+					if books.has_book (l_short) then
+						Result := l_short
+					elseif is_forgiving and then not a_name.is_empty and then attached books.candidates_for_name (a_name) as al_candidates
+						and then not al_candidates.is_empty
+					then
+						Result := al_candidates.first
+					end
 				end
 			end
+		end
+
+	abbreviations: BIB_BOOK_ABBREVIATIONS
+			-- The standard short forms.
+		once
+			create Result
+		end
+
+	capitalized (a_name: STRING_32): STRING_32
+			-- `a_name' with its first letter a capital: "gn" "Gn", "1cor" "1Cor", "1 jn" "1 Jn".
+		local
+			i: INTEGER
+			l_done: BOOLEAN
+		do
+			Result := a_name.twin
+			from i := 1 until i > Result.count or l_done loop
+				if Result [i].is_alpha then
+					Result [i] := Result [i].as_upper
+					l_done := True
+				end
+				i := i + 1
+			end
+		ensure
+			same_length: Result.count = a_name.count
 		end
 
 	numbers_at (a_text: STRING_32; a_start, a_book: INTEGER): detachable TUPLE [last, book, chapter, verse, end_chapter, end_verse: INTEGER]
@@ -409,11 +444,13 @@ feature {NONE} -- Implementation
 		end
 
 	starts_like_a_name (a_name: STRING_32): BOOLEAN
-			-- Does `a_name' begin as a book name is written: a capital, or a digit, a space and a
-			-- capital ("1 John")?
+			-- Does `a_name' begin as a book name is written: a capital, or a digit and a capital with or
+			-- without a space between ("1 John", "1Cor": scan 59)?
 		do
 			if not a_name.is_empty then
 				if a_name [1].is_upper then
+					Result := True
+				elseif a_name [1].is_digit and then a_name.count >= 2 and then a_name [2].is_upper then
 					Result := True
 				elseif a_name [1].is_digit and then a_name.count >= 3 and then a_name [2] = ' ' then
 					Result := a_name [3].is_upper

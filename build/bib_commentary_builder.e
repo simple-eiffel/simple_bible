@@ -96,13 +96,9 @@ feature -- Commands
 			list_count := 0
 			restricted_count := 0
 			title := {BIB_COMMENTARY_SCHEMA}.Pack_title.to_string_32
-			l_db := fresh_pack (a_pack, schema.Schema_statements)
+			l_db := begin_private_pack (a_pack, schema, "bible_build --commentary")
+			put_meta (l_db, "voice_status", {STRING_32} "PROVISIONAL")
 			if last_error = Void then
-				put_meta (l_db, "pack_kind", schema.Pack_kind.to_string_32)
-				put_meta (l_db, "title", title)
-				put_meta (l_db, "voice_status", {STRING_32} "PROVISIONAL")
-				put_meta (l_db, "author", {STRING_32} "Larry Rix")
-				put_meta (l_db, "builder", {STRING_32} "bible_build --commentary")
 				create l_json
 				across a_sidecars as ic until last_error /= Void loop
 					if attached l_json.parse_file (ic.to_string_32) as al_value and then al_value.is_object then
