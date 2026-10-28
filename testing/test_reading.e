@@ -177,6 +177,14 @@ feature -- Tests
 			assert_true ("verses across chapters", l_linker.linked ("Exodus 5:1-6:2").has_substring ("](bible:2.5.1-6.2)"))
 			assert_true ("whole chapters", l_linker.linked ("Matthew 5-7").has_substring ("](bible:40.5.0-7.0)"))
 			assert_true ("a range in a book of one chapter", l_linker.linked ("Jude 5-7").has_substring ("](bible:65.1.5-1.7)"))
+				-- 2026-10-28: the abbreviations prose writes (Larry's books, the commentary).
+			assert_true ("1 Pet", l_linker.linked ("as 1 Pet 1:3 says").has_substring ("[1 Pet 1:3](bible:60.1.3)"))
+			assert_true ("1 Jn", l_linker.linked ("1 Jn 1:9").has_substring ("[1 Jn 1:9](bible:62.1.9)"))
+			assert_true ("Matt, Mt", l_linker.linked ("Matt 5:3 and Mt 5:4").has_substring ("](bible:40.5.3)") and l_linker.linked ("Mt 5:4").has_substring ("](bible:40.5.4)"))
+			assert_true ("Isa", l_linker.linked ("Isa 53:5").has_substring ("](bible:23.53.5)"))
+			assert_true ("an abbreviation's period", l_linker.linked ("Exod. 3:14").has_substring ("](bible:2.3.14)"))
+			assert_false ("a book the content does not hold is no link", l_linker.linked ("Heb 13:8").has_substring ("bible:"))
+			assert_false ("lowercase is prose", l_linker.linked ("the gen 1:1 line").has_substring ("bible:"))
 			assert_true ("a range that runs backward is its first place", l_linker.linked ("Exodus 3:15-14").has_substring ("](bible:2.3.15)"))
 				-- Design scan 57: a target no reference writes reads as none, so a hover never walks
 				-- a thousand chapters; a long digit run never overflows into a link.

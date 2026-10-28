@@ -314,6 +314,10 @@ feature {NONE} -- Implementation
 				end
 			elseif starts_like_a_name (a_name) then
 				Result := books.book_named_exactly (a_name)
+				if Result = 0 and then books.has_book ((create {BIB_BOOK_ABBREVIATIONS}).book_of (a_name)) then
+						-- "Heb", "1 Kgs", "Psalm": the standard short forms (2026-10-28)
+					Result := (create {BIB_BOOK_ABBREVIATIONS}).book_of (a_name)
+				end
 			end
 		end
 

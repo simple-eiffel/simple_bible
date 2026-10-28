@@ -6,6 +6,7 @@ note
 			bible_build --bible <bible.db> --out <content.db> [--tvtms <TVTMS file>] [--build-id <id>] [--built-at <ISO time>]
 			bible_build --commentary <Commentaries folder, or one sidecar.json> --out <commentary.db>
 			bible_build --frameworks <folder of *.framework.json, or one> --out <frameworks.db> [--uses <commentary.db>]
+			bible_build --books <folder of *.book.json, or one> --out <books.db> [--content <content.db>] [--frameworks-pack <frameworks.db>]
 		Exit code 0 on success, 1 on failure (the reason is printed).
 	]"
 	author: "Larry Rix"
@@ -18,6 +19,18 @@ class
 create
 	make
 
+feature {NONE} -- Implementation
+
+	content_path (a_given: READABLE_STRING_GENERAL): STRING_32
+			-- `a_given', or the installed content.db when it is empty.
+		do
+			if a_given.is_empty and then attached (create {EXECUTION_ENVIRONMENT}).item ("LOCALAPPDATA") as al_local then
+				Result := al_local.to_string_32 + {STRING_32} "\simple_bible\content.db"
+			else
+				Result := a_given.to_string_32
+			end
+		end
+
 feature {NONE} -- Initialization
 
 	make
@@ -27,6 +40,8 @@ feature {NONE} -- Initialization
 			l_builder: BIB_CONTENT_BUILDER
 			l_commentary: BIB_COMMENTARY_BUILDER
 			l_frameworks: BIB_FRAMEWORK_BUILDER
+			l_books: BIB_BOOK_BUILDER
+			l_reader: SIMPLE_BIBLE
 			l_build_id: STRING
 			l_failed: BOOLEAN
 		do
@@ -36,6 +51,9 @@ feature {NONE} -- Initialization
 			l_cli.add_option_with_default ("c|commentary", "The Commentaries folder (every book's _build sidecar) or one sidecar JSON: write the commentary pack instead", "path", "")
 			l_cli.add_option_with_default ("f|frameworks", "A folder of *.framework.json sidecars, or one: write the frameworks pack instead", "path", "")
 			l_cli.add_option_with_default ("u|uses", "With --frameworks: the commentary pack whose Frameworks at work lists give each framework's uses (empty: none)", "path", "")
+			l_cli.add_option_with_default ("k|books", "A folder of *.book.json manifests, or one: write the books pack instead", "path", "")
+			l_cli.add_option_with_default ("n|content", "With --books: the content.db whose book names link references (empty: the installed one)", "path", "")
+			l_cli.add_option_with_default ("p|frameworks-pack", "With --books: the frameworks pack whose names link and index (empty: none)", "path", "")
 			l_cli.add_required_option ("o|out", "The content.db to write", "path")
 			l_cli.add_option_with_default ("i|build-id", "The build id (the edition)", "id", "content-v2")
 			l_cli.add_option_with_default ("t|built-at", "The build time, for a byte-identical rebuild (empty: now)", "ISO time", "")
@@ -46,6 +64,33 @@ feature {NONE} -- Initialization
 					print (ic + "%N")
 				end
 				l_failed := True
+			elseif attached l_cli.value_of ("books") as al_manifests and then not al_manifests.is_empty
+				and then attached l_cli.value_of ("out") as al_books_pack and then not al_books_pack.is_empty
+			then
+				create l_reader.make (create {BIB_CONFIG}.make_with_core (content_path (l_cli.option_value_or_default ("content", ""))))
+				l_reader.open
+				if not l_reader.is_open then
+					print ("bible_build: content.db could not be opened, so references cannot be linked%N")
+					l_failed := True
+				else
+					create l_books.make (l_reader.books)
+					if l_books.sidecars_in (al_manifests).is_empty then
+						print ("bible_build: no *.book.json in " + al_manifests + "%N")
+						l_failed := True
+					else
+						l_books.build (l_books.sidecars_in (al_manifests), al_books_pack, l_cli.option_value_or_default ("frameworks-pack", ""))
+						if attached l_books.last_error as al_error then
+							print ("bible_build failed: ")
+							print (al_error)
+							print ("%N")
+							l_failed := True
+						else
+							print ("bible_build: wrote " + al_books_pack + " (" + l_books.book_count.out + " books, " + l_books.chapter_count.out + " chapters, "
+								+ l_books.block_count.out + " blocks, " + l_books.passage_count.out + " passages cited, " + l_books.framework_use_count.out + " framework uses)%N")
+						end
+					end
+					l_reader.close
+				end
 			elseif attached l_cli.value_of ("frameworks") as al_folder and then not al_folder.is_empty
 				and then attached l_cli.value_of ("out") as al_frameworks_pack and then not al_frameworks_pack.is_empty
 			then
