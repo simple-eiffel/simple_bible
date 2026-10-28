@@ -24,6 +24,12 @@ feature -- Tests
 			assert_true ("Psalm 119:176 and back", l_hub.book_of (19119176) = 19 and l_hub.chapter_of (19119176) = 119 and l_hub.verse_of (19119176) = 176)
 			assert_false ("verse 0 is no verse", l_hub.is_valid_hub (43003000))
 			assert_false ("chapter 0 is no verse", l_hub.is_valid_hub (43000016))
+				-- Design scan 56: the one range rule, asked before packing.
+			assert_true ("John 3:16 is a place", l_hub.is_place (43, 3, 16))
+			assert_false ("verse 0 is not", l_hub.is_place (43, 3, 0))
+			assert_false ("a part past the packing is not", l_hub.is_place (43, l_hub.Max_part + 1, 1))
+			assert_true ("a place packs", l_hub.hub_of_place (43, 3, 16) = 43003016)
+			assert_true ("no place packs to 0", l_hub.hub_of_place (0, 3, 16) = 0)
 		end
 
 	test_notes_keep_every_version

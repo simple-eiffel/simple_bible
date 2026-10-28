@@ -23,9 +23,7 @@ feature -- Conversion
 	hub_id (a_book, a_chapter, a_verse: INTEGER): INTEGER_64
 			-- The hub id of verse `a_book' `a_chapter':`a_verse' in English numbering.
 		require
-			book_valid: a_book >= 1 and a_book <= Max_part
-			chapter_valid: a_chapter >= 1 and a_chapter <= Max_part
-			verse_valid: a_verse >= 1 and a_verse <= Max_part
+			place: is_place (a_book, a_chapter, a_verse)
 		do
 			Result := packed_place (a_book, a_chapter, a_verse)
 		ensure
@@ -33,6 +31,18 @@ feature -- Conversion
 			book_back: book_of (Result) = a_book
 			chapter_back: chapter_of (Result) = a_chapter
 			verse_back: verse_of (Result) = a_verse
+		end
+
+	hub_of_place (a_book, a_chapter, a_verse: INTEGER): INTEGER_64
+			-- `hub_id' of the place, 0 when it names no verse (design scan 56: the window had its own
+			-- copy of the range rule).
+		do
+			if is_place (a_book, a_chapter, a_verse) then
+				Result := hub_id (a_book, a_chapter, a_verse)
+			end
+		ensure
+			named: is_place (a_book, a_chapter, a_verse) implies Result = hub_id (a_book, a_chapter, a_verse)
+			none: not is_place (a_book, a_chapter, a_verse) implies Result = 0
 		end
 
 	book_of (a_hub: INTEGER_64): INTEGER
@@ -54,6 +64,13 @@ feature -- Conversion
 			valid: is_valid_hub (a_hub)
 		do
 			Result := verse_part (a_hub)
+		end
+
+	is_place (a_book, a_chapter, a_verse: INTEGER): BOOLEAN
+			-- Can `a_book' `a_chapter':`a_verse' have a hub id: each 1 to `Max_part'?
+		do
+			Result := a_book >= 1 and a_book <= Max_part and a_chapter >= 1 and a_chapter <= Max_part
+				and a_verse >= 1 and a_verse <= Max_part
 		end
 
 	is_valid_hub (a_hub: INTEGER_64): BOOLEAN
