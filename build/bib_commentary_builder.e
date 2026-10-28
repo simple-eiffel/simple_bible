@@ -206,6 +206,11 @@ feature {NONE} -- Writing
 							if not text_of (al_fields, l_kinds [i]).is_empty then
 								a_db.execute_with_args ("INSERT INTO commentary_field VALUES (?, ?, ?, ?, ?, ?)", <<l_id, l_kinds [i], i, text_of (al_fields, l_kinds [i]), l_voice, a_key>>)
 								check_db (a_db, {STRING_32} "A field of " + l_id + " could not be written.")
+								if not l_kinds [i].same_string ("text") then
+										-- the quoted Bible text is the Bible search's, not the writings'
+									put_search_row (a_db, (create {BIB_BIBLE_LINK}).range_target_text (l_book, l_start_chapter, l_start_verse, l_end_chapter, l_end_verse),
+										text_of (a_section, "heading"), text_of (al_fields, l_kinds [i]), l_voice)
+								end
 							end
 							i := i + 1
 						end

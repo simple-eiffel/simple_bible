@@ -25,6 +25,9 @@ feature -- Access
 	last_error: detachable STRING_32
 			-- Why the last build failed.
 
+	search_row_count: INTEGER
+			-- The search rows the last build wrote (research/20).
+
 feature {NONE} -- The pack file
 
 	fresh_pack (a_pack: READABLE_STRING_GENERAL; a_statements: ARRAY [STRING_8]): SIMPLE_SQL_DATABASE
@@ -57,6 +60,7 @@ feature {NONE} -- The pack file
 		require
 			pack_named: not a_pack.is_empty
 		do
+			search_row_count := 0
 			Result := fresh_pack (a_pack, a_schema.schema_statements)
 			put_meta (Result, "pack_kind", a_schema.Pack_kind.to_string_32)
 			put_meta (Result, "title", a_schema.Pack_title.to_string_32)
@@ -74,6 +78,21 @@ feature {NONE} -- The pack file
 				a_db.execute_with_args ("INSERT INTO source_provenance VALUES (?, ?, ?, 'private', 1, 0, 1, 'Larry Rix', ?)",
 					<<a_key, a_source_key.to_string_32, a_edition.to_string_32, a_caveat.to_string_32>>)
 				check_db (a_db, "The pack's provenance could not be written.")
+			end
+		end
+
+	put_search_row (a_db: SIMPLE_SQL_DATABASE; a_address, a_place, a_body, a_voice: READABLE_STRING_GENERAL)
+			-- One row of the pack's search table: the text `a_body' at `a_address' (a link a reading
+			-- pane follows), standing at `a_place', in `a_voice'; unless the build already failed or
+			-- there is no text.
+		require
+			address_given: not a_address.is_empty
+		do
+			if last_error = Void and then not a_body.is_empty then
+				a_db.execute_with_args ("INSERT INTO writing_search (address, place, body, voice) VALUES (?, ?, ?, ?)",
+					<<a_address.to_string_32, a_place.to_string_32, a_body.to_string_32, a_voice.to_string_32>>)
+				check_db (a_db, "A search row could not be written.")
+				search_row_count := search_row_count + 1
 			end
 		end
 

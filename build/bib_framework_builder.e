@@ -202,6 +202,7 @@ feature {NONE} -- Writing
 				schema.tier_rank (a_record.tier), a_record.status, a_record.hover, a_record.source>>)
 			check_db (a_db, {STRING_32} "The framework " + a_record.id + {STRING_32} " could not be written.")
 			framework_count := framework_count + 1
+			put_search_row (a_db, schema.Link_prefix + a_record.id, a_record.name + {STRING_32} ": " + a_record.title, a_record.hover, "author")
 			from i := 1 until i > a_record.aliases.count or last_error /= Void loop
 					-- The name of a marked framework links only with its mark; an alias as written.
 				a_db.execute_with_args ("INSERT INTO framework_alias VALUES (?, ?, ?, 'author', 1)",
@@ -215,6 +216,8 @@ feature {NONE} -- Writing
 					<<a_record.id, i, a_record.sections.i_th (i).heading, a_record.sections.i_th (i).markdown>>)
 				check_db (a_db, {STRING_32} "A section of " + a_record.id + {STRING_32} " could not be written.")
 				section_count := section_count + 1
+				put_search_row (a_db, schema.Link_prefix + a_record.id, a_record.name + {STRING_32} ": " + a_record.sections.i_th (i).heading,
+					a_record.sections.i_th (i).markdown, "author")
 				i := i + 1
 			end
 			from i := 1 until i > a_record.related.count or last_error /= Void loop

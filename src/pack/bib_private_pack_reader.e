@@ -46,6 +46,80 @@ feature -- Access
 			Result := sources.is_open and then sources.is_attached_alias (pack_alias)
 		end
 
+feature -- Searching (research/20, 2026-10-28)
+
+	has_search: BOOLEAN
+			-- Does the pack carry its search table (one built before it existed does not)?
+		require
+			available: is_available
+		do
+			run_query ("SELECT count(*) AS n FROM " + pack_alias + ".sqlite_master WHERE type = 'table' AND name = ?",
+				{ARRAY [detachable ANY]} <<{BIB_BOOK_SCHEMA}.Search_table>>)
+			Result := attached last_rows as al_rows and then not al_rows.rows.is_empty and then al_rows.rows.first.integer_value ("n") > 0
+		end
+
+	searched (a_match, a_within, a_kind: READABLE_STRING_GENERAL; a_limit: INTEGER): BIB_LIST_RESULT [BIB_WRITING_HIT]
+			-- The places the FTS5 expression `a_match' finds whose address begins `a_within' (empty:
+			-- anywhere), best first, at most `a_limit', as hits of a `a_kind' pack.
+		require
+			available: is_available
+			searchable: has_search
+			match_given: not a_match.is_empty
+			kind_given: not a_kind.is_empty
+			positive: a_limit > 0
+		local
+			l_sql: STRING_8
+			l_list: ARRAYED_LIST [BIB_WRITING_HIT]
+			l_provenance: BIB_PROVENANCE
+		do
+			l_provenance := pack_provenance
+			l_sql := "SELECT address, place, snippet(writing_search, 2, ?, ?, '...', 16) AS snippet, bm25(writing_search) AS rank, voice FROM "
+				+ pack_alias + ".writing_search WHERE writing_search MATCH ? AND substr(address, 1, ?) = ? ORDER BY rank LIMIT ?"
+			run_query (l_sql, {ARRAY [detachable ANY]} <<Match_open, Match_close, a_match.to_string_32, a_within.count, a_within.to_string_32, a_limit>>)
+			if attached last_rows as al_rows then
+				create l_list.make (al_rows.rows.count)
+				across al_rows.rows as ic loop
+					if not ic.string_value ("address").is_empty then
+						l_list.extend (create {BIB_WRITING_HIT}.make (a_kind, ic.string_value ("address"), ic.string_value ("place"), ic.string_value ("snippet"),
+							ic.real_value ("rank"), ic.string_value ("voice"), l_provenance))
+					end
+				end
+				create Result.make_success (method ("searched", l_sql, pack_alias, a_match, l_list.count), {ARRAY [BIB_PROVENANCE]} <<l_provenance>>, l_list)
+			else
+				create Result.make_failure (method ("searched", l_sql, pack_alias, a_match, 0), query_error)
+			end
+		end
+
+	words: ARRAYED_LIST [STRING_32]
+			-- The pack's searchable words, folded as the search folds them; read once.
+		require
+			available: is_available
+		do
+			if attached words_read as al_words then
+				Result := al_words
+			else
+				create Result.make (1000)
+				if has_search then
+					run_query ("SELECT term FROM " + pack_alias + ".writing_words", {ARRAY [detachable ANY]} <<>>)
+					if attached last_rows as al_rows then
+						across al_rows.rows as ic loop
+							Result.extend (ic.string_value ("term"))
+						end
+					end
+				end
+				words_read := Result
+			end
+		end
+
+	Match_open: STRING_32 = "%/171/"
+	Match_close: STRING_32 = "%/187/"
+			-- The marks around a matched word in a snippet.
+
+feature {NONE} -- Searching
+
+	words_read: detachable ARRAYED_LIST [STRING_32]
+			-- `words' once read.
+
 feature {NONE} -- The heir's part
 
 	pack_noun: STRING_32

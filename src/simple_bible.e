@@ -202,6 +202,22 @@ feature -- Status
 			end
 		end
 
+	writings_search: BIB_WRITINGS_SEARCH
+			-- Search across the attached commentary, frameworks and books packs, in that order
+			-- (research/20, 2026-10-28).
+		do
+			create Result.make (query_parser)
+			across commentary_packs as ic loop
+				Result.add_pack (ic, {BIB_COMMENTARY_SCHEMA}.Pack_kind)
+			end
+			across framework_packs as ic loop
+				Result.add_pack (ic, {BIB_FRAMEWORK_SCHEMA}.Pack_kind)
+			end
+			across book_packs as ic loop
+				Result.add_pack (ic, {BIB_BOOK_SCHEMA}.Pack_kind)
+			end
+		end
+
 	book_packs: ARRAYED_LIST [BIB_BOOK_PACK]
 			-- The attached packs whose kind is "books" (BIB_BOOK_SCHEMA, 2026-10-28).
 		do

@@ -428,6 +428,7 @@ feature {NONE} -- Suites
 			run_test (agent t.test_framework_pack_builds_attaches_and_answers, "test_framework_pack_builds_attaches_and_answers")
 			run_test (agent t.test_framework_sidecar_breaking_a_rule_is_refused, "test_framework_sidecar_breaking_a_rule_is_refused")
 			run_test (agent t.test_book_pack_builds_attaches_and_answers, "test_book_pack_builds_attaches_and_answers")
+			run_test (agent t.test_writings_search_finds_plain_and_fuzzy, "test_writings_search_finds_plain_and_fuzzy")
 			run_test (agent t.test_a_pack_breaking_the_rules_is_refused_and_named, "test_a_pack_breaking_the_rules_is_refused_and_named")
 			run_test (agent t.test_a_claim_without_an_id_is_refused, "test_a_claim_without_an_id_is_refused")
 			run_test (agent t.test_book_catalog_reads_content_db, "test_book_catalog_reads_content_db")
