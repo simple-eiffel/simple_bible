@@ -102,7 +102,8 @@ feature -- Access
 		end
 
 	is_word_character (a_character: CHARACTER_32): BOOLEAN
-			-- A letter or digit, which a name may not touch.
+			-- A letter or digit, which a name may not touch (its own rule on purpose: the mark (TM)
+			-- after a name must not count as a letter, as BIB_WORD_CHARACTERS would count it).
 		do
 			Result := a_character.is_alpha or a_character.is_digit
 		end

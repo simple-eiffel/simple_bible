@@ -619,9 +619,12 @@ feature {NONE} -- Window
 
 	search_scope: BIB_SEARCH_SCOPE
 			-- The scope `scope_select' names for the version read: the whole Bible, a name of
-			-- BIB_SCOPE_NAMES (the list shows them in their order), or the book being read.
+			-- BIB_SCOPE_NAMES (the list shows them in their order), or the book being read; while an
+			-- Ask search names a book ("grace in Romans"), that book (scan 63).
 		do
-			if scope_select.selected_index = (create {BIB_SCOPE_NAMES}).names.count + 2 and reading_book > 0 and then attached bible.search_scopes.scope_named (bible.books.book (reading_book).name, reading_version) as al_book then
+			if attached asked_search_scope as al_asked then
+				Result := al_asked
+			elseif scope_select.selected_index = (create {BIB_SCOPE_NAMES}).names.count + 2 and reading_book > 0 and then attached bible.search_scopes.scope_named (bible.books.book (reading_book).name, reading_version) as al_book then
 				Result := al_book
 			elseif scope_select.selected_index >= 2 and scope_select.selected_index <= (create {BIB_SCOPE_NAMES}).names.count + 1 and then attached bible.search_scopes.scope_named ((create {BIB_SCOPE_NAMES}).names.i_th (scope_select.selected_index - 1), reading_version) as al_named then
 				Result := al_named
@@ -634,6 +637,7 @@ feature {NONE} -- Window
 			-- C6.1 changed: search again in the new scope when there is a search (My writings: the
 			-- writings, research/20).
 		do
+			asked_search_scope := Void
 			if is_writings_scope then
 				search_writings
 			elseif bible.is_open and then not search_box.text.is_empty then
@@ -1533,13 +1537,15 @@ feature {NONE} -- Reading (S1, P01)
 		end
 
 	is_word_character (a_char: CHARACTER_32): BOOLEAN
-			-- Is `a_char' part of a word: a letter, digit, Hebrew point or Greek letter (not a space,
-			-- punctuation, the Hebrew maqaf or sof pasuq)?
+			-- Is `a_char' part of a word (BIB_WORD_CHARACTERS: one rule for the window and Ask)?
 		do
-			Result := a_char.is_alpha_numeric
-				or else (a_char.natural_32_code > 127 and then not a_char.is_space
-					and then a_char.natural_32_code /= 0x05BE and then a_char.natural_32_code /= 0x05C3
-					and then not (a_char.natural_32_code >= 0x2000 and a_char.natural_32_code <= 0x206F))
+			Result := word_characters.is_word_character (a_char)
+		end
+
+	word_characters: BIB_WORD_CHARACTERS
+			-- What a word is made of.
+		once
+			create Result
 		end
 
 	whole_word_after (a_text: READABLE_STRING_32; a_word: STRING_32; a_from: INTEGER): INTEGER
@@ -3167,31 +3173,36 @@ feature {NONE} -- Notes (T2, P06)
 			l_other, l_original: STRING_8
 		do
 			create Result.make (3)
+			Result.compare_objects
 			if attached asked_parallel_versions as al_asked then
+					-- scan 63: the versions asked for are the columns, the one read not added before them
 				across al_asked as ic loop
 					if Result.count < 3 and then not Result.has (ic) and then bible.text_reader.has_version (ic) then
 						Result.extend (ic)
 					end
 				end
 			end
-			Result.extend (reading_version)
-			if reading_version.same_string ("KJV") then
-				l_other := "BSB"
-			else
-				l_other := "KJV"
-			end
-			if reading_book <= {BIB_CANON}.Last_old_testament_book then
-				l_original := "WLC"
-			else
-				l_original := "TR"
-			end
-			across <<l_other, l_original, "BSB", "YLT">> as ic loop
-				if Result.count < 3 and then not Result.has (ic) and then bible.text_reader.has_version (ic) then
-					Result.extend (ic)
+			if Result.is_empty then
+				Result.extend (reading_version)
+				if reading_version.same_string ("KJV") then
+					l_other := "BSB"
+				else
+					l_other := "KJV"
+				end
+				if reading_book <= {BIB_CANON}.Last_old_testament_book then
+					l_original := "WLC"
+				else
+					l_original := "TR"
+				end
+				across <<l_other, l_original, "BSB", "YLT">> as ic loop
+					if Result.count < 3 and then not Result.has (ic) and then bible.text_reader.has_version (ic) then
+						Result.extend (ic)
+					end
 				end
 			end
 		ensure
 			at_most_three: Result.count <= 3
+			each_once: across Result as al_v all Result.occurrences (al_v) = 1 end
 		end
 
 	fill_parallel
@@ -4292,6 +4303,10 @@ feature {NONE} -- Ask (C6.5, 0.7.31: plain words through the Cactus Needle helpe
 	asked_parallel_versions: detachable ARRAYED_LIST [STRING_8]
 			-- The versions the last Ask request put side by side; Void after another request.
 
+	asked_search_scope: detachable BIB_SEARCH_SCOPE
+			-- A scope an Ask search named that the scope list does not offer (one book); Void after
+			-- another request or a scope chosen in the list.
+
 	ask_folder: STRING_32
 			-- Where the helper's files are: SIMPLE_BIBLE_ASK when set, else the "ask" folder beside the
 			-- program (where the installer puts them).
@@ -4332,6 +4347,7 @@ feature {NONE} -- Ask (C6.5, 0.7.31: plain words through the Cactus Needle helpe
 			l_text.left_adjust
 			l_text.right_adjust
 			asked_parallel_versions := Void
+			asked_search_scope := Void
 			if bible.is_open and then not l_text.is_empty then
 				create l_check.make (bible)
 				if l_check.is_outside (l_text) then
@@ -4341,7 +4357,9 @@ feature {NONE} -- Ask (C6.5, 0.7.31: plain words through the Cactus Needle helpe
 					go_to (al_place.book, al_place.chapter, al_place.verse)
 					log_ask (l_text, "", "rule 1: read as a reference")
 				else
-					if not (attached ask_helper as al_running and then al_running.is_ready) then
+					if attached ask_helper as al_running and then not al_running.is_ready and then al_running.may_start then
+						al_running.start
+					elseif ask_helper = Void then
 						create l_helper.make (ask_folder)
 						ask_helper := l_helper
 						l_helper.start
@@ -4434,6 +4452,9 @@ feature {NONE} -- Ask (C6.5, 0.7.31: plain words through the Cactus Needle helpe
 						end
 						i := i + 1
 					end
+				elseif not a_call.text ("scope").is_empty then
+						-- a book (BIB_ASK_CHECK let it pass as a scope): searched there (scan 63)
+					asked_search_scope := bible.search_scopes.scope_named (a_call.text ("scope"), reading_version)
 				end
 				search_box.set_text (a_call.text ("query"))
 				on_search

@@ -60,8 +60,22 @@ feature -- Access
 	last_ms: INTEGER
 			-- How long the last answer took in the helper.
 
-	Wait_ms: INTEGER = 10000
-			-- The longest the ready line or a reply may take.
+	Wait_ms: INTEGER = 5000
+			-- The longest the ready line may take (it comes in about half a second).
+
+	Reply_ms: INTEGER = 3000
+			-- The longest a reply may take (they come in 0.04 to 0.1 seconds; scan 63: the window waits
+			-- on it, so the wait is short).
+
+	Retry_ms: INTEGER_64 = 60000
+			-- After a failed start, how long before `start' tries again (scan 63: it was respawned on
+			-- every request, each one a wait).
+
+	may_start: BOOLEAN
+			-- May `start' run: never tried, or the last failure is `Retry_ms' old?
+		do
+			Result := failed_at = 0 or else clock.elapsed_milliseconds (failed_at) >= Retry_ms
+		end
 
 	Required_files: ARRAY [STRING_8]
 			-- The files that must stand in `folder'.
@@ -97,6 +111,7 @@ feature -- Commands
 				l_env.put ("0", "NEEDLE_TELEMETRY")
 				l_env.put ("1", "DO_NOT_TRACK")
 				create l_process.make
+				l_process.set_merge_error_output (False)
 				l_process.set_show_window (False)
 				l_process.set_ends_with_owner (True)
 				l_process.start_in_directory ({STRING_32} "%"" + path_of ("needle_helper.exe") + {STRING_32} "%"", folder)
@@ -120,6 +135,9 @@ feature -- Commands
 					end
 				end
 			end
+			if not is_ready then
+				failed_at := clock.nanoseconds.max (1)
+			end
 		ensure
 			ready_or_said: is_ready = off_reason.is_empty
 		end
@@ -141,8 +159,7 @@ feature -- Commands
 			l_request.append_character ('}')
 			if attached process as al_process then
 				al_process.write_line (l_request)
-				al_process.read_line (Wait_ms)
-				if attached al_process.last_line as al_line and then attached object_of (al_line) as al_reply then
+				if attached reply_to (al_process, request_id) as al_reply then
 					if attached al_reply.item ({STRING_32} "error") as al_error and then al_error.is_string then
 						off_reason := {STRING_32} "The Ask helper answered with an error: " + al_error.as_string_32
 					else
@@ -151,12 +168,13 @@ feature -- Commands
 						end
 						read_calls (al_reply)
 					end
-				else
-					off_reason := {STRING_32} "The Ask helper did not answer within " + (Wait_ms // 1000).out.to_string_32 + {STRING_32} " seconds."
+				elseif off_reason.is_empty then
+					off_reason := {STRING_32} "The Ask helper did not answer within " + (Reply_ms // 1000).out.to_string_32 + {STRING_32} " seconds."
 				end
 			end
 			if not off_reason.is_empty then
 				stop
+				failed_at := clock.nanoseconds.max (1)
 			end
 		ensure
 			calls_only_while_ready: not is_ready implies calls.is_empty
@@ -186,6 +204,41 @@ feature -- Commands
 		end
 
 feature {NONE} -- Implementation
+
+	reply_to (a_process: SIMPLE_PIPED_PROCESS; a_id: INTEGER): detachable SIMPLE_JSON_OBJECT
+			-- The reply whose id is `a_id', read within `Reply_ms'; a line that is no JSON object, or
+			-- answers another id, is passed over (scan 63: one stray line shifted every later answer).
+			-- Void when none came in time; a run of unreadable lines says so in `off_reason'.
+		local
+			l_start: INTEGER_64
+			l_stray: INTEGER
+		do
+			l_start := clock.nanoseconds
+			from until Result /= Void or l_stray > 20 or clock.elapsed_milliseconds (l_start) >= Reply_ms loop
+				a_process.read_line ((Reply_ms - clock.elapsed_milliseconds (l_start).to_integer_32).max (1))
+				if attached a_process.last_line as al_line then
+					if attached object_of (al_line) as al_object and then attached al_object.item ({STRING_32} "id") as al_id
+						and then al_id.is_integer and then al_id.as_integer = a_id
+					then
+						Result := al_object
+					else
+						l_stray := l_stray + 1
+					end
+				end
+			end
+			if Result = Void and l_stray > 20 then
+				off_reason := {STRING_32} "The Ask helper answered with lines that do not read."
+			end
+		end
+
+	clock: SIMPLE_MONOTONIC_CLOCK
+			-- For the waits.
+		once
+			create Result
+		end
+
+	failed_at: INTEGER_64
+			-- The clock's nanoseconds at the last failure; 0 for none.
 
 	process: detachable SIMPLE_PIPED_PROCESS
 			-- The running helper.
