@@ -85,21 +85,23 @@ feature -- Splitting
 			else
 				l_lines := without_comments (without_front_matter (without_mark (a_markdown.to_string_32))).split ('%N')
 			end
+			fences.reset
 			across l_lines as ic loop
 				l_line := ic.twin
 				l_line.prune_all ('%R')
 				l_trimmed := l_line.twin
 				l_trimmed.left_adjust
 				l_trimmed.right_adjust
+				fences.feed (l_line)
 				if l_in_code then
 					current_lines.extend (l_line)
-					if l_trimmed.starts_with ({STRING_32} "```") then
+					if fences.was_fence_line then
 						l_in_code := False
 						flush
 					end
-				elseif l_skip_level > 0 and then not (heading_level (l_trimmed) > 0 and heading_level (l_trimmed) <= l_skip_level) then
-						-- inside a left-out section
-				elseif l_trimmed.starts_with ({STRING_32} "```") then
+				elseif l_skip_level > 0 and then (fences.is_inside or else not (heading_level (l_trimmed) > 0 and heading_level (l_trimmed) <= l_skip_level)) then
+						-- inside a left-out section (a heading inside a code fence there ends nothing: scan 66)
+				elseif fences.was_fence_line then
 					flush
 					current_kind := "code"
 					current_lines.extend (l_line)
@@ -355,37 +357,38 @@ feature {NONE} -- Implementation
 			-- code block is the code's, and is kept).
 		local
 			l_lines: LIST [STRING_32]
-			l_outside, l_trimmed, l_piece: STRING_32
-			l_in_fence, l_is_fence: BOOLEAN
+			l_outside, l_piece: STRING_32
+			l_fences: BIB_FENCE_TRACKER
 			i: INTEGER
 		do
 			create Result.make (a_text.count)
 			create l_outside.make (a_text.count)
+			create l_fences
 			l_lines := a_text.split ('%N')
 			from i := 1 until i > l_lines.count loop
-				l_trimmed := l_lines.i_th (i).twin
-				l_trimmed.left_adjust
-				l_is_fence := l_trimmed.starts_with ({STRING_32} "```") or l_trimmed.starts_with ({STRING_32} "~~~")
+				l_fences.feed (l_lines.i_th (i))
 				l_piece := l_lines.i_th (i).twin
 				if i < l_lines.count then
 					l_piece.append_character ('%N')
 				end
-				if l_in_fence then
-					Result.append (l_piece)
-					if l_is_fence then
-						l_in_fence := False
+				if l_fences.is_inside then
+					if l_fences.was_fence_line and then not l_outside.is_empty then
+						Result.append (comments_removed (l_outside))
+						l_outside.wipe_out
 					end
-				elseif l_is_fence then
-					Result.append (comments_removed (l_outside))
-					l_outside.wipe_out
 					Result.append (l_piece)
-					l_in_fence := True
 				else
 					l_outside.append (l_piece)
 				end
 				i := i + 1
 			end
 			Result.append (comments_removed (l_outside))
+		end
+
+	fences: BIB_FENCE_TRACKER
+			-- Which lines stand in a code fence (one rule with the notes importer, scan 66).
+		attribute
+			create Result
 		end
 
 	comments_removed (a_text: STRING_32): STRING_32

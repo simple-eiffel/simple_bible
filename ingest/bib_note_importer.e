@@ -150,11 +150,7 @@ feature -- Keeping
 			end
 			l_dir := a_notes_folder.to_string_32 + {STRING_32} "\" + id
 			create l_folder.make (l_dir)
-			if l_folder.is_directory then
-				across l_folder.files_with_extension (".md") as ic loop
-					Result := (create {SIMPLE_FILE}.make (l_dir + {STRING_32} "\" + ic)).delete and Result
-				end
-			elseif Result then
+			if not l_folder.is_directory and Result then
 				Result := l_folder.create_directory
 			end
 			create l_list.make
@@ -176,6 +172,27 @@ feature -- Keeping
 			end
 		end
 
+	keep (a_notes_folder, a_pack, a_frameworks_pack: READABLE_STRING_GENERAL): detachable STRING_32
+			-- The accepted note written (`write_files') and the notes pack `a_pack' built (`build');
+			-- when either fails, the note's earlier files put back and the new ones gone (scan 66: a
+			-- failed build left a manifest that broke every later import). Void when kept, else why not.
+		require
+			accepted: is_accepted
+			pack_named: not a_pack.is_empty
+		do
+			set_aside (a_notes_folder)
+			if not write_files (a_notes_folder) then
+				Result := {STRING_32} "The note's files could not be written in " + a_notes_folder.to_string_32
+			else
+				Result := build (a_notes_folder, a_pack, a_frameworks_pack)
+			end
+			if Result /= Void then
+				put_back (a_notes_folder)
+			else
+				drop_set_aside (a_notes_folder)
+			end
+		end
+
 	build (a_notes_folder, a_pack, a_frameworks_pack: READABLE_STRING_GENERAL): detachable STRING_32
 			-- The notes pack `a_pack' built afresh from every manifest in `a_notes_folder' (names of
 			-- the frameworks pack `a_frameworks_pack' linked, when it exists); Void when it built, else
@@ -187,7 +204,11 @@ feature -- Keeping
 			l_frameworks: STRING_32
 		do
 			create l_builder.make_with_schema (bible.books, schema)
-			if l_builder.sidecars_in (a_notes_folder).is_empty then
+			if not (create {SIMPLE_FILE}.make (a_pack)).parent_path.is_empty and then not (create {SIMPLE_FILE}.make ((create {SIMPLE_FILE}.make (a_pack)).parent_path)).is_directory then
+					-- scan 66: SQLite cannot open a pack in a folder that is not there (it raised, past the
+					-- restore of an earlier note)
+				Result := {STRING_32} "No folder for the notes pack: " + (create {SIMPLE_FILE}.make (a_pack)).parent_path
+			elseif l_builder.sidecars_in (a_notes_folder).is_empty then
 				Result := {STRING_32} "No notes to build."
 			else
 				l_frameworks := a_frameworks_pack.to_string_32
@@ -203,6 +224,74 @@ feature -- Keeping
 
 	built_blocks, built_suggestions: INTEGER
 			-- What the last `build' wrote.
+
+feature {NONE} -- Setting an earlier note aside
+
+	set_aside (a_notes_folder: READABLE_STRING_GENERAL)
+			-- An earlier note with this id: its chapter files and manifest renamed with ".aside", out of
+			-- the builder's sight, until the new note is kept or fails.
+		local
+			l_dir: STRING_32
+			l_ok: BOOLEAN
+		do
+			l_dir := a_notes_folder.to_string_32 + {STRING_32} "\" + id
+			if (create {SIMPLE_FILE}.make (l_dir)).is_directory then
+				across (create {SIMPLE_FILE}.make (l_dir)).files_with_extension (".md") as ic loop
+					l_ok := (create {SIMPLE_FILE}.make (l_dir + {STRING_32} "\" + ic)).rename_to (ic + Aside)
+				end
+			end
+			if (create {SIMPLE_FILE}.make (manifest_path (a_notes_folder))).is_file then
+				l_ok := (create {SIMPLE_FILE}.make (manifest_path (a_notes_folder))).rename_to (id + schema.Manifest_extension + Aside)
+			end
+		end
+
+	put_back (a_notes_folder: READABLE_STRING_GENERAL)
+			-- The new note's files gone, the earlier note's put back.
+		local
+			l_dir: STRING_32
+			l_ok: BOOLEAN
+		do
+			l_dir := a_notes_folder.to_string_32 + {STRING_32} "\" + id
+			if (create {SIMPLE_FILE}.make (l_dir)).is_directory then
+				across (create {SIMPLE_FILE}.make (l_dir)).files_with_extension (".md") as ic loop
+					l_ok := (create {SIMPLE_FILE}.make (l_dir + {STRING_32} "\" + ic)).delete
+				end
+				across (create {SIMPLE_FILE}.make (l_dir)).files_with_extension ({STRING_32} ".md" + Aside) as ic loop
+					l_ok := (create {SIMPLE_FILE}.make (l_dir + {STRING_32} "\" + ic)).rename_to (ic.substring (1, ic.count - Aside.count))
+				end
+			end
+			if (create {SIMPLE_FILE}.make (manifest_path (a_notes_folder))).is_file then
+				l_ok := (create {SIMPLE_FILE}.make (manifest_path (a_notes_folder))).delete
+			end
+			if (create {SIMPLE_FILE}.make (manifest_path (a_notes_folder) + Aside)).is_file then
+				l_ok := (create {SIMPLE_FILE}.make (manifest_path (a_notes_folder) + Aside)).rename_to (id + schema.Manifest_extension)
+			end
+		end
+
+	drop_set_aside (a_notes_folder: READABLE_STRING_GENERAL)
+			-- The earlier note's files set aside, no longer needed.
+		local
+			l_dir: STRING_32
+			l_ok: BOOLEAN
+		do
+			l_dir := a_notes_folder.to_string_32 + {STRING_32} "\" + id
+			if (create {SIMPLE_FILE}.make (l_dir)).is_directory then
+				across (create {SIMPLE_FILE}.make (l_dir)).files_with_extension ({STRING_32} ".md" + Aside) as ic loop
+					l_ok := (create {SIMPLE_FILE}.make (l_dir + {STRING_32} "\" + ic)).delete
+				end
+			end
+			if (create {SIMPLE_FILE}.make (manifest_path (a_notes_folder) + Aside)).is_file then
+				l_ok := (create {SIMPLE_FILE}.make (manifest_path (a_notes_folder) + Aside)).delete
+			end
+		end
+
+	manifest_path (a_notes_folder: READABLE_STRING_GENERAL): STRING_32
+			-- This note's manifest.
+		do
+			Result := a_notes_folder.to_string_32 + {STRING_32} "\" + id + schema.Manifest_extension
+		end
+
+	Aside: STRING_32 = ".aside"
 
 feature {NONE} -- The header
 
@@ -282,16 +371,16 @@ feature {NONE} -- The body
 		local
 			l_links: HASH_TABLE [BOOLEAN, STRING_32]
 			l_line, l_trim: STRING_32
-			l_in_fence: BOOLEAN
+			l_fences: BIB_FENCE_TRACKER
 			i: INTEGER
 		do
 			l_links := (create {BIB_NAME_LIST}.make (bible)).links ((create {BIB_NAME_LIST}.make (bible)).names (""))
+			create l_fences
 			from i := a_start until i > a_lines.count loop
 				l_line := a_lines.i_th (i)
 				l_trim := trimmed (l_line)
-				if l_trim.starts_with ({STRING_32} "```") or l_trim.starts_with ({STRING_32} "~~~") then
-					l_in_fence := not l_in_fence
-				elseif not l_in_fence then
+				l_fences.feed (l_line)
+				if not l_fences.is_inside then
 					check_links (i, l_line, l_links)
 					if suggestions.mentions (l_line) then
 						check_suggestion (i, l_trim)
@@ -358,24 +447,29 @@ feature {NONE} -- The body
 			-- a body with none, goes under the note's title.
 		local
 			l_title, l_text: STRING_32
-			l_in_fence: BOOLEAN
-			l_trim: STRING_32
+			l_fences: BIB_FENCE_TRACKER
 			i: INTEGER
 		do
 			create l_title.make_empty
 			create l_text.make (2000)
+			create l_fences
 			from i := a_start until i > a_lines.count loop
-				l_trim := trimmed (a_lines.i_th (i))
-				if l_trim.starts_with ({STRING_32} "```") or l_trim.starts_with ({STRING_32} "~~~") then
-					l_in_fence := not l_in_fence
-				end
-				if not l_in_fence and then a_lines.i_th (i).starts_with ({STRING_32} "# ") then
+				l_fences.feed (a_lines.i_th (i))
+				if not l_fences.is_inside and then a_lines.i_th (i).starts_with ({STRING_32} "# ") then
 					keep_chapter (l_title, l_text)
 					l_title := trimmed (a_lines.i_th (i).substring (3, a_lines.i_th (i).count))
 					create l_text.make (2000)
 				end
-				l_text.append (a_lines.i_th (i))
-				l_text.append_character ('%N')
+				if not l_fences.is_inside and then suggestions.parsed (a_lines.i_th (i)) /= Void then
+						-- scan 66: a suggestion stands as a block of its own (blank lines around it), or the
+						-- splitter would read it into its paragraph and link its passage as a citation
+					l_text.append_character ('%N')
+					l_text.append (trimmed (a_lines.i_th (i)))
+					l_text.append ({STRING_32} "%N%N")
+				else
+					l_text.append (a_lines.i_th (i))
+					l_text.append_character ('%N')
+				end
 				i := i + 1
 			end
 			keep_chapter (l_title, l_text)

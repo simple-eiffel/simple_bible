@@ -909,9 +909,15 @@ feature -- Ingest kit (0.7.32)
 			assert_true ("an id of capitals and a hyphen refused", not l_importer.is_accepted and then l_importer.problems.first.has_substring ("lowercase"))
 			l_importer.read ({STRING_32} "```markdown%N" + Prepared_note + "```%N", Void)
 			assert_true ("a file an AI wrapped in a fence still reads", l_importer.is_accepted)
+				-- Scan 66: a suggestion written right against its paragraph still stands apart; a link
+				-- inside a tilde fence is code, unchecked, and stays code.
+			l_importer.read ({STRING_32} "---%Nsbn: 1%Nid: tight%Ntitle: Tight%N---%N# Tight%N%NJude 5 here.%N{{suggest: Jude 9 | close by}}%NMore.%N", Void)
+			assert_true ("a suggestion against its paragraph passes", l_importer.is_accepted)
+			assert_true ("and stands as its own block", l_importer.chapters.first.text.has_substring ({STRING_32} "%N%N{{suggest: Jude 9 | close by}}%N%N"))
+			l_importer.read (Prepared_note + {STRING_32} "%N~~~~%N[code](essay:nope)%N```%N~~~~%N", Void)
+			assert_true ("a link inside a fence is code", l_importer.is_accepted)
 			l_importer.read (Prepared_note, Void)
-			assert_true ("its files written", l_importer.write_files (Notes_folder))
-			assert_true ("the notes pack built", l_importer.build (Notes_folder, Folder_notes_file, Folder_frameworks_file) = Void)
+			assert_true ("kept: its files written and the notes pack built", l_importer.keep (Notes_folder, Folder_notes_file, Folder_frameworks_file) = Void)
 			assert_integers_equal ("the suggestion stored", 1, l_importer.built_suggestions)
 			l_bible.close
 			l_bible := bible ("", Folder)
@@ -934,6 +940,12 @@ feature -- Ingest kit (0.7.32)
 			create l_importer.make (l_bible)
 			l_importer.read (Prepared_note, Void)
 			assert_true ("a second import of the same id is told it replaces", across l_importer.warnings as al_w some al_w.has_substring ("replaces") end)
+				-- Scan 66: a replacement whose build fails puts the earlier note back as it was.
+			l_importer.read ({STRING_32} "---%Nsbn: 1%Nid: sermon8%Ntitle: Replaced%N---%N# Replaced%N%NOther words.%N", Void)
+			assert_true ("the replacement reads", l_importer.is_accepted)
+			assert_false ("its build fails (no such folder)", l_importer.keep (Notes_folder, "no_such_folder\notes.db", "") = Void)
+			assert_true ("the earlier note's chapter is back", (create {SIMPLE_FILE}.make (Notes_folder + "\sermon8\01.md")).read_text_utf_8.has_substring ("Second paragraph."))
+			assert_true ("and its manifest", (create {SIMPLE_FILE}.make (Notes_folder + "\sermon8.note.json")).read_text_utf_8.has_substring ("Sermon on Jude"))
 			l_bible.close
 			remove_notes_folder
 			fixture.delete_file (Kacc_file)
@@ -961,7 +973,9 @@ feature {NONE} -- Fixture
 			l_ok: BOOLEAN
 		do
 			fixture.delete_file (Notes_folder + "\sermon8\01.md")
+			fixture.delete_file (Notes_folder + "\sermon8\01.md.aside")
 			fixture.delete_file (Notes_folder + "\sermon8.note.json")
+			fixture.delete_file (Notes_folder + "\sermon8.note.json.aside")
 			if (create {SIMPLE_FILE}.make (Notes_folder + "\sermon8")).is_directory then
 				l_ok := (create {SIMPLE_FILE}.make (Notes_folder + "\sermon8")).delete_directory
 			end

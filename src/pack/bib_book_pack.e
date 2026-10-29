@@ -138,26 +138,14 @@ feature -- Access
 			place: (create {BIB_HUB_ID}).is_place (a_book, a_chapter, a_verse)
 		local
 			l_sql: STRING_8
-			l_reasons: ARRAYED_LIST [STRING_32]
-			i: INTEGER
 		do
 			if has_table ("block_suggestion") then
-				l_sql := blocks_sql + "JOIN " + pack_alias + ".block_suggestion s ON s.book_id = b.book_id AND s.chapter = b.chapter AND s.block = b.block "
+				l_sql := "SELECT b.book_id, b.chapter, b.block, b.kind, b.level, b.body_markdown, k.title AS book_title, c.title AS chapter_title, s.reason AS reason FROM "
+					+ blocks_sql.substring (blocks_sql.substring_index (" FROM ", 1) + 6, blocks_sql.count)
+					+ "JOIN " + pack_alias + ".block_suggestion s ON s.book_id = b.book_id AND s.chapter = b.chapter AND s.block = b.block "
 					+ "WHERE ? BETWEEN s.start_hub AND s.end_hub ORDER BY k.ordinal, b.chapter, b.block, s.ordinal"
 				Result := blocks_answer ("blocks_suggesting", l_sql, {ARRAY [detachable ANY]} <<(create {BIB_HUB_ID}).hub_id (a_book, a_chapter, a_verse)>>,
 					a_book.out.to_string_32 + {STRING_32} " " + a_chapter.out.to_string_32 + {STRING_32} ":" + a_verse.out.to_string_32)
-				run_query ("SELECT s.reason FROM " + pack_alias + ".block_suggestion s JOIN " + pack_alias + ".book k ON k.book_id = s.book_id WHERE ? BETWEEN s.start_hub AND s.end_hub ORDER BY k.ordinal, s.chapter, s.block, s.ordinal",
-					{ARRAY [detachable ANY]} <<(create {BIB_HUB_ID}).hub_id (a_book, a_chapter, a_verse)>>)
-				create l_reasons.make (4)
-				if attached last_rows as al_rows then
-					across al_rows.rows as ic loop
-						l_reasons.extend (ic.string_value ("reason"))
-					end
-				end
-				from i := 1 until i > Result.count or i > l_reasons.count loop
-					Result.item (i).set_suggestion_reason (l_reasons.i_th (i))
-					i := i + 1
-				end
 			else
 				create Result.make_success (method ("blocks_suggesting", "no block_suggestion table", pack_alias, "all", 0), {ARRAY [BIB_PROVENANCE]} <<pack_provenance>>,
 					create {ARRAYED_LIST [BIB_BOOK_BLOCK]}.make (0))
@@ -243,7 +231,9 @@ feature {NONE} -- Implementation
 		end
 
 	blocks_answer (a_feature, a_sql: STRING_8; a_args: ARRAY [detachable ANY]; a_scope: READABLE_STRING_GENERAL): BIB_LIST_RESULT [BIB_BOOK_BLOCK]
-			-- The blocks `a_sql' selects, as an answer.
+			-- The blocks `a_sql' selects, as an answer; a "reason" column, when `a_sql' selects one, is
+			-- each block's suggestion reason, read in the same row (scan 66: two queries paired by
+			-- index could pair the wrong ones).
 		local
 			l_list: ARRAYED_LIST [BIB_BOOK_BLOCK]
 			l_provenance: BIB_PROVENANCE
@@ -260,6 +250,9 @@ feature {NONE} -- Implementation
 						l_list.extend (create {BIB_BOOK_BLOCK}.make (ic.string_value ("book_id"), ic.integer_value ("chapter"), ic.integer_value ("block"),
 							ic.string_value ("kind"), ic.integer_value ("level"), ic.string_value ("body_markdown"), ic.string_value ("book_title"),
 							ic.string_value ("chapter_title"), schema, l_provenance))
+						if a_sql.has_substring (" AS reason") then
+							l_list.last.set_suggestion_reason (ic.string_value ("reason"))
+						end
 					end
 				end
 				create Result.make_success (method (a_feature, a_sql, pack_alias, a_scope, l_list.count), {ARRAY [BIB_PROVENANCE]} <<l_provenance>>, l_list)
