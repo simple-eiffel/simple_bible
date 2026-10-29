@@ -4,6 +4,14 @@ All notable changes to simple_bible are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added (2026-10-29: the ingest kit; personal installer 0.7.32)
+
+- **File > Make ingest kit...** (research/21-INGEST-KIT.md): pick a source (TXT or MD) and Simple Bible writes one self-contained `<source>.kit.md` beside it (its path on the clipboard): instructions written for that source (plain text or Markdown, short or long), the prepared-file format with an example, everything Simple Bible can link to (the 66 books and their short forms, the link forms, every name of the books, essays, frameworks and notes with its link: `BIB_NAME_LIST`, shared with `bible names`), then the source. Give it to an AI chat.
+- **File > Import prepared notes...**: `BIB_NOTE_IMPORTER` checks the returned file line by line (the header, every link a web page, a real passage, this note or a listed target; every `{{suggest: reference | reason}}` on its own line, reading, with a reason; a summary passed off as notes and a replaced note warned), keeps it as files in the data folder with a manifest, rebuilds the **notes pack** (`BIB_NOTE_SCHEMA`, `note:<id>/<chapter>#<block>`, a third text-pack kind) with the books' builder, reopens the engine on it and shows the note. A refused file shows its report in the Author Library.
+- **Suggested passages** (`block_suggestion`, `BIB_SUGGESTION_LINE`): kept apart from citations; shown after their paragraph as "(Suggested: ... - why)", and in the verse's Books & essays after the citations, marked "Suggested (why)". Notes are searched with the writings and named in the next kit.
+- **Buttons**: a magnifying glass beside the reference box (C4) and the search box (C6), and an Ask button (C6.5), each doing what Enter does, with tooltips (Larry). Ask's first request shows "Starting Ask" while the helper starts.
+- Tests 202.
+
 ### Fixed (2026-10-29: personal installer 0.7.31.1, a patch of 0.7.31)
 
 - Design scans 63-65 in Ask: Parallel shows the versions asked for, each once; a book named as a search's scope is searched, for that one search only; a range typed as "5-7" counts its numbers; the helper's replies are matched by id with its errors apart, waits are short (5 s to start, 3 s to answer), a failed helper is retried after a minute rather than on every request, a request the helper refuses keeps Ask on, and a helper that dies is told at once; one rule for word characters (Greek and Hebrew letters too) in the window and Ask's checks; "the good news" and "fair weather" are not refused as outside requests; "faith without works" is not turned into a NOT; the log keeps the helper's own reason. The version test reads a four-part patch number.

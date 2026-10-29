@@ -125,6 +125,10 @@ feature {NONE} -- Initialization
 			create back_button.make ("<", Void)
 			create forward_button.make (">", Void)
 			create reference_box.make_lookup
+			create go_button.make ({STRING_32} "%/128269/", Void)
+			go_button.set_tooltip ("Go: open the reference typed in the box (C4), or search for it when it names no place. Enter does the same.")
+			create search_button.make ({STRING_32} "%/128269/", Void)
+			search_button.set_tooltip ("Search: every verse the box names (C6) - words, %"phrases%", word*, AND, OR, NOT, Strong's numbers - in the scope beside it. Enter does the same.")
 			create version_select.make
 			create scope_select.make
 			scope_select.add_option ({BIB_SCOPE_NAMES}.Whole_bible_name)
@@ -137,6 +141,8 @@ feature {NONE} -- Initialization
 			scope_select.select_index (1)
 			create search_box.make_lookup
 			create ask_box.make_lookup
+			create ask_button.make ("Ask", Void)
+			ask_button.set_tooltip ("Ask: read the request in the box (Enter does the same).")
 			ask_box.set_tooltip ("Ask in plain words: %"commentary on Titus 2:12%", %"Psalm 23 in Hebrew%", %"verses with light or darkness%". Enter.")
 			create mode_switch.make
 			create smaller_button.make ("A-", Void)
@@ -384,6 +390,11 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 				scope_select.select_index (3)
 				search_box.set_text ("grace")
 				on_search
+			elseif snapshot_tab.same_string ({STRING_32} "kitwrite") and then attached (create {SIMPLE_ENV}).get ("SIMPLE_BIBLE_SNAPSHOT_FILE") as al_file then
+				write_ingest_kit (al_file.to_string_32)
+			elseif snapshot_tab.same_string ({STRING_32} "importnote") and then attached (create {SIMPLE_ENV}).get ("SIMPLE_BIBLE_SNAPSHOT_FILE") as al_file then
+				import_note (al_file.to_string_32)
+				commentary_tabs.select_tab (In_books_tab)
 			elseif snapshot_tab.same_string ({STRING_32} "ask") then
 				ask_box.set_text ("commentary on Galatians 2:16")
 				on_ask
@@ -538,8 +549,11 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			back_button.set_on_click (agent move_in_history (-1))
 			forward_button.set_on_click (agent move_in_history (1))
 			reference_box.set_on_enter (agent on_reference)
+			go_button.set_on_click (agent on_reference)
+			search_button.set_on_click (agent on_search)
 			search_box.set_on_enter (agent on_search)
 			ask_box.set_on_enter (agent on_ask)
+			ask_button.set_on_click (agent on_ask)
 			version_select.set_on_change (agent on_version_change)
 			scope_select.set_on_change (agent on_scope_change)
 			mode_switch.set_on_change (agent on_mode)
@@ -582,7 +596,7 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			verses_grid.set_on_select (agent on_verse_hit)
 			close_results_button.set_on_click (agent hide_results)
 			places_grid.set_on_select (agent on_place)
-			window.set_on_tick (agent load_more_places)
+			window.set_on_tick (agent on_window_tick)
 			focus_button.set_on_click (agent toggle_focus_reading)
 			origin_button.set_on_click (agent back_to_commentary_verse)
 			back_to_writings_button.set_on_click (agent back_to_writings)
@@ -668,11 +682,13 @@ feature {NONE} -- Window
 			l_toolbar.put (back_button)
 			l_toolbar.put (forward_button)
 			l_toolbar.put (reference_box.growing)
+			l_toolbar.put (go_button)
 			l_toolbar.put (version_select)
 			l_toolbar.put (search_box.growing)
+			l_toolbar.put (search_button)
 			l_toolbar.put (scope_select)
-			l_toolbar.put (create {SW_LABEL}.make_ui ("Ask"))
 			l_toolbar.put (ask_box.growing)
+			l_toolbar.put (ask_button)
 			create l_spacer.make_weighted (0.2)
 			l_toolbar.put (l_spacer)
 			l_toolbar.put (mode_switch)
@@ -906,6 +922,9 @@ feature {NONE} -- Menus and keys (C2)
 	file_menu: SW_MENU
 		do
 			create Result.make
+			Result.add_item ("Make ingest kit...", "", True, agent make_ingest_kit)
+			Result.add_item ("Import prepared notes...", "", True, agent import_prepared_notes)
+			Result.add_separator
 			Result.add_item ("Export...", "", False, Void)
 			Result.add_item ("Print...", "", False, Void)
 			Result.add_separator
@@ -4175,9 +4194,14 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 		end
 
 	block_snippet (a_block: BIB_BOOK_BLOCK): STRING_32
-			-- A paragraph's first words, for a list.
+			-- A paragraph's first words, for a list; "Suggested (why): ..." when the verse was only
+			-- suggested for it.
 		do
-			Result := a_block.snippet (140)
+			if a_block.suggestion_reason.is_empty then
+				Result := a_block.snippet (140)
+			else
+				Result := {STRING_32} "Suggested (" + a_block.suggestion_reason + {STRING_32} "): " + a_block.snippet (120)
+			end
 		end
 
 	show_book_place (a_kind, a_book: READABLE_STRING_GENERAL; a_chapter, a_block: INTEGER)
@@ -4231,10 +4255,12 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 			-- section (0.7.31; COMMENTARY's builder notes).
 		local
 			l_linker: BIB_REFERENCE_LINKER
+			l_suggestions: ARRAYED_LIST [TUPLE [block: INTEGER; passage, reason: STRING_32]]
 		do
 			l_linker := page_linker
 			create Result.make (20000)
 			Result.append ({STRING_32} "*" + a_book.full_title + {STRING_32} "*%N%N")
+			l_suggestions := a_pack.chapter_suggestions (a_book.id, a_chapter)
 			if attached a_pack.chapter_blocks (a_book.id, a_chapter) as al_blocks and then al_blocks.is_success then
 				across 1 |..| al_blocks.count as al_i loop
 					if a_pack.schema.Starts_at_title and then is_subtitle (al_blocks, al_i) then
@@ -4245,7 +4271,14 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 					elseif al_blocks.item (al_i).kind.same_string_general ("code") then
 						Result.append (al_blocks.item (al_i).markdown + {STRING_32} "%N%N")
 					else
-						Result.append (l_linker.linked (al_blocks.item (al_i).markdown) + {STRING_32} "%N%N")
+						Result.append (l_linker.linked (al_blocks.item (al_i).markdown))
+							-- 0.7.32: a passage the text only alludes to, after its paragraph, never as a citation
+						across l_suggestions as ic loop
+							if ic.block = al_blocks.item (al_i).block then
+								Result.append ({STRING_32} " *(Suggested: " + l_linker.linked (ic.passage) + (if ic.reason.is_empty then {STRING_32} "" else {STRING_32} " - " + ic.reason end) + {STRING_32} ")*")
+							end
+						end
+						Result.append ({STRING_32} "%N%N")
 					end
 				end
 			end
@@ -4273,6 +4306,14 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 						end
 					end
 				end
+					-- then the paragraphs the verse was only suggested for, marked so (0.7.32)
+				across library_packs as ic loop
+					if attached ic.blocks_suggesting (commentary_book, commentary_chapter, commentary_verse) as al_result and then al_result.is_success then
+						across 1 |..| al_result.count as al_i loop
+							in_books_rows.extend (al_result.item (al_i))
+						end
+					end
+				end
 			end
 			in_books_grid.set_rows (in_books_rows)
 		end
@@ -4292,10 +4333,188 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 			end
 		end
 
+feature {NONE} -- The ingest kit (0.7.32, research/21)
+
+	make_ingest_kit
+			-- File > Make ingest kit: choose a source (TXT or MD); its kit is written beside it.
+		local
+			l_dialog: SW_FILE_DIALOG
+		do
+			create l_dialog.make_open (documents_folder)
+			l_dialog.set_extension_filter ("*.txt;*.md")
+			l_dialog.set_on_accept (agent (a_path: STRING_32) do window.close_sheet; write_ingest_kit (a_path) end)
+			l_dialog.set_on_cancel (agent window.close_sheet)
+			window.show_sheet (l_dialog, 680.0)
+		end
+
+	write_ingest_kit (a_source: STRING_32)
+			-- The kit for the source file `a_source', written beside it as <name>.kit.md.
+		local
+			l_file: SIMPLE_FILE
+			l_kit_path: STRING_32
+			l_ok: BOOLEAN
+		do
+			create l_file.make (a_source)
+			if not bible.is_open then
+				say ("No Bible content is open, so a kit cannot list what Simple Bible holds.")
+			elseif not l_file.is_file then
+				say ({STRING_32} "No file at " + a_source)
+			else
+				l_kit_path := kit_path_for (a_source)
+				l_ok := (create {SIMPLE_FILE}.make (l_kit_path)).write_text_utf_8 ((create {BIB_INGEST_KIT}.make (bible)).kit_text (l_file.file_name, l_file.read_text_utf_8))
+				if l_ok then
+					copy_to_clipboard (l_kit_path)
+					say ({STRING_32} "Ingest kit written: " + l_kit_path + {STRING_32} " (its path is on the clipboard). Give it to an AI chat; import what it returns with File > Import prepared notes.")
+				else
+					say ({STRING_32} "The kit could not be written at " + l_kit_path)
+				end
+			end
+		end
+
+	kit_path_for (a_source: STRING_32): STRING_32
+			-- "notes.txt" "notes.kit.md".
+		local
+			l_dot, l_slash: INTEGER
+		do
+			l_dot := a_source.last_index_of ('.', a_source.count)
+			l_slash := a_source.last_index_of ('\', a_source.count)
+			if l_dot > l_slash and l_dot > 1 then
+				Result := a_source.substring (1, l_dot - 1) + {STRING_32} ".kit.md"
+			else
+				Result := a_source + {STRING_32} ".kit.md"
+			end
+		ensure
+			a_kit: Result.ends_with ({STRING_32} ".kit.md")
+		end
+
+	import_prepared_notes
+			-- File > Import prepared notes: choose the file an AI returned; checked, then kept as a note.
+		local
+			l_dialog: SW_FILE_DIALOG
+		do
+			create l_dialog.make_open (documents_folder)
+			l_dialog.set_extension_filter ("*.md;*.txt")
+			l_dialog.set_on_accept (agent (a_path: STRING_32) do window.close_sheet; import_note (a_path) end)
+			l_dialog.set_on_cancel (agent window.close_sheet)
+			window.show_sheet (l_dialog, 680.0)
+		end
+
+	import_note (a_path: STRING_32)
+			-- The prepared file `a_path' checked (its source beside it, when there, for the length check);
+			-- refused with its report in the Author Library, or kept: its files written, the notes pack
+			-- rebuilt, the engine reopened on it, the note shown.
+		local
+			l_importer: BIB_NOTE_IMPORTER
+			l_file, l_source: SIMPLE_FILE
+			l_text, l_folder, l_packs, l_new, l_pack: STRING_32
+			l_error: detachable STRING_32
+			l_ok: BOOLEAN
+		do
+			create l_file.make (a_path)
+			if bible.is_open and then l_file.is_file then
+				l_text := l_file.read_text_utf_8
+				create l_importer.make (bible)
+				l_importer.read (l_text, Void)
+				if not l_importer.source.is_empty then
+					create l_source.make (l_file.parent_path + {STRING_32} "\" + l_importer.source)
+					if l_source.is_file then
+						l_importer.read (l_text, l_source.read_text_utf_8)
+					end
+				end
+				if not l_importer.is_accepted then
+					show_import_report ({STRING_32} "Import refused", l_importer.problems, l_importer.warnings)
+				else
+					l_folder := (create {BIB_DATA_LOCATION}).notes_folder.to_string_32
+					l_packs := (create {BIB_DATA_LOCATION}).pack_folder.to_string_32
+					l_pack := l_packs + {STRING_32} "\" + {BIB_NOTE_SCHEMA}.Pack_file_name
+					l_new := l_pack + {STRING_32} ".new"
+					if not l_importer.write_files (l_folder) then
+						say ({STRING_32} "The note's files could not be written in " + l_folder)
+					else
+						l_error := l_importer.build (l_folder, l_new, l_packs + {STRING_32} "\" + {BIB_FRAMEWORK_SCHEMA}.Pack_file_name)
+						if attached l_error as al_error then
+							show_import_report ({STRING_32} "The notes pack could not be built", create {ARRAYED_LIST [STRING_32]}.make_from_array (<<al_error>>), l_importer.warnings)
+						else
+								-- the pack is attached while open: close, swap in the new one, open again
+							bible.close
+							if (create {SIMPLE_FILE}.make (l_pack)).is_file then
+								l_ok := (create {SIMPLE_FILE}.make (l_pack)).delete
+							end
+							l_ok := (create {SIMPLE_FILE}.make (l_new)).rename_to ({BIB_NOTE_SCHEMA}.Pack_file_name)
+							bible.open
+							framework_names_cache := Void
+							writing_names_cache := Void
+							create listed_book.make_empty
+							create listed_kind.make_empty
+							fill_books
+							show_book_place ({BIB_NOTE_SCHEMA}.Pack_kind, l_importer.id, 1, 0)
+							say ({STRING_32} "Imported " + l_importer.title + {STRING_32} ": " + l_importer.built_blocks.out.to_string_32 + {STRING_32} " paragraphs, "
+								+ l_importer.built_suggestions.out.to_string_32 + (if l_importer.built_suggestions = 1 then {STRING_32} " suggested passage." else {STRING_32} " suggested passages." end)
+								+ (if l_importer.warnings.is_empty then {STRING_32} "" else {STRING_32} " Note: " + l_importer.warnings.first end))
+						end
+					end
+				end
+			end
+		end
+
+	show_import_report (a_heading: STRING_32; a_problems, a_warnings: LIST [STRING_32])
+			-- The import's report in the Author Library's reader.
+		local
+			l_page: STRING_32
+		do
+			create l_page.make (2000)
+			l_page.append ({STRING_32} "# " + a_heading + {STRING_32} "%N%N")
+			across a_problems as ic loop
+				l_page.append ({STRING_32} "- " + ic + {STRING_32} "%N")
+			end
+			if not a_warnings.is_empty then
+				l_page.append ({STRING_32} "%N## Warnings%N%N")
+				across a_warnings as ic loop
+					l_page.append ({STRING_32} "- " + ic + {STRING_32} "%N")
+				end
+			end
+			l_page.append ({STRING_32} "%NCorrect the prepared file (or ask the AI to), then import it again.%N")
+			bring_into_view (results_panel, results_tabs, Author_library_tab)
+			book_view.set_document (commentary_reader.read (l_page))
+			say (a_heading)
+		end
+
+	documents_folder: STRING_32
+			-- Where the file dialogs open: the reader's Documents folder, else the current one.
+		do
+			if attached (create {SIMPLE_ENV}).item ("USERPROFILE") as al_home then
+				Result := al_home.to_string_32 + {STRING_32} "\Documents"
+			else
+				Result := {STRING_32} "."
+			end
+		end
+
 feature {NONE} -- Ask (C6.5, 0.7.31: plain words through the Cactus Needle helper)
 
 	ask_box: BIB_LOOKUP_BOX
 			-- C6.5: a request in plain words.
+
+	ask_button: SW_BUTTON
+			-- Reads the request in `ask_box' (Larry, 2026-10-29).
+
+	go_button, search_button: SW_BUTTON
+			-- Beside C4 and C6, a magnifying glass each, doing what Enter does (Larry, 2026-10-29).
+
+	pending_ask: detachable STRING_32
+			-- A request waiting for the helper to start, so "Starting Ask" is painted first.
+
+	pending_ask_ticks: INTEGER
+			-- Ticks left before `pending_ask' runs.
+
+	needs_helper_start: BOOLEAN
+			-- Will the next request start the helper (about half a second)?
+		do
+			if attached ask_helper as al_helper then
+				Result := not al_helper.is_ready and then al_helper.may_start
+			else
+				Result := True
+			end
+		end
 
 	ask_helper: detachable BIB_ASK_HELPER
 			-- The helper, started at the first request that needs it.
@@ -4340,8 +4559,6 @@ feature {NONE} -- Ask (C6.5, 0.7.31: plain words through the Cactus Needle helpe
 		local
 			l_text: STRING_32
 			l_check: BIB_ASK_CHECK
-			l_calls: ARRAYED_LIST [BIB_ASK_CALL]
-			l_helper: BIB_ASK_HELPER
 		do
 			l_text := ask_box.text.to_string_32
 			l_text.left_adjust
@@ -4356,7 +4573,30 @@ feature {NONE} -- Ask (C6.5, 0.7.31: plain words through the Cactus Needle helpe
 				elseif attached (create {BIB_LOOKUP}.make (bible)).place_named (l_text) as al_place then
 					go_to (al_place.book, al_place.chapter, al_place.verse)
 					log_ask (l_text, "", "rule 1: read as a reference")
+				elseif needs_helper_start then
+					pending_ask := l_text
+					pending_ask_ticks := 2
+					say ("Starting Ask: the first request takes a moment...")
+					window.request_render
 				else
+					answer_ask (l_text)
+				end
+			end
+		end
+
+	answer_ask (a_text: STRING_32)
+			-- The request `a_text' through the helper (started here when it is not running): its calls
+			-- checked and run, or the search box when Ask cannot answer it safely.
+		local
+			l_text: STRING_32
+			l_check: BIB_ASK_CHECK
+			l_calls: ARRAYED_LIST [BIB_ASK_CALL]
+			l_helper: BIB_ASK_HELPER
+		do
+			l_text := a_text
+			if bible.is_open then
+				create l_check.make (bible)
+				if not l_text.is_empty then
 					if attached ask_helper as al_running and then not al_running.is_ready and then al_running.may_start then
 						al_running.start
 					elseif ask_helper = Void then
@@ -5163,6 +5403,20 @@ feature {NONE} -- Dictionary and lexicon (S3, P05)
 		do
 			if a_model >= 1 and a_model <= places.count and then places.i_th (a_model).is_readable then
 				go_to (places.i_th (a_model).book_id, places.i_th (a_model).chapter, places.i_th (a_model).verse)
+			end
+		end
+
+	on_window_tick
+			-- The window's heartbeat: a long every-place list's next pages; an Ask request waiting for
+			-- its helper to start, once "Starting Ask" has been painted (0.7.32).
+		do
+			load_more_places
+			if attached pending_ask as al_text then
+				pending_ask_ticks := pending_ask_ticks - 1
+				if pending_ask_ticks <= 0 then
+					pending_ask := Void
+					answer_ask (al_text)
+				end
 			end
 		end
 

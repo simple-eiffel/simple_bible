@@ -29,7 +29,40 @@ feature -- Access
 			a_book: Result >= 0 and Result <= 66
 		end
 
+	forms_of (a_book: INTEGER): ARRAYED_LIST [STRING_32]
+			-- Every short form of book `a_book', shortest first (for the ingest kit's list).
+		do
+			create Result.make (4)
+			across table as ic loop
+				if ic = a_book then
+					Result.extend (@ic.key)
+				end
+			end
+			sort_by_length (Result)
+		ensure
+			all_of_the_book: across Result as ic all book_of (ic) = a_book end
+		end
+
 feature {NONE} -- Implementation
+
+	sort_by_length (a_list: ARRAYED_LIST [STRING_32])
+			-- `a_list' ordered shortest first.
+		local
+			i, j: INTEGER
+			l_swap: STRING_32
+		do
+			from i := 1 until i > a_list.count loop
+				from j := i + 1 until j > a_list.count loop
+					if a_list.i_th (j).count < a_list.i_th (i).count then
+						l_swap := a_list.i_th (i)
+						a_list.put_i_th (a_list.i_th (j), i)
+						a_list.put_i_th (l_swap, j)
+					end
+					j := j + 1
+				end
+				i := i + 1
+			end
+		end
 
 	table: HASH_TABLE [INTEGER, STRING_32]
 			-- Every abbreviation, to its book.

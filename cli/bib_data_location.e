@@ -58,6 +58,14 @@ feature -- Access
 			not_empty: not Result.is_empty
 		end
 
+	notes_folder: STRING
+			-- The notes brought in through ingest kits, as files (0.7.32): %LOCALAPPDATA%\simple_bible\notes.
+		do
+			Result := local_data ("notes")
+		ensure
+			not_empty: not Result.is_empty
+		end
+
 	ask_log_path: STRING
 			-- What Ask was asked and what it did, one line a request (0.7.31), in
 			-- %LOCALAPPDATA%\simple_bible: kept on this machine only, for tuning NEEDLE's checks.

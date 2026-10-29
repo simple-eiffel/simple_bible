@@ -74,7 +74,7 @@ feature -- Access
 			create Result.make (0)
 		end
 
-	book_count, chapter_count, block_count, passage_count, framework_use_count: INTEGER
+	book_count, chapter_count, block_count, passage_count, framework_use_count, suggestion_count: INTEGER
 			-- What the last build wrote.
 
 	sidecars_in (a_folder: READABLE_STRING_GENERAL): ARRAYED_LIST [STRING_32]
@@ -103,6 +103,8 @@ feature -- Commands
 			block_count := 0
 			passage_count := 0
 			framework_use_count := 0
+			suggestion_count := 0
+			suggestion_ordinal := 0
 			records.wipe_out
 			create warnings.make (0)
 			read_framework_spellings (a_frameworks_pack)
@@ -240,7 +242,8 @@ feature {NONE} -- Writing
 			-- One book: its row, aliases, chapters, their blocks and the blocks' indexes.
 		local
 			l_blocks: BIB_MARKDOWN_BLOCKS
-			l_chapter, l_block: INTEGER
+			l_chapter, l_block, l_number, l_last_text: INTEGER
+			l_pending: ARRAYED_LIST [TUPLE [passage, reason: STRING_32]]
 		do
 			a_db.execute_with_args ("INSERT INTO book VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'author', 1)",
 				<<a_record.id, a_ordinal, a_record.title, a_record.subtitle, non_empty_or (a_record.author, "Larry Rix"), a_record.status,
@@ -275,19 +278,77 @@ feature {NONE} -- Writing
 				end
 				fail_unless (not schema.Starts_at_title or else (not l_blocks.blocks.is_empty and then l_blocks.blocks.first.kind.same_string ("heading") and then l_blocks.blocks.first.level = 1),
 					a_record.chapters.i_th (l_chapter).file, {STRING_32} "no %"# %" title to begin at (scan 62: what stood above it would have been kept)")
+				l_number := 0
+				l_last_text := 0
+				create l_pending.make (0)
 				from l_block := 1 until l_block > l_blocks.blocks.count or last_error /= Void loop
-					a_db.execute_with_args ("INSERT INTO book_block VALUES (?, ?, ?, ?, ?, ?, 'author', 1)",
-						<<a_record.id, l_chapter, l_block, l_blocks.blocks.i_th (l_block).kind, l_blocks.blocks.i_th (l_block).level, l_blocks.blocks.i_th (l_block).markdown>>)
-					check_db (a_db, {STRING_32} "A block of " + a_record.id + {STRING_32} " could not be written.")
-					block_count := block_count + 1
-					put_search_row (a_db, schema.link_text (a_record.id, l_chapter, l_block), a_record.title + {STRING_32} ", " + a_record.chapters.i_th (l_chapter).title,
-						l_blocks.blocks.i_th (l_block).markdown, "author")
-					write_indexes (a_db, a_record.id, l_chapter, l_block, a_linker.linked (l_blocks.blocks.i_th (l_block).markdown))
+					if attached suggestions.parsed (l_blocks.blocks.i_th (l_block).markdown) as al_suggestion then
+							-- 0.7.32: a passage alluded to, kept apart, on the paragraph it follows
+						if l_last_text > 0 then
+							write_suggestion (a_db, a_record.id, l_chapter, l_last_text, al_suggestion)
+						else
+							l_pending.extend (al_suggestion)
+						end
+					else
+						l_number := l_number + 1
+						a_db.execute_with_args ("INSERT INTO book_block VALUES (?, ?, ?, ?, ?, ?, 'author', 1)",
+							<<a_record.id, l_chapter, l_number, l_blocks.blocks.i_th (l_block).kind, l_blocks.blocks.i_th (l_block).level, l_blocks.blocks.i_th (l_block).markdown>>)
+						check_db (a_db, {STRING_32} "A block of " + a_record.id + {STRING_32} " could not be written.")
+						block_count := block_count + 1
+						put_search_row (a_db, schema.link_text (a_record.id, l_chapter, l_number), a_record.title + {STRING_32} ", " + a_record.chapters.i_th (l_chapter).title,
+							l_blocks.blocks.i_th (l_block).markdown, "author")
+						write_indexes (a_db, a_record.id, l_chapter, l_number, a_linker.linked (l_blocks.blocks.i_th (l_block).markdown))
+						if not l_blocks.blocks.i_th (l_block).kind.same_string ("heading") then
+							l_last_text := l_number
+							across l_pending as ic loop
+								write_suggestion (a_db, a_record.id, l_chapter, l_number, ic)
+							end
+							l_pending.wipe_out
+						end
+					end
 					l_block := l_block + 1
+				end
+				across l_pending as ic loop
+						-- a chapter of headings only: on its last block
+					write_suggestion (a_db, a_record.id, l_chapter, l_number.max (1), ic)
 				end
 				l_chapter := l_chapter + 1
 			end
 		end
+
+	write_suggestion (a_db: SIMPLE_SQL_DATABASE; a_book: STRING_32; a_chapter, a_block: INTEGER; a_suggestion: TUPLE [passage, reason: STRING_32])
+			-- Suggestion `a_suggestion' on block `a_block', its passage as hubs; one that does not read is
+			-- a warning, not written.
+		local
+			l_hub: BIB_HUB_ID
+			l_start, l_end: INTEGER_64
+		do
+			if attached (create {BIB_REFERENCE_LINKER}.make_forgiving (catalog)).reference_at (a_suggestion.passage, 1) as al_found
+				and then catalog.has_book (al_found.book)
+			then
+				create l_hub
+				l_start := l_hub.hub_of_place (al_found.book, al_found.chapter, al_found.verse.max (1))
+				l_end := l_hub.hub_of_place (al_found.book, al_found.end_chapter, (if al_found.end_verse = 0 then l_hub.Max_part else al_found.end_verse end))
+				if l_start > 0 and l_end >= l_start then
+					suggestion_ordinal := suggestion_ordinal + 1
+					a_db.execute_with_args ("INSERT INTO block_suggestion VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'author', 1)",
+						<<a_book, a_chapter, a_block, suggestion_ordinal, a_suggestion.passage, l_start, l_end, a_suggestion.reason>>)
+					check_db (a_db, "A suggestion could not be written.")
+					suggestion_count := suggestion_count + 1
+				end
+			else
+				warnings.extend (a_book + {STRING_32} "/" + a_chapter.out.to_string_32 + {STRING_32} ": the suggested reference " + a_suggestion.passage + {STRING_32} " does not read; left out")
+			end
+		end
+
+	suggestions: BIB_SUGGESTION_LINE
+			-- Reads a suggestion's line.
+		once
+			create Result
+		end
+
+	suggestion_ordinal: INTEGER
+			-- The last suggestion's ordinal (unique across the pack).
 
 	write_indexes (a_db: SIMPLE_SQL_DATABASE; a_book: STRING_32; a_chapter, a_block: INTEGER; a_linked: STRING_32)
 			-- The block's passages and frameworks, read back from the links the linker wrote into it.
