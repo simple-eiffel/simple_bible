@@ -136,6 +136,8 @@ feature {NONE} -- Initialization
 			scope_select.add_option (Scope_writings_fuzzy_name)
 			scope_select.select_index (1)
 			create search_box.make_lookup
+			create ask_box.make_lookup
+			ask_box.set_tooltip ("Ask in plain words: %"commentary on Titus 2:12%", %"Psalm 23 in Hebrew%", %"verses with light or darkness%". Enter.")
 			create mode_switch.make
 			create smaller_button.make ("A-", Void)
 			create larger_button.make ("A+", Void)
@@ -382,6 +384,9 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 				scope_select.select_index (3)
 				search_box.set_text ("grace")
 				on_search
+			elseif snapshot_tab.same_string ({STRING_32} "ask") then
+				ask_box.set_text ("commentary on Galatians 2:16")
+				on_ask
 			elseif snapshot_tab.same_string ({STRING_32} "writingsback") then
 				scope_select.select_index (Writings_scope_index)
 				search_box.set_text ("covenant memory")
@@ -534,6 +539,7 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			forward_button.set_on_click (agent move_in_history (1))
 			reference_box.set_on_enter (agent on_reference)
 			search_box.set_on_enter (agent on_search)
+			ask_box.set_on_enter (agent on_ask)
 			version_select.set_on_change (agent on_version_change)
 			scope_select.set_on_change (agent on_scope_change)
 			mode_switch.set_on_change (agent on_mode)
@@ -661,6 +667,8 @@ feature {NONE} -- Window
 			l_toolbar.put (version_select)
 			l_toolbar.put (search_box.growing)
 			l_toolbar.put (scope_select)
+			l_toolbar.put (create {SW_LABEL}.make_ui ("Ask"))
+			l_toolbar.put (ask_box.growing)
 			create l_spacer.make_weighted (0.2)
 			l_toolbar.put (l_spacer)
 			l_toolbar.put (mode_switch)
@@ -999,7 +1007,7 @@ feature {NONE} -- Menus and keys (C2)
 	show_about
 			-- Which build and data are open.
 		do
-			window.toast ({STRING_32} "simple_bible " + {BIB_RELEASE}.Program_version + {STRING_32} " (engine " + {BIB_RELEASE}.Engine_version + {STRING_32} ").  " + status_text, 1)
+			window.toast ({STRING_32} "simple_bible " + {BIB_RELEASE}.Program_version + {STRING_32} " (engine " + {BIB_RELEASE}.Engine_version + {STRING_32} ").  " + status_text + {STRING_32} "  |  " + ask_status, 1)
 		end
 
 feature {NONE} -- Toolbar (C3-C9)
@@ -3152,12 +3160,20 @@ feature {NONE} -- Notes (T2, P06)
 		end
 
 	parallel_versions: ARRAYED_LIST [STRING_8]
-			-- Three versions side by side: the one read, the other English one, and the original
-			-- (the Hebrew Bible for the Old Testament, the Textus Receptus for the New).
+			-- Three versions side by side: those an Ask request named (0.7.31), else the one read, the
+			-- other English one, and the original (the Hebrew Bible for the Old Testament, the Textus
+			-- Receptus for the New).
 		local
 			l_other, l_original: STRING_8
 		do
 			create Result.make (3)
+			if attached asked_parallel_versions as al_asked then
+				across al_asked as ic loop
+					if Result.count < 3 and then not Result.has (ic) and then bible.text_reader.has_version (ic) then
+						Result.extend (ic)
+					end
+				end
+			end
 			Result.extend (reading_version)
 			if reading_version.same_string ("KJV") then
 				l_other := "BSB"
@@ -4265,6 +4281,205 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 			end
 		end
 
+feature {NONE} -- Ask (C6.5, 0.7.31: plain words through the Cactus Needle helper)
+
+	ask_box: BIB_LOOKUP_BOX
+			-- C6.5: a request in plain words.
+
+	ask_helper: detachable BIB_ASK_HELPER
+			-- The helper, started at the first request that needs it.
+
+	asked_parallel_versions: detachable ARRAYED_LIST [STRING_8]
+			-- The versions the last Ask request put side by side; Void after another request.
+
+	ask_folder: STRING_32
+			-- Where the helper's files are: SIMPLE_BIBLE_ASK when set, else the "ask" folder beside the
+			-- program (where the installer puts them).
+		do
+			if attached (create {SIMPLE_ENV}).get ("SIMPLE_BIBLE_ASK") as al_folder and then not al_folder.is_empty then
+				Result := al_folder.to_string_32
+			else
+				Result := (create {SIMPLE_ENV}).executable_folder.to_string_32 + {STRING_32} "\ask"
+			end
+		end
+
+	ask_status: STRING_32
+			-- "Ask: on (libneedle)", "Ask: off - <why>", or "Ask: starts at the first request".
+		do
+			if attached ask_helper as al_helper and then al_helper.is_ready then
+				Result := {STRING_32} "Ask: on (" + al_helper.engine + {STRING_32} ")"
+			elseif attached ask_helper as al_helper then
+				Result := {STRING_32} "Ask: off - " + al_helper.off_reason
+			elseif attached (create {BIB_ASK_HELPER}.make (ask_folder)).missing_file as al_missing then
+				Result := {STRING_32} "Ask: off - its file " + al_missing + {STRING_32} " is missing"
+			else
+				Result := {STRING_32} "Ask: starts at the first request"
+			end
+		end
+
+	on_ask
+			-- C6.5: the request in `ask_box'. Not Ask's (the internet, the news): said. A reference the
+			-- box reads: opened at once (NEEDLE's rule 1). Else the helper proposes tools, BIB_ASK_CHECK
+			-- checks them against what was typed, and the window runs them; a refused or failed answer
+			-- goes to the search box as typed.
+		local
+			l_text: STRING_32
+			l_check: BIB_ASK_CHECK
+			l_calls: ARRAYED_LIST [BIB_ASK_CALL]
+			l_helper: BIB_ASK_HELPER
+		do
+			l_text := ask_box.text.to_string_32
+			l_text.left_adjust
+			l_text.right_adjust
+			asked_parallel_versions := Void
+			if bible.is_open and then not l_text.is_empty then
+				create l_check.make (bible)
+				if l_check.is_outside (l_text) then
+					say ("Ask looks things up in Simple Bible only: not the internet, the news or the weather.")
+					log_ask (l_text, "", "rule 11: not Ask's")
+				elseif attached (create {BIB_LOOKUP}.make (bible)).place_named (l_text) as al_place then
+					go_to (al_place.book, al_place.chapter, al_place.verse)
+					log_ask (l_text, "", "rule 1: read as a reference")
+				else
+					if not (attached ask_helper as al_running and then al_running.is_ready) then
+						create l_helper.make (ask_folder)
+						ask_helper := l_helper
+						l_helper.start
+					end
+					if attached ask_helper as al_helper and then al_helper.is_ready then
+						al_helper.ask (l_text)
+						if al_helper.is_ready then
+							l_calls := l_check.checked (l_text, al_helper.calls)
+							if l_calls.is_empty then
+								log_ask (l_text, calls_text (al_helper.calls), l_check.refusal)
+								ask_fallback (l_text)
+							else
+								log_ask (l_text, calls_text (l_calls), "run")
+								across l_calls as ic loop
+									run_ask_call (ic)
+								end
+							end
+						else
+							say ({STRING_32} "Ask is off: " + al_helper.off_reason)
+							log_ask (l_text, "", al_helper.off_reason)
+							ask_fallback (l_text)
+						end
+					elseif attached ask_helper as al_off then
+						say ({STRING_32} "Ask is off: " + al_off.off_reason)
+						log_ask (l_text, "", al_off.off_reason)
+						ask_fallback (l_text)
+					end
+				end
+			end
+		end
+
+	ask_fallback (a_text: READABLE_STRING_GENERAL)
+			-- What Ask could not answer safely, searched as typed (the Bible's search, not the writings').
+		do
+			if is_writings_scope then
+				scope_select.select_index (1)
+			end
+			search_box.set_text (a_text)
+			on_search
+		end
+
+	run_ask_call (a_call: BIB_ASK_CALL)
+			-- One checked call, run with the window's own actions.
+		local
+			l_place: detachable TUPLE [book, chapter, verse: INTEGER]
+			l_versions: ARRAYED_LIST [STRING_8]
+			l_scope: STRING_32
+			i: INTEGER
+		do
+			if a_call.has ("reference") then
+				l_place := (create {BIB_LOOKUP}.make (bible)).place_named (a_call.text ("reference"))
+			end
+			if a_call.has ("version") and then bible.text_reader.has_version (a_call.text ("version").to_string_8) then
+				use_version (a_call.text ("version").to_string_8)
+			end
+			if a_call.name.same_string ("open_passage") and attached l_place as al_place then
+				go_to (al_place.book, al_place.chapter, al_place.verse)
+			elseif a_call.name.same_string ("show_parallel") and attached l_place as al_place then
+				create l_versions.make (3)
+				across a_call.texts ("versions") as ic loop
+					l_versions.extend (ic.to_string_8)
+				end
+				asked_parallel_versions := l_versions
+				go_to (al_place.book, al_place.chapter, al_place.verse)
+				if not is_study then
+					arrange (True)
+				end
+				center_tabs.select_tab (2)
+				fill_parallel
+			elseif a_call.name.same_string ("word_study") then
+				ask_fallback (a_call.text ("word"))
+			elseif a_call.name.same_string ("words_behind") then
+				ask_fallback (a_call.text ("english"))
+			elseif a_call.name.same_string ("cross_references") and attached l_place as al_place then
+				go_to (al_place.book, al_place.chapter, al_place.verse)
+				bring_into_view (commentary_panel, commentary_tabs, 2)
+			elseif a_call.name.same_string ("interlinear") and attached l_place as al_place then
+				go_to (al_place.book, al_place.chapter, al_place.verse)
+				show_interlinear
+			elseif a_call.name.same_string ("commentary") and attached l_place as al_place then
+				go_to (al_place.book, al_place.chapter, al_place.verse)
+				bring_into_view (commentary_panel, commentary_tabs, 1)
+			elseif a_call.name.same_string ("search_text") then
+				scope_select.select_index (1)
+				if not a_call.text ("scope").is_empty and then attached (create {BIB_SCOPE_NAMES}).range_named (a_call.text ("scope")) as al_range then
+					l_scope := al_range.name
+					from i := 1 until i > (create {BIB_SCOPE_NAMES}).names.count loop
+						if (create {BIB_SCOPE_NAMES}).names.i_th (i).same_string (l_scope) then
+							scope_select.select_index (i + 1)
+						end
+						i := i + 1
+					end
+				end
+				search_box.set_text (a_call.text ("query"))
+				on_search
+			end
+		end
+
+	use_version (a_code: STRING_8)
+			-- Read in version `a_code' (the version box follows).
+		local
+			i: INTEGER
+		do
+			from i := 1 until i > bible.text_reader.versions.count loop
+				if bible.text_reader.versions.i_th (i).code.same_string (a_code) then
+					version_select.select_index (i)
+				end
+				i := i + 1
+			end
+			if not reading_version.same_string (a_code) then
+				on_version_change
+			end
+		end
+
+	calls_text (a_calls: LIST [BIB_ASK_CALL]): STRING_32
+			-- The calls, for the log.
+		do
+			create Result.make (80)
+			across a_calls as ic loop
+				if not Result.is_empty then
+					Result.append ({STRING_32} "; ")
+				end
+				Result.append (ic.description)
+			end
+		end
+
+	log_ask (a_text, a_calls, a_outcome: READABLE_STRING_GENERAL)
+			-- One line in the Ask log (on this machine only): when, the request, the calls, the outcome.
+		local
+			l_ok: BOOLEAN
+			l_line: STRING_32
+		do
+			l_line := (create {SIMPLE_DATE_TIME}.make_now).to_iso8601.to_string_32 + {STRING_32} "%T" + a_text.to_string_32 + {STRING_32} "%T"
+				+ a_calls.to_string_32 + {STRING_32} "%T" + a_outcome.to_string_32
+			l_line.replace_substring_all ({STRING_32} "%N", {STRING_32} " ")
+			l_ok := (create {SIMPLE_FILE}.make ((create {BIB_DATA_LOCATION}).ask_log_path)).append_line (l_line)
+		end
+
 feature {NONE} -- Searching Larry's writings (T6 Writings; research/20, 2026-10-28)
 
 	Scope_writings_name: STRING_32 = "My writings"
@@ -5205,6 +5420,7 @@ feature {NONE} -- Design pills
 			window.add_reference_mark (reference_box, "C4", "Reference box: 'John 3:16', 'Ps 23', 'Gen 1 1'. Anything else is searched. Ctrl+L.", window.Corner_top_left)
 			window.add_reference_mark (scope_select, "C6.1", "Search scope: the whole Bible, the Old or New Testament, the Gospels, Paul's letters, or the book being read. Changing it searches again.", window.Corner_top_right)
 			window.add_reference_mark (version_select, "C5", "Version picker: every version content.db holds. The text changes; the place stays.", window.Corner_top_right)
+			window.add_reference_mark (ask_box, "C6.5", "Ask: a request in plain words, read by the Cactus Needle helper on this machine (no internet). Its answer is checked against what you typed, then run here: a passage, its commentary, a word study, a search. Anything it cannot answer safely goes to the search box.", window.Corner_top_left)
 			window.add_reference_mark (search_box, "C6", "Quick search: a word, verse or Strong's number, and every verse it names: words, %"phrases%", word*, AND, OR and NOT in capitals, parentheses, strongs:H1254 or G5485, lemma:charis, morph:V-AAI-3S or morph:Vq*, and a root in a form on one word: G3056@N-NSM. Results open the results zone. Ctrl+F.", window.Corner_top_left)
 			window.add_reference_mark (smaller_button, "C8", {STRING_32} "Text size: all the window's text, " + (settings.Min_text_scale * 100.0).rounded.out + {STRING_32} " to "
 				+ (settings.Max_text_scale * 100.0).rounded.out + {STRING_32} " percent, kept for next time. Ctrl + and -.", window.Corner_top_left)
