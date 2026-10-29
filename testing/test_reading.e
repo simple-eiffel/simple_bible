@@ -224,7 +224,11 @@ feature -- Tests
 			assert_true ("bible_gui.rc read", not l_rc.is_empty)
 			assert_true ("ProductVersion is Program_version", l_rc.has_substring ("VALUE %"ProductVersion%", %"" + {BIB_RELEASE}.Program_version + "%""))
 			assert_true ("FileVersion is Program_version", l_rc.has_substring ("VALUE %"FileVersion%", %"" + {BIB_RELEASE}.Program_version + "%""))
-			assert_true ("PRODUCTVERSION numbers are Program_version", l_rc.has_substring ("PRODUCTVERSION " + l_numbers + ",0"))
+			if l_numbers.occurrences (',') = 2 then
+					-- "0.7.31" is 0,7,31,0; a patch "0.7.31.1" (2026-10-29) is 0,7,31,1
+				l_numbers.append (",0")
+			end
+			assert_true ("PRODUCTVERSION numbers are Program_version", l_rc.has_substring ("PRODUCTVERSION " + l_numbers))
 		end
 
 	test_reference_box_reads_ranges_and_one_chapter_books
