@@ -757,6 +757,10 @@ feature -- Ask (0.7.31)
 			assert_true ("and refused", refused (l_check, "search the internet for Jude 5", call_of ("open_passage", "reference", "Jude 5"), "rule 11"))
 			assert_false ("a request about web of lies is about the web", l_check.is_outside ("Jude 5 commentary"))
 			assert_true ("no tool fits", l_check.checked ("hello", create {ARRAYED_LIST [BIB_ASK_CALL]}.make (0)).is_empty and l_check.refusal.has_substring ("rule 0"))
+				-- Scan 63-64: one rule for word characters, Greek and Hebrew letters among them.
+			assert_true ("a Greek word is a word", (create {BIB_WORD_CHARACTERS}).has_whole_word ({STRING_32} "the word %/967/%/940/%/961/%/953/%/962/ here", {STRING_32} "%/967/%/940/%/961/%/953/%/962/"))
+			assert_false ("not inside another", (create {BIB_WORD_CHARACTERS}).has_whole_word ("delight", "light"))
+			assert_true ("a Greek word typed", passes (l_check, "study %/967/%/940/%/961/%/953/%/962/", call_of ("word_study", "word", {STRING_32} "%/967/%/940/%/961/%/953/%/962/")))
 				-- Scan 63: a range typed with a hyphen; the good news is Scripture's; "or" inside a word
 				-- mends nothing; "faith without works" stays a phrase.
 			assert_true ("a hyphen range typed", passes (l_check, "explain Jude 1:5-7 please", call_of ("commentary", "reference", "Jude 1:5-7")))
@@ -794,6 +798,11 @@ feature -- Ask (0.7.31)
 					assert_strings_equal ("its reference", "Titus 2:12", l_helper.calls.first.text ("reference"))
 					l_helper.ask ("a request with %"quotes%" and a \ backslash")
 					assert_true ("still ready after an odd request", l_helper.is_ready)
+						-- scan 64: a request the helper refuses is that request's error; Ask stays on
+					l_helper.ask (create {STRING_32}.make_filled ('a', 2100))
+					assert_false ("a request too long is told", l_helper.last_error.is_empty)
+					assert_true ("and Ask stays on", l_helper.is_ready)
+					assert_true ("with no calls", l_helper.calls.is_empty)
 					l_helper.stop
 					assert_false ("stopped", l_helper.is_ready)
 				end
