@@ -4428,32 +4428,57 @@ feature {NONE} -- The ingest kit (0.7.32, research/21)
 					l_packs := (create {BIB_DATA_LOCATION}).pack_folder.to_string_32
 					l_pack := l_packs + {STRING_32} "\" + {BIB_NOTE_SCHEMA}.Pack_file_name
 					l_new := l_pack + {STRING_32} ".new"
-					if not l_importer.write_files (l_folder) then
-						say ({STRING_32} "The note's files could not be written in " + l_folder)
+					if (create {SIMPLE_FILE}.make (l_new)).is_file then
+						l_ok := (create {SIMPLE_FILE}.make (l_new)).delete
+					end
+					l_error := l_importer.keep (l_folder, l_new, l_packs + {STRING_32} "\" + {BIB_FRAMEWORK_SCHEMA}.Pack_file_name)
+					if attached l_error as al_error then
+						show_import_report ({STRING_32} "The note could not be kept", create {ARRAYED_LIST [STRING_32]}.make_from_array (<<al_error>>), l_importer.warnings)
+					elseif attached swapped_notes_pack (l_pack, l_new) as al_swap_error then
+						show_import_report ({STRING_32} "The new notes pack could not be put in place", create {ARRAYED_LIST [STRING_32]}.make_from_array (<<al_swap_error>>), l_importer.warnings)
 					else
-						l_error := l_importer.build (l_folder, l_new, l_packs + {STRING_32} "\" + {BIB_FRAMEWORK_SCHEMA}.Pack_file_name)
-						if attached l_error as al_error then
-							show_import_report ({STRING_32} "The notes pack could not be built", create {ARRAYED_LIST [STRING_32]}.make_from_array (<<al_error>>), l_importer.warnings)
-						else
-								-- the pack is attached while open: close, swap in the new one, open again
-							bible.close
-							if (create {SIMPLE_FILE}.make (l_pack)).is_file then
-								l_ok := (create {SIMPLE_FILE}.make (l_pack)).delete
-							end
-							l_ok := (create {SIMPLE_FILE}.make (l_new)).rename_to ({BIB_NOTE_SCHEMA}.Pack_file_name)
-							bible.open
-							framework_names_cache := Void
-							writing_names_cache := Void
-							create listed_book.make_empty
-							create listed_kind.make_empty
-							fill_books
-							show_book_place ({BIB_NOTE_SCHEMA}.Pack_kind, l_importer.id, 1, 0)
-							say ({STRING_32} "Imported " + l_importer.title + {STRING_32} ": " + l_importer.built_blocks.out.to_string_32 + {STRING_32} " paragraphs, "
-								+ l_importer.built_suggestions.out.to_string_32 + (if l_importer.built_suggestions = 1 then {STRING_32} " suggested passage." else {STRING_32} " suggested passages." end)
-								+ (if l_importer.warnings.is_empty then {STRING_32} "" else {STRING_32} " Note: " + l_importer.warnings.first end))
-						end
+						framework_names_cache := Void
+						writing_names_cache := Void
+						create listed_book.make_empty
+						create listed_kind.make_empty
+						fill_books
+						show_book_place ({BIB_NOTE_SCHEMA}.Pack_kind, l_importer.id, 1, 0)
+						say ({STRING_32} "Imported " + l_importer.title + {STRING_32} ": " + l_importer.built_blocks.out.to_string_32 + {STRING_32} " paragraphs, "
+							+ l_importer.built_suggestions.out.to_string_32 + (if l_importer.built_suggestions = 1 then {STRING_32} " suggested passage." else {STRING_32} " suggested passages." end)
+							+ (if l_importer.warnings.is_empty then {STRING_32} "" else {STRING_32} " Note: " + l_importer.warnings.first end))
 					end
 				end
+			end
+		end
+
+	swapped_notes_pack (a_pack, a_new: STRING_32): detachable STRING_32
+			-- The new notes pack `a_new' put in `a_pack''s place, the engine closed for it and opened
+			-- again; the old pack kept as ".old" until the new one is in place, and put back when it
+			-- cannot be (scan 66: a failed delete or rename lost the pack and still said "Imported").
+			-- Void when done, else what went wrong.
+		local
+			l_old: STRING_32
+			l_had_old, l_ok: BOOLEAN
+		do
+			l_old := a_pack + {STRING_32} ".old"
+			bible.close
+			if (create {SIMPLE_FILE}.make (l_old)).is_file then
+				l_ok := (create {SIMPLE_FILE}.make (l_old)).delete
+			end
+			l_had_old := (create {SIMPLE_FILE}.make (a_pack)).is_file
+			if l_had_old and then not (create {SIMPLE_FILE}.make (a_pack)).rename_to ({BIB_NOTE_SCHEMA}.Pack_file_name.to_string_32 + {STRING_32} ".old") then
+				Result := {STRING_32} "The old notes pack could not be moved aside; it is unchanged."
+			elseif not (create {SIMPLE_FILE}.make (a_new)).rename_to ({BIB_NOTE_SCHEMA}.Pack_file_name) then
+				Result := {STRING_32} "The new notes pack could not be renamed into place; the old one is back."
+				if l_had_old then
+					l_ok := (create {SIMPLE_FILE}.make (l_old)).rename_to ({BIB_NOTE_SCHEMA}.Pack_file_name)
+				end
+			elseif l_had_old then
+				l_ok := (create {SIMPLE_FILE}.make (l_old)).delete
+			end
+			bible.open
+			if not bible.is_open then
+				Result := {STRING_32} "Simple Bible could not open its data again: " + (if attached bible.last_error as al_e then al_e.message else {STRING_32} "no reason given" end)
 			end
 		end
 
