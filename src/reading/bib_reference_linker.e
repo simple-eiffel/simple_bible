@@ -103,7 +103,8 @@ feature -- Places
 			l_text: STRING_32
 			l_words: LIST [STRING_32]
 		do
-			l_text := a_text.to_string_32
+				-- a copy: `to_string_32' is the caller's own string when it is one (scan 68)
+			create l_text.make_from_string_general (a_text)
 			l_text.left_adjust
 			l_text.right_adjust
 			if l_text.ends_with ({STRING_32} ".") then

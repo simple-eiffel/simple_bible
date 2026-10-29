@@ -152,7 +152,7 @@ feature -- Tests
 			-- one chapter takes a lone number as its verse; prose and existing links are left alone.
 		local
 			l_linker: BIB_REFERENCE_LINKER
-			l_out: STRING_32
+			l_out, l_text: STRING_32
 		do
 			create l_linker.make (bible.books)
 			l_out := l_linker.linked ("See Genesis 1:1 and Exodus 3:14-15, Matthew 5, Jude 9; it is 5 words.")
@@ -183,6 +183,10 @@ feature -- Tests
 			assert_true ("Matt, Mt", l_linker.linked ("Matt 5:3 and Mt 5:4").has_substring ("](bible:40.5.3)") and l_linker.linked ("Mt 5:4").has_substring ("](bible:40.5.4)"))
 			assert_true ("Isa", l_linker.linked ("Isa 53:5").has_substring ("](bible:23.53.5)"))
 			assert_true ("an abbreviation's period", l_linker.linked ("Exod. 3:14").has_substring ("](bible:2.3.14)"))
+				-- Scan 68: reading a reference leaves the caller's text as it was.
+			l_text := {STRING_32} "  Jude 9. "
+			assert_true ("a box reads it", (create {BIB_REFERENCE_LINKER}.make_forgiving (bible.books)).place_in (l_text) /= Void)
+			assert_strings_equal ("and the text is untouched", {STRING_32} "  Jude 9. ", l_text)
 				-- Scan 59: the compact forms link in prose, and a box reads the short forms too.
 			assert_true ("1Pet", l_linker.linked ("as 1Pet 1:3 says").has_substring ("[1Pet 1:3](bible:60.1.3)"))
 			assert_true ("1John", l_linker.linked ("1John 1:9").has_substring ("](bible:62.1.9)"))
