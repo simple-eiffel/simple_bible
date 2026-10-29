@@ -4461,47 +4461,52 @@ feature {NONE} -- The ingest kit (0.7.32, research/21)
 			l_had_old, l_ok: BOOLEAN
 		do
 			l_old := a_pack + {STRING_32} ".old"
-			bible.close
 			if (create {SIMPLE_FILE}.make (l_old)).is_file then
-				l_ok := (create {SIMPLE_FILE}.make (l_old)).delete
-			end
-			l_had_old := (create {SIMPLE_FILE}.make (a_pack)).is_file
-			if l_had_old and then not (create {SIMPLE_FILE}.make (a_pack)).rename_to ({BIB_NOTE_SCHEMA}.Pack_file_name.to_string_32 + {STRING_32} ".old") then
-				Result := {STRING_32} "The old notes pack could not be moved aside; it is unchanged."
-			elseif not (create {SIMPLE_FILE}.make (a_new)).rename_to ({BIB_NOTE_SCHEMA}.Pack_file_name) then
-				Result := {STRING_32} "The new notes pack could not be renamed into place"
-				if l_had_old then
-					if (create {SIMPLE_FILE}.make (l_old)).rename_to ({BIB_NOTE_SCHEMA}.Pack_file_name) then
-						Result.append ({STRING_32} "; the old one is back.")
+					-- scan 69: never deleted: it may be the only copy of an earlier notes pack
+				Result := {STRING_32} "A notes pack kept from an earlier failed import is still at " + l_old
+					+ {STRING_32} ": move it somewhere safe, then import again."
+			else
+				bible.close
+				l_had_old := (create {SIMPLE_FILE}.make (a_pack)).is_file
+				if l_had_old and then not (create {SIMPLE_FILE}.make (a_pack)).rename_to ({BIB_NOTE_SCHEMA}.Pack_file_name.to_string_32 + {STRING_32} ".old") then
+					Result := {STRING_32} "The old notes pack could not be moved aside; it is unchanged."
+				elseif not (create {SIMPLE_FILE}.make (a_new)).rename_to ({BIB_NOTE_SCHEMA}.Pack_file_name) then
+					Result := {STRING_32} "The new notes pack could not be renamed into place"
+					if l_had_old then
+						if (create {SIMPLE_FILE}.make (l_old)).rename_to ({BIB_NOTE_SCHEMA}.Pack_file_name) then
+							Result.append ({STRING_32} "; the old one is back.")
+						else
+							Result.append ({STRING_32} "; the old one is kept as " + l_old + {STRING_32} ".")
+						end
 					else
-						Result.append ({STRING_32} "; the old one is kept as " + l_old + {STRING_32} ".")
+						Result.append_character ('.')
 					end
-				else
-					Result.append_character ('.')
-				end
-			end
-			bible.open
-			if Result = Void and not bible.is_open then
-					-- scan 67: the new pack would not open: the old one goes back and opens again
-				Result := {STRING_32} "Simple Bible could not open the new notes pack ("
-					+ (if attached bible.last_error as al_e then al_e.message else {STRING_32} "no reason given" end) + {STRING_32} ")"
-				l_ok := (create {SIMPLE_FILE}.make (a_pack)).delete
-				if l_had_old then
-					if (create {SIMPLE_FILE}.make (l_old)).rename_to ({BIB_NOTE_SCHEMA}.Pack_file_name) then
-						Result.append ({STRING_32} "; the old one is back.")
-					else
-						Result.append ({STRING_32} "; the old one is kept as " + l_old + {STRING_32} ".")
-					end
-				else
-					Result.append_character ('.')
 				end
 				bible.open
-			elseif Result = Void and l_had_old then
-					-- scan 68: the old pack goes only once the new one is in place and open
-				l_ok := (create {SIMPLE_FILE}.make (l_old)).delete
-			end
-			if not bible.is_open then
-				Result := {STRING_32} "Simple Bible could not open its data again: " + (if attached bible.last_error as al_e then al_e.message else {STRING_32} "no reason given" end)
+				if Result = Void and not bible.is_open then
+						-- scan 67: the new pack would not open: the old one goes back and opens again
+					Result := {STRING_32} "Simple Bible could not open the new notes pack ("
+						+ (if attached bible.last_error as al_e then al_e.message else {STRING_32} "no reason given" end) + {STRING_32} ")"
+					l_ok := (create {SIMPLE_FILE}.make (a_pack)).delete
+					if l_had_old then
+						if (create {SIMPLE_FILE}.make (l_old)).rename_to ({BIB_NOTE_SCHEMA}.Pack_file_name) then
+							Result.append ({STRING_32} "; the old one is back.")
+						else
+							Result.append ({STRING_32} "; the old one is kept as " + l_old + {STRING_32} ".")
+						end
+					else
+						Result.append_character ('.')
+					end
+					bible.open
+				elseif Result = Void and l_had_old then
+						-- scan 68: the old pack goes only once the new one is in place and open
+					l_ok := (create {SIMPLE_FILE}.make (l_old)).delete
+				end
+				if not bible.is_open then
+						-- scan 69: what was said about the old pack stays said
+					Result := (if attached Result as al_said then al_said + {STRING_32} " " else {STRING_32} "" end)
+						+ {STRING_32} "Simple Bible could not open its data again: " + (if attached bible.last_error as al_e then al_e.message else {STRING_32} "no reason given" end)
+				end
 			end
 		end
 
