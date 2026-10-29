@@ -6,6 +6,7 @@ note
 			bible verse <book> <chapter> <verse> [--corpus CODE]
 			bible strongs <H1234 or G3056>
 			bible writings <query> [--fuzzy] [--pack KIND] [--within PREFIX]
+			bible names [--pack KIND]
 		--content names content.db and --conc the concordance pack. Without them, bible
 		looks in the data folder beside itself (where the installer puts both), then in
 		%LOCALAPPDATA%\simple_bible (where bible_build writes content.db); for the pack it
@@ -93,6 +94,9 @@ feature {NONE} -- Commands
 			if l_command.same_string ("writings") and a_args.count >= 2 and then not joined (a_args).is_empty then
 					-- Larry's writings need no concordance (research/20)
 				print (a_commands.writings (joined (a_args), a_cli.has_flag ("fuzzy"), a_cli.option_value_or_default ("pack", ""), a_cli.option_value_or_default ("within", "")))
+			elseif l_command.same_string ("names") and a_args.count = 1 then
+					-- the names Larry's writings go by, for NEEDLE (0.7.31)
+				print (a_commands.names (a_cli.option_value_or_default ("pack", "")))
 			elseif not a_commands.bible.conc_pack.is_available then
 				print ("The concordance is not available, so there is nothing to look up.%N")
 				fail
@@ -169,7 +173,8 @@ feature {NONE} -- Defaults
 		  bible english <word>
 		  bible verse <book> <chapter> <verse> [--corpus CODE]
 		  bible strongs <H1234 or G3056>
-		  bible writings <query> [--fuzzy] [--pack commentary|frameworks|books] [--within book:beacon]
+		  bible writings <query> [--fuzzy] [--pack commentary|frameworks|books|essays] [--within book:beacon]
+		  bible names [--pack books|essays|frameworks]
 		Options: --content <content.db>  --conc <conc.db>  --packs <folder>
 
 		]"

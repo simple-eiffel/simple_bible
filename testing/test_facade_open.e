@@ -694,6 +694,150 @@ feature -- Books pack (2026-10-28)
 			remove_test_files
 		end
 
+	test_markdown_blocks_edge_cases
+			-- 0.7.31 (design scan 59 finding 8, scan 62 finding 6): a heading ending in a hash keeps it;
+			-- a comment inside a code block is the code's; an unclosed comment keeps the text after it
+			-- and is told; a byte-order mark before an essay's title is read past. And the kinds of
+			-- text pack: distinct, found by kind.
+		local
+			l_blocks: BIB_MARKDOWN_BLOCKS
+		do
+			create l_blocks.make (create {ARRAYED_LIST [STRING_32]}.make (0))
+			l_blocks.split ({STRING_32} "# Learning C#%N%N## Closed ##%N%N```%N<!-- kept -->%N```%N%N<!-- gone -->After.%N")
+			assert_strings_equal ("C# keeps its hash", "Learning C#", l_blocks.blocks.i_th (1).markdown)
+			assert_strings_equal ("a closing run of hashes goes", "Closed", l_blocks.blocks.i_th (2).markdown)
+			assert_true ("a comment in code is kept", l_blocks.blocks.i_th (3).kind.same_string ("code") and l_blocks.blocks.i_th (3).markdown.has_substring ("<!-- kept -->"))
+			assert_strings_equal ("a comment outside code goes", "After.", l_blocks.blocks.i_th (4).markdown)
+			assert_false ("every comment closed", l_blocks.has_unclosed_comment)
+			l_blocks.split ({STRING_32} "# T%N%NBefore <!-- never closed%N%NStill here.%N")
+			assert_true ("an unclosed comment is told", l_blocks.has_unclosed_comment)
+			assert_true ("and the text after it is kept", across l_blocks.blocks as al_b some al_b.markdown.has_substring ("Still here.") end)
+			l_blocks.start_at_title
+			l_blocks.split ({STRING_32} "%/65279/# Title%N%NBody.%N")
+			assert_strings_equal ("a byte-order mark read past", "Title", l_blocks.blocks.first.markdown)
+			assert_integers_equal ("two kinds of text pack", 2, (create {BIB_TEXT_PACKS}).schemas.count)
+			assert_true ("essays found by kind", attached (create {BIB_TEXT_PACKS}).schema_of_kind ("essays") as al_s and then al_s.Link_prefix.same_string ("essay:"))
+			assert_true ("no such kind", (create {BIB_TEXT_PACKS}).schema_of_kind ("notes") = Void)
+		end
+
+feature -- Ask (0.7.31)
+
+	test_ask_checks_follow_the_rules
+			-- Every reference, number, version, word and query must come from what was typed; a
+			-- request for the internet is not Ask's; a lost mark in a query is mended.
+		local
+			l_bible: SIMPLE_BIBLE
+			l_check: BIB_ASK_CHECK
+		do
+			close_leftovers
+			fixture.build_content (Content_file, {CONC_FIXTURE}.Content_version, False)
+			l_bible := bible ("", "")
+			l_bible.open
+			create l_check.make (l_bible)
+			assert_true ("a reference as typed", passes (l_check, "commentary on 1 Peter 1:18", call_of ("commentary", "reference", "1 Peter 1:18")))
+			assert_true ("a number not typed", refused (l_check, "commentary on 1 Peter", call_of ("commentary", "reference", "1 Peter 1:18"), "rule 4"))
+			assert_true ("numbers in words; chapter 1 of a one-chapter book", passes (l_check, "help me understand Jude verses five through seven", call_of ("commentary", "reference", "Jude 1:5-7")))
+			assert_true ("no such tool", refused (l_check, "delete it", call_of ("delete_everything", "reference", "Jude 5"), "rule 2"))
+			assert_true ("a key the tool lacks", refused (l_check, "Jude 5", call_with_key ("open_passage", "color", "red"), "rule 2"))
+			assert_true ("a reference that does not read", refused (l_check, "look up G1680", call_of ("open_passage", "reference", "G1680"), "rule 3"))
+			assert_true ("a word not typed (met for emet)", refused (l_check, "study the Hebrew word emet", call_of ("word_study", "word", "met"), "rule 8"))
+			assert_true ("a word typed", passes (l_check, "study the Hebrew word emet", call_of ("word_study", "word", "emet")))
+			assert_true ("an English word typed", passes (l_check, "what Greek words are behind grace", call_of ("words_behind", "english", "grace")))
+			assert_true ("a version the program lacks", refused (l_check, "Genesis 1:1 in the ESV", version_call ("Genesis 1:1", "ESV"), "rule 5"))
+			assert_true ("a version no code, the reader's word wins", passes (l_check, "Genesis 1:1 in Hebrew", version_call ("Genesis 1:1", "GLT")))
+			assert_strings_equal ("Hebrew is WLC", "WLC", last_call.text ("version"))
+			assert_true ("the Hebrew text has no New Testament", refused (l_check, "1 Peter 1:18 WLC", version_call ("1 Peter 1:18", "WLC"), "rule 7"))
+			assert_true ("A or B mended", passes (l_check, "verses with light or darkness", call_of ("search_text", "query", "light darkness")))
+			assert_strings_equal ("light OR darkness", "light OR darkness", last_call.text ("query"))
+			assert_true ("any form of X mended", passes (l_check, "any form of glorify", call_of ("search_text", "query", "glorify")))
+			assert_strings_equal ("glorify*", "glorify*", last_call.text ("query"))
+			assert_true ("a searched word not typed", refused (l_check, "verses about salvation", call_of ("search_text", "query", "salv*"), "rule 8"))
+			assert_true ("a scope that is none", refused (l_check, "grace in the epistles of Zog", search_in ("grace", "Zog"), "rule 9"))
+			assert_true ("the internet is not Ask's", l_check.is_outside ("search the internet for Jude 5"))
+			assert_true ("and refused", refused (l_check, "search the internet for Jude 5", call_of ("open_passage", "reference", "Jude 5"), "rule 11"))
+			assert_false ("a request about web of lies is about the web", l_check.is_outside ("Jude 5 commentary"))
+			assert_true ("no tool fits", l_check.checked ("hello", create {ARRAYED_LIST [BIB_ASK_CALL]}.make (0)).is_empty and l_check.refusal.has_substring ("rule 0"))
+			l_bible.close
+			remove_test_files
+		end
+
+	test_ask_helper_is_off_without_its_files_and_answers_with_them
+			-- Without its files the helper is never started and Ask is off, saying which file; with a
+			-- kit (SIMPLE_BIBLE_ASK) it starts, answers a request with a tool call, and stops.
+		local
+			l_helper: BIB_ASK_HELPER
+		do
+			create l_helper.make ("no_such_ask_folder")
+			assert_true ("the first file named", attached l_helper.missing_file as al_m and then al_m.same_string ("needle_helper.exe"))
+			l_helper.start
+			assert_false ("off", l_helper.is_ready)
+			assert_true ("saying which file", l_helper.off_reason.has_substring ("needle_helper.exe"))
+			if attached (create {SIMPLE_ENV}).get ("SIMPLE_BIBLE_ASK") as al_kit and then not al_kit.is_empty then
+				create l_helper.make (al_kit)
+				l_helper.start
+				assert_true ("the kit's helper is ready", l_helper.is_ready)
+				if l_helper.is_ready then
+					assert_strings_equal ("its engine", "libneedle", l_helper.engine)
+					l_helper.ask ("commentary on Titus 2:12")
+					assert_true ("one call", l_helper.calls.count = 1)
+					assert_strings_equal ("the commentary tool", "commentary", l_helper.calls.first.name)
+					assert_strings_equal ("its reference", "Titus 2:12", l_helper.calls.first.text ("reference"))
+					l_helper.ask ("a request with %"quotes%" and a \ backslash")
+					assert_true ("still ready after an odd request", l_helper.is_ready)
+					l_helper.stop
+					assert_false ("stopped", l_helper.is_ready)
+				end
+			end
+		end
+
+feature {NONE} -- Ask helpers
+
+	last_call: BIB_ASK_CALL
+			-- The call the last `passes' or `refused' checked.
+		attribute
+			create Result.make ("none")
+		end
+
+	passes (a_check: BIB_ASK_CHECK; a_text: STRING_32; a_call: BIB_ASK_CALL): BOOLEAN
+			-- Does `a_call' pass for `a_text'?
+		do
+			last_call := a_call
+			Result := a_check.checked (a_text, create {ARRAYED_LIST [BIB_ASK_CALL]}.make_from_array (<<a_call>>)).count = 1
+		end
+
+	refused (a_check: BIB_ASK_CHECK; a_text: STRING_32; a_call: BIB_ASK_CALL; a_rule: STRING_32): BOOLEAN
+			-- Is `a_call' refused for `a_text' by rule `a_rule' ("rule 4")?
+		do
+			last_call := a_call
+			Result := a_check.checked (a_text, create {ARRAYED_LIST [BIB_ASK_CALL]}.make_from_array (<<a_call>>)).is_empty
+				and then a_check.refusal.starts_with (a_rule + {STRING_32} ":")
+		end
+
+	call_of (a_name, a_key, a_value: STRING_32): BIB_ASK_CALL
+		do
+			create Result.make (a_name)
+			Result.set_text (a_key, a_value)
+		end
+
+	call_with_key (a_name, a_key, a_value: STRING_32): BIB_ASK_CALL
+			-- `a_name' on Jude 5 with one more key.
+		do
+			Result := call_of (a_name, "reference", "Jude 5")
+			Result.set_text (a_key, a_value)
+		end
+
+	version_call (a_reference, a_version: STRING_32): BIB_ASK_CALL
+		do
+			Result := call_of ("open_passage", "reference", a_reference)
+			Result.set_text ("version", a_version)
+		end
+
+	search_in (a_query, a_scope: STRING_32): BIB_ASK_CALL
+		do
+			Result := call_of ("search_text", "query", a_query)
+			Result.set_text ("scope", a_scope)
+		end
+
 feature {NONE} -- Fixture
 
 	Folder_essays_file: STRING = "facade_test_packs\essays.db"

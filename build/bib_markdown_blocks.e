@@ -50,6 +50,9 @@ feature -- Access
 	skip_headings: ARRAYED_LIST [STRING_32]
 			-- Headings whose sections are left out, lowercase.
 
+	has_unclosed_comment: BOOLEAN
+			-- Did the last `split' meet a "<!--" never closed (its text kept)?
+
 	is_starting_at_title: BOOLEAN
 			-- Does a chapter begin at its first "# " title (an essay: a draft note, a status line or an
 			-- image above it left out, and an italic production line of wiki links right under it)?
@@ -75,6 +78,7 @@ feature -- Splitting
 			l_skip_level, l_level: INTEGER
 		do
 			blocks.wipe_out
+			has_unclosed_comment := False
 			reset_current
 			if is_starting_at_title then
 				l_lines := from_title (without_comments (without_front_matter (without_mark (a_markdown.to_string_32)))).split ('%N')
@@ -271,16 +275,22 @@ feature {NONE} -- Implementation
 		end
 
 	heading_text (a_line: STRING_32): STRING_32
-			-- The text of heading line `a_line', its marks and closing hashes gone.
+			-- The text of heading line `a_line', its marks gone, and a closing run of hashes after a
+			-- space ("## Title ##"), never a hash that ends a word ("Learning C#": 0.7.31).
 		require
 			a_heading: heading_level (a_line) > 0
+		local
+			l_hashes: INTEGER
 		do
 			Result := a_line.substring (heading_level (a_line) + 2, a_line.count)
 			Result.right_adjust
-			from until Result.is_empty or else Result [Result.count] /= '#' loop
-				Result.remove_tail (1)
+			from until l_hashes = Result.count or else Result [Result.count - l_hashes] /= '#' loop
+				l_hashes := l_hashes + 1
 			end
-			Result.right_adjust
+			if l_hashes > 0 and then (l_hashes = Result.count or else Result [Result.count - l_hashes] = ' ') then
+				Result.remove_tail (l_hashes)
+				Result.right_adjust
+			end
 		end
 
 	is_rule (a_line: STRING_32): BOOLEAN
@@ -341,7 +351,46 @@ feature {NONE} -- Implementation
 		end
 
 	without_comments (a_text: STRING_32): STRING_32
-			-- `a_text' without HTML comments.
+			-- `a_text' without HTML comments outside code fences (0.7.31: a comment written inside a
+			-- code block is the code's, and is kept).
+		local
+			l_lines: LIST [STRING_32]
+			l_outside, l_trimmed, l_piece: STRING_32
+			l_in_fence, l_is_fence: BOOLEAN
+			i: INTEGER
+		do
+			create Result.make (a_text.count)
+			create l_outside.make (a_text.count)
+			l_lines := a_text.split ('%N')
+			from i := 1 until i > l_lines.count loop
+				l_trimmed := l_lines.i_th (i).twin
+				l_trimmed.left_adjust
+				l_is_fence := l_trimmed.starts_with ({STRING_32} "```") or l_trimmed.starts_with ({STRING_32} "~~~")
+				l_piece := l_lines.i_th (i).twin
+				if i < l_lines.count then
+					l_piece.append_character ('%N')
+				end
+				if l_in_fence then
+					Result.append (l_piece)
+					if l_is_fence then
+						l_in_fence := False
+					end
+				elseif l_is_fence then
+					Result.append (comments_removed (l_outside))
+					l_outside.wipe_out
+					Result.append (l_piece)
+					l_in_fence := True
+				else
+					l_outside.append (l_piece)
+				end
+				i := i + 1
+			end
+			Result.append (comments_removed (l_outside))
+		end
+
+	comments_removed (a_text: STRING_32): STRING_32
+			-- `a_text' without its HTML comments. An unclosed "<!--" keeps the rest of the text (it
+			-- once deleted the rest of the chapter) and sets `has_unclosed_comment'.
 		local
 			l_start, l_end: INTEGER
 		do
@@ -349,7 +398,8 @@ feature {NONE} -- Implementation
 			from l_start := Result.substring_index ({STRING_32} "<!--", 1) until l_start = 0 loop
 				l_end := Result.substring_index ({STRING_32} "-->", l_start + 4)
 				if l_end = 0 then
-					Result.keep_head (l_start - 1)
+					has_unclosed_comment := True
+					Result.remove_substring (l_start, l_start + 3)
 					l_start := 0
 				else
 					Result.remove_substring (l_start, l_end + 2)

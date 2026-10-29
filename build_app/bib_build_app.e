@@ -101,6 +101,11 @@ feature {NONE} -- Initialization
 						l_failed := True
 					else
 						l_books.build (l_books.sidecars_in (al_manifests), al_books_pack, l_cli.option_value_or_default ("frameworks-pack", ""))
+						across l_books.warnings as ic_warning loop
+							print ("bible_build: warning: ")
+							print (ic_warning)
+							print ("%N")
+						end
 						if attached l_books.last_error as al_error then
 							print ("bible_build failed: ")
 							print (al_error)

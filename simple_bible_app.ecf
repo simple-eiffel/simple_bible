@@ -53,7 +53,10 @@
 		<library name="simple_widgets" location="$SIMPLE_EIFFEL/simple_widgets/simple_widgets.ecf">
 			<option warning="none"/>
 		</library>
+		<library name="simple_json" location="$SIMPLE_EIFFEL/simple_json/simple_json.ecf"/>
+		<library name="simple_process" location="$SIMPLE_EIFFEL/simple_process/simple_process.ecf"/>
 		<cluster name="cli" location=".\cli\" recursive="true"/>
+		<cluster name="ask" location=".\ask\" recursive="true"/>
 		<cluster name="gui_app" location=".\gui_app\" recursive="true"/>
 	</target>
 </system>

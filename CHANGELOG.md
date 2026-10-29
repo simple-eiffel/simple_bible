@@ -4,6 +4,14 @@ All notable changes to simple_bible are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added (2026-10-29: Ask, and the 0.7.31 plan; personal installer 0.7.31)
+
+- **Ask** (C6.5, the toolbar): a request in plain words. Larry's ruling (D-016, 2026-10-29): only the Cactus Needle CPU engine ships, in a separate helper (`needle_helper.exe` with `libneedle.dll`, the fine-tuned model and the tool list, installed in an `ask` folder beside the program, with Cactus's Apache-2.0 license and our NOTICE). The program never loads its DLL: `BIB_ASK_HELPER` (the new `ask` cluster) checks the files, starts the helper at the first request, speaks JSON lines with it, sets Cactus's telemetry switches off, and turns Ask off with its reason on any failure or a reply past ten seconds. `BIB_ASK_CHECK` applies NEEDLE's rules before anything runs: the tool and its keys, a reference that reads, every number typed, versions (the reader's words win; ESV and the like refused; testaments), every word typed, a query mended and read, a scope that exists, the internet refused. A reference the box reads opens without asking. The checked calls run with the window's own actions (open, parallel, word study, words behind, cross-references, interlinear, commentary, search); anything refused goes to the search box as typed. Help > About shows Ask's state; each request is logged on this machine (`ask_log.txt`).
+- **Back to results** in the Author Library after opening a Writings hit there.
+- **Essays**: a heading straight under the title reads as the subtitle, in italics.
+- **`bible names`**: every name of the books, essays and frameworks with the link it opens, for NEEDLE's tool data (1,547 names today).
+- **The block splitter**: a hash ending a heading word kept ("C#"); comments inside code kept; an unclosed `<!--` keeps the text after it and the build warns. Tests 201.
+
 ### Added (2026-10-28: the names of Larry's books and essays link; personal installer 0.7.30)
 
 - **The packs keep the names an essay goes by** (`chapter_alias`: "JESUS 06: Isaac's Word", "JESUS 06"), from the manifests' per-chapter `aliases`, checked unique across the pack and never a framework's spelling. `BIB_BOOK_PACK.name_links` gives every book's and chapter's name with the link it opens; `BIB_REFERENCE_LINKER.writing_names` links them by the frameworks' rule (as written, a word of its own, longest first). In the window every page the linker writes (the commentary, the frameworks, the books and essays) links them: 56 of the commentary's 300 Further reading items name a book or an essay.

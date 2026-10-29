@@ -58,6 +58,15 @@ feature -- Access
 			not_empty: not Result.is_empty
 		end
 
+	ask_log_path: STRING
+			-- What Ask was asked and what it did, one line a request (0.7.31), in
+			-- %LOCALAPPDATA%\simple_bible: kept on this machine only, for tuning NEEDLE's checks.
+		do
+			Result := local_data ("ask_log.txt")
+		ensure
+			not_empty: not Result.is_empty
+		end
+
 	user_path: STRING
 			-- The reader's own notes (user.db), always in %LOCALAPPDATA%\simple_bible, beside the
 			-- settings: never beside the program, which an installer replaces.
