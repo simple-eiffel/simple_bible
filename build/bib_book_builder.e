@@ -68,6 +68,12 @@ feature -- Access
 	schema: BIB_TEXT_PACK_SCHEMA
 			-- The pack built: the books' or the essays'.
 
+	warnings: ARRAYED_LIST [STRING_32]
+			-- What the last build kept but should be looked at (an unclosed HTML comment, 0.7.31).
+		attribute
+			create Result.make (0)
+		end
+
 	book_count, chapter_count, block_count, passage_count, framework_use_count: INTEGER
 			-- What the last build wrote.
 
@@ -98,6 +104,7 @@ feature -- Commands
 			passage_count := 0
 			framework_use_count := 0
 			records.wipe_out
+			create warnings.make (0)
 			read_framework_spellings (a_frameworks_pack)
 			across a_manifests as ic until last_error /= Void loop
 				read_manifest (ic.to_string_32)
@@ -263,6 +270,9 @@ feature {NONE} -- Writing
 				chapter_count := chapter_count + 1
 				l_blocks.split ((create {SIMPLE_FILE}.make (chapter_path (a_record.root, a_record.chapters.i_th (l_chapter).file))).read_text_utf_8)
 				fail_unless (l_blocks.blocks.count <= schema.Max_part, a_record.chapters.i_th (l_chapter).file, {STRING_32} "more blocks than a link can name")
+				if l_blocks.has_unclosed_comment then
+					warnings.extend (a_record.chapters.i_th (l_chapter).file + {STRING_32} ": an HTML comment (<!--) is never closed; the text after it is kept")
+				end
 				fail_unless (not schema.Starts_at_title or else (not l_blocks.blocks.is_empty and then l_blocks.blocks.first.kind.same_string ("heading") and then l_blocks.blocks.first.level = 1),
 					a_record.chapters.i_th (l_chapter).file, {STRING_32} "no %"# %" title to begin at (scan 62: what stood above it would have been kept)")
 				from l_block := 1 until l_block > l_blocks.blocks.count or last_error /= Void loop

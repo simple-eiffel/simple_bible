@@ -694,6 +694,32 @@ feature -- Books pack (2026-10-28)
 			remove_test_files
 		end
 
+	test_markdown_blocks_edge_cases
+			-- 0.7.31 (design scan 59 finding 8, scan 62 finding 6): a heading ending in a hash keeps it;
+			-- a comment inside a code block is the code's; an unclosed comment keeps the text after it
+			-- and is told; a byte-order mark before an essay's title is read past. And the kinds of
+			-- text pack: distinct, found by kind.
+		local
+			l_blocks: BIB_MARKDOWN_BLOCKS
+		do
+			create l_blocks.make (create {ARRAYED_LIST [STRING_32]}.make (0))
+			l_blocks.split ({STRING_32} "# Learning C#%N%N## Closed ##%N%N```%N<!-- kept -->%N```%N%N<!-- gone -->After.%N")
+			assert_strings_equal ("C# keeps its hash", "Learning C#", l_blocks.blocks.i_th (1).markdown)
+			assert_strings_equal ("a closing run of hashes goes", "Closed", l_blocks.blocks.i_th (2).markdown)
+			assert_true ("a comment in code is kept", l_blocks.blocks.i_th (3).kind.same_string ("code") and l_blocks.blocks.i_th (3).markdown.has_substring ("<!-- kept -->"))
+			assert_strings_equal ("a comment outside code goes", "After.", l_blocks.blocks.i_th (4).markdown)
+			assert_false ("every comment closed", l_blocks.has_unclosed_comment)
+			l_blocks.split ({STRING_32} "# T%N%NBefore <!-- never closed%N%NStill here.%N")
+			assert_true ("an unclosed comment is told", l_blocks.has_unclosed_comment)
+			assert_true ("and the text after it is kept", across l_blocks.blocks as al_b some al_b.markdown.has_substring ("Still here.") end)
+			l_blocks.start_at_title
+			l_blocks.split ({STRING_32} "%/65279/# Title%N%NBody.%N")
+			assert_strings_equal ("a byte-order mark read past", "Title", l_blocks.blocks.first.markdown)
+			assert_integers_equal ("two kinds of text pack", 2, (create {BIB_TEXT_PACKS}).schemas.count)
+			assert_true ("essays found by kind", attached (create {BIB_TEXT_PACKS}).schema_of_kind ("essays") as al_s and then al_s.Link_prefix.same_string ("essay:"))
+			assert_true ("no such kind", (create {BIB_TEXT_PACKS}).schema_of_kind ("notes") = Void)
+		end
+
 feature {NONE} -- Fixture
 
 	Folder_essays_file: STRING = "facade_test_packs\essays.db"
