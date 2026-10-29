@@ -148,6 +148,9 @@ feature {NONE} -- Initialization
 			create previous_button.make ("< Previous", Void)
 			create next_button.make ("Next >", Void)
 			create focus_button.make ("Focus", Void)
+			create back_to_writings_button.make ("Back to results", Void)
+			back_to_writings_button.set_tooltip ("Back to the Writings list, at the hit you opened.")
+			create library_bar.make
 			create origin_button.make ("Back", Void)
 			origin_button.set_tooltip ("Back to the verse the commentary is on; the commentary follows the Bible text again.")
 			create reading_bar.make
@@ -379,6 +382,15 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 				scope_select.select_index (3)
 				search_box.set_text ("grace")
 				on_search
+			elseif snapshot_tab.same_string ({STRING_32} "writingsback") then
+				scope_select.select_index (Writings_scope_index)
+				search_box.set_text ("covenant memory")
+				on_search
+				across 1 |..| writing_rows.count as al_i loop
+					if writing_row_opened = 0 and then writing_rows.i_th (al_i).pack_kind.same_string ({BIB_BOOK_SCHEMA}.Pack_kind) then
+						on_writing_row (al_i)
+					end
+				end
 			elseif snapshot_tab.same_string ({STRING_32} "writings") then
 				scope_select.select_index (Writings_scope_index)
 				search_box.set_text ("covenant memory")
@@ -567,6 +579,7 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			window.set_on_tick (agent load_more_places)
 			focus_button.set_on_click (agent toggle_focus_reading)
 			origin_button.set_on_click (agent back_to_commentary_verse)
+			back_to_writings_button.set_on_click (agent back_to_writings)
 			commentary_view.set_hover_card_builder (agent link_card (commentary_view, ?, ?))
 			framework_view.set_hover_card_builder (agent link_card (framework_view, ?, ?))
 			framework_view.set_on_link_click (agent on_commentary_link)
@@ -4033,14 +4046,19 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 			-- The most book paragraphs a framework's page lists.
 
 	books_page: SW_SPLITTER
-			-- The books over their chapters, beside the chapter read.
+			-- The books over their chapters, beside the chapter read (under `library_bar').
 		local
 			l_lists: SW_SPLITTER
+			l_reader: SW_COLUMN
 		do
 			create l_lists.make (books_grid, chapters_grid)
 			l_lists.set_horizontal (True)
 			l_lists.set_ratio (0.4)
-			create Result.make (l_lists, book_view)
+			create l_reader.make
+			l_reader := l_reader.with_gap (4.0)
+			l_reader.put (library_bar)
+			l_reader.put (book_view.growing)
+			create Result.make (l_lists, l_reader)
 			Result.set_ratio (0.28)
 			fill_books
 		end
@@ -4278,6 +4296,8 @@ feature {NONE} -- Searching Larry's writings (T6 Writings; research/20, 2026-10-
 			l_note: STRING_32
 		do
 			create writing_rows.make (0)
+			writing_row_opened := 0
+			show_back_to_writings
 			if bible.is_open and then not search_box.text.is_empty then
 				l_search := bible.writings_search
 				if l_search.pack_count = 0 then
@@ -4311,11 +4331,50 @@ feature {NONE} -- Searching Larry's writings (T6 Writings; research/20, 2026-10-
 
 	on_writing_row (a_model: INTEGER)
 			-- A hit chosen: open it where it stands (a passage with its commentary, a framework, a
-			-- book's paragraph).
+			-- book's or essay's paragraph: then the library offers "Back to results", 0.7.31).
 		do
-			if a_model >= 1 and then a_model <= writing_rows.count then
+			if not is_reselecting and then a_model >= 1 and then a_model <= writing_rows.count then
+				if (create {BIB_LINK_TARGET}.make (writing_rows.i_th (a_model).address, bible.books)).is_book then
+					writing_row_opened := a_model
+				end
 				on_commentary_link (writing_rows.i_th (a_model).address)
+				show_back_to_writings
 			end
+		end
+
+	library_bar: SW_ROW
+	back_to_writings_button: SW_BUTTON
+			-- Above the library's reader: "Back to results" while a Writings hit is open there.
+
+	writing_row_opened: INTEGER
+			-- The Writings row whose book or essay the library shows; 0 for none.
+
+	show_back_to_writings
+			-- "Back to results" above the library's reader while a Writings hit is open there.
+		do
+			if writing_row_opened > 0 then
+				if not library_bar.children.has (back_to_writings_button) then
+					library_bar.put (back_to_writings_button)
+				end
+			elseif library_bar.children.has (back_to_writings_button) then
+				library_bar.remove (back_to_writings_button)
+			end
+			window.request_render
+		ensure
+			shown_while_open: library_bar.children.has (back_to_writings_button) = (writing_row_opened > 0)
+		end
+
+	back_to_writings
+			-- The Writings list again, the hit that was opened selected.
+		do
+			results_tabs.select_tab (Writings_tab)
+			if writing_row_opened >= 1 and writing_row_opened <= writing_rows.count then
+				reselect (writings_grid, writing_row_opened)
+			end
+			writing_row_opened := 0
+			show_back_to_writings
+		ensure
+			closed: writing_row_opened = 0
 		end
 
 	writing_pack_name (a_hit: BIB_WRITING_HIT): STRING_32
