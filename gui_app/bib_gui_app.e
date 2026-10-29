@@ -4473,10 +4473,23 @@ feature {NONE} -- The ingest kit (0.7.32, research/21)
 				if l_had_old then
 					l_ok := (create {SIMPLE_FILE}.make (l_old)).rename_to ({BIB_NOTE_SCHEMA}.Pack_file_name)
 				end
+			end
+			bible.open
+			if Result = Void and not bible.is_open then
+					-- scan 67: the new pack would not open: the old one goes back and opens again
+				Result := {STRING_32} "Simple Bible could not open the new notes pack ("
+					+ (if attached bible.last_error as al_e then al_e.message else {STRING_32} "no reason given" end) + {STRING_32} "); the old one is back."
+				if bible.is_open then
+					bible.close
+				end
+				l_ok := (create {SIMPLE_FILE}.make (a_pack)).delete
+				if l_had_old then
+					l_ok := (create {SIMPLE_FILE}.make (l_old)).rename_to ({BIB_NOTE_SCHEMA}.Pack_file_name)
+				end
+				bible.open
 			elseif l_had_old then
 				l_ok := (create {SIMPLE_FILE}.make (l_old)).delete
 			end
-			bible.open
 			if not bible.is_open then
 				Result := {STRING_32} "Simple Bible could not open its data again: " + (if attached bible.last_error as al_e then al_e.message else {STRING_32} "no reason given" end)
 			end
@@ -4585,7 +4598,7 @@ feature {NONE} -- Ask (C6.5, 0.7.31: plain words through the Cactus Needle helpe
 			l_text: STRING_32
 			l_check: BIB_ASK_CHECK
 		do
-			l_text := ask_box.text.to_string_32
+			create l_text.make_from_string_general (ask_box.text)
 			l_text.left_adjust
 			l_text.right_adjust
 			asked_parallel_versions := Void

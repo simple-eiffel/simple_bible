@@ -96,7 +96,7 @@ feature -- Reading
 			create warnings.make (0)
 			create chapters.make (0)
 			suggestion_count := 0
-			l_text := a_prepared.to_string_32
+			create l_text.make_from_string_general (a_prepared)
 			l_text.replace_substring_all ({STRING_32} "%R%N", {STRING_32} "%N")
 			if not l_text.is_empty and then l_text [1].code = 65279 then
 				l_text.remove_head (1)
@@ -179,17 +179,30 @@ feature -- Keeping
 		require
 			accepted: is_accepted
 			pack_named: not a_pack.is_empty
+		local
+			l_failed: BOOLEAN
 		do
-			set_aside (a_notes_folder)
-			if not write_files (a_notes_folder) then
-				Result := {STRING_32} "The note's files could not be written in " + a_notes_folder.to_string_32
-			else
-				Result := build (a_notes_folder, a_pack, a_frameworks_pack)
-			end
-			if Result /= Void then
+			if l_failed then
+					-- scan 67: an exception on the way still puts the earlier note back
+				Result := {STRING_32} "Keeping the note failed unexpectedly; the earlier note is back."
 				put_back (a_notes_folder)
 			else
-				drop_set_aside (a_notes_folder)
+				set_aside (a_notes_folder)
+				if not write_files (a_notes_folder) then
+					Result := {STRING_32} "The note's files could not be written in " + a_notes_folder.to_string_32
+				else
+					Result := build (a_notes_folder, a_pack, a_frameworks_pack)
+				end
+				if Result /= Void then
+					put_back (a_notes_folder)
+				else
+					drop_set_aside (a_notes_folder)
+				end
+			end
+		rescue
+			if not l_failed then
+				l_failed := True
+				retry
 			end
 		end
 
