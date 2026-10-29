@@ -17,7 +17,9 @@ note
 		reading order, every chapter as BLOCKS (heading, paragraph, quote, list
 		item, code) - the unit a link points at, "book:<id>/<chapter>#<block>" or
 		"essay:<series>/<essay>#<block>" -
-		and two indexes the build works out: the Bible passages each block cites
+		and the passages a block's text only alludes to, each with its reason
+		(`block_suggestion', 0.7.32: kept apart from what it cites), and two
+		indexes the build works out: the Bible passages each block cites
 		(by hub id, so a verse finds the paragraphs about it) and the frameworks
 		each block names.
 	]"
@@ -179,7 +181,9 @@ feature -- Constants
 				"CREATE TABLE book_passage(book_id TEXT NOT NULL, chapter INTEGER NOT NULL, block INTEGER NOT NULL, ordinal INTEGER NOT NULL, start_book INTEGER NOT NULL, start_chapter INTEGER NOT NULL, start_verse INTEGER NOT NULL, end_chapter INTEGER NOT NULL, end_verse INTEGER NOT NULL, start_hub INTEGER NOT NULL, end_hub INTEGER NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key), PRIMARY KEY (book_id, chapter, block, ordinal))",
 				"CREATE INDEX ix_book_passage_hub ON book_passage(start_hub, end_hub)",
 				"CREATE TABLE book_framework(book_id TEXT NOT NULL, chapter INTEGER NOT NULL, block INTEGER NOT NULL, framework_id TEXT NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key), PRIMARY KEY (book_id, chapter, block, framework_id))",
-				"CREATE INDEX ix_book_framework ON book_framework(framework_id)">>
+				"CREATE INDEX ix_book_framework ON book_framework(framework_id)",
+				"CREATE TABLE block_suggestion(book_id TEXT NOT NULL, chapter INTEGER NOT NULL, block INTEGER NOT NULL, ordinal INTEGER NOT NULL, reference TEXT NOT NULL, start_hub INTEGER NOT NULL, end_hub INTEGER NOT NULL, reason TEXT NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key), PRIMARY KEY (book_id, chapter, block, ordinal))",
+				"CREATE INDEX ix_block_suggestion_hub ON block_suggestion(start_hub, end_hub)">>
 		end
 
 end

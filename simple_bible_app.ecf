@@ -55,8 +55,11 @@
 		</library>
 		<library name="simple_json" location="$SIMPLE_EIFFEL/simple_json/simple_json.ecf"/>
 		<library name="simple_process" location="$SIMPLE_EIFFEL/simple_process/simple_process.ecf"/>
+		<library name="simple_sql" location="$SIMPLE_EIFFEL/simple_sql/simple_sql.ecf"/>
 		<cluster name="cli" location=".\cli\" recursive="true"/>
 		<cluster name="ask" location=".\ask\" recursive="true"/>
+		<cluster name="build" location=".\build\" recursive="true"/>
+		<cluster name="ingest" location=".\ingest\" recursive="true"/>
 		<cluster name="gui_app" location=".\gui_app\" recursive="true"/>
 	</target>
 </system>

@@ -39,7 +39,7 @@ The reference data is everything `bible names` lists today (1,547 names) plus th
 ```
 ---
 sbn: 1
-id: romans8-sermon          (lowercase letters, digits, hyphens; unique)
+id: romans8sermon           (lowercase letters and digits; unique)
 title: Sermon notes on Romans 8
 author: Larry Rix
 date: 2026-10-12
@@ -70,8 +70,10 @@ A passage the text alludes to but does not cite:
 
 A fourth text-pack kind, **notes** (BIB_TEXT_PACKS: `note:<id>/<chapter>#<block>`, `notes.db`), built by the books' builder from the imported files kept in the user's data folder (`notes\<id>\` plus a generated `<id>.note.json` manifest), so a rebuild never needs the AI again. Suggestions go in their own table (`block_suggestion`: the block, the passage, the reason): shown under the paragraph as "Suggested: Galatians 5:1 - reason", in the verse's "Books & essays" list marked "suggested", never mixed with citations.
 
-## Questions for Larry
+## Decided (Larry, 2026-10-29: "let's get 0.7.32 done", the defaults)
 
-1. The kit's name and place: `<source>.kit.md` beside the source, or in a Kits folder?
-2. Suggestions in the verse's list: shown with the citations (marked), or behind a "show suggested" switch?
-3. A note re-imported with the same `id`: replace the old one (my default), or keep both?
+1. The kit is `<source>.kit.md` beside the source; its path goes on the clipboard.
+2. Suggestions are listed in the verse's "Books & essays" after the citations, each marked "Suggested (why)".
+3. A note re-imported with the same `id` replaces the old one (the importer warns that it does).
+
+Built in 0.7.32: File > Make ingest kit (TXT, MD), File > Import prepared notes, the notes pack. Later: DOCX, ODT, EPUB, HTML readers; PDF.

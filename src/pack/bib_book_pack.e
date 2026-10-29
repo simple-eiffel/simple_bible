@@ -130,6 +130,57 @@ feature -- Access
 				a_book.out.to_string_32 + {STRING_32} " " + a_chapter.out.to_string_32 + {STRING_32} ":" + a_verse.out.to_string_32)
 		end
 
+	blocks_suggesting (a_book, a_chapter, a_verse: INTEGER): BIB_LIST_RESULT [BIB_BOOK_BLOCK]
+			-- The blocks a passage covering `a_book' `a_chapter':`a_verse' was suggested for, each with
+			-- the suggestion's reason (0.7.32); none from a pack built before suggestions.
+		require
+			available: is_available
+			place: (create {BIB_HUB_ID}).is_place (a_book, a_chapter, a_verse)
+		local
+			l_sql: STRING_8
+			l_reasons: ARRAYED_LIST [STRING_32]
+			i: INTEGER
+		do
+			if has_table ("block_suggestion") then
+				l_sql := blocks_sql + "JOIN " + pack_alias + ".block_suggestion s ON s.book_id = b.book_id AND s.chapter = b.chapter AND s.block = b.block "
+					+ "WHERE ? BETWEEN s.start_hub AND s.end_hub ORDER BY k.ordinal, b.chapter, b.block, s.ordinal"
+				Result := blocks_answer ("blocks_suggesting", l_sql, {ARRAY [detachable ANY]} <<(create {BIB_HUB_ID}).hub_id (a_book, a_chapter, a_verse)>>,
+					a_book.out.to_string_32 + {STRING_32} " " + a_chapter.out.to_string_32 + {STRING_32} ":" + a_verse.out.to_string_32)
+				run_query ("SELECT s.reason FROM " + pack_alias + ".block_suggestion s JOIN " + pack_alias + ".book k ON k.book_id = s.book_id WHERE ? BETWEEN s.start_hub AND s.end_hub ORDER BY k.ordinal, s.chapter, s.block, s.ordinal",
+					{ARRAY [detachable ANY]} <<(create {BIB_HUB_ID}).hub_id (a_book, a_chapter, a_verse)>>)
+				create l_reasons.make (4)
+				if attached last_rows as al_rows then
+					across al_rows.rows as ic loop
+						l_reasons.extend (ic.string_value ("reason"))
+					end
+				end
+				from i := 1 until i > Result.count or i > l_reasons.count loop
+					Result.item (i).set_suggestion_reason (l_reasons.i_th (i))
+					i := i + 1
+				end
+			else
+				create Result.make_success (method ("blocks_suggesting", "no block_suggestion table", pack_alias, "all", 0), {ARRAY [BIB_PROVENANCE]} <<pack_provenance>>,
+					create {ARRAYED_LIST [BIB_BOOK_BLOCK]}.make (0))
+			end
+		end
+
+	chapter_suggestions (a_book: READABLE_STRING_GENERAL; a_chapter: INTEGER): ARRAYED_LIST [TUPLE [block: INTEGER; passage, reason: STRING_32]]
+			-- Chapter `a_chapter''s suggestions, block by block, in order (0.7.32).
+		require
+			available: is_available
+		do
+			create Result.make (4)
+			if has_table ("block_suggestion") then
+				run_query ("SELECT block, reference, reason FROM " + pack_alias + ".block_suggestion WHERE book_id = ? AND chapter = ? ORDER BY block, ordinal",
+					{ARRAY [detachable ANY]} <<a_book.to_string_32, a_chapter>>)
+				if attached last_rows as al_rows then
+					across al_rows.rows as ic loop
+						Result.extend ([ic.integer_value ("block"), ic.string_value ("reference"), ic.string_value ("reason")])
+					end
+				end
+			end
+		end
+
 	blocks_naming (a_framework: READABLE_STRING_GENERAL): BIB_LIST_RESULT [BIB_BOOK_BLOCK]
 			-- The blocks that name framework `a_framework', in the books' order.
 		require

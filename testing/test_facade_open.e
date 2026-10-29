@@ -715,9 +715,9 @@ feature -- Books pack (2026-10-28)
 			l_blocks.start_at_title
 			l_blocks.split ({STRING_32} "%/65279/# Title%N%NBody.%N")
 			assert_strings_equal ("a byte-order mark read past", "Title", l_blocks.blocks.first.markdown)
-			assert_integers_equal ("two kinds of text pack", 2, (create {BIB_TEXT_PACKS}).schemas.count)
+			assert_integers_equal ("three kinds of text pack: books, essays, notes", 3, (create {BIB_TEXT_PACKS}).schemas.count)
 			assert_true ("essays found by kind", attached (create {BIB_TEXT_PACKS}).schema_of_kind ("essays") as al_s and then al_s.Link_prefix.same_string ("essay:"))
-			assert_true ("no such kind", (create {BIB_TEXT_PACKS}).schema_of_kind ("notes") = Void)
+			assert_true ("no such kind", (create {BIB_TEXT_PACKS}).schema_of_kind ("letters") = Void)
 		end
 
 feature -- Ask (0.7.31)
@@ -857,7 +857,118 @@ feature {NONE} -- Ask helpers
 			Result.set_text ("scope", a_scope)
 		end
 
+feature -- Ingest kit (0.7.32)
+
+	test_ingest_kit_writes_and_notes_import
+			-- 0.7.32 (research/21): a kit holds its instructions, the format, what Simple Bible holds and
+			-- the source; a prepared file that passes every check becomes a note in the notes pack (its
+			-- blocks, the verses it cites, its suggestions kept apart, searched with the writings, named
+			-- in the next kit); one that fails is refused line by line.
+		local
+			l_frameworks: BIB_FRAMEWORK_BUILDER
+			l_books: BIB_BOOK_BUILDER
+			l_bible: SIMPLE_BIBLE
+			l_kit: STRING_32
+			l_importer: BIB_NOTE_IMPORTER
+			l_ok: BOOLEAN
+		do
+			close_leftovers
+			fixture.build_content (Content_file, {CONC_FIXTURE}.Content_version, False)
+			make_folder
+			make_book_folder
+			l_ok := (create {SIMPLE_FILE}.make (Kacc_file)).write_text_utf_8 (Kacc_text)
+			l_ok := (create {SIMPLE_FILE}.make (Zakar_file)).write_text_utf_8 (Zakar_text)
+			create l_frameworks.make
+			l_frameworks.build (<<Kacc_file, Zakar_file>>, Folder_frameworks_file, "")
+			l_bible := bible ("", "")
+			l_bible.open
+			create l_books.make (l_bible.books)
+			l_books.build (<<Book_manifest_file>>, Folder_books_file, Folder_frameworks_file)
+			l_bible.close
+			l_bible := bible ("", Folder)
+			l_bible.open
+			l_kit := (create {BIB_INGEST_KIT}.make (l_bible)).kit_text ("sermon.txt", "Paul says in Jude 5 what he means.")
+			assert_true ("the kit's instructions", l_kit.has_substring ("## Instructions"))
+			assert_true ("the format", l_kit.has_substring ("sbn: 1"))
+			assert_true ("the Bible's books", l_kit.has_substring ("- Jude (JUD"))
+			assert_true ("Larry's book named with its link", l_kit.has_substring ("| book:zk"))
+			assert_true ("a framework named with its link", l_kit.has_substring ("| framework:kacc"))
+			assert_true ("and the source", l_kit.has_substring ("Paul says in Jude 5 what he means."))
+			create l_importer.make (l_bible)
+			l_importer.read (Prepared_note, "Jude 5. Second.")
+			assert_true ("a prepared note passes", l_importer.is_accepted)
+			assert_integers_equal ("one chapter", 1, l_importer.chapters.count)
+			assert_integers_equal ("one suggestion", 1, l_importer.suggestion_count)
+			l_importer.read (Prepared_note + {STRING_32} "%N[a stray](essay:nope)%N", Void)
+			assert_true ("a link to nothing refused by line", not l_importer.is_accepted and then l_importer.problems.first.has_substring ("essay:nope"))
+			l_importer.read (Prepared_note + {STRING_32} "%NMid-line {{suggest: Jude 9 | x}} here.%N", Void)
+			assert_true ("a suggestion inside a line refused", not l_importer.is_accepted and then l_importer.problems.first.has_substring ("line of its own"))
+			l_importer.read (Prepared_note + {STRING_32} "%N{{suggest: Hezekiah 3:3 | no such book}}%N", Void)
+			assert_true ("a suggestion that does not read refused", not l_importer.is_accepted and then l_importer.problems.first.has_substring ("does not read"))
+			l_importer.read ({STRING_32} "---%Nsbn: 1%Nid: Sermon-8%Ntitle: T%N---%N# T%N%NText.%N", Void)
+			assert_true ("an id of capitals and a hyphen refused", not l_importer.is_accepted and then l_importer.problems.first.has_substring ("lowercase"))
+			l_importer.read ({STRING_32} "```markdown%N" + Prepared_note + "```%N", Void)
+			assert_true ("a file an AI wrapped in a fence still reads", l_importer.is_accepted)
+			l_importer.read (Prepared_note, Void)
+			assert_true ("its files written", l_importer.write_files (Notes_folder))
+			assert_true ("the notes pack built", l_importer.build (Notes_folder, Folder_notes_file, Folder_frameworks_file) = Void)
+			assert_integers_equal ("the suggestion stored", 1, l_importer.built_suggestions)
+			l_bible.close
+			l_bible := bible ("", Folder)
+			l_bible.open
+			assert_true ("the notes pack attaches", l_bible.is_open and l_bible.pack_errors.is_empty)
+			assert_integers_equal ("one notes pack", 1, l_bible.text_packs_of_kind ("notes").count)
+			if attached l_bible.text_packs_of_kind ("notes").first as al_notes then
+				if attached al_notes.chapter_blocks ("sermon8", 1) as al_blocks then
+					assert_integers_equal ("the title and two paragraphs, the suggestion no block", 3, al_blocks.count)
+					assert_strings_equal ("the title first", "No Condemnation", al_blocks.item (1).markdown)
+					assert_strings_equal ("addressed as a note", "note:sermon8/1#2", al_blocks.item (2).link)
+				end
+				assert_integers_equal ("Jude 5: the paragraph citing it", 1, al_notes.blocks_citing (65, 1, 5).count)
+				assert_integers_equal ("Jude 9: the paragraph it was suggested for", 1, al_notes.blocks_suggesting (65, 1, 9).count)
+				assert_strings_equal ("with its reason", "the archangel's restraint", al_notes.blocks_suggesting (65, 1, 9).item (1).suggestion_reason)
+				assert_integers_equal ("Jude 9 is not cited", 0, al_notes.blocks_citing (65, 1, 9).count)
+				assert_true ("the suggestion on the paragraph before it", al_notes.chapter_suggestions ("sermon8", 1).count = 1 and then al_notes.chapter_suggestions ("sermon8", 1).first.block = 2)
+			end
+			assert_true ("named in the next kit", across (create {BIB_NAME_LIST}.make (l_bible)).names ("notes") as al_n some al_n.name.same_string ("Sermon on Jude") end)
+			create l_importer.make (l_bible)
+			l_importer.read (Prepared_note, Void)
+			assert_true ("a second import of the same id is told it replaces", across l_importer.warnings as al_w some al_w.has_substring ("replaces") end)
+			l_bible.close
+			remove_notes_folder
+			fixture.delete_file (Kacc_file)
+			fixture.delete_file (Zakar_file)
+			remove_book_folder
+			remove_test_files
+		end
+
 feature {NONE} -- Fixture
+
+	Folder_notes_file: STRING = "facade_test_packs\notes.db"
+	Notes_folder: STRING = "facade_test_notes"
+
+	Prepared_note: STRING_32
+			-- A prepared file: a header, a title, a paragraph citing Jude 5 and linking the test book,
+			-- a suggestion on a line of its own, a second paragraph.
+		once
+			Result := {STRING_32} "---%Nsbn: 1%Nid: sermon8%Ntitle: Sermon on Jude%Nauthor: Larry Rix%Ndate: 2026-10-12%Nsource: sermon.txt%Nstatus: draft%N---%N"
+				+ {STRING_32} "# No Condemnation%N%NJude 5 reminds them. See [the book](book:zk).%N%N{{suggest: Jude 9 | the archangel's restraint}}%N%NSecond paragraph.%N"
+		end
+
+	remove_notes_folder
+			-- The test notes' files and folders gone.
+		local
+			l_ok: BOOLEAN
+		do
+			fixture.delete_file (Notes_folder + "\sermon8\01.md")
+			fixture.delete_file (Notes_folder + "\sermon8.note.json")
+			if (create {SIMPLE_FILE}.make (Notes_folder + "\sermon8")).is_directory then
+				l_ok := (create {SIMPLE_FILE}.make (Notes_folder + "\sermon8")).delete_directory
+			end
+			if (create {SIMPLE_FILE}.make (Notes_folder)).is_directory then
+				l_ok := (create {SIMPLE_FILE}.make (Notes_folder)).delete_directory
+			end
+		end
 
 	Folder_essays_file: STRING = "facade_test_packs\essays.db"
 	Essay_manifest_file: STRING = "facade_test_sr.essay.json"
@@ -1097,6 +1208,7 @@ feature {NONE} -- Fixture
 			fixture.delete_file (Folder_frameworks_file)
 			fixture.delete_file (Folder_books_file)
 			fixture.delete_file (Folder_essays_file)
+			fixture.delete_file (Folder_notes_file)
 			if (create {SIMPLE_FILE}.make (Folder)).is_directory then
 				l_ok := (create {SIMPLE_FILE}.make (Folder)).delete_directory
 			end

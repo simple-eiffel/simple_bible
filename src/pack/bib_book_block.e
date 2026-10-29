@@ -62,6 +62,21 @@ feature -- Access
 	schema: BIB_TEXT_PACK_SCHEMA
 			-- The pack's kind and link grammar.
 
+	suggestion_reason: STRING_32
+			-- Why a passage was suggested for this block, when the block was found by a suggestion
+			-- (BIB_BOOK_PACK.blocks_suggesting, 0.7.32); empty for a block found by what it cites.
+		attribute
+			create Result.make_empty
+		end
+
+	set_suggestion_reason (a_reason: READABLE_STRING_GENERAL)
+			-- The block was found by a suggestion, for `a_reason'.
+		do
+			suggestion_reason := a_reason.to_string_32
+		ensure
+			set: suggestion_reason.same_string_general (a_reason)
+		end
+
 	pack_kind: STRING_8
 			-- "books" or "essays".
 		do
