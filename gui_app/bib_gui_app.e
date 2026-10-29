@@ -4469,25 +4469,35 @@ feature {NONE} -- The ingest kit (0.7.32, research/21)
 			if l_had_old and then not (create {SIMPLE_FILE}.make (a_pack)).rename_to ({BIB_NOTE_SCHEMA}.Pack_file_name.to_string_32 + {STRING_32} ".old") then
 				Result := {STRING_32} "The old notes pack could not be moved aside; it is unchanged."
 			elseif not (create {SIMPLE_FILE}.make (a_new)).rename_to ({BIB_NOTE_SCHEMA}.Pack_file_name) then
-				Result := {STRING_32} "The new notes pack could not be renamed into place; the old one is back."
+				Result := {STRING_32} "The new notes pack could not be renamed into place"
 				if l_had_old then
-					l_ok := (create {SIMPLE_FILE}.make (l_old)).rename_to ({BIB_NOTE_SCHEMA}.Pack_file_name)
+					if (create {SIMPLE_FILE}.make (l_old)).rename_to ({BIB_NOTE_SCHEMA}.Pack_file_name) then
+						Result.append ({STRING_32} "; the old one is back.")
+					else
+						Result.append ({STRING_32} "; the old one is kept as " + l_old + {STRING_32} ".")
+					end
+				else
+					Result.append_character ('.')
 				end
 			end
 			bible.open
 			if Result = Void and not bible.is_open then
 					-- scan 67: the new pack would not open: the old one goes back and opens again
 				Result := {STRING_32} "Simple Bible could not open the new notes pack ("
-					+ (if attached bible.last_error as al_e then al_e.message else {STRING_32} "no reason given" end) + {STRING_32} "); the old one is back."
-				if bible.is_open then
-					bible.close
-				end
+					+ (if attached bible.last_error as al_e then al_e.message else {STRING_32} "no reason given" end) + {STRING_32} ")"
 				l_ok := (create {SIMPLE_FILE}.make (a_pack)).delete
 				if l_had_old then
-					l_ok := (create {SIMPLE_FILE}.make (l_old)).rename_to ({BIB_NOTE_SCHEMA}.Pack_file_name)
+					if (create {SIMPLE_FILE}.make (l_old)).rename_to ({BIB_NOTE_SCHEMA}.Pack_file_name) then
+						Result.append ({STRING_32} "; the old one is back.")
+					else
+						Result.append ({STRING_32} "; the old one is kept as " + l_old + {STRING_32} ".")
+					end
+				else
+					Result.append_character ('.')
 				end
 				bible.open
-			elseif l_had_old then
+			elseif Result = Void and l_had_old then
+					-- scan 68: the old pack goes only once the new one is in place and open
 				l_ok := (create {SIMPLE_FILE}.make (l_old)).delete
 			end
 			if not bible.is_open then
