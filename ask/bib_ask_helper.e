@@ -60,6 +60,12 @@ feature -- Access
 	last_ms: INTEGER
 			-- How long the last answer took in the helper.
 
+	last_error: STRING_32
+			-- What the helper said was wrong with the last request; empty when nothing was.
+		attribute
+			create Result.make_empty
+		end
+
 	Wait_ms: INTEGER = 5000
 			-- The longest the ready line may take (it comes in about half a second).
 
@@ -152,6 +158,7 @@ feature -- Commands
 			l_request: STRING_32
 		do
 			create calls.make (2)
+			create last_error.make_empty
 			request_id := request_id + 1
 			create l_request.make (a_query.count + 40)
 			l_request.append ({STRING_32} "{%"id%":" + request_id.out.to_string_32 + {STRING_32} ",%"query%":")
@@ -161,7 +168,9 @@ feature -- Commands
 				al_process.write_line (l_request)
 				if attached reply_to (al_process, request_id) as al_reply then
 					if attached al_reply.item ({STRING_32} "error") as al_error and then al_error.is_string then
-						off_reason := {STRING_32} "The Ask helper answered with an error: " + al_error.as_string_32
+							-- this request's error ("query longer than 2000 characters"): no calls, the helper
+							-- stays on (scan 64: one bad request turned Ask off for a minute)
+						last_error := al_error.as_string_32
 					else
 						if attached al_reply.item ({STRING_32} "ms") as al_ms and then al_ms.is_integer then
 							last_ms := al_ms.as_integer.to_integer_32
@@ -214,7 +223,7 @@ feature {NONE} -- Implementation
 			l_stray: INTEGER
 		do
 			l_start := clock.nanoseconds
-			from until Result /= Void or l_stray > 20 or clock.elapsed_milliseconds (l_start) >= Reply_ms loop
+			from until Result /= Void or l_stray > 20 or a_process.has_exited or clock.elapsed_milliseconds (l_start) >= Reply_ms loop
 				a_process.read_line ((Reply_ms - clock.elapsed_milliseconds (l_start).to_integer_32).max (1))
 				if attached a_process.last_line as al_line then
 					if attached object_of (al_line) as al_object and then attached al_object.item ({STRING_32} "id") as al_id
@@ -228,6 +237,9 @@ feature {NONE} -- Implementation
 			end
 			if Result = Void and l_stray > 20 then
 				off_reason := {STRING_32} "The Ask helper answered with lines that do not read."
+			elseif Result = Void and a_process.has_exited then
+					-- scan 64: a helper that died is told at once, not waited out
+				off_reason := {STRING_32} "The Ask helper stopped."
 			end
 		end
 

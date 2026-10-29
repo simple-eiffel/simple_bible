@@ -4304,8 +4304,8 @@ feature {NONE} -- Ask (C6.5, 0.7.31: plain words through the Cactus Needle helpe
 			-- The versions the last Ask request put side by side; Void after another request.
 
 	asked_search_scope: detachable BIB_SEARCH_SCOPE
-			-- A scope an Ask search named that the scope list does not offer (one book); Void after
-			-- another request or a scope chosen in the list.
+			-- A scope an Ask search named that the scope list does not offer (one book), while that
+			-- one search runs; Void otherwise (scan 64: it outlived the search).
 
 	ask_folder: STRING_32
 			-- Where the helper's files are: SIMPLE_BIBLE_ASK when set, else the "ask" folder beside the
@@ -4458,7 +4458,11 @@ feature {NONE} -- Ask (C6.5, 0.7.31: plain words through the Cactus Needle helpe
 				end
 				search_box.set_text (a_call.text ("query"))
 				on_search
+					-- scan 64: the asked book was this search's only; a later search reads the list again
+				asked_search_scope := Void
 			end
+		ensure
+			scope_not_kept: asked_search_scope = Void
 		end
 
 	use_version (a_code: STRING_8)
