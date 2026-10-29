@@ -172,7 +172,7 @@ feature -- Linking
 					if l_framework = Void and then attached writing_names as al_names then
 						l_writing := al_names.match_at (l_text, i)
 					end
-					if l_framework = Void and then l_writing = Void and then (i = 1 or else not is_word_character (l_text [i - 1])) then
+					if l_framework = Void and then l_writing = Void and then (i = 1 or else not is_name_character (l_text [i - 1])) then
 						l_found := reference_at (l_text, i)
 					end
 					if attached l_framework as al_framework then
@@ -209,9 +209,9 @@ feature -- Linking
 		do
 				-- Up to three words ("1 John", "Song of Songs") that may name a book.
 			create l_words.make (3)
-			from l_pos := a_start until l_words.count = 3 or l_pos > a_text.count or else not is_word_character (a_text [l_pos]) loop
+			from l_pos := a_start until l_words.count = 3 or l_pos > a_text.count or else not is_name_character (a_text [l_pos]) loop
 				l_word_end := l_pos
-				from until l_word_end + 1 > a_text.count or else not is_word_character (a_text [l_word_end + 1]) loop
+				from until l_word_end + 1 > a_text.count or else not is_name_character (a_text [l_word_end + 1]) loop
 					l_word_end := l_word_end + 1
 				end
 				l_words.extend ([l_pos, l_word_end])
@@ -399,7 +399,7 @@ feature {NONE} -- Implementation
 			end
 		end
 
-	is_word_character (a_character: CHARACTER_32): BOOLEAN
+	is_name_character (a_character: CHARACTER_32): BOOLEAN
 			-- A letter, digit or period inside a book name or abbreviation.
 		do
 			Result := a_character.is_alpha or a_character.is_digit or a_character = '.'

@@ -757,6 +757,16 @@ feature -- Ask (0.7.31)
 			assert_true ("and refused", refused (l_check, "search the internet for Jude 5", call_of ("open_passage", "reference", "Jude 5"), "rule 11"))
 			assert_false ("a request about web of lies is about the web", l_check.is_outside ("Jude 5 commentary"))
 			assert_true ("no tool fits", l_check.checked ("hello", create {ARRAYED_LIST [BIB_ASK_CALL]}.make (0)).is_empty and l_check.refusal.has_substring ("rule 0"))
+				-- Scan 63: a range typed with a hyphen; the good news is Scripture's; "or" inside a word
+				-- mends nothing; "faith without works" stays a phrase.
+			assert_true ("a hyphen range typed", passes (l_check, "explain Jude 1:5-7 please", call_of ("commentary", "reference", "Jude 1:5-7")))
+			assert_false ("the good news is not the news", l_check.is_outside ("what is the good news in 1 Peter"))
+			assert_false ("fair weather is Scripture's", l_check.is_outside ("fair weather"))
+			assert_true ("but the weather forecast is not Ask's", l_check.is_outside ("the weather forecast for tomorrow"))
+			assert_true ("or inside a word mends nothing", passes (l_check, "delight or darkness", call_of ("search_text", "query", "delight darkness")))
+			assert_strings_equal ("delight OR darkness", "delight OR darkness", last_call.text ("query"))
+			assert_true ("faith without works", passes (l_check, "faith without works", call_of ("search_text", "query", "faith works")))
+			assert_strings_equal ("no NOT made of without", "faith works", last_call.text ("query"))
 			l_bible.close
 			remove_test_files
 		end

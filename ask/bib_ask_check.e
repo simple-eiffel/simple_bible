@@ -24,8 +24,9 @@ note
 		10 a query that kept the reader's words but lost a mark is mended: a
 		   quoted run quoted, "any form of X" X*, "A or B" A OR B, "A but not B"
 		   A NOT B, "the Greek word X" lemma:X;
-		11 a request about the internet, the web, the news or the weather is not
-		   Ask's (`is_outside');
+		11 a request about the internet, the web, today's news or a weather
+		   forecast is not Ask's (`is_outside': phrases, so "the good news" and
+		   "fair weather" pass);
 		12 each call is checked on its own.
 		Rule 1 (a reference the box reads is opened without asking) is the
 		window's, before it asks.
@@ -279,7 +280,7 @@ feature {NONE} -- Rule 10
 			end
 			Result := joined_by (Result, l_lower, " or ", " OR ")
 			Result := joined_by (Result, l_lower, " but not ", " NOT ")
-			Result := joined_by (Result, l_lower, " without ", " NOT ")
+				-- (scan 63: not "without": "faith without works" is a phrase, not a NOT)
 		end
 
 	joined_by (a_query, a_lower: STRING_32; a_spoken, a_operator: READABLE_STRING_GENERAL): STRING_32
@@ -292,7 +293,7 @@ feature {NONE} -- Rule 10
 			l_words := a_query.split (' ')
 			from i := 1 until i >= l_words.count loop
 				if not l_words.i_th (i).is_empty and then not l_words.i_th (i + 1).is_empty
-					and then a_lower.has_substring (l_words.i_th (i).as_lower + a_spoken.to_string_32 + l_words.i_th (i + 1).as_lower)
+					and then has_word (a_lower, l_words.i_th (i).as_lower + a_spoken.to_string_32 + l_words.i_th (i + 1).as_lower)
 				then
 					Result.replace_substring_all (l_words.i_th (i) + {STRING_32} " " + l_words.i_th (i + 1), l_words.i_th (i) + a_operator.to_string_32 + l_words.i_th (i + 1))
 				end
@@ -370,6 +371,11 @@ feature {NONE} -- Reading the request
 				l_word := l_words.i_th (i)
 				if l_word.is_natural and then l_word.count <= 3 then
 					Result.extend (l_word.to_integer)
+				elseif l_word.has ('-') and then across l_word.split ('-') as al_part all al_part.is_natural and al_part.count <= 3 end then
+						-- "28-30" typed as one word: both numbers (scan 63)
+					across l_word.split ('-') as al_part loop
+						Result.extend (al_part.to_integer)
+					end
 				else
 					l_tens := 0
 					if l_word.has ('-') and then attached number_word (l_word.substring (1, l_word.index_of ('-', 1) - 1)) as al_t
@@ -429,24 +435,16 @@ feature {NONE} -- Reading the request
 		end
 
 	has_word (a_text, a_word: READABLE_STRING_GENERAL): BOOLEAN
-			-- Is `a_word' (one word or several) in `a_text' as whole words, any case?
-		local
-			l_text, l_word: STRING_32
-			i: INTEGER
+			-- Is `a_word' (one word or several) in `a_text' as whole words, any case (one rule with the
+			-- window: BIB_WORD_CHARACTERS, scan 63)?
 		do
-			l_text := a_text.to_string_32.as_lower
-			l_word := a_word.to_string_32.as_lower
-			if not l_word.is_empty then
-				from i := l_text.substring_index (l_word, 1) until i = 0 or Result loop
-					if (i = 1 or else not is_word_character (l_text [i - 1]))
-						and then (i + l_word.count > l_text.count or else not is_word_character (l_text [i + l_word.count]))
-					then
-						Result := True
-					else
-						i := l_text.substring_index (l_word, i + 1)
-					end
-				end
-			end
+			Result := word_characters.has_whole_word (a_text, a_word)
+		end
+
+	word_characters: BIB_WORD_CHARACTERS
+			-- What a word is made of.
+		once
+			create Result
 		end
 
 	words_of (a_text: READABLE_STRING_GENERAL): ARRAYED_LIST [STRING_32]
@@ -470,9 +468,9 @@ feature {NONE} -- Reading the request
 		end
 
 	is_word_character (a_character: CHARACTER_32): BOOLEAN
-			-- A letter or digit.
+			-- Part of a word (BIB_WORD_CHARACTERS).
 		do
-			Result := a_character.is_alpha or a_character.is_digit
+			Result := word_characters.is_word_character (a_character)
 		end
 
 	refuse (a_rule, a_why: READABLE_STRING_GENERAL)
@@ -554,9 +552,12 @@ feature {NONE} -- Tables
 		end
 
 	Outside_words: ARRAY [STRING_32]
-			-- Rule 11.
+			-- Rule 11, as phrases (scan 63: "the good news", "fair weather" and a spider's "web" are
+			-- Scripture's, never refused).
 		once
-			Result := <<{STRING_32} "internet", {STRING_32} "web", {STRING_32} "google", {STRING_32} "online", {STRING_32} "news", {STRING_32} "weather">>
+			Result := <<{STRING_32} "internet", {STRING_32} "google", {STRING_32} "online", {STRING_32} "website", {STRING_32} "the web",
+				{STRING_32} "web search", {STRING_32} "latest news", {STRING_32} "news today", {STRING_32} "today's news",
+				{STRING_32} "weather forecast", {STRING_32} "today's weather", {STRING_32} "weather today">>
 		end
 
 	Number_words: ARRAY [STRING_32]
