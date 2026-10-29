@@ -26,14 +26,16 @@ feature -- Status
 feature -- Reading
 
 	feed (a_line: READABLE_STRING_GENERAL)
-			-- Read the next line; `is_inside' and `was_fence_line' follow.
+			-- Read the next line; `is_inside' and `was_fence_line' follow. `a_line' is left as it is.
 		local
 			l_char: CHARACTER_32
 			l_run: INTEGER
 			l_line: STRING_32
 		do
 			was_fence_line := False
-			l_line := a_line.to_string_32
+				-- a copy: `to_string_32' is the caller's own string when it is one (scan 67: the
+				-- caller's line lost its indentation)
+			create l_line.make_from_string_general (a_line)
 			l_line.prune_all ('%R')
 			l_line.left_adjust
 			if not l_line.is_empty and then (l_line [1] = '`' or l_line [1] = '~') then

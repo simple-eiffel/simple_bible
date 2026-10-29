@@ -21,7 +21,7 @@ feature -- Reading
 			l_line, l_inner: STRING_32
 			l_bar: INTEGER
 		do
-			l_line := a_line.to_string_32
+			create l_line.make_from_string_general (a_line)
 			l_line.left_adjust
 			l_line.right_adjust
 			if l_line.starts_with (Opening) and then l_line.ends_with ({STRING_32} "}}") and then l_line.occurrences ('{') = 2 and then l_line.occurrences ('}') = 2 then

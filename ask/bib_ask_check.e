@@ -254,7 +254,7 @@ feature {NONE} -- Rule 10
 			l_quoted: STRING_32
 			i, j: INTEGER
 		do
-			Result := a_query.to_string_32
+			create Result.make_from_string_general (a_query)
 			l_lower := a_text.to_string_32.as_lower
 				-- a quoted run in the request: quoted in the query
 			i := a_text.to_string_32.index_of ('"', 1)

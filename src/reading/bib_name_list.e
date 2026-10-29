@@ -89,7 +89,7 @@ feature {NONE} -- Implementation
 		local
 			l_name: STRING_32
 		do
-			l_name := a_name.to_string_32
+			create l_name.make_from_string_general (a_name)
 			l_name.replace_substring_all ({STRING_32} "%T", {STRING_32} " ")
 			l_name.replace_substring_all ({STRING_32} "%N", {STRING_32} " ")
 			l_name.left_adjust
