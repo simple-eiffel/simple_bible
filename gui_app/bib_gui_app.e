@@ -4368,7 +4368,11 @@ feature {NONE} -- Ask (C6.5, 0.7.31: plain words through the Cactus Needle helpe
 						al_helper.ask (l_text)
 						if al_helper.is_ready then
 							l_calls := l_check.checked (l_text, al_helper.calls)
-							if l_calls.is_empty then
+							if l_calls.is_empty and then not al_helper.last_error.is_empty then
+									-- the helper refused the request itself: its reason, not "no tool fits" (scan 65)
+								log_ask (l_text, "", {STRING_32} "helper: " + al_helper.last_error)
+								ask_fallback (l_text)
+							elseif l_calls.is_empty then
 								log_ask (l_text, calls_text (al_helper.calls), l_check.refusal)
 								ask_fallback (l_text)
 							else
