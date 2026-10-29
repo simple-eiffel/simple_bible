@@ -262,6 +262,64 @@ feature -- Commands
 			not_empty: not Result.is_empty
 		end
 
+	names (a_kind: READABLE_STRING_GENERAL): STRING_32
+			-- Every name a reader may write for Larry's writings, one a line, tab-separated: the pack's
+			-- kind, the name, the link it opens (0.7.31, for NEEDLE's tool data): each book's and essay
+			-- series' title, each chapter's or essay's title, every alias, every framework spelling.
+			-- `a_kind' empty for every pack, else "books", "essays" or "frameworks".
+		local
+			i: INTEGER
+		do
+			create Result.make (40000)
+			across bible.text_packs as ic loop
+				if ic.is_available and then (a_kind.is_empty or else ic.schema.Pack_kind.same_string_general (a_kind)) and then attached ic.books as al_books
+					and then al_books.is_success
+				then
+					from i := 1 until i > al_books.count loop
+						Result.append (name_line (ic.schema.Pack_kind, al_books.item (i).title, ic.schema.link_text (al_books.item (i).id, 0, 0)))
+						if attached ic.book (al_books.item (i).id) as al_book and then al_book.is_success and then al_book.count = 1 then
+							across al_book.item (1).chapters as ic_chapter loop
+								if ic_chapter.chapter <= ic.schema.Max_part then
+									Result.append (name_line (ic.schema.Pack_kind, ic_chapter.title, ic.schema.link_text (al_books.item (i).id, ic_chapter.chapter, 0)))
+								end
+							end
+						end
+						i := i + 1
+					end
+					across ic.name_links as al_name loop
+						Result.append (name_line (ic.schema.Pack_kind, al_name.spelling, al_name.id))
+					end
+				end
+			end
+			if a_kind.is_empty or else a_kind.same_string ({BIB_FRAMEWORK_SCHEMA}.Pack_kind) then
+				across bible.framework_packs as ic loop
+					if ic.is_available and then attached ic.aliases as al_spellings and then al_spellings.is_success then
+						from i := 1 until i > al_spellings.count loop
+							Result.append (name_line ({BIB_FRAMEWORK_SCHEMA}.Pack_kind, al_spellings.item (i).spelling, {BIB_FRAMEWORK_SCHEMA}.Link_prefix + al_spellings.item (i).id))
+							i := i + 1
+						end
+					end
+				end
+			end
+			if Result.is_empty then
+				Result.append_string_general ("No books, essays or frameworks pack is attached (--packs).")
+			end
+		ensure
+			not_empty: not Result.is_empty
+		end
+
+	name_line (a_kind, a_name, a_link: READABLE_STRING_GENERAL): STRING_32
+			-- "essays<TAB>JESUS 06<TAB>essay:jesus/6" and a new line; a tab or new line inside the name
+			-- read as a space.
+		local
+			l_name: STRING_32
+		do
+			l_name := a_name.to_string_32
+			l_name.replace_substring_all ({STRING_32} "%T", {STRING_32} " ")
+			l_name.replace_substring_all ({STRING_32} "%N", {STRING_32} " ")
+			Result := a_kind.to_string_32 + {STRING_32} "%T" + l_name + {STRING_32} "%T" + a_link.to_string_32 + {STRING_32} "%N"
+		end
+
 feature -- Constants
 
 	Places_shown: INTEGER = 20
