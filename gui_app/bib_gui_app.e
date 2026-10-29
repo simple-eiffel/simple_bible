@@ -4200,6 +4200,8 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 			-- Chapter `a_chapter' of `a_book' as a page: the book's title, then every block in order,
 			-- each its own paragraph (so block n is the page's block n + 1) and a heading at its own
 			-- level (the chapter's first heading is its title), references and framework names linked.
+			-- In an essay, a heading straight under the title is its subtitle, set in italics, not a
+			-- section (0.7.31; COMMENTARY's builder notes).
 		local
 			l_linker: BIB_REFERENCE_LINKER
 		do
@@ -4208,7 +4210,9 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 			Result.append ({STRING_32} "*" + a_book.full_title + {STRING_32} "*%N%N")
 			if attached a_pack.chapter_blocks (a_book.id, a_chapter) as al_blocks and then al_blocks.is_success then
 				across 1 |..| al_blocks.count as al_i loop
-					if al_blocks.item (al_i).kind.same_string_general ("heading") then
+					if a_pack.schema.Starts_at_title and then is_subtitle (al_blocks, al_i) then
+						Result.append ({STRING_32} "*" + l_linker.linked (al_blocks.item (al_i).markdown) + {STRING_32} "*%N%N")
+					elseif al_blocks.item (al_i).kind.same_string_general ("heading") then
 						Result.append (create {STRING_32}.make_filled ('#', al_blocks.item (al_i).level.max (1).min (6)))
 						Result.append ({STRING_32} " " + l_linker.linked (al_blocks.item (al_i).markdown) + {STRING_32} "%N%N")
 					elseif al_blocks.item (al_i).kind.same_string_general ("code") then
@@ -4218,6 +4222,15 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 					end
 				end
 			end
+		end
+
+	is_subtitle (a_blocks: BIB_LIST_RESULT [BIB_BOOK_BLOCK]; a_index: INTEGER): BOOLEAN
+			-- Is block `a_index' a heading below level 1 standing straight under a level-1 title?
+		require
+			in_range: a_index >= 1 and a_index <= a_blocks.count
+		do
+			Result := a_index = 2 and then a_blocks.item (1).kind.same_string_general ("heading") and then a_blocks.item (1).level = 1
+				and then a_blocks.item (2).kind.same_string_general ("heading") and then a_blocks.item (2).level >= 2
 		end
 
 	fill_in_books
