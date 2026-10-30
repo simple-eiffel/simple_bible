@@ -39,6 +39,8 @@
 		<library name="simple_env" location="$SIMPLE_EIFFEL/simple_env/simple_env.ecf"/>
 		<library name="simple_json" location="$SIMPLE_EIFFEL/simple_json/simple_json.ecf"/>
 		<library name="simple_process" location="$SIMPLE_EIFFEL/simple_process/simple_process.ecf"/>
+		<library name="simple_archive" location="$SIMPLE_EIFFEL/simple_archive/simple_archive.ecf"/>
+		<library name="simple_pdf" location="$SIMPLE_EIFFEL/simple_pdf/simple_pdf.ecf"/>
 		<cluster name="build" location=".\build\" recursive="true"/>
 		<cluster name="ask" location=".\ask\" recursive="true"/>
 		<cluster name="ingest" location=".\ingest\" recursive="true"/>

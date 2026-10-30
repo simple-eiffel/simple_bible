@@ -408,6 +408,24 @@ feature {NONE} -- Suites
 			end
 		end
 
+	run_sources_tests
+			-- The sources an ingest kit is made from (2026-10-30): markup, archives, PDF.
+		local
+			t: TEST_SOURCES
+		do
+			print ("TEST_SOURCES%N")
+			create t
+			run_test (agent t.test_html_becomes_markdown, "test_html_becomes_markdown")
+			run_test (agent t.test_word_xml_becomes_markdown, "test_word_xml_becomes_markdown")
+			run_test (agent t.test_libreoffice_xml_becomes_markdown, "test_libreoffice_xml_becomes_markdown")
+			run_test (agent t.test_archives_read_as_their_kind, "test_archives_read_as_their_kind")
+			if t.is_pdf_runnable then
+				run_test (agent t.test_pdf_reads_as_prose, "test_pdf_reads_as_prose")
+			else
+				run_skeletal (agent t.test_pdf_reads_as_prose, "test_pdf_reads_as_prose", "set SIMPLE_BIBLE_PDF")
+			end
+		end
+
 	run_facade_open_tests
 		local
 			t: TEST_FACADE_OPEN
@@ -435,6 +453,7 @@ feature {NONE} -- Suites
 			run_test (agent t.test_ingest_kit_writes_and_notes_import, "test_ingest_kit_writes_and_notes_import")
 			run_test (agent t.test_a_prepared_folder_imports_once, "test_a_prepared_folder_imports_once")
 			run_test (agent t.test_kits_for_a_folder, "test_kits_for_a_folder")
+			run_sources_tests
 			run_test (agent t.test_ask_helper_is_off_without_its_files_and_answers_with_them, "test_ask_helper_is_off_without_its_files_and_answers_with_them")
 			run_test (agent t.test_a_pack_breaking_the_rules_is_refused_and_named, "test_a_pack_breaking_the_rules_is_refused_and_named")
 			run_test (agent t.test_a_claim_without_an_id_is_refused, "test_a_claim_without_an_id_is_refused")
