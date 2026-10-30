@@ -191,6 +191,9 @@ feature -- Tests
 			assert_true ("open with the pack", l_bible.is_open and l_bible.pack_errors.is_empty and l_bible.private_packs.count = 1)
 			assert_integers_equal ("one commentary", 1, l_bible.commentary_packs.count)
 			assert_strings_equal ("titled", "Larry Rix: Commentaries", l_bible.commentary_packs.first.title)
+				-- 2026-10-30, Larry: "I can share my own material. It's mine."
+			assert_true ("his commentary is his to share", l_bible.credits.has_substring ("- Larry Rix (the author's own work, free to share)%N"))
+			assert_false ("never personal use only", l_bible.credits.has_substring ("personal use only"))
 			l_sections := l_bible.commentary_packs.first.sections_for_verse (65, 1, 6)
 			assert_true ("two sections cover Jude 6", l_sections.is_success and l_sections.count = 2)
 			assert_strings_equal ("the narrowest first", "jude-5-7", l_sections.item (1).section_id)
@@ -1162,7 +1165,9 @@ feature -- Ingest kit (0.7.32)
 				-- Help > About's data credits (2026-10-30): generated, every source with its license
 			assert_true ("credits name the Bible text", l_bible.credits.has_substring ("## The Bible text"))
 			assert_true ("and each pack", l_bible.credits.has_substring ("## Scholar Guides"))
-			assert_strings_equal ("a credit line, restricted", {STRING_32} "- Name (CC BY; personal use only)%N", l_bible.credit_line ("Name", "", "CC BY", True))
+				-- 2026-10-30 licensing: study guides on copyrighted works stay with the NDA testers
+			assert_true ("the guides are not to be shared", l_bible.credits.has_substring ("- Larry Rix (study guides on copyrighted works, for alpha testers under NDA; not to be shared)"))
+			assert_strings_equal ("a credit line, restricted", {STRING_32} "- Name (CC BY; not to be shared)%N", l_bible.credit_line ("Name", "", "CC BY", True))
 			assert_strings_equal ("the edition when the credit is only a name", {STRING_32} "- Westcott-Hort 1881%N", l_bible.credit_line ("Westcott-Hort", "Westcott-Hort 1881", "", False))
 			assert_strings_equal ("a license the credit states not said twice", {STRING_32} "- Data courtesy of X, CC BY.%N", l_bible.credit_line ("Data courtesy of X, CC BY.", "", "CC BY", False))
 			assert_false ("no kit names a guide", across (create {BIB_NAME_LIST}.make (l_bible)).names ("") as al_n some al_n.kind.same_string ("guides") end)

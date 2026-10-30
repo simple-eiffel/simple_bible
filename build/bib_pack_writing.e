@@ -8,7 +8,7 @@ note
 		its sidecars and writes its own tables between `fresh_pack' (or
 		`begin_private_pack', which writes the `meta' rows every private pack
 		carries) and `finish_pack'. Scan 59 moved up what the books builder had
-		copied again: `fail_unless', `sidecars_with', `put_private_provenance'.
+		copied again: `fail_unless', `sidecars_with', `put_pack_provenance'.
 	]"
 	author: "Larry Rix"
 	date: "$Date$"
@@ -68,15 +68,17 @@ feature {NONE} -- The pack file
 			put_meta (Result, "builder", a_builder.to_string_32)
 		end
 
-	put_private_provenance (a_db: SIMPLE_SQL_DATABASE; a_key: INTEGER; a_source_key, a_edition, a_caveat: READABLE_STRING_GENERAL)
-			-- Provenance row `a_key': Larry's own text, private, never shared, unless the build
-			-- already failed.
+	put_pack_provenance (a_db: SIMPLE_SQL_DATABASE; a_key: INTEGER; a_source_key, a_edition, a_caveat: READABLE_STRING_GENERAL; a_license: BIB_LICENSE)
+			-- Provenance row `a_key' under `a_license' (the pack schema's `pack_license': Larry's own
+			-- work is free to share, 2026-10-30), unless the build already failed.
 		require
 			key_positive: a_key > 0
 		do
 			if last_error = Void then
-				a_db.execute_with_args ("INSERT INTO source_provenance VALUES (?, ?, ?, 'private', 1, 0, 1, 'Larry Rix', ?)",
-					<<a_key, a_source_key.to_string_32, a_edition.to_string_32, a_caveat.to_string_32>>)
+				a_db.execute_with_args ("INSERT INTO source_provenance VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+					<<a_key, a_source_key.to_string_32, a_edition.to_string_32, a_license.identifier,
+					a_license.is_non_commercial.to_integer, a_license.is_share_alike.to_integer, a_license.is_restricted.to_integer,
+					a_license.credit_line, a_caveat.to_string_32>>)
 				check_db (a_db, "The pack's provenance could not be written.")
 			end
 		end

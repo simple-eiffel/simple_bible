@@ -20,7 +20,7 @@ class
 inherit
 	BIB_TEXT_PACK_SCHEMA
 		redefine
-			Is_kept_apart
+			Is_kept_apart, pack_license
 		end
 
 feature -- Constants
@@ -49,5 +49,18 @@ feature -- Constants
 
 	Is_kept_apart: BOOLEAN = True
 			-- Another scholar's work, kept apart from Larry's writings.
+
+	pack_license: BIB_LICENSE
+			-- Study guides on another author's copyrighted books: not shared freely, only with the
+			-- alpha testers under NDA (Larry, 2026-10-30: the "gray line" is notes derived from
+			-- copyrighted works).
+		do
+			create Result.make (Guide_license, False, False, True, Pack_author)
+		ensure then
+			restricted: Result.is_restricted
+		end
+
+	Guide_license: STRING_8 = "study guides on copyrighted works, for alpha testers under NDA"
+			-- `pack_license''s identifier.
 
 end

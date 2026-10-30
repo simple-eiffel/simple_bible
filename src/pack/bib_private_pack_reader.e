@@ -157,7 +157,7 @@ feature {NONE} -- Provenance
 
 	pack_provenance: BIB_PROVENANCE
 			-- The pack's own provenance: its first `source_provenance' row as the builder wrote it,
-			-- read once; a private one in the pack's name only when that row cannot be read.
+			-- read once; when that row cannot be read, an UNKNOWN license, which D-002 never shares.
 		do
 			if attached pack_provenance_read as al_read then
 				Result := al_read
@@ -168,7 +168,7 @@ feature {NONE} -- Provenance
 					Result := provenance_of_row (al_rows.rows.first)
 				else
 					create Result.make (1, method_edition, method_edition,
-						create {BIB_LICENSE}.make ({STRING_32} "private", True, False, True, {STRING_32} "Larry Rix"), {STRING_32} "")
+						create {BIB_LICENSE}.make ({BIB_LICENSE}.Unknown_identifier, False, False, True, {STRING_32} "Larry Rix"), {STRING_32} "")
 				end
 				pack_provenance_read := Result
 			end

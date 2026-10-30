@@ -588,7 +588,7 @@ feature -- Convenience
 			-- notice table; nothing typed by hand (FR-003, settlement S4). Built 2026-10-30 for
 			-- Help > About (Larry): Markdown, a section for the Bible text (content.db), the
 			-- concordance (its corpora and meaning sources) and each attached pack, one line a source
-			-- with its license, and "personal use only" where it is restricted.
+			-- with its license, and "not to be shared" where it is restricted.
 		require
 			open: is_open
 		local
@@ -638,7 +638,8 @@ feature -- Convenience
 
 	credit_line (a_credit, a_edition, a_license: READABLE_STRING_GENERAL; a_restricted: BOOLEAN): STRING_32
 			-- "- <credit> (<license>)": the credit, or the edition when the credit is only its name;
-			-- "personal use only" when restricted.
+			-- "not to be shared" when restricted (2026-10-30: was "personal use only", wrong for the guides
+			-- the alpha testers read).
 		local
 			l_name: STRING_32
 		do
@@ -650,9 +651,9 @@ feature -- Convenience
 			if (not a_license.is_empty and then not l_name.has_substring (a_license.to_string_32)) or a_restricted then
 					-- a license the credit states already is not said twice
 				if l_name.has_substring (a_license.to_string_32) then
-					Result.append ({STRING_32} " (personal use only)")
+					Result.append ({STRING_32} " (not to be shared)")
 				else
-					Result.append ({STRING_32} " (" + a_license.to_string_32 + (if a_restricted then (if a_license.is_empty then {STRING_32} "" else {STRING_32} "; " end) + {STRING_32} "personal use only" else {STRING_32} "" end) + {STRING_32} ")")
+					Result.append ({STRING_32} " (" + a_license.to_string_32 + (if a_restricted then (if a_license.is_empty then {STRING_32} "" else {STRING_32} "; " end) + {STRING_32} "not to be shared" else {STRING_32} "" end) + {STRING_32} ")")
 				end
 			end
 			Result.append_character ('%N')
