@@ -90,9 +90,14 @@ feature -- Conversion
 					elseif i < l_markup.count and then (l_markup [i + 1] = '?' or l_markup [i + 1] = '!') then
 						j := l_markup.index_of ('>', i)
 						i := if j = 0 then l_markup.count + 1 else j + 1 end
+					elseif i = l_markup.count or else not (l_markup [i + 1].is_alpha or l_markup [i + 1] = '/') then
+							-- scan 72: a "<" that opens no tag ("a < b") is text
+						add_text ({STRING_32} "<", True)
+						i := i + 1
 					else
 						j := tag_end (l_markup, i)
 						if j = 0 then
+							add_text (l_markup.substring (i, l_markup.count), True)
 							i := l_markup.count + 1
 						else
 							read_tag (l_markup.substring (i + 1, j - 1))
@@ -258,6 +263,12 @@ feature {NONE} -- Scanning
 			if l_end > 0 then
 				l_attributes := l_name.substring (l_end + 1, l_name.count)
 				l_name := l_name.substring (1, l_end).as_lower
+				if attached skipping as al_skipped and then kind = Html_kind and then al_skipped.same_string ({STRING_32} "head")
+					and then not l_close and then l_name.same_string ({STRING_32} "body")
+				then
+						-- scan 72: a page whose head is never closed begins at its body
+					skipping := Void
+				end
 				if attached skipping as al_skipped then
 					if l_close and l_name.same_string (al_skipped) then
 						skipping := Void
@@ -282,7 +293,10 @@ feature {NONE} -- Scanning
 				skipping := a_name
 			elseif a_name.count = 2 and then a_name [1] = 'h' and then a_name [2] >= '1' and then a_name [2] <= '6' then
 				end_block
-				if not a_close then
+				if a_close then
+						-- scan 72: an empty heading marks nothing after it
+					heading := 0
+				else
 					heading := a_name [2].code - ('0').code
 				end
 			elseif a_name.same_string ({STRING_32} "li") then
@@ -306,6 +320,11 @@ feature {NONE} -- Scanning
 		do
 			if a_name.same_string ({STRING_32} "w:p") then
 				end_block
+				if a_close or a_empty then
+						-- scan 72: an empty heading or item paragraph marks nothing after it
+					heading := 0
+					is_item := False
+				end
 			elseif a_name.same_string ({STRING_32} "w:t") then
 				in_docx_text := not a_close and not a_empty
 			elseif a_name.same_string ({STRING_32} "w:pstyle") and then attached attribute_of (a_attributes, "w:val") as al_value then
@@ -331,7 +350,10 @@ feature {NONE} -- Scanning
 				skipping := a_name
 			elseif a_name.same_string ({STRING_32} "text:h") then
 				end_block
-				if not a_close then
+				if a_close then
+						-- scan 72: an empty heading marks nothing after it
+					heading := 0
+				else
 					heading := 1
 					if attached attribute_of (a_attributes, "text:outline-level") as al_level and then al_level.is_integer then
 						heading := al_level.to_integer.max (1).min (6)
@@ -340,9 +362,8 @@ feature {NONE} -- Scanning
 			elseif a_name.same_string ({STRING_32} "text:p") then
 				end_block
 			elseif a_name.same_string ({STRING_32} "text:list-item") then
-				if not a_close then
-					is_item := True
-				end
+				end_block
+				is_item := not a_close
 			elseif a_name.same_string ({STRING_32} "text:s") then
 				if attached attribute_of (a_attributes, "text:c") as al_count and then al_count.is_integer then
 					block.append (create {STRING_32}.make_filled (' ', al_count.to_integer.max (1).min (40)))
@@ -494,7 +515,7 @@ feature {NONE} -- Scanning
 	Named_entities: HASH_TABLE [CHARACTER_32, STRING_32]
 			-- The named character references prose uses.
 		once
-			create Result.make (24)
+			create Result.make (48)
 			Result.put ('&', "amp")
 			Result.put ('<', "lt")
 			Result.put ('>', "gt")
@@ -513,6 +534,29 @@ feature {NONE} -- Scanning
 			Result.put ('%/0xB6/', "para")
 			Result.put ('%/0x2020/', "dagger")
 			Result.put ('%/0xB7/', "middot")
+				-- scan 72: the accented letters and marks prose most often names
+			Result.put ('%/0xE1/', "aacute")
+			Result.put ('%/0xE0/', "agrave")
+			Result.put ('%/0xE4/', "auml")
+			Result.put ('%/0xE7/', "ccedil")
+			Result.put ('%/0xE9/', "eacute")
+			Result.put ('%/0xE8/', "egrave")
+			Result.put ('%/0xEB/', "euml")
+			Result.put ('%/0xED/', "iacute")
+			Result.put ('%/0xEF/', "iuml")
+			Result.put ('%/0xF1/', "ntilde")
+			Result.put ('%/0xF3/', "oacute")
+			Result.put ('%/0xF6/', "ouml")
+			Result.put ('%/0xFA/', "uacute")
+			Result.put ('%/0xFC/', "uuml")
+			Result.put ('%/0xDF/', "szlig")
+			Result.put ('%/0xC9/', "Eacute")
+			Result.put ('%/0xAB/', "laquo")
+			Result.put ('%/0xBB/', "raquo")
+			Result.put ('%/0x2022/', "bull")
+			Result.put ('%/0xB0/', "deg")
+			Result.put ('%/0xD7/', "times")
+			Result.put ('%/0x2032/', "prime")
 		end
 
 invariant

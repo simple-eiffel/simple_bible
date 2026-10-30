@@ -50,6 +50,49 @@ feature -- Markup
 			assert_strings_equal ("as Markdown", {STRING_32} "## Title%N%NOne  two.%N%N- Item%N", l_text)
 		end
 
+	test_empty_marks_mark_nothing
+			-- Scan 72: an empty heading or item (a heading holding only a picture) marks nothing after it.
+		do
+			assert_strings_equal ("HTML", {STRING_32} "It was a dark night.%N", (create {BIB_MARKUP_TEXT}.make_html).text_of ("<h2><img src=%"x.png%"/></h2><p>It was a dark night.</p>"))
+			assert_strings_equal ("Word", {STRING_32} "Body text.%N", (create {BIB_MARKUP_TEXT}.make_docx).text_of ("<w:body><w:p><w:pPr><w:pStyle w:val=%"Heading1%"/></w:pPr></w:p><w:p><w:r><w:t>Body text.</w:t></w:r></w:p></w:body>"))
+			assert_strings_equal ("LibreOffice", {STRING_32} "Body%N", (create {BIB_MARKUP_TEXT}.make_odt).text_of ("<office:text><text:h text:outline-level=%"1%"></text:h><text:p>Body</text:p></office:text>"))
+			assert_strings_equal ("an empty item", {STRING_32} "After.%N", (create {BIB_MARKUP_TEXT}.make_html).text_of ("<ul><li></li></ul><p>After.</p>"))
+		end
+
+	test_markup_that_is_not_tidy
+			-- Scan 72: a head never closed, a "<" in text, a named accent, a byte-order mark.
+		do
+			assert_strings_equal ("a head never closed", {STRING_32} "Text%N", (create {BIB_MARKUP_TEXT}.make_html).text_of ("<html><head><title>x</title><body><p>Text</p></body></html>"))
+			assert_strings_equal ("a < in text", {STRING_32} "a < b and c%N", (create {BIB_MARKUP_TEXT}.make_html).text_of ("<p>a < b and c</p>"))
+			assert_strings_equal ("an accent", {STRING_32} "caf%/0xE9/%N", (create {BIB_MARKUP_TEXT}.make_html).text_of ("<p>caf&eacute;</p>"))
+		end
+
+	test_pdf_lines_become_paragraphs
+			-- Scan 72: a narrow column's short lines stay in their sentence; a heading with no blank line
+			-- around it stands apart; an ending direction mark leaves a space.
+		local
+			l_reader: BIB_SOURCE_READER
+		do
+			create l_reader
+			assert_strings_equal ("a narrow column", {STRING_32} "Paul wrote that he said that Jesus would come again to judge the living and the dead.",
+				l_reader.prose_from_pdf ("Paul wrote that he said that%NJesus would come again to%Njudge the living and the%Ndead."))
+			assert_strings_equal ("a heading between paragraphs", {STRING_32} "In the beginning God created the heavens and the earth, and it was very good.%N%NSecond part%N%NCompare these two passages closely with the first one before.",
+				l_reader.prose_from_pdf ("In the beginning God created the heavens and the earth, and it%Nwas very good.%NSecond part%NCompare these two passages closely with the first one%Nbefore."))
+			assert_strings_equal ("a word hyphenated at a line's end", {STRING_32} "the resurrection of the dead", l_reader.prose_from_pdf ("the resur-%Nrection of the dead"))
+			assert_strings_equal ("the Hebrew word apart", {STRING_32} "The word is %/0x5D0/%/0x5DC/%/0x5D4/%/0x5D9/%/0x5DD/ elohim.",
+				l_reader.prose_from_pdf ({STRING_32} "The word is %/0x202B/%/0x5D0/%/0x5DC/%/0x5D4/%/0x5D9/%/0x5DD/%/0x202C/elohim."))
+		end
+
+	test_epub_page_names
+			-- Scan 72: a page named "../Text/ch1.xhtml#start" from the package's folder.
+		local
+			l_reader: BIB_SOURCE_READER
+		do
+			create l_reader
+			assert_strings_equal ("up a folder, part dropped", {STRING_32} "Text/ch1.xhtml", l_reader.archive_path ({STRING_32} "OEBPS/", {STRING_32} "../Text/ch1.xhtml#start"))
+			assert_strings_equal ("beside the package", {STRING_32} "OEBPS/ch2.xhtml", l_reader.archive_path ({STRING_32} "OEBPS/", {STRING_32} "./ch2.xhtml"))
+		end
+
 feature -- Files
 
 	test_archives_read_as_their_kind
