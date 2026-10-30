@@ -991,6 +991,7 @@ feature -- Ingest kit (0.7.32)
 			assert_true ("and known as kept", l_importer.is_already_kept (Notes_folder))
 			create l_batch.make (l_bible)
 			l_batch.run (Prepared_folder, l_places)
+			as_put_in_place (l_batch)
 			assert_true ("the folder imports", l_batch.last_error = Void)
 			assert_integers_equal ("three prepared files; a plain .md is none", 3, l_batch.file_count)
 			assert_true ("the new note kept", l_batch.kept.count = 1 and then l_batch.kept.first.file.same_string ("b.prepared.md"))
@@ -999,29 +1000,35 @@ feature -- Ingest kit (0.7.32)
 			assert_true ("the pack built once", l_batch.has_new_notes and l_batch.built_blocks > 0)
 			assert_true ("the new note's chapter written", (create {SIMPLE_FILE}.make (Notes_folder + "\sermon9\01.md")).read_text_utf_8.has_substring ("Jude 3 urges them."))
 			l_batch.run (Prepared_folder, l_places)
+			as_put_in_place (l_batch)
 			assert_true ("again: nothing new, nothing built", l_batch.last_error = Void and l_batch.kept.is_empty and not l_batch.has_new_notes)
 			assert_integers_equal ("both notes passed over", 2, l_batch.skipped.count)
 			l_ok := (create {SIMPLE_FILE}.make (Prepared_folder + "\b.prepared.md")).write_text_utf_8 (Second_note + "%NOne more paragraph.%N")
 			l_batch.run (Prepared_folder, l_places)
+			as_put_in_place (l_batch)
 			assert_true ("a changed file comes in again", l_batch.kept.count = 1 and l_batch.replaced.count = 1 and l_batch.skipped.count = 1)
 			assert_true ("with its new text", (create {SIMPLE_FILE}.make (Notes_folder + "\sermon9\01.md")).read_text_utf_8.has_substring ("One more paragraph."))
 			l_ok := (create {SIMPLE_FILE}.make (Prepared_folder + "\d.prepared.md")).write_text_utf_8 (Second_note)
 			l_batch.run (Prepared_folder, l_places)
+			as_put_in_place (l_batch)
 			assert_true ("a second file with one id refused", across l_batch.refused as al_r some al_r.file.same_string ("d.prepared.md") end)
 			assert_true ("and the note it would have replaced kept as it was", (create {SIMPLE_FILE}.make (Notes_folder + "\sermon9\01.md")).read_text_utf_8.has_substring ("One more paragraph."))
 			fixture.delete_file (Prepared_folder + "\d.prepared.md")
 				-- Scan 70: a pack built but never put in place is built again, though no file is new.
 			l_batch.set_pack_stale (Notes_folder, True)
 			l_batch.run (Prepared_folder, l_places)
+			as_put_in_place (l_batch)
 			assert_true ("a stale pack built again", l_batch.is_built and l_batch.kept.is_empty and l_batch.built_blocks > 0)
 			l_batch.set_pack_stale (Notes_folder, False)
 			l_batch.run (Prepared_folder, l_places)
+			as_put_in_place (l_batch)
 			assert_false ("and not once it is in place", l_batch.is_built)
 				-- Scan 70: an earlier note that cannot be moved aside is never written over.
 				-- (a folder where the file would go: a rename onto it fails, as onto a file in use)
 			l_ok := (create {SIMPLE_FILE}.make (Notes_folder + "\sermon9\01.md.aside")).create_directory
 			l_ok := (create {SIMPLE_FILE}.make (Prepared_folder + "\b.prepared.md")).write_text_utf_8 (Second_note + "%NA third version.%N")
 			l_batch.run (Prepared_folder, l_places)
+			as_put_in_place (l_batch)
 			assert_true ("refused when it cannot be moved aside", attached l_batch.last_error as al_e and then al_e.has_substring ("could not be moved aside"))
 			assert_true ("the earlier note's text untouched", (create {SIMPLE_FILE}.make (Notes_folder + "\sermon9\01.md")).read_text_utf_8.has_substring ("One more paragraph."))
 			assert_true ("and its manifest", (create {SIMPLE_FILE}.make (Notes_folder + "\sermon9.note.json")).is_file)
@@ -1127,11 +1134,14 @@ feature -- Ingest kit (0.7.32)
 			l_ok := (create {SIMPLE_FILE}.make (Prepared_folder + "\a.prepared.md")).write_text_utf_8 (First_note)
 			create l_batch.make (l_bible)
 			l_batch.run (Prepared_folder, l_places)
+			as_put_in_place (l_batch)
 			assert_true ("the note kept", l_batch.last_error = Void and l_batch.notes_built and not l_batch.guides_built)
 				-- the same id comes back as a guide, beside another note
 			l_ok := (create {SIMPLE_FILE}.make (Prepared_folder + "\a.prepared.md")).write_text_utf_8 (Guide_note)
 			l_ok := (create {SIMPLE_FILE}.make (Prepared_folder + "\b.prepared.md")).write_text_utf_8 (Second_note)
 			l_batch.run (Prepared_folder, l_places)
+			assert_true ("scan 73: the guides folder marked until its pack is in place", l_batch.is_pack_stale (Guides_folder))
+			as_put_in_place (l_batch)
 			assert_true ("both kept", l_batch.last_error = Void and l_batch.kept.count = 2)
 			assert_true ("the guide in the guides pack", l_batch.guides_built and across l_batch.kept as al_k some al_k.id.same_string ("sermon8") and al_k.kind.same_string ("guides") end)
 			assert_true ("the note it replaced retired", l_batch.retired.count = 1 and then l_batch.retired.first.same_string ("sermon8"))
@@ -1142,6 +1152,7 @@ feature -- Ingest kit (0.7.32)
 				-- the last note becomes a guide too: the notes pack is to go
 			l_ok := (create {SIMPLE_FILE}.make (Prepared_folder + "\b.prepared.md")).write_text_utf_8 (Second_guide)
 			l_batch.run (Prepared_folder, l_places)
+			as_put_in_place (l_batch)
 			assert_true ("the last note retired", l_batch.last_error = Void and l_batch.retired.count = 1 and l_batch.notes_now_empty and not l_batch.notes_built)
 			l_bible.close
 				-- the guides pack opens apart from Larry's writings
@@ -1177,6 +1188,13 @@ feature -- Ingest kit (0.7.32)
 		end
 
 feature {NONE} -- Fixture
+
+	as_put_in_place (a_batch: BIB_NOTE_BATCH)
+			-- What the window does once it has put `a_batch''s packs in place: the stale marks cleared.
+		do
+			a_batch.set_pack_stale (Notes_folder, False)
+			a_batch.set_pack_stale (Guides_folder, False)
+		end
 
 	Guides_folder: STRING = "facade_test_guides"
 	Folder_guides_file: STRING = "facade_test_packs\guides.db"

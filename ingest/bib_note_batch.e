@@ -20,10 +20,11 @@ note
 		many. When a write or a build fails, every file this run wrote is put back
 		and every retired note restored.
 
-		A PACK NOT PUT IN PLACE (scan 70): the files are kept before the window
-		swaps the built pack in; when that swap fails the window marks the folder
-		(`set_pack_stale'), and the next run builds that pack from every file even
-		when none is new, clearing the way.
+		A PACK NOT PUT IN PLACE (scans 70, 73): the files are kept before the
+		window swaps the built pack in, so a run that builds a pack marks its
+		folder stale (`set_pack_stale') and the window clears the mark once the
+		pack is in place. A swap that fails, or a stop before it, leaves the mark,
+		and the next run builds that pack from every file even when none is new.
 	]"
 	author: "Larry Rix"
 	date: "$Date$"
@@ -169,8 +170,13 @@ feature -- Importing
 					end
 				end
 				restore_retired (a_places.notes_folder)
+					-- scan 73: as the ordinary failure does, nothing left saying a pack was built
+				retired.wipe_out
 				kept.wipe_out
 				replaced.wipe_out
+				notes_built := False
+				guides_built := False
+				notes_now_empty := False
 			else
 				kept.wipe_out
 				replaced.wipe_out
@@ -281,6 +287,14 @@ feature -- Importing
 						ic.drop_set_aside (ic.folder_for (a_places.notes_folder, a_places.guides_folder))
 					end
 					drop_retired (a_places.notes_folder)
+						-- scan 73: kept as files, the pack not yet in place: marked stale now, so a stop
+						-- before the window puts it in place (it clears the mark) still builds it next time
+					if guides_built then
+						set_pack_stale (a_places.guides_folder, True)
+					end
+					if notes_built or notes_now_empty then
+						set_pack_stale (a_places.notes_folder, True)
+					end
 				end
 			end
 		ensure
