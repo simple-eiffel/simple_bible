@@ -11,6 +11,11 @@ note
 		problems and the rest still come in; two files with one id are one too
 		many. When a write or the one build fails, every note this run wrote is
 		put back as it was.
+
+		A PACK NOT PUT IN PLACE (scan 70): the notes are kept as files before the
+		window swaps the built pack in; when that swap fails the window marks the
+		notes folder (`set_pack_stale'), and the next run builds the pack from
+		every note even when no file is new (`is_built'), clearing the way.
 	]"
 	author: "Larry Rix"
 	date: "$Date$"
@@ -62,10 +67,34 @@ feature -- Access
 			-- The prepared files the last `run' found.
 
 	has_new_notes: BOOLEAN
-			-- Did the last `run' build a notes pack with new or changed notes?
+			-- Did the last `run' keep new or changed notes?
 		do
 			Result := last_error = Void and not kept.is_empty
 		end
+
+	is_built: BOOLEAN
+			-- Did the last `run' build a notes pack to put in place (new or changed notes, or a pack
+			-- marked stale)?
+
+	is_pack_stale (a_notes_folder: READABLE_STRING_GENERAL): BOOLEAN
+			-- Was a notes pack built from `a_notes_folder' never put in place?
+		do
+			Result := (create {SIMPLE_FILE}.make (a_notes_folder.to_string_32 + {STRING_32} "\" + Stale_marker)).is_file
+		end
+
+	set_pack_stale (a_notes_folder: READABLE_STRING_GENERAL; a_stale: BOOLEAN)
+			-- Mark `a_notes_folder''s notes as not yet in the live pack (`a_stale'), or clear the mark.
+		local
+			l_ok: BOOLEAN
+		do
+			if a_stale and (create {SIMPLE_FILE}.make (a_notes_folder)).is_directory then
+				l_ok := (create {SIMPLE_FILE}.make (a_notes_folder.to_string_32 + {STRING_32} "\" + Stale_marker)).write_text_utf_8 ("The notes pack built from these notes was not put in place; the next import builds it again.%N")
+			elseif not a_stale and is_pack_stale (a_notes_folder) then
+				l_ok := (create {SIMPLE_FILE}.make (a_notes_folder.to_string_32 + {STRING_32} "\" + Stale_marker)).delete
+			end
+		end
+
+	Stale_marker: STRING_32 = "notes-pack-stale.txt"
 
 	prepared_files (a_folder: READABLE_STRING_GENERAL): ARRAYED_LIST [STRING_32]
 			-- The names in `a_folder' ending ".prepared.md", in name order.
@@ -101,7 +130,7 @@ feature -- Importing
 			l_files: ARRAYED_LIST [STRING_32]
 			l_folder, l_name, l_text: STRING_32
 			l_source: SIMPLE_FILE
-			l_was_kept, l_failed: BOOLEAN
+			l_was_kept, l_failed, l_rebuild: BOOLEAN
 			i: INTEGER
 		do
 			if l_failed then
@@ -119,6 +148,8 @@ feature -- Importing
 				skipped.wipe_out
 				refused.wipe_out
 				last_error := Void
+				is_built := False
+				l_rebuild := is_pack_stale (a_notes_folder)
 				built_blocks := 0
 				built_suggestions := 0
 				create l_written.make (0)
@@ -148,24 +179,32 @@ feature -- Importing
 							skipped.extend (l_name)
 						else
 							l_was_kept := (create {SIMPLE_FILE}.make (l_importer.manifest_path (a_notes_folder))).is_file
-							l_importer.set_aside (a_notes_folder)
-							l_written.extend (l_importer)
-							if l_importer.write_files (a_notes_folder) then
-								kept.extend ([l_name, l_importer.title])
-								if l_was_kept then
-									replaced.extend (l_name)
-								end
+							if not l_importer.set_aside (a_notes_folder) then
+									-- scan 70: it undid itself; joining `l_written' only after, so a rollback
+									-- never deletes an earlier note's files left in place
+								last_error := l_name + {STRING_32} ": " + l_importer.set_aside_refusal (a_notes_folder)
 							else
-								last_error := {STRING_32} "The files of " + l_name + {STRING_32} " could not be written in " + a_notes_folder.to_string_32
+								l_written.extend (l_importer)
+								if l_importer.write_files (a_notes_folder) then
+									kept.extend ([l_name, l_importer.title])
+									if l_was_kept then
+										replaced.extend (l_name)
+									end
+								else
+									last_error := {STRING_32} "The files of " + l_name + {STRING_32} " could not be written in " + a_notes_folder.to_string_32
+								end
 							end
 						end
 					end
 					i := i + 1
 				end
-				if last_error = Void and not l_written.is_empty then
-					last_error := l_written.first.build (a_notes_folder, a_pack, a_frameworks_pack)
-					built_blocks := l_written.first.built_blocks
-					built_suggestions := l_written.first.built_suggestions
+				if last_error = Void and (not l_written.is_empty or (l_rebuild and then not (create {SIMPLE_FILE}.make (a_notes_folder)).files_with_extension (".json").is_empty)) then
+						-- one build from every note there: new ones, or a pack never put in place (scan 70)
+					create l_importer.make (bible)
+					last_error := l_importer.build (a_notes_folder, a_pack, a_frameworks_pack)
+					built_blocks := l_importer.built_blocks
+					built_suggestions := l_importer.built_suggestions
+					is_built := last_error = Void
 				end
 				if attached last_error then
 					across l_written as ic loop
@@ -181,6 +220,7 @@ feature -- Importing
 			end
 		ensure
 			nothing_kept_on_failure: last_error /= Void implies kept.is_empty
+			new_notes_built: has_new_notes implies is_built
 			every_file_accounted: last_error = Void implies kept.count + skipped.count + refused.count = file_count
 		rescue
 			if not l_failed then
