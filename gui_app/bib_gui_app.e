@@ -414,6 +414,9 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 				import_folder (al_folder.to_string_32)
 			elseif snapshot_tab.same_string ({STRING_32} "kitfolder") and then attached (create {SIMPLE_ENV}).get ("SIMPLE_BIBLE_SNAPSHOT_FILE") as al_folder then
 				make_kits (al_folder.to_string_32)
+			elseif snapshot_tab.same_string ({STRING_32} "about") then
+				show_about
+				keep_snapshot_report ((create {BIB_ABOUT_PAGE}.make (bible, status_text + {STRING_32} "; " + ask_status)).text)
 			elseif snapshot_tab.same_string ({STRING_32} "scholarguides") then
 				bring_into_view (results_panel, results_tabs, Scholar_guides_tab)
 				if not book_rows.is_empty then
@@ -1063,9 +1066,23 @@ feature {NONE} -- Menus and keys (C2)
 		end
 
 	show_about
-			-- Which build and data are open.
+			-- Help > About (2026-10-30, Larry): a modal window with the version, what Simple Bible is, and
+			-- credit to everyone owed it (BIB_ABOUT_PAGE): the data's sources as the data records them,
+			-- the compiler, the libraries, the tools and the art; Close shuts it.
+		local
+			l_column: SW_COLUMN
+			l_view: SW_DOCUMENT_VIEW
+			l_close: SW_BUTTON
 		do
-			window.toast ({STRING_32} "simple_bible " + {BIB_RELEASE}.Program_version + {STRING_32} " (engine " + {BIB_RELEASE}.Engine_version + {STRING_32} ").  " + status_text + {STRING_32} "  |  " + ask_status, 1)
+			create l_view.make (560.0)
+			l_view.set_document (commentary_reader.read ((create {BIB_ABOUT_PAGE}.make (bible, status_text + {STRING_32} "; " + ask_status)).text))
+			create l_close.make ("Close", agent window.close_sheet)
+			l_close.set_tooltip ("Close the About window")
+			create l_column.make
+			l_column := l_column.with_padding (16.0)
+			l_column.put (l_view)
+			l_column.put (l_close)
+			window.show_sheet (l_column, 820.0)
 		end
 
 feature {NONE} -- Toolbar (C3-C9)
