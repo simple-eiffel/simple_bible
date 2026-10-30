@@ -4438,8 +4438,11 @@ feature {NONE} -- The ingest kit (0.7.32, research/21)
 					if attached l_error as al_error then
 						show_import_report ({STRING_32} "The note could not be kept", create {ARRAYED_LIST [STRING_32]}.make_from_array (<<al_error>>), l_importer.warnings)
 					elseif attached swapped_notes_pack (l_pack, l_new) as al_swap_error then
+							-- scan 70: the note is kept as files; the next import builds the pack again
+						(create {BIB_NOTE_BATCH}.make (bible)).set_pack_stale (l_folder, True)
 						show_import_report ({STRING_32} "The new notes pack could not be put in place", create {ARRAYED_LIST [STRING_32]}.make_from_array (<<al_swap_error>>), l_importer.warnings)
 					else
+						(create {BIB_NOTE_BATCH}.make (bible)).set_pack_stale (l_folder, False)
 						framework_names_cache := Void
 						writing_names_cache := Void
 						create listed_book.make_empty
@@ -4494,8 +4497,10 @@ feature {NONE} -- The ingest kit (0.7.32, research/21)
 				end
 				create l_batch.make (bible)
 				l_batch.run (a_folder, l_folder, l_new, l_packs + {STRING_32} "\" + {BIB_FRAMEWORK_SCHEMA}.Pack_file_name)
-				if l_batch.has_new_notes then
+				if l_batch.is_built then
 					l_swap_error := swapped_notes_pack (l_pack, l_new)
+						-- scan 70: a pack not put in place is built again by the next import
+					l_batch.set_pack_stale (l_folder, l_swap_error /= Void)
 					if l_swap_error = Void then
 						framework_names_cache := Void
 						writing_names_cache := Void
@@ -4521,7 +4526,10 @@ feature {NONE} -- The ingest kit (0.7.32, research/21)
 			if attached a_batch.last_error as al_error then
 				l_page.append ({STRING_32} "**Nothing was imported:** " + al_error + {STRING_32} "%N%N")
 			elseif attached a_swap_error as al_swap then
-				l_page.append ({STRING_32} "**The new notes pack could not be put in place:** " + al_swap + {STRING_32} "%N%N")
+				l_page.append ({STRING_32} "**The notes below are saved, but the new notes pack could not be put in place:** " + al_swap
+					+ {STRING_32} " Once that is put right, import the folder again: the pack is built again from every note.%N%N")
+			elseif a_batch.is_built and a_batch.kept.is_empty then
+				l_page.append ({STRING_32} "The notes pack was built again from every note: an earlier one had not been put in place.%N%N")
 			end
 			if a_batch.file_count = 0 then
 				l_page.append ({STRING_32} "No file in this folder ends in .prepared.md.%N%N")

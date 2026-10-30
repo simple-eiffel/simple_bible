@@ -196,6 +196,8 @@ feature -- Tests
 			assert_true ("past a page note", l_list.has_substring ("; [3:17](bible:2.3.17)"))
 			assert_true ("page numbers are no verses", not l_list.has_substring ("[19]"))
 			assert_true ("a number in prose is no verse", not l_linker.linked ("Romans 8:28, 30 people came").has_substring ("[30]"))
+			assert_true ("scan 70: a list in emphasis links each part", l_linker.linked ("**Genesis 1:26; 3:5**").has_substring ("; [3:5](bible:1.3.5)**"))
+			assert_true ("scan 70: after a chapter, a comma names another chapter", l_linker.linked ("Genesis 1, 2.").has_substring (", [2](bible:1.2.0)."))
 			assert_true ("a new book after a comma", l_linker.linked ("John 3:16, 1 John 4:8").has_substring (", [1 John 4:8](bible:62.4.8)"))
 			assert_true ("a new book after a semicolon", l_linker.linked ("Genesis 1; Exodus 3").has_substring ("; [Exodus 3](bible:2.3.0)"))
 				-- Scan 68: reading a reference leaves the caller's text as it was.

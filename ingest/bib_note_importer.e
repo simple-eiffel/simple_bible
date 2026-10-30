@@ -232,8 +232,10 @@ feature -- Keeping
 					-- scan 67: an exception on the way still puts the earlier note back
 				Result := {STRING_32} "Keeping the note failed unexpectedly; the earlier note is back."
 				put_back (a_notes_folder)
+			elseif not set_aside (a_notes_folder) then
+					-- scan 70: nothing written over an earlier note that could not be moved aside
+				Result := set_aside_refusal (a_notes_folder)
 			else
-				set_aside (a_notes_folder)
 				if not write_files (a_notes_folder) then
 					Result := {STRING_32} "The note's files could not be written in " + a_notes_folder.to_string_32
 				else
@@ -286,22 +288,55 @@ feature -- Keeping
 
 feature {BIB_NOTE_BATCH} -- Setting an earlier note aside
 
-	set_aside (a_notes_folder: READABLE_STRING_GENERAL)
+	set_aside (a_notes_folder: READABLE_STRING_GENERAL): BOOLEAN
 			-- An earlier note with this id: its chapter files and manifest renamed with ".aside", out of
-			-- the builder's sight, until the new note is kept or fails.
+			-- the builder's sight, until the new note is kept or fails. False, every rename undone, when
+			-- one fails (scan 70: a file left in place was written over, then deleted by the rollback).
 		local
 			l_dir: STRING_32
+		do
+			Result := True
+			l_dir := a_notes_folder.to_string_32 + {STRING_32} "\" + id
+			if (create {SIMPLE_FILE}.make (l_dir)).is_directory then
+				across (create {SIMPLE_FILE}.make (l_dir)).files_with_extension (".md") as ic loop
+					if Result then
+						Result := (create {SIMPLE_FILE}.make (l_dir + {STRING_32} "\" + ic)).rename_to (ic + Aside)
+					end
+				end
+			end
+			if Result and then (create {SIMPLE_FILE}.make (manifest_path (a_notes_folder))).is_file then
+				Result := (create {SIMPLE_FILE}.make (manifest_path (a_notes_folder))).rename_to (id + schema.Manifest_extension + Aside)
+			end
+			if not Result then
+				undo_set_aside (a_notes_folder)
+			end
+		end
+
+	undo_set_aside (a_notes_folder: READABLE_STRING_GENERAL)
+			-- The files `set_aside' renamed given their names back (where nothing has taken them since).
+		local
+			l_dir, l_name: STRING_32
 			l_ok: BOOLEAN
 		do
 			l_dir := a_notes_folder.to_string_32 + {STRING_32} "\" + id
 			if (create {SIMPLE_FILE}.make (l_dir)).is_directory then
-				across (create {SIMPLE_FILE}.make (l_dir)).files_with_extension (".md") as ic loop
-					l_ok := (create {SIMPLE_FILE}.make (l_dir + {STRING_32} "\" + ic)).rename_to (ic + Aside)
+				across (create {SIMPLE_FILE}.make (l_dir)).files_with_extension ({STRING_32} ".md" + Aside) as ic loop
+					l_name := ic.substring (1, ic.count - Aside.count)
+					if not (create {SIMPLE_FILE}.make (l_dir + {STRING_32} "\" + l_name)).exists then
+						l_ok := (create {SIMPLE_FILE}.make (l_dir + {STRING_32} "\" + ic)).rename_to (l_name)
+					end
 				end
 			end
-			if (create {SIMPLE_FILE}.make (manifest_path (a_notes_folder))).is_file then
-				l_ok := (create {SIMPLE_FILE}.make (manifest_path (a_notes_folder))).rename_to (id + schema.Manifest_extension + Aside)
+			if (create {SIMPLE_FILE}.make (manifest_path (a_notes_folder) + Aside)).is_file and then not (create {SIMPLE_FILE}.make (manifest_path (a_notes_folder))).exists then
+				l_ok := (create {SIMPLE_FILE}.make (manifest_path (a_notes_folder) + Aside)).rename_to (id + schema.Manifest_extension)
 			end
+		end
+
+	set_aside_refusal (a_notes_folder: READABLE_STRING_GENERAL): STRING_32
+			-- Why an earlier note could not be moved aside.
+		do
+			Result := {STRING_32} "The earlier note " + id + {STRING_32} " could not be moved aside (a file in "
+				+ a_notes_folder.to_string_32 + {STRING_32} "\" + id + {STRING_32} " is in use, or left as .aside by an interrupted import); nothing was changed."
 		end
 
 	put_back (a_notes_folder: READABLE_STRING_GENERAL)

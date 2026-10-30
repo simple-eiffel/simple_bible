@@ -20,7 +20,8 @@ note
 		A LIST KEEPS ITS BOOK (2026-10-30, Larry, from the Unseen Realm guide):
 		"Genesis 1:26; 3:5, 22; 6:1-4; 10-11" links each part in Genesis. After
 		a ";" a number is a chapter (with ":verse", a place); after a "," that
-		follows a verse, a lone number is a verse of the same chapter. A page
+		follows a verse, a lone number is a verse of the same chapter, and after
+		one that follows a chapter, another chapter ("Matthew 5, 6"). A page
 		note ("(p. 19)", "(pp. 19, 19n2)") before the ";" is passed over. A part
 		counts only when it ends as a reference ends (`ends_a_reference'), so
 		"Romans 8:28, 30 people" leaves the 30 alone (`continuation_at').
@@ -460,14 +461,17 @@ feature {NONE} -- Implementation
 		end
 
 	ends_a_reference (a_text: STRING_32; a_position: INTEGER): BOOLEAN
-			-- Does a part of a list end before `a_position': the text's or line's end, a ";", ",", ")" or
-			-- closing period, or " (" before a note?
+			-- Does a part of a list end before `a_position': the text's or line's end, a ";", ",", ")", "]",
+			-- closing period, emphasis ("*", "_") or closing quote, or " (" before a note?
 		do
 			if a_position > a_text.count then
 				Result := True
 			else
 				inspect a_text [a_position]
-				when ';', ',', ')', '%N', '%R' then
+				when ';', ',', ')', ']', '*', '_', '"', '%N', '%R' then
+						-- scan 70: emphasis and a closing quote end a part as they end a sentence
+					Result := True
+				when '%/0x201D/' then
 					Result := True
 				when '.' then
 					Result := a_position = a_text.count or else not a_text [a_position + 1].is_digit

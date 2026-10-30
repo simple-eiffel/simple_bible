@@ -1007,6 +1007,23 @@ feature -- Ingest kit (0.7.32)
 			l_batch.run (Prepared_folder, Notes_folder, Folder_notes_file, "")
 			assert_true ("a second file with one id refused", across l_batch.refused as al_r some al_r.file.same_string ("d.prepared.md") end)
 			assert_true ("and the note it would have replaced kept as it was", (create {SIMPLE_FILE}.make (Notes_folder + "\sermon9\01.md")).read_text_utf_8.has_substring ("One more paragraph."))
+			fixture.delete_file (Prepared_folder + "\d.prepared.md")
+				-- Scan 70: a pack built but never put in place is built again, though no file is new.
+			l_batch.set_pack_stale (Notes_folder, True)
+			l_batch.run (Prepared_folder, Notes_folder, Folder_notes_file, "")
+			assert_true ("a stale pack built again", l_batch.is_built and l_batch.kept.is_empty and l_batch.built_blocks > 0)
+			l_batch.set_pack_stale (Notes_folder, False)
+			l_batch.run (Prepared_folder, Notes_folder, Folder_notes_file, "")
+			assert_false ("and not once it is in place", l_batch.is_built)
+				-- Scan 70: an earlier note that cannot be moved aside is never written over.
+				-- (a folder where the file would go: a rename onto it fails, as onto a file in use)
+			l_ok := (create {SIMPLE_FILE}.make (Notes_folder + "\sermon9\01.md.aside")).create_directory
+			l_ok := (create {SIMPLE_FILE}.make (Prepared_folder + "\b.prepared.md")).write_text_utf_8 (Second_note + "%NA third version.%N")
+			l_batch.run (Prepared_folder, Notes_folder, Folder_notes_file, "")
+			assert_true ("refused when it cannot be moved aside", attached l_batch.last_error as al_e and then al_e.has_substring ("could not be moved aside"))
+			assert_true ("the earlier note's text untouched", (create {SIMPLE_FILE}.make (Notes_folder + "\sermon9\01.md")).read_text_utf_8.has_substring ("One more paragraph."))
+			assert_true ("and its manifest", (create {SIMPLE_FILE}.make (Notes_folder + "\sermon9.note.json")).is_file)
+			l_ok := (create {SIMPLE_FILE}.make (Notes_folder + "\sermon9\01.md.aside")).delete_directory
 			l_bible.close
 			fixture.delete_file (Notes_folder + "\sermon9\01.md")
 			fixture.delete_file (Notes_folder + "\sermon9.note.json")
