@@ -960,7 +960,83 @@ feature -- Ingest kit (0.7.32)
 			remove_test_files
 		end
 
+	test_a_prepared_folder_imports_once
+			-- 2026-10-30 (Larry): File > Import prepared folder brings in every *.prepared.md once: a
+			-- note kept already, unchanged (Larry's chapters 1-3, imported one by one), is passed over;
+			-- a changed file replaces its note; a refused file is named; two files with one id refused.
+		local
+			l_bible: SIMPLE_BIBLE
+			l_importer: BIB_NOTE_IMPORTER
+			l_batch: BIB_NOTE_BATCH
+			l_ok: BOOLEAN
+		do
+			close_leftovers
+			fixture.build_content (Content_file, {CONC_FIXTURE}.Content_version, False)
+			make_folder
+			if not (create {SIMPLE_FILE}.make (Prepared_folder)).is_directory then
+				l_ok := (create {SIMPLE_FILE}.make (Prepared_folder)).create_directory
+			end
+			l_ok := (create {SIMPLE_FILE}.make (Prepared_folder + "\a.prepared.md")).write_text_utf_8 (First_note)
+			l_ok := (create {SIMPLE_FILE}.make (Prepared_folder + "\b.prepared.md")).write_text_utf_8 (Second_note)
+			l_ok := (create {SIMPLE_FILE}.make (Prepared_folder + "\c.prepared.md")).write_text_utf_8 ("No header here.%N")
+			l_ok := (create {SIMPLE_FILE}.make (Prepared_folder + "\notes.md")).write_text_utf_8 (First_note)
+			l_bible := bible ("", Folder)
+			l_bible.open
+			create l_importer.make (l_bible)
+			l_importer.read (First_note, Void)
+			assert_true ("the first note reads", l_importer.is_accepted)
+			assert_true ("one note kept alone first", l_importer.keep (Notes_folder, Folder_notes_file, "") = Void)
+			assert_true ("and known as kept", l_importer.is_already_kept (Notes_folder))
+			create l_batch.make (l_bible)
+			l_batch.run (Prepared_folder, Notes_folder, Folder_notes_file, "")
+			assert_true ("the folder imports", l_batch.last_error = Void)
+			assert_integers_equal ("three prepared files; a plain .md is none", 3, l_batch.file_count)
+			assert_true ("the new note kept", l_batch.kept.count = 1 and then l_batch.kept.first.file.same_string ("b.prepared.md"))
+			assert_true ("the note kept before passed over", l_batch.skipped.count = 1 and then l_batch.skipped.first.same_string ("a.prepared.md"))
+			assert_true ("the broken file refused by name", l_batch.refused.count = 1 and then l_batch.refused.first.file.same_string ("c.prepared.md"))
+			assert_true ("the pack built once", l_batch.has_new_notes and l_batch.built_blocks > 0)
+			assert_true ("the new note's chapter written", (create {SIMPLE_FILE}.make (Notes_folder + "\sermon9\01.md")).read_text_utf_8.has_substring ("Jude 3 urges them."))
+			l_batch.run (Prepared_folder, Notes_folder, Folder_notes_file, "")
+			assert_true ("again: nothing new, nothing built", l_batch.last_error = Void and l_batch.kept.is_empty and not l_batch.has_new_notes)
+			assert_integers_equal ("both notes passed over", 2, l_batch.skipped.count)
+			l_ok := (create {SIMPLE_FILE}.make (Prepared_folder + "\b.prepared.md")).write_text_utf_8 (Second_note + "%NOne more paragraph.%N")
+			l_batch.run (Prepared_folder, Notes_folder, Folder_notes_file, "")
+			assert_true ("a changed file comes in again", l_batch.kept.count = 1 and l_batch.replaced.count = 1 and l_batch.skipped.count = 1)
+			assert_true ("with its new text", (create {SIMPLE_FILE}.make (Notes_folder + "\sermon9\01.md")).read_text_utf_8.has_substring ("One more paragraph."))
+			l_ok := (create {SIMPLE_FILE}.make (Prepared_folder + "\d.prepared.md")).write_text_utf_8 (Second_note)
+			l_batch.run (Prepared_folder, Notes_folder, Folder_notes_file, "")
+			assert_true ("a second file with one id refused", across l_batch.refused as al_r some al_r.file.same_string ("d.prepared.md") end)
+			assert_true ("and the note it would have replaced kept as it was", (create {SIMPLE_FILE}.make (Notes_folder + "\sermon9\01.md")).read_text_utf_8.has_substring ("One more paragraph."))
+			l_bible.close
+			fixture.delete_file (Notes_folder + "\sermon9\01.md")
+			fixture.delete_file (Notes_folder + "\sermon9.note.json")
+			if (create {SIMPLE_FILE}.make (Notes_folder + "\sermon9")).is_directory then
+				l_ok := (create {SIMPLE_FILE}.make (Notes_folder + "\sermon9")).delete_directory
+			end
+			remove_notes_folder
+			across <<"a", "b", "c", "d">> as ic loop
+				fixture.delete_file (Prepared_folder + "\" + ic + ".prepared.md")
+			end
+			fixture.delete_file (Prepared_folder + "\notes.md")
+			l_ok := (create {SIMPLE_FILE}.make (Prepared_folder)).delete_directory
+			remove_test_files
+		end
+
 feature {NONE} -- Fixture
+
+	Prepared_folder: STRING = "facade_test_prepared"
+
+	First_note: STRING_32
+			-- A prepared file linking nothing outside the Bible (this test builds no book pack).
+		once
+			Result := {STRING_32} "---%Nsbn: 1%Nid: sermon8%Ntitle: Sermon on Jude%Ndate: 2026-10-12%N---%N# No Condemnation%N%NJude 5 reminds them.%N%N{{suggest: Jude 9 | the archangel's restraint}}%N%NSecond paragraph.%N"
+		end
+
+	Second_note: STRING_32
+			-- A second prepared file, another id.
+		once
+			Result := {STRING_32} "---%Nsbn: 1%Nid: sermon9%Ntitle: Second Sermon%Ndate: 2026-10-13%N---%N# Grace%N%NJude 3 urges them.%N"
+		end
 
 	Folder_notes_file: STRING = "facade_test_packs\notes.db"
 	Notes_folder: STRING = "facade_test_notes"
