@@ -214,7 +214,10 @@ feature -- Status
 				Result.add_pack (ic, {BIB_FRAMEWORK_SCHEMA}.Pack_kind)
 			end
 			across text_packs as ic loop
-				Result.add_pack (ic, ic.schema.Pack_kind)
+				if not ic.schema.Is_kept_apart then
+						-- the scholar guides are no writings of Larry's (2026-10-30)
+					Result.add_pack (ic, ic.schema.Pack_kind)
+				end
 			end
 		end
 

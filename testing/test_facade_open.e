@@ -718,7 +718,7 @@ feature -- Books pack (2026-10-28)
 			l_blocks.start_at_title
 			l_blocks.split ({STRING_32} "%/65279/# Title%N%NBody.%N")
 			assert_strings_equal ("a byte-order mark read past", "Title", l_blocks.blocks.first.markdown)
-			assert_integers_equal ("three kinds of text pack: books, essays, notes", 3, (create {BIB_TEXT_PACKS}).schemas.count)
+			assert_integers_equal ("four kinds of text pack: books, essays, notes, guides", 4, (create {BIB_TEXT_PACKS}).schemas.count)
 			assert_true ("essays found by kind", attached (create {BIB_TEXT_PACKS}).schema_of_kind ("essays") as al_s and then al_s.Link_prefix.same_string ("essay:"))
 			assert_true ("no such kind", (create {BIB_TEXT_PACKS}).schema_of_kind ("letters") = Void)
 		end
@@ -968,11 +968,13 @@ feature -- Ingest kit (0.7.32)
 			l_bible: SIMPLE_BIBLE
 			l_importer: BIB_NOTE_IMPORTER
 			l_batch: BIB_NOTE_BATCH
+			l_places: BIB_INGEST_PLACES
 			l_ok: BOOLEAN
 		do
 			close_leftovers
 			fixture.build_content (Content_file, {CONC_FIXTURE}.Content_version, False)
 			make_folder
+			create l_places.make (Notes_folder, Folder_notes_file, Guides_folder, Folder_guides_file, "")
 			if not (create {SIMPLE_FILE}.make (Prepared_folder)).is_directory then
 				l_ok := (create {SIMPLE_FILE}.make (Prepared_folder)).create_directory
 			end
@@ -988,7 +990,7 @@ feature -- Ingest kit (0.7.32)
 			assert_true ("one note kept alone first", l_importer.keep (Notes_folder, Folder_notes_file, "") = Void)
 			assert_true ("and known as kept", l_importer.is_already_kept (Notes_folder))
 			create l_batch.make (l_bible)
-			l_batch.run (Prepared_folder, Notes_folder, Folder_notes_file, "")
+			l_batch.run (Prepared_folder, l_places)
 			assert_true ("the folder imports", l_batch.last_error = Void)
 			assert_integers_equal ("three prepared files; a plain .md is none", 3, l_batch.file_count)
 			assert_true ("the new note kept", l_batch.kept.count = 1 and then l_batch.kept.first.file.same_string ("b.prepared.md"))
@@ -996,30 +998,30 @@ feature -- Ingest kit (0.7.32)
 			assert_true ("the broken file refused by name", l_batch.refused.count = 1 and then l_batch.refused.first.file.same_string ("c.prepared.md"))
 			assert_true ("the pack built once", l_batch.has_new_notes and l_batch.built_blocks > 0)
 			assert_true ("the new note's chapter written", (create {SIMPLE_FILE}.make (Notes_folder + "\sermon9\01.md")).read_text_utf_8.has_substring ("Jude 3 urges them."))
-			l_batch.run (Prepared_folder, Notes_folder, Folder_notes_file, "")
+			l_batch.run (Prepared_folder, l_places)
 			assert_true ("again: nothing new, nothing built", l_batch.last_error = Void and l_batch.kept.is_empty and not l_batch.has_new_notes)
 			assert_integers_equal ("both notes passed over", 2, l_batch.skipped.count)
 			l_ok := (create {SIMPLE_FILE}.make (Prepared_folder + "\b.prepared.md")).write_text_utf_8 (Second_note + "%NOne more paragraph.%N")
-			l_batch.run (Prepared_folder, Notes_folder, Folder_notes_file, "")
+			l_batch.run (Prepared_folder, l_places)
 			assert_true ("a changed file comes in again", l_batch.kept.count = 1 and l_batch.replaced.count = 1 and l_batch.skipped.count = 1)
 			assert_true ("with its new text", (create {SIMPLE_FILE}.make (Notes_folder + "\sermon9\01.md")).read_text_utf_8.has_substring ("One more paragraph."))
 			l_ok := (create {SIMPLE_FILE}.make (Prepared_folder + "\d.prepared.md")).write_text_utf_8 (Second_note)
-			l_batch.run (Prepared_folder, Notes_folder, Folder_notes_file, "")
+			l_batch.run (Prepared_folder, l_places)
 			assert_true ("a second file with one id refused", across l_batch.refused as al_r some al_r.file.same_string ("d.prepared.md") end)
 			assert_true ("and the note it would have replaced kept as it was", (create {SIMPLE_FILE}.make (Notes_folder + "\sermon9\01.md")).read_text_utf_8.has_substring ("One more paragraph."))
 			fixture.delete_file (Prepared_folder + "\d.prepared.md")
 				-- Scan 70: a pack built but never put in place is built again, though no file is new.
 			l_batch.set_pack_stale (Notes_folder, True)
-			l_batch.run (Prepared_folder, Notes_folder, Folder_notes_file, "")
+			l_batch.run (Prepared_folder, l_places)
 			assert_true ("a stale pack built again", l_batch.is_built and l_batch.kept.is_empty and l_batch.built_blocks > 0)
 			l_batch.set_pack_stale (Notes_folder, False)
-			l_batch.run (Prepared_folder, Notes_folder, Folder_notes_file, "")
+			l_batch.run (Prepared_folder, l_places)
 			assert_false ("and not once it is in place", l_batch.is_built)
 				-- Scan 70: an earlier note that cannot be moved aside is never written over.
 				-- (a folder where the file would go: a rename onto it fails, as onto a file in use)
 			l_ok := (create {SIMPLE_FILE}.make (Notes_folder + "\sermon9\01.md.aside")).create_directory
 			l_ok := (create {SIMPLE_FILE}.make (Prepared_folder + "\b.prepared.md")).write_text_utf_8 (Second_note + "%NA third version.%N")
-			l_batch.run (Prepared_folder, Notes_folder, Folder_notes_file, "")
+			l_batch.run (Prepared_folder, l_places)
 			assert_true ("refused when it cannot be moved aside", attached l_batch.last_error as al_e and then al_e.has_substring ("could not be moved aside"))
 			assert_true ("the earlier note's text untouched", (create {SIMPLE_FILE}.make (Notes_folder + "\sermon9\01.md")).read_text_utf_8.has_substring ("One more paragraph."))
 			assert_true ("and its manifest", (create {SIMPLE_FILE}.make (Notes_folder + "\sermon9.note.json")).is_file)
@@ -1089,7 +1091,110 @@ feature -- Ingest kit (0.7.32)
 			remove_test_files
 		end
 
+	test_guides_kept_apart
+			-- 2026-10-30 (Larry, the Scholar Guides): a prepared file with "kind: guide" is kept in the
+			-- guides folder and pack, its work in its record; a guide taking a note's id retires the note;
+			-- the last note retired leaves the notes pack to go; the guides stay out of the Writings search
+			-- and a kit's names.
+		local
+			l_bible: SIMPLE_BIBLE
+			l_batch: BIB_NOTE_BATCH
+			l_places: BIB_INGEST_PLACES
+			l_importer: BIB_NOTE_IMPORTER
+			l_manifest: STRING_32
+			l_ok: BOOLEAN
+		do
+			close_leftovers
+			fixture.build_content (Content_file, {CONC_FIXTURE}.Content_version, False)
+			make_folder
+			create l_places.make (Notes_folder, Folder_notes_file, Guides_folder, Folder_guides_file, "")
+			if not (create {SIMPLE_FILE}.make (Prepared_folder)).is_directory then
+				l_ok := (create {SIMPLE_FILE}.make (Prepared_folder)).create_directory
+			end
+			l_bible := bible ("", Folder)
+			l_bible.open
+			create l_importer.make (l_bible)
+			l_importer.read (Guide_note, Void)
+			assert_true ("a guide reads", l_importer.is_accepted and l_importer.is_guide)
+			assert_strings_equal ("its work, short", "The Unseen Realm", l_importer.short_work_title)
+			assert_strings_equal ("its label", "Heiser, The Unseen Realm", l_importer.work_label)
+			assert_integers_equal ("its place in the work", 11, l_importer.work_chapter)
+			l_importer.read ({STRING_32} "---%Nsbn: 1%Nkind: guide%Nid: noguide%Ntitle: T%N---%N# T%N%NText.%N", Void)
+			assert_true ("a guide names its work", not l_importer.is_accepted and then l_importer.problems.first.has_substring ("work_title"))
+			l_importer.read ({STRING_32} "---%Nsbn: 1%Nkind: poem%Nid: x%Ntitle: T%N---%N# T%N%NText.%N", Void)
+			assert_true ("an unknown kind refused", not l_importer.is_accepted and then l_importer.problems.first.has_substring ("kind"))
+				-- a note first, as the Unseen Realm chapters were brought in before guides existed
+			l_ok := (create {SIMPLE_FILE}.make (Prepared_folder + "\a.prepared.md")).write_text_utf_8 (First_note)
+			create l_batch.make (l_bible)
+			l_batch.run (Prepared_folder, l_places)
+			assert_true ("the note kept", l_batch.last_error = Void and l_batch.notes_built and not l_batch.guides_built)
+				-- the same id comes back as a guide, beside another note
+			l_ok := (create {SIMPLE_FILE}.make (Prepared_folder + "\a.prepared.md")).write_text_utf_8 (Guide_note)
+			l_ok := (create {SIMPLE_FILE}.make (Prepared_folder + "\b.prepared.md")).write_text_utf_8 (Second_note)
+			l_batch.run (Prepared_folder, l_places)
+			assert_true ("both kept", l_batch.last_error = Void and l_batch.kept.count = 2)
+			assert_true ("the guide in the guides pack", l_batch.guides_built and across l_batch.kept as al_k some al_k.id.same_string ("sermon8") and al_k.kind.same_string ("guides") end)
+			assert_true ("the note it replaced retired", l_batch.retired.count = 1 and then l_batch.retired.first.same_string ("sermon8"))
+			assert_false ("no longer a note", (create {SIMPLE_FILE}.make (Notes_folder + "\sermon8.note.json")).is_file)
+			assert_true ("the other note stays, its pack built", (create {SIMPLE_FILE}.make (Notes_folder + "\sermon9.note.json")).is_file and l_batch.notes_built)
+			l_manifest := (create {SIMPLE_FILE}.make (Guides_folder + "\sermon8.guide.json")).read_text_utf_8
+			assert_true ("the guide's record names its work", l_manifest.has_substring ("%"edition%": %"Heiser, The Unseen Realm%"") and l_manifest.has_substring ("%"subtitle%": %"Chapter 11%""))
+				-- the last note becomes a guide too: the notes pack is to go
+			l_ok := (create {SIMPLE_FILE}.make (Prepared_folder + "\b.prepared.md")).write_text_utf_8 (Second_guide)
+			l_batch.run (Prepared_folder, l_places)
+			assert_true ("the last note retired", l_batch.last_error = Void and l_batch.retired.count = 1 and l_batch.notes_now_empty and not l_batch.notes_built)
+			l_bible.close
+				-- the guides pack opens apart from Larry's writings
+			l_bible := bible ("", Folder)
+			l_bible.open
+			assert_integers_equal ("a guides pack attached", 1, l_bible.text_packs_of_kind ("guides").count)
+			assert_false ("no kit names a guide", across (create {BIB_NAME_LIST}.make (l_bible)).names ("") as al_n some al_n.kind.same_string ("guides") end)
+			assert_true ("asked for, the guides are named", across (create {BIB_NAME_LIST}.make (l_bible)).names ("guides") as al_n some al_n.kind.same_string ("guides") end)
+			if attached l_bible.text_packs_of_kind ("guides").first as al_guides then
+				assert_integers_equal ("its paragraph citing Jude 5", 1, al_guides.blocks_citing (65, 1, 5).count)
+			end
+			l_bible.close
+			across <<"sermon8", "sermon9">> as ic loop
+				fixture.delete_file (Guides_folder + "\" + ic + "\01.md")
+				fixture.delete_file (Guides_folder + "\" + ic + ".guide.json")
+				fixture.delete_file (Notes_folder + "\" + ic + "\01.md")
+				fixture.delete_file (Notes_folder + "\" + ic + ".note.json")
+				if (create {SIMPLE_FILE}.make (Guides_folder + "\" + ic)).is_directory then
+					l_ok := (create {SIMPLE_FILE}.make (Guides_folder + "\" + ic)).delete_directory
+				end
+				if (create {SIMPLE_FILE}.make (Notes_folder + "\" + ic)).is_directory then
+					l_ok := (create {SIMPLE_FILE}.make (Notes_folder + "\" + ic)).delete_directory
+				end
+			end
+			if (create {SIMPLE_FILE}.make (Guides_folder)).is_directory then
+				l_ok := (create {SIMPLE_FILE}.make (Guides_folder)).delete_directory
+			end
+			remove_notes_folder
+			fixture.delete_file (Prepared_folder + "\a.prepared.md")
+			fixture.delete_file (Prepared_folder + "\b.prepared.md")
+			l_ok := (create {SIMPLE_FILE}.make (Prepared_folder)).delete_directory
+			remove_test_files
+		end
+
 feature {NONE} -- Fixture
+
+	Guides_folder: STRING = "facade_test_guides"
+	Folder_guides_file: STRING = "facade_test_packs\guides.db"
+
+	Guide_note: STRING_32
+			-- A prepared scholar guide: the work it guides, a paragraph citing Jude 5.
+		once
+			Result := {STRING_32} "---%Nsbn: 1%Nkind: guide%Nid: sermon8%Ntitle: The Unseen Realm, chapter 11 (study guide)%Nauthor: Larry Rix (private study)%N"
+				+ {STRING_32} "work_author: Michael S. Heiser%Nwork_title: The Unseen Realm: Recovering the Supernatural Worldview of the Bible%Nwork_chapter: 11%N"
+				+ {STRING_32} "work_section: Chapter 11%Npublisher: Lexham Press%Nyear: 2015%Nstatus: draft%N---%N# 11. The Divine Council%N%NJude 5 (p. 77) is cited.%N"
+		end
+
+	Second_guide: STRING_32
+			-- A second guide, with the id the second note had.
+		once
+			Result := {STRING_32} "---%Nsbn: 1%Nkind: guide%Nid: sermon9%Ntitle: The Unseen Realm, chapter 12 (study guide)%N"
+				+ {STRING_32} "work_author: Michael S. Heiser%Nwork_title: The Unseen Realm%Nwork_chapter: 12%Nwork_section: Chapter 12%N---%N# 12. More%N%NJude 3 here.%N"
+		end
 
 	Kit_folder: STRING = "facade_test_kits"
 
@@ -1374,6 +1479,7 @@ feature {NONE} -- Fixture
 			fixture.delete_file (Folder_books_file)
 			fixture.delete_file (Folder_essays_file)
 			fixture.delete_file (Folder_notes_file)
+			fixture.delete_file (Folder_guides_file)
 			if (create {SIMPLE_FILE}.make (Folder)).is_directory then
 				l_ok := (create {SIMPLE_FILE}.make (Folder)).delete_directory
 			end

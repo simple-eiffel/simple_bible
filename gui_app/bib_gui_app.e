@@ -177,6 +177,13 @@ feature {NONE} -- Initialization
 			create chapter_rows.make (0)
 			create book_view.make (200.0)
 			create in_books_grid.make (60.0)
+			create study_guides_grid.make (60.0)
+			create study_guides_rows.make (0)
+			create guide_labels.make (16)
+			create library_holder.make
+			library_holder := library_holder.with_padding (0.0)
+			create guides_holder.make
+			guides_holder := guides_holder.with_padding (0.0)
 			create writings_grid.make (60.0)
 			create writing_rows.make (0)
 			create writings_note.make_ui ("Choose My writings in the search scope, then search: your commentary, frameworks and books.")
@@ -274,7 +281,9 @@ feature {NONE} -- Initialization
 			if is_snapshot then
 				take_snapshot
 			else
-				if bible.is_open and then (create {BIB_NOTE_BATCH}.make (bible)).is_pack_stale ((create {BIB_DATA_LOCATION}).notes_folder) then
+				if bible.is_open and then ((create {BIB_NOTE_BATCH}.make (bible)).is_pack_stale ((create {BIB_DATA_LOCATION}).notes_folder)
+					or (create {BIB_NOTE_BATCH}.make (bible)).is_pack_stale ((create {BIB_DATA_LOCATION}).guides_folder))
+				then
 						-- notes the installer brought (Larry's, for the alpha testers, 2026-10-30), or a pack
 						-- an import could not put in place: built again once the window is painted
 					pending_notes_rebuild_ticks := 2
@@ -405,8 +414,15 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 				import_folder (al_folder.to_string_32)
 			elseif snapshot_tab.same_string ({STRING_32} "kitfolder") and then attached (create {SIMPLE_ENV}).get ("SIMPLE_BIBLE_SNAPSHOT_FILE") as al_folder then
 				make_kits (al_folder.to_string_32)
+			elseif snapshot_tab.same_string ({STRING_32} "scholarguides") then
+				bring_into_view (results_panel, results_tabs, Scholar_guides_tab)
+				if not book_rows.is_empty then
+					on_book_row (1)
+				end
+			elseif snapshot_tab.same_string ({STRING_32} "studyguides") then
+				commentary_tabs.select_tab (Study_guides_tab)
 			elseif snapshot_tab.same_string ({STRING_32} "notesrebuild") then
-				rebuild_notes_pack
+				rebuild_stale_packs
 				bring_into_view (results_panel, results_tabs, Author_library_tab)
 			elseif snapshot_tab.same_string ({STRING_32} "ask") then
 				ask_box.set_text ("commentary on Galatians 2:16")
@@ -621,6 +637,7 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			books_grid.set_on_select (agent on_book_row)
 			chapters_grid.set_on_select (agent on_chapter_row)
 			in_books_grid.set_on_select (agent on_in_books_row)
+			study_guides_grid.set_on_select (agent on_study_guides_row)
 			writings_grid.set_on_select (agent on_writing_row)
 			book_view.set_on_link_click (agent on_commentary_link)
 			book_view.set_hover_card_builder (agent link_card (book_view, ?, ?))
@@ -765,6 +782,7 @@ feature {NONE} -- Window
 			commentary_tabs.add_page ("Commentaries", commentary_view)
 			commentary_tabs.add_page ("Cross-refs", cross_refs_grid)
 			commentary_tabs.add_page ("Books & essays", in_books_grid)
+			commentary_tabs.add_page ("Study guides", study_guides_grid)
 			commentary_tabs.add_page ("Related", create {SW_EMPTY_STATE}.make ("Related passages come later",
 				"AI-made related passages are planned for a later release, always marked as AI-made."))
 				-- Larry's commentary first when a pack holds one (2026-10-27), else the cross-references.
@@ -892,6 +910,8 @@ feature {NONE} -- Window
 			in_books_grid.add_column (create {SW_GRID_COLUMN [BIB_BOOK_BLOCK]}.make ("Book", 120.0, agent {BIB_BOOK_BLOCK}.book_title))
 			in_books_grid.add_column (create {SW_GRID_COLUMN [BIB_BOOK_BLOCK]}.make ("Chapter", 140.0, agent {BIB_BOOK_BLOCK}.chapter_title))
 			in_books_grid.add_column ((create {SW_GRID_COLUMN [BIB_BOOK_BLOCK]}.make ("Text", 300.0, agent block_snippet)).growing)
+			study_guides_grid.add_column (create {SW_GRID_COLUMN [BIB_BOOK_BLOCK]}.make ("Guide", 290.0, agent guide_label))
+			study_guides_grid.add_column ((create {SW_GRID_COLUMN [BIB_BOOK_BLOCK]}.make ("Text", 300.0, agent block_snippet)).growing)
 			writings_grid.add_column (create {SW_GRID_COLUMN [BIB_WRITING_HIT]}.make ("In", 110.0, agent writing_pack_name))
 			writings_grid.add_column (create {SW_GRID_COLUMN [BIB_WRITING_HIT]}.make ("Where", 240.0, agent {BIB_WRITING_HIT}.place))
 			writings_grid.add_column ((create {SW_GRID_COLUMN [BIB_WRITING_HIT]}.make ("Text", 400.0, agent writing_text)).growing)
@@ -1772,6 +1792,7 @@ feature {NONE} -- Two layouts (C7)
 			-- T3's tabs, T6's tabs and C10's tools, built once.
 		local
 			l_parallel_page, l_interlinear_page: SW_COLUMN
+			l_library: SW_SPLITTER
 		do
 			create l_parallel_page.make
 			l_parallel_page.put (parallel_view.growing)
@@ -1793,8 +1814,14 @@ feature {NONE} -- Two layouts (C7)
 			results_tabs.add_page ("Search Results", results_page)
 			results_tabs.add_page ("Guides", create {SW_EMPTY_STATE}.make ("Guides come later", "A guide assembles passages, notes and word studies on one subject (P08)."))
 			results_tabs.add_page ("Census and Checks", create {SW_EMPTY_STATE}.make ("Census comes later", "Counts across books and corpora with their controls (P09)."))
-			results_tabs.add_page ("Author Library", books_page)
+				-- one reader for the Author Library and the Scholar Guides, shelved in the tab chosen (2026-10-30)
+			l_library := books_page.growing
+			library_page := l_library
+			library_holder.put (l_library)
+			results_tabs.add_page ("Author Library", library_holder)
 			results_tabs.add_page ("Writings", writings_page)
+			results_tabs.add_page ("Scholar Guides", guides_holder)
+			results_tabs.set_on_change (agent on_results_tab)
 			results_tabs.add_page ("Study Ledger v1.5", create {SW_EMPTY_STATE}.make ("Study ledger is version 1.5", "Planned for version 1.5."))
 
 			tools_strip.add_tool ("Parallel", "Versions side by side (P02)", True, agent show_parallel)
@@ -4097,8 +4124,42 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 	in_books_rows: ARRAYED_LIST [BIB_BOOK_BLOCK]
 			-- T5's In the books: the paragraphs citing the commentary's verse.
 
+	study_guides_grid: SW_DATA_GRID [BIB_BOOK_BLOCK]
+	study_guides_rows: ARRAYED_LIST [BIB_BOOK_BLOCK]
+			-- T5's Study guides: the scholar guides' paragraphs citing the verse, apart (2026-10-30).
+
+	guide_labels: HASH_TABLE [STRING_32, STRING_32]
+			-- Each guide's label by its id, as `guide_label' made it.
+
+	guide_label (a_block: BIB_BOOK_BLOCK): STRING_32
+			-- "Heiser, The Unseen Realm: Chapter 11": the guide's work and section.
+		do
+			if attached guide_labels.item (a_block.book) as al_label then
+				Result := al_label
+			else
+				Result := a_block.book_title
+				across guide_packs as ic loop
+					if attached ic.book (a_block.book) as al_result and then al_result.is_success and then al_result.count = 1 and then not al_result.item (1).edition.is_empty then
+						Result := al_result.item (1).edition + (if al_result.item (1).subtitle.is_empty then {STRING_32} "" else {STRING_32} ": " + al_result.item (1).subtitle end)
+					end
+				end
+				guide_labels.put (Result, a_block.book)
+			end
+		end
+
+	on_study_guides_row (a_model: INTEGER)
+			-- A guide's paragraph citing the verse chosen: read it where it stands, on the guides' shelf.
+		do
+			if a_model >= 1 and then a_model <= study_guides_rows.count then
+				show_book_place (study_guides_rows.i_th (a_model).pack_kind, study_guides_rows.i_th (a_model).book, study_guides_rows.i_th (a_model).chapter, study_guides_rows.i_th (a_model).block)
+			end
+		end
+
 	In_books_tab: INTEGER = 3
 			-- T5's In the books page.
+
+	Study_guides_tab: INTEGER = 4
+			-- T5's Study guides page (2026-10-30).
 
 	Author_library_tab: INTEGER = 4
 			-- T6's Author Library page.
@@ -4125,22 +4186,95 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 		end
 
 	library_packs: ARRAYED_LIST [BIB_BOOK_PACK]
-			-- The attached text packs, books then essays (2026-10-28): the Author Library's.
+			-- The attached packs of Larry's writings, books then essays then notes (2026-10-28): the Author
+			-- Library's; never the scholar guides, kept apart (2026-10-30).
 		do
 			create Result.make (2)
 			if bible.is_open then
 				across bible.text_packs as ic loop
-					if ic.is_available then
+					if ic.is_available and not ic.schema.Is_kept_apart then
 						Result.extend (ic)
 					end
 				end
 			end
 		end
 
+	guide_packs: ARRAYED_LIST [BIB_BOOK_PACK]
+			-- The attached scholar guides packs: the Scholar Guides tab's (2026-10-30).
+		do
+			create Result.make (1)
+			if bible.is_open then
+				across bible.text_packs as ic loop
+					if ic.is_available and ic.schema.Is_kept_apart then
+						Result.extend (ic)
+					end
+				end
+			end
+		end
+
+	shelf_packs: ARRAYED_LIST [BIB_BOOK_PACK]
+			-- The packs the shared reader lists: the guides on the Scholar Guides shelf, else the library.
+		do
+			Result := if is_guides_shelf then guide_packs else library_packs end
+		end
+
+	is_guides_shelf: BOOLEAN
+			-- Is the reader shelved in the Scholar Guides tab, listing the guides (`show_shelf')?
+
+	library_page: detachable SW_SPLITTER
+			-- The reader both the Author Library and the Scholar Guides tab show, one at a time; set once
+			-- the results tabs are built.
+
+	library_holder, guides_holder: SW_COLUMN
+			-- The two tabs' places for `library_page'.
+
+	Scholar_guides_tab: INTEGER = 6
+			-- T6's Scholar Guides page.
+
+	on_results_tab (a_index: INTEGER)
+			-- A results tab chosen: the reader moved to the Author Library or the Scholar Guides with it.
+		do
+			if a_index = Scholar_guides_tab then
+				show_shelf (True)
+			elseif a_index = Author_library_tab then
+				show_shelf (False)
+			end
+		end
+
+	show_shelf (a_guides: BOOLEAN)
+			-- The reader shelved with the scholar guides (`a_guides') or the library: moved to that tab and
+			-- its list filled with that shelf's packs.
+		do
+			if a_guides /= is_guides_shelf then
+				if attached library_page as al_page then
+					if a_guides then
+						detach (library_holder, al_page)
+						guides_holder.put (al_page)
+					else
+						detach (guides_holder, al_page)
+						library_holder.put (al_page)
+					end
+				end
+				is_guides_shelf := a_guides
+				create listed_book.make_empty
+				create listed_kind.make_empty
+				create chapter_rows.make (0)
+				chapters_grid.set_rows (chapter_rows)
+				fill_books
+			end
+		ensure
+			shelved: is_guides_shelf = a_guides
+		end
+
 	library_pack (a_kind: READABLE_STRING_GENERAL): detachable BIB_BOOK_PACK
-			-- The attached pack of kind `a_kind' ("books", "essays"); Void when none is.
+			-- The attached pack of kind `a_kind' ("books", "essays", "guides"); Void when none is.
 		do
 			across library_packs as ic loop
+				if Result = Void and then ic.schema.Pack_kind.same_string_general (a_kind) then
+					Result := ic
+				end
+			end
+			across guide_packs as ic loop
 				if Result = Void and then ic.schema.Pack_kind.same_string_general (a_kind) then
 					Result := ic
 				end
@@ -4150,18 +4284,23 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 		end
 
 	fill_books
-			-- The books, then the essay series, or the page saying there is no pack yet.
+			-- The shelf's packs (the books, then the essay series, then the notes; or the scholar guides),
+			-- or the page saying there is none yet.
 		do
 			create book_rows.make (0)
-			across library_packs as ic loop
+			across shelf_packs as ic loop
 				if attached ic.books as al_result and then al_result.is_success then
 					across 1 |..| al_result.count as al_i loop
 						book_rows.extend (al_result.item (al_i))
 					end
 				end
 			end
-			if book_rows.is_empty then
+			if book_rows.is_empty and is_guides_shelf then
+				book_view.set_document (commentary_reader.read ({STRING_32} "**No scholar guides yet**%N%NImport a folder of prepared guides (File > Import prepared folder): each file whose header says %"kind: guide%" comes here, kept apart from your writings."))
+			elseif book_rows.is_empty then
 				book_view.set_document (commentary_reader.read ({STRING_32} "**No books or essays pack yet**%N%NA books or essays pack in the packs folder brings Larry's writing here, chapter by chapter."))
+			elseif is_guides_shelf then
+				book_view.set_document (commentary_reader.read ({STRING_32} "Choose a guide, then a chapter. These are study guides to other scholars' books: private research, kept apart from your writings."))
 			else
 				book_view.set_document (commentary_reader.read ({STRING_32} "Choose a book or an essay series, then a chapter or an essay. A Bible reference in the text shows its passage; a framework's name, its summary."))
 			end
@@ -4228,7 +4367,9 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 		local
 			l_chapter, i: INTEGER
 		do
-			bring_into_view (results_panel, results_tabs, Author_library_tab)
+				-- a scholar guide opens on the Scholar Guides shelf, anything else in the Author Library
+			show_shelf (attached (create {BIB_TEXT_PACKS}).schema_of_kind (a_kind) as al_schema and then al_schema.Is_kept_apart)
+			bring_into_view (results_panel, results_tabs, if is_guides_shelf then Scholar_guides_tab else Author_library_tab end)
 			l_chapter := a_chapter.max (1)
 			if attached library_pack (a_kind) as al_pack and then attached al_pack.book (a_book) as al_result and then al_result.is_success and then al_result.count = 1 then
 				if not listed_book.same_string_general (a_book) or not listed_kind.same_string_general (a_kind) then
@@ -4331,6 +4472,25 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 				end
 			end
 			in_books_grid.set_rows (in_books_rows)
+				-- the scholar guides apart: their own list (2026-10-30)
+			create study_guides_rows.make (0)
+			if commentary_verse > 0 and then (create {BIB_HUB_ID}).is_place (commentary_book, commentary_chapter, commentary_verse) then
+				across guide_packs as ic loop
+					if attached ic.blocks_citing (commentary_book, commentary_chapter, commentary_verse) as al_result and then al_result.is_success then
+						across 1 |..| al_result.count as al_i loop
+							study_guides_rows.extend (al_result.item (al_i))
+						end
+					end
+				end
+				across guide_packs as ic loop
+					if attached ic.blocks_suggesting (commentary_book, commentary_chapter, commentary_verse) as al_result and then al_result.is_success then
+						across 1 |..| al_result.count as al_i loop
+							study_guides_rows.extend (al_result.item (al_i))
+						end
+					end
+				end
+			end
+			study_guides_grid.set_rows (study_guides_rows)
 		end
 
 	book_card (a_kind, a_book: READABLE_STRING_GENERAL; a_chapter: INTEGER): detachable SW_HOVER_CARD
@@ -4470,49 +4630,82 @@ feature {NONE} -- The ingest kit (0.7.32, research/21)
 		end
 
 	import_note (a_path: STRING_32)
-			-- The prepared file `a_path' checked (its source beside it, when there, for the length check);
-			-- refused with its report in the Author Library, or kept: its files written, the notes pack
-			-- rebuilt, the engine reopened on it, the note shown.
+			-- The prepared file `a_path' checked (its source beside it, when there, for the length check)
+			-- and kept through the folder import's one path (BIB_NOTE_BATCH.run_files, 2026-10-30): a note
+			-- or a scholar guide, each in its own place; refused with its report, or kept and shown.
 		local
-			l_importer: BIB_NOTE_IMPORTER
-			l_file, l_source: SIMPLE_FILE
-			l_text, l_folder, l_packs, l_new, l_pack: STRING_32
-			l_error: detachable STRING_32
-			l_ok: BOOLEAN
+			l_batch: BIB_NOTE_BATCH
+			l_file: SIMPLE_FILE
+			l_errors: ARRAYED_LIST [STRING_32]
 		do
 			create l_file.make (a_path)
 			if bible.is_open and then l_file.is_file then
-				l_text := l_file.read_text_utf_8
-				create l_importer.make (bible)
-				l_importer.read (l_text, Void)
-				if not l_importer.source.is_empty then
-					create l_source.make (l_file.parent_path + {STRING_32} "\" + l_importer.source)
-					if l_source.is_file then
-						l_importer.read (l_text, l_source.read_text_utf_8)
-					end
-				end
-				if not l_importer.is_accepted then
-					show_import_report ({STRING_32} "Import refused", l_importer.problems, l_importer.warnings)
+				create l_batch.make (bible)
+				l_batch.run_files (l_file.parent_path, create {ARRAYED_LIST [STRING_32]}.make_from_array (<<l_file.file_name>>), ingest_places)
+				if not l_batch.refused.is_empty then
+					show_import_report ({STRING_32} "Import refused", l_batch.refused.first.problems, l_batch.warnings)
+				elseif attached l_batch.last_error as al_error then
+					show_import_report ({STRING_32} "The file could not be kept", create {ARRAYED_LIST [STRING_32]}.make_from_array (<<al_error>>), l_batch.warnings)
 				else
-					l_folder := (create {BIB_DATA_LOCATION}).notes_folder.to_string_32
-					l_packs := (create {BIB_DATA_LOCATION}).pack_folder.to_string_32
-					l_pack := l_packs + {STRING_32} "\" + {BIB_NOTE_SCHEMA}.Pack_file_name
-					l_new := l_pack + {STRING_32} ".new"
-					if (create {SIMPLE_FILE}.make (l_new)).is_file then
-						l_ok := (create {SIMPLE_FILE}.make (l_new)).delete
-					end
-					l_error := l_importer.keep (l_folder, l_new, l_packs + {STRING_32} "\" + {BIB_FRAMEWORK_SCHEMA}.Pack_file_name)
-					if attached l_error as al_error then
-						show_import_report ({STRING_32} "The note could not be kept", create {ARRAYED_LIST [STRING_32]}.make_from_array (<<al_error>>), l_importer.warnings)
-					elseif attached notes_pack_put_in_place (l_pack, l_new, l_folder) as al_swap_error then
-						show_import_report ({STRING_32} "The new notes pack could not be put in place", create {ARRAYED_LIST [STRING_32]}.make_from_array (<<al_swap_error>>), l_importer.warnings)
+					l_errors := packs_put_in_place (l_batch)
+					if not l_errors.is_empty then
+						show_import_report ({STRING_32} "A new pack could not be put in place", l_errors, l_batch.warnings)
+					elseif not l_batch.kept.is_empty then
+						show_book_place (l_batch.kept.first.kind, l_batch.kept.first.id, 1, 0)
+						say ({STRING_32} "Imported " + l_batch.kept.first.title + {STRING_32} ": " + l_batch.built_blocks.out.to_string_32 + {STRING_32} " paragraphs, "
+							+ l_batch.built_suggestions.out.to_string_32 + (if l_batch.built_suggestions = 1 then {STRING_32} " suggested passage." else {STRING_32} " suggested passages." end)
+							+ (if l_batch.retired.is_empty then {STRING_32} "" else {STRING_32} " It replaces the note of the same id." end)
+							+ (if l_batch.warnings.is_empty then {STRING_32} "" else {STRING_32} " Note: " + l_batch.warnings.first end))
 					else
-						show_book_place ({BIB_NOTE_SCHEMA}.Pack_kind, l_importer.id, 1, 0)
-						say ({STRING_32} "Imported " + l_importer.title + {STRING_32} ": " + l_importer.built_blocks.out.to_string_32 + {STRING_32} " paragraphs, "
-							+ l_importer.built_suggestions.out.to_string_32 + (if l_importer.built_suggestions = 1 then {STRING_32} " suggested passage." else {STRING_32} " suggested passages." end)
-							+ (if l_importer.warnings.is_empty then {STRING_32} "" else {STRING_32} " Note: " + l_importer.warnings.first end))
+						say ({STRING_32} "Already imported, unchanged: " + l_file.file_name)
 					end
 				end
+			end
+		end
+
+	ingest_places: BIB_INGEST_PLACES
+			-- Where imports keep notes and scholar guides, the packs built as ".new" files (any left from
+			-- before removed) and put in place after (`packs_put_in_place').
+		local
+			l_location: BIB_DATA_LOCATION
+		do
+			create l_location
+			create Result.make (l_location.notes_folder, new_pack_path ({BIB_NOTE_SCHEMA}.Pack_file_name),
+				l_location.guides_folder, new_pack_path ({BIB_GUIDE_SCHEMA}.Pack_file_name),
+				l_location.pack_folder.to_string_32 + {STRING_32} "\" + {BIB_FRAMEWORK_SCHEMA}.Pack_file_name)
+		end
+
+	live_pack_path (a_file_name: READABLE_STRING_GENERAL): STRING_32
+			-- The pack `a_file_name' in the packs folder.
+		do
+			Result := (create {BIB_DATA_LOCATION}).pack_folder.to_string_32 + {STRING_32} "\" + a_file_name.to_string_32
+		end
+
+	new_pack_path (a_file_name: READABLE_STRING_GENERAL): STRING_32
+			-- Where a pack `a_file_name' is built before it is put in place; one left from before removed.
+		local
+			l_ok: BOOLEAN
+		do
+			Result := live_pack_path (a_file_name) + {STRING_32} ".new"
+			if (create {SIMPLE_FILE}.make (Result)).is_file then
+				l_ok := (create {SIMPLE_FILE}.make (Result)).delete
+			end
+		end
+
+	packs_put_in_place (a_batch: BIB_NOTE_BATCH): ARRAYED_LIST [STRING_32]
+			-- The packs `a_batch' built put in place, guides first, and the notes pack taken away when its
+			-- last note retired; what could not be done, empty when all was.
+		do
+			create Result.make (0)
+			if a_batch.guides_built and then attached pack_put_in_place (live_pack_path ({BIB_GUIDE_SCHEMA}.Pack_file_name), live_pack_path ({BIB_GUIDE_SCHEMA}.Pack_file_name) + {STRING_32} ".new", (create {BIB_DATA_LOCATION}).guides_folder) as al_error then
+				Result.extend (al_error)
+			end
+			if a_batch.notes_built then
+				if attached pack_put_in_place (live_pack_path ({BIB_NOTE_SCHEMA}.Pack_file_name), live_pack_path ({BIB_NOTE_SCHEMA}.Pack_file_name) + {STRING_32} ".new", (create {BIB_DATA_LOCATION}).notes_folder) as al_error then
+					Result.extend (al_error)
+				end
+			elseif a_batch.notes_now_empty and then attached pack_removed (live_pack_path ({BIB_NOTE_SCHEMA}.Pack_file_name), (create {BIB_DATA_LOCATION}).notes_folder) as al_error then
+				Result.extend (al_error)
 			end
 		end
 
@@ -4538,28 +4731,15 @@ feature {NONE} -- The ingest kit (0.7.32, research/21)
 		end
 
 	import_folder (a_folder: STRING_32)
-			-- Every prepared file in `a_folder' checked; the new and changed kept, the notes pack built once
-			-- and put in place, the engine reopened on it; what happened shown in the Author Library.
+			-- Every prepared file in `a_folder' checked; notes and scholar guides kept apart, each pack built
+			-- once and put in place, the engine reopened on them; what happened shown in a report.
 		local
 			l_batch: BIB_NOTE_BATCH
-			l_folder, l_packs, l_pack, l_new: STRING_32
-			l_swap_error: detachable STRING_32
-			l_ok: BOOLEAN
 		do
 			if bible.is_open then
-				l_folder := (create {BIB_DATA_LOCATION}).notes_folder.to_string_32
-				l_packs := (create {BIB_DATA_LOCATION}).pack_folder.to_string_32
-				l_pack := l_packs + {STRING_32} "\" + {BIB_NOTE_SCHEMA}.Pack_file_name
-				l_new := l_pack + {STRING_32} ".new"
-				if (create {SIMPLE_FILE}.make (l_new)).is_file then
-					l_ok := (create {SIMPLE_FILE}.make (l_new)).delete
-				end
 				create l_batch.make (bible)
-				l_batch.run (a_folder, l_folder, l_new, l_packs + {STRING_32} "\" + {BIB_FRAMEWORK_SCHEMA}.Pack_file_name)
-				if l_batch.is_built then
-					l_swap_error := notes_pack_put_in_place (l_pack, l_new, l_folder)
-				end
-				show_folder_report (a_folder, l_batch, l_swap_error)
+				l_batch.run (a_folder, ingest_places)
+				show_folder_report (a_folder, l_batch, packs_put_in_place (l_batch))
 			end
 		end
 
@@ -4574,47 +4754,48 @@ feature {NONE} -- The ingest kit (0.7.32, research/21)
 			end
 		end
 
-	rebuild_notes_pack
-			-- The notes pack built again from every note in the notes folder and put in place, the stale
-			-- mark cleared (2026-10-30: notes the installer brought; a pack an import could not put in
-			-- place). A folder with no notes only loses the mark.
+	rebuild_stale_packs
+			-- The notes pack and the guides pack, each whose folder is marked stale, built again from every
+			-- file there and put in place, the mark cleared (2026-10-30: files the installer brought; a pack
+			-- an import could not put in place). A folder with no files takes its pack away.
+		do
+			rebuild_pack (create {BIB_NOTE_SCHEMA}, (create {BIB_DATA_LOCATION}).notes_folder)
+			rebuild_pack (create {BIB_GUIDE_SCHEMA}, (create {BIB_DATA_LOCATION}).guides_folder)
+		end
+
+	rebuild_pack (a_schema: BIB_TEXT_PACK_SCHEMA; a_folder: READABLE_STRING_GENERAL)
+			-- The `a_schema' pack built again from `a_folder' when it is marked stale (`rebuild_stale_packs').
 		local
 			l_importer: BIB_NOTE_IMPORTER
 			l_batch: BIB_NOTE_BATCH
-			l_folder, l_packs, l_pack, l_new: STRING_32
+			l_folder: STRING_32
 			l_error: detachable STRING_32
-			l_ok: BOOLEAN
 		do
+			create l_folder.make_from_string_general (a_folder)
 			if bible.is_open then
-				l_folder := (create {BIB_DATA_LOCATION}).notes_folder.to_string_32
-				l_packs := (create {BIB_DATA_LOCATION}).pack_folder.to_string_32
-				l_pack := l_packs + {STRING_32} "\" + {BIB_NOTE_SCHEMA}.Pack_file_name
-				l_new := l_pack + {STRING_32} ".new"
 				create l_batch.make (bible)
-				if not (create {SIMPLE_FILE}.make (l_folder)).is_directory or else (create {SIMPLE_FILE}.make (l_folder)).files_with_extension (".json").is_empty then
-					l_batch.set_pack_stale (l_folder, False)
-				else
-					if (create {SIMPLE_FILE}.make (l_new)).is_file then
-						l_ok := (create {SIMPLE_FILE}.make (l_new)).delete
-					end
-					create l_importer.make (bible)
-					l_error := l_importer.build (l_folder, l_new, l_packs + {STRING_32} "\" + {BIB_FRAMEWORK_SCHEMA}.Pack_file_name)
-					if l_error = Void then
-						l_error := notes_pack_put_in_place (l_pack, l_new, l_folder)
+				if l_batch.is_pack_stale (l_folder) then
+					if not (create {SIMPLE_FILE}.make (l_folder)).is_directory or else (create {SIMPLE_FILE}.make (l_folder)).files_with_extension (".json").is_empty then
+						l_error := pack_removed (live_pack_path (a_schema.Pack_file_name), l_folder)
 					else
-						l_batch.set_pack_stale (l_folder, True)
+						create l_importer.make (bible)
+						l_error := l_importer.build_with (a_schema, l_folder, new_pack_path (a_schema.Pack_file_name), live_pack_path ({BIB_FRAMEWORK_SCHEMA}.Pack_file_name))
+						if l_error = Void then
+							l_error := pack_put_in_place (live_pack_path (a_schema.Pack_file_name), live_pack_path (a_schema.Pack_file_name) + {STRING_32} ".new", l_folder)
+						else
+							l_batch.set_pack_stale (l_folder, True)
+						end
 					end
 					if attached l_error as al_error then
-						say ({STRING_32} "The notes could not be brought up to date: " + al_error)
+						say ({STRING_32} "The " + a_schema.Entries_noun + {STRING_32} " could not be brought up to date: " + al_error)
 					else
-						say ({STRING_32} "The notes are up to date: " + l_importer.built_blocks.out.to_string_32 + {STRING_32} " paragraphs, "
-							+ l_importer.built_suggestions.out.to_string_32 + {STRING_32} " suggested passages.")
+						say ({STRING_32} "The " + a_schema.Entries_noun + {STRING_32} " are up to date.")
 					end
 				end
 			end
 		end
 
-	show_folder_report (a_folder: STRING_32; a_batch: BIB_NOTE_BATCH; a_swap_error: detachable STRING_32)
+	show_folder_report (a_folder: STRING_32; a_batch: BIB_NOTE_BATCH; a_swap_errors: LIST [STRING_32])
 			-- What a folder import did, in the Author Library's reader.
 		local
 			l_page, l_summary: STRING_32
@@ -4626,11 +4807,14 @@ feature {NONE} -- The ingest kit (0.7.32, research/21)
 				+ a_batch.file_count.out.to_string_32 + {STRING_32} " prepared files).%N%N")
 			if attached a_batch.last_error as al_error then
 				l_page.append ({STRING_32} "**Nothing was imported:** " + al_error + {STRING_32} "%N%N")
-			elseif attached a_swap_error as al_swap then
-				l_page.append ({STRING_32} "**The notes below are saved, but the new notes pack could not be put in place:** " + al_swap
-					+ {STRING_32} " Once that is put right, import the folder again: the pack is built again from every note.%N%N")
+			elseif not a_swap_errors.is_empty then
+				l_page.append ({STRING_32} "**The files below are saved, but a new pack could not be put in place:**%N%N")
+				across a_swap_errors as ic loop
+					l_page.append ({STRING_32} "- " + ic + {STRING_32} "%N")
+				end
+				l_page.append ({STRING_32} "%NOnce that is put right, import the folder again: the pack is built again from every file.%N%N")
 			elseif a_batch.is_built and a_batch.kept.is_empty then
-				l_page.append ({STRING_32} "The notes pack was built again from every note: an earlier one had not been put in place.%N%N")
+				l_page.append ({STRING_32} "A pack was built again from every file: an earlier one had not been put in place.%N%N")
 			end
 			if a_batch.file_count = 0 then
 				l_page.append ({STRING_32} "No file in this folder ends in .prepared.md.%N%N")
@@ -4639,11 +4823,18 @@ feature {NONE} -- The ingest kit (0.7.32, research/21)
 				l_page.append ({STRING_32} "## Imported (" + a_batch.kept.count.out.to_string_32 + {STRING_32} ")%N%N")
 				across a_batch.kept as ic loop
 					l_page.append ({STRING_32} "- " + ic.title + {STRING_32} " (" + ic.file
+						+ (if ic.kind.same_string ({BIB_GUIDE_SCHEMA}.Pack_kind) then {STRING_32} ", a scholar guide" else {STRING_32} "" end)
 						+ (if across a_batch.replaced as al_r some al_r.same_string (ic.file) end then {STRING_32} ", replacing its earlier version" else {STRING_32} "" end)
 						+ {STRING_32} ")%N")
 				end
-				l_page.append ({STRING_32} "%NThe notes pack holds " + a_batch.built_blocks.out.to_string_32 + {STRING_32} " paragraphs and "
+				l_page.append ({STRING_32} "%NThe packs built hold " + a_batch.built_blocks.out.to_string_32 + {STRING_32} " paragraphs and "
 					+ a_batch.built_suggestions.out.to_string_32 + {STRING_32} " suggested passages.%N%N")
+			end
+			if not a_batch.retired.is_empty then
+				l_page.append ({STRING_32} "## Moved from Notes to Scholar Guides (" + a_batch.retired.count.out.to_string_32 + {STRING_32} ")%N%NThese notes are guides now, kept apart from your writings: ")
+				across a_batch.retired as ic loop
+					l_page.append (ic + (if ic.is_equal (a_batch.retired.last) then {STRING_32} ".%N%N" else {STRING_32} ", " end))
+				end
 			end
 			if not a_batch.refused.is_empty then
 				l_page.append ({STRING_32} "## Refused (" + a_batch.refused.count.out.to_string_32 + {STRING_32} ")%N%N")
@@ -4667,46 +4858,89 @@ feature {NONE} -- The ingest kit (0.7.32, research/21)
 			keep_snapshot_report (l_page)
 		end
 
-	notes_pack_put_in_place (a_pack, a_new, a_notes_folder: STRING_32): detachable STRING_32
-			-- The built notes pack `a_new' put in `a_pack''s place (`swapped_notes_pack'); the notes
-			-- folder `a_notes_folder' marked stale when it could not be (scan 70: the next import or start
-			-- builds it again), else the mark cleared and the lists the pack feeds filled afresh. Void
-			-- when in place, else why not. (Scan 71: once, for a note, a folder and a rebuild.)
+	pack_put_in_place (a_pack, a_new, a_folder: READABLE_STRING_GENERAL): detachable STRING_32
+			-- The built pack `a_new' put in `a_pack''s place (`swapped_pack'); the folder `a_folder' its files
+			-- live in marked stale when it could not be (scan 70: the next import or start builds it again),
+			-- else the mark cleared and the lists the packs feed filled afresh (`packs_changed'). Void when in
+			-- place, else why not. (Scan 71: once, for a note, a folder and a rebuild; 2026-10-30: any pack.)
 		do
-			Result := swapped_notes_pack (a_pack, a_new)
-			(create {BIB_NOTE_BATCH}.make (bible)).set_pack_stale (a_notes_folder, Result /= Void)
+			Result := swapped_pack (a_pack.to_string_32, a_new.to_string_32)
+			(create {BIB_NOTE_BATCH}.make (bible)).set_pack_stale (a_folder, Result /= Void)
 			if Result = Void then
-				framework_names_cache := Void
-				writing_names_cache := Void
-				create listed_book.make_empty
-				create listed_kind.make_empty
-				fill_books
+				packs_changed
 			end
 		end
 
-	swapped_notes_pack (a_pack, a_new: STRING_32): detachable STRING_32
-			-- The new notes pack `a_new' put in `a_pack''s place, the engine closed for it and opened
-			-- again; the old pack kept as ".old" until the new one is in place, and put back when it
-			-- cannot be (scan 66: a failed delete or rename lost the pack and still said "Imported").
-			-- Void when done, else what went wrong.
+	pack_removed (a_pack, a_folder: READABLE_STRING_GENERAL): detachable STRING_32
+			-- The pack `a_pack' taken away (its folder `a_folder' holds no files now: the last note became a
+			-- guide), the engine closed for it and opened again; put back when the engine will not open
+			-- without it. Void when done or there was none, else why not.
 		local
-			l_old: STRING_32
+			l_pack, l_old: STRING_32
+			l_ok: BOOLEAN
+		do
+			create l_pack.make_from_string_general (a_pack)
+			l_old := l_pack + {STRING_32} ".old"
+			if (create {SIMPLE_FILE}.make (l_pack)).is_file then
+				if (create {SIMPLE_FILE}.make (l_old)).is_file then
+					Result := {STRING_32} "A pack kept from an earlier failed import is still at " + l_old + {STRING_32} ": move it somewhere safe, then import again."
+				else
+					bible.close
+					if not (create {SIMPLE_FILE}.make (l_pack)).rename_to ((create {SIMPLE_FILE}.make (l_pack)).file_name + {STRING_32} ".old") then
+						Result := {STRING_32} "The emptied pack " + l_pack + {STRING_32} " could not be taken away; it is unchanged."
+					end
+					bible.open
+					if Result = Void and not bible.is_open then
+						bible.close
+						l_ok := (create {SIMPLE_FILE}.make (l_old)).rename_to ((create {SIMPLE_FILE}.make (l_pack)).file_name)
+						bible.open
+						Result := {STRING_32} "Simple Bible would not open without " + l_pack + {STRING_32} "; it is back."
+					elseif Result = Void then
+						l_ok := (create {SIMPLE_FILE}.make (l_old)).delete
+					end
+				end
+			end
+			(create {BIB_NOTE_BATCH}.make (bible)).set_pack_stale (a_folder, Result /= Void)
+			if Result = Void then
+				packs_changed
+			end
+		end
+
+	packs_changed
+			-- The lists the text packs feed filled afresh, after a pack was put in place or taken away.
+		do
+			framework_names_cache := Void
+			writing_names_cache := Void
+			create guide_labels.make (16)
+			create listed_book.make_empty
+			create listed_kind.make_empty
+			fill_books
+		end
+
+	swapped_pack (a_pack, a_new: STRING_32): detachable STRING_32
+			-- The new pack `a_new' put in `a_pack''s place, the engine closed for it and opened again; the
+			-- old pack kept as ".old" until the new one is in place, and put back when it cannot be (scan
+			-- 66: a failed delete or rename lost the pack and still said "Imported"). Void when done, else
+			-- what went wrong. (2026-10-30: any pack, notes or guides.)
+		local
+			l_old, l_name: STRING_32
 			l_had_old, l_ok: BOOLEAN
 		do
 			l_old := a_pack + {STRING_32} ".old"
+			l_name := (create {SIMPLE_FILE}.make (a_pack)).file_name
 			if (create {SIMPLE_FILE}.make (l_old)).is_file then
-					-- scan 69: never deleted: it may be the only copy of an earlier notes pack
-				Result := {STRING_32} "A notes pack kept from an earlier failed import is still at " + l_old
+					-- scan 69: never deleted: it may be the only copy of an earlier pack
+				Result := {STRING_32} "A pack kept from an earlier failed import is still at " + l_old
 					+ {STRING_32} ": move it somewhere safe, then import again."
 			else
 				bible.close
 				l_had_old := (create {SIMPLE_FILE}.make (a_pack)).is_file
-				if l_had_old and then not (create {SIMPLE_FILE}.make (a_pack)).rename_to ({BIB_NOTE_SCHEMA}.Pack_file_name.to_string_32 + {STRING_32} ".old") then
-					Result := {STRING_32} "The old notes pack could not be moved aside; it is unchanged."
-				elseif not (create {SIMPLE_FILE}.make (a_new)).rename_to ({BIB_NOTE_SCHEMA}.Pack_file_name) then
-					Result := {STRING_32} "The new notes pack could not be renamed into place"
+				if l_had_old and then not (create {SIMPLE_FILE}.make (a_pack)).rename_to (l_name + {STRING_32} ".old") then
+					Result := {STRING_32} "The old pack " + l_name + {STRING_32} " could not be moved aside; it is unchanged."
+				elseif not (create {SIMPLE_FILE}.make (a_new)).rename_to (l_name) then
+					Result := {STRING_32} "The new pack " + l_name + {STRING_32} " could not be renamed into place"
 					if l_had_old then
-						if (create {SIMPLE_FILE}.make (l_old)).rename_to ({BIB_NOTE_SCHEMA}.Pack_file_name) then
+						if (create {SIMPLE_FILE}.make (l_old)).rename_to (l_name) then
 							Result.append ({STRING_32} "; the old one is back.")
 						else
 							Result.append ({STRING_32} "; the old one is kept as " + l_old + {STRING_32} ".")
@@ -4718,11 +4952,11 @@ feature {NONE} -- The ingest kit (0.7.32, research/21)
 				bible.open
 				if Result = Void and not bible.is_open then
 						-- scan 67: the new pack would not open: the old one goes back and opens again
-					Result := {STRING_32} "Simple Bible could not open the new notes pack ("
+					Result := {STRING_32} "Simple Bible could not open the new pack " + l_name + {STRING_32} " ("
 						+ (if attached bible.last_error as al_e then al_e.message else {STRING_32} "no reason given" end) + {STRING_32} ")"
 					l_ok := (create {SIMPLE_FILE}.make (a_pack)).delete
 					if l_had_old then
-						if (create {SIMPLE_FILE}.make (l_old)).rename_to ({BIB_NOTE_SCHEMA}.Pack_file_name) then
+						if (create {SIMPLE_FILE}.make (l_old)).rename_to (l_name) then
 							Result.append ({STRING_32} "; the old one is back.")
 						else
 							Result.append ({STRING_32} "; the old one is kept as " + l_old + {STRING_32} ".")
@@ -4805,7 +5039,7 @@ feature {NONE} -- Ask (C6.5, 0.7.31: plain words through the Cactus Needle helpe
 			-- Ticks left before `pending_kit_folder''s kits are made.
 
 	pending_notes_rebuild_ticks: INTEGER
-			-- Ticks left before the notes pack is built again (`rebuild_notes_pack'); 0: none waiting.
+			-- Ticks left before stale packs are built again (`rebuild_stale_packs'); 0: none waiting.
 
 	needs_helper_start: BOOLEAN
 			-- Will the next request start the helper (about half a second)?
@@ -5737,7 +5971,7 @@ feature {NONE} -- Dictionary and lexicon (S3, P05)
 			if pending_notes_rebuild_ticks > 0 then
 				pending_notes_rebuild_ticks := pending_notes_rebuild_ticks - 1
 				if pending_notes_rebuild_ticks = 0 then
-					rebuild_notes_pack
+					rebuild_stale_packs
 				end
 			end
 		end

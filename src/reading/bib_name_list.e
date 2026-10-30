@@ -28,13 +28,14 @@ feature -- Access
 	bible: SIMPLE_BIBLE
 
 	names (a_kind: READABLE_STRING_GENERAL): ARRAYED_LIST [TUPLE [kind, name, link: STRING_32]]
-			-- Every name of the packs of kind `a_kind' (empty: every pack), in the packs' order.
+			-- Every name of the packs of kind `a_kind' (empty: every pack but those kept apart, the
+			-- scholar guides, which a kit never names: 2026-10-30), in the packs' order.
 		local
 			i: INTEGER
 		do
 			create Result.make (2000)
 			across bible.text_packs as ic loop
-				if ic.is_available and then (a_kind.is_empty or else ic.schema.Pack_kind.same_string_general (a_kind)) and then attached ic.books as al_books
+				if ic.is_available and then ((a_kind.is_empty and not ic.schema.Is_kept_apart) or else ic.schema.Pack_kind.same_string_general (a_kind)) and then attached ic.books as al_books
 					and then al_books.is_success
 				then
 					from i := 1 until i > al_books.count loop
