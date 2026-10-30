@@ -223,6 +223,10 @@ feature -- Tests
 			assert_true ("Greek only", l_bible.verse_search.has_greek_roots and not l_bible.verse_search.has_hebrew_roots)
 			assert_integers_equal ("a Hebrew code", 1, found (l_bible, "morph:Vq*"))
 			assert_true ("Hebrew only", l_bible.verse_search.has_hebrew_roots and not l_bible.verse_search.has_greek_roots)
+				-- 2026-10-30: an "attribution" corpus is shared with its credit; only restricted, personal,
+				-- unknown and to-verify classes are not (0.7.37 marked everything but "open")
+			assert_true ("an attribution corpus is shared", l_bible.credits.has_substring ("- Greek New Testament (CC BY 4.0)%N"))
+			assert_false ("and never marked not to be shared", l_bible.credits.has_substring ("Greek New Testament (CC BY 4.0; not to be shared)"))
 			l_bible.close
 			remove_test_files
 		end

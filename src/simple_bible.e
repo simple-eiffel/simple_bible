@@ -608,10 +608,10 @@ feature -- Convenience
 					Result.append (conc_pack_label)
 					Result.append ({STRING_32} ")%N%N")
 					across al_db.query ("SELECT name, license, ship_class FROM " + {BIB_CONC_PACK}.Pack_alias + ".corpus ORDER BY corpus_id").rows as ic loop
-						Result.append (credit_line (ic.string_value ("name"), "", ic.string_value ("license"), not ic.string_value ("ship_class").same_string_general ("open")))
+						Result.append (credit_line (ic.string_value ("name"), "", ic.string_value ("license"), is_unshared_class (ic.string_value ("ship_class"))))
 					end
 					across al_db.query ("SELECT credit, license, ship_class FROM " + {BIB_CONC_PACK}.Pack_alias + ".meaning_source WHERE credit <> '' ORDER BY rowid").rows as ic loop
-						Result.append (credit_line (ic.string_value ("credit"), "", ic.string_value ("license"), not ic.string_value ("ship_class").same_string_general ("open")))
+						Result.append (credit_line (ic.string_value ("credit"), "", ic.string_value ("license"), is_unshared_class (ic.string_value ("ship_class"))))
 					end
 				end
 				across private_packs as ic_pack loop
@@ -659,6 +659,25 @@ feature -- Convenience
 			Result.append_character ('%N')
 		ensure
 			a_line: Result.ends_with ({STRING_32} "%N")
+		end
+
+	is_unshared_class (a_class: READABLE_STRING_GENERAL): BOOLEAN
+			-- Does a concordance ship class keep its source from being shared (D-002)? Restricted
+			-- ("restricted_nc (RESEARCH ONLY)"), personal, unknown, still-to-verify and internal classes
+			-- do; "open", "attribution" and "share_alike", each perhaps with a note, do not (2026-10-30:
+			-- 0.7.37 marked every class but "open").
+		local
+			l_class: STRING_32
+		do
+			create l_class.make_from_string_general (a_class)
+			l_class.to_lower
+			Result := across Unshared_classes as ic some l_class.starts_with (ic) end
+		end
+
+	Unshared_classes: ARRAY [STRING_32]
+			-- The ship-class beginnings `is_unshared_class' refuses.
+		once
+			Result := <<{STRING_32} "restricted", {STRING_32} "personal", {STRING_32} "unknown", {STRING_32} "verify", {STRING_32} "internal">>
 		end
 
 	conc_pack_label: STRING_32
