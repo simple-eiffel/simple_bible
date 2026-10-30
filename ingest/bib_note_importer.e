@@ -18,6 +18,13 @@ note
 		 source (a summary passed off as the notes); a note that replaces an
 		 earlier one with the same id.
 
+		 A GUIDE (2026-10-30, Larry): a header with "kind: guide" makes the file a
+		 scholar guide (BIB_GUIDE_SCHEMA), kept in its own folder and pack
+		 (`folder_for'), with the work it guides: work_author, work_title,
+		 work_chapter (reading order), work_section ("Chapter 3", "Appendix IV"),
+		 publisher and year. A guide is a summary on purpose, so the length
+		 warning is not given.
+
 		 KEPT ALREADY (2026-10-30, for BIB_NOTE_BATCH): `is_already_kept' compares
 		 the note's manifest and chapter files with what `write_files' would write,
 		 so a folder imported again brings nothing in twice.
@@ -49,6 +56,12 @@ feature {NONE} -- Initialization
 			create date.make_empty
 			create source.make_empty
 			create status.make_empty
+			create work_author.make_empty
+			create work_title.make_empty
+			create work_section.make_empty
+			create publisher.make_empty
+			create work_year.make_empty
+			schema := Note_schema
 		end
 
 feature -- Access
@@ -63,6 +76,53 @@ feature -- Access
 
 	id, title, author, date, source, status: STRING_32
 			-- The header's fields.
+
+	work_author, work_title, work_section, publisher, work_year: STRING_32
+			-- A guide's work: who wrote it, its title, the section guided, its publisher and year.
+
+	work_chapter: INTEGER
+			-- The guided section's place in the work's reading order (0: an introduction).
+
+	is_guide: BOOLEAN
+			-- Did the last `read' find a scholar guide ("kind: guide")?
+		do
+			Result := schema = Guide_schema
+		end
+
+	short_work_title: STRING_32
+			-- `work_title' to its first colon: "The Unseen Realm" (COMMENTARY: cut at the colon, not
+			-- Supernatural's dash).
+		do
+			if work_title.has (':') then
+				Result := work_title.substring (1, work_title.index_of (':', 1) - 1)
+				Result.right_adjust
+			else
+				Result := work_title.twin
+			end
+		end
+
+	work_label: STRING_32
+			-- The work as a verse's Study guides list names it: "Heiser, The Unseen Realm".
+		local
+			l_author: STRING_32
+		do
+			l_author := work_author.twin
+			l_author.right_adjust
+			if l_author.has (' ') then
+				l_author := l_author.substring (l_author.last_index_of (' ', l_author.count) + 1, l_author.count)
+			end
+			if l_author.is_empty then
+				Result := short_work_title
+			else
+				Result := l_author + {STRING_32} ", " + short_work_title
+			end
+		end
+
+	folder_for (a_notes_folder, a_guides_folder: READABLE_STRING_GENERAL): READABLE_STRING_GENERAL
+			-- Where the accepted file is kept: the guides folder for a guide, else the notes folder.
+		do
+			Result := if is_guide then a_guides_folder else a_notes_folder end
+		end
 
 	chapters: ARRAYED_LIST [TUPLE [title, text: STRING_32]]
 			-- The note's chapters, each its "# " title line and its text.
@@ -79,8 +139,17 @@ feature -- Access
 	Short_ratio: REAL_64 = 0.5
 			-- A prepared text under this share of its source's length is warned about.
 
-	schema: BIB_NOTE_SCHEMA
+	schema: BIB_TEXT_PACK_SCHEMA
+			-- The kind the last `read' found: a note's, or a guide's ("kind: guide").
+
+	Note_schema: BIB_NOTE_SCHEMA
 			-- The notes pack's.
+		once
+			create Result
+		end
+
+	Guide_schema: BIB_GUIDE_SCHEMA
+			-- The scholar guides pack's.
 		once
 			create Result
 		end
@@ -96,6 +165,13 @@ feature -- Reading
 			l_body_start: INTEGER
 		do
 			has_read := True
+			schema := Note_schema
+			create work_author.make_empty
+			create work_title.make_empty
+			create work_section.make_empty
+			create publisher.make_empty
+			create work_year.make_empty
+			work_chapter := 0
 			create problems.make (0)
 			create warnings.make (0)
 			create chapters.make (0)
@@ -113,7 +189,7 @@ feature -- Reading
 			end
 			if problems.is_empty then
 				split_chapters (l_lines, l_body_start)
-				if attached a_source_text as al_source and then al_source.count > 0 then
+				if attached a_source_text as al_source and then al_source.count > 0 and then not is_guide then
 					if body_length < (al_source.count * Short_ratio).truncated_to_integer then
 						warnings.extend ({STRING_32} "The prepared text is " + body_length.out.to_string_32 + {STRING_32} " characters against the source's "
 							+ al_source.count.out.to_string_32 + {STRING_32} ": it may be a summary, not the notes.")
@@ -123,7 +199,7 @@ feature -- Reading
 					if ic.schema.Pack_kind.same_string (schema.Pack_kind) and then ic.is_available and then attached ic.book (id) as al_old
 						and then al_old.is_success and then al_old.count = 1
 					then
-						warnings.extend ({STRING_32} "It replaces the earlier note " + id + {STRING_32} ".")
+						warnings.extend ({STRING_32} "It replaces the earlier " + (if is_guide then {STRING_32} "guide " else {STRING_32} "note " end) + id + {STRING_32} ".")
 					end
 				end
 			end
@@ -202,9 +278,20 @@ feature -- Keeping
 				i := i + 1
 			end
 			create l_object.make
-			l_object := l_object.put_string (id, "id").put_string (title, "title").put_string ("", "subtitle").put_string (author, "author")
-				.put_string (status, "status").put_string ("", "edition").put_integer (year_of (date), "year")
-				.put_string (description, "description").put_string (id, "root").put_string (source, "source")
+			if is_guide then
+					-- the work it guides: its author, the section as the subtitle, the work's short title
+					-- as the edition, publisher and year in the description (2026-10-30)
+				l_object := l_object.put_string (id, "id").put_string (title, "title").put_string (work_section, "subtitle")
+					.put_string (if work_author.is_empty then author else work_author end, "author")
+					.put_string (status, "status").put_string (work_label, "edition")
+					.put_integer (if work_year.is_integer then work_year.to_integer else year_of (date) end, "year")
+					.put_string (guide_description, "description").put_integer (work_chapter, "work_chapter")
+			else
+				l_object := l_object.put_string (id, "id").put_string (title, "title").put_string ("", "subtitle").put_string (author, "author")
+					.put_string (status, "status").put_string ("", "edition").put_integer (year_of (date), "year")
+					.put_string (description, "description")
+			end
+			l_object := l_object.put_string (id, "root").put_string (source, "source")
 				.put_array (create {SIMPLE_JSON_ARRAY}.make, "aliases").put_array (create {SIMPLE_JSON_ARRAY}.make, "skip_headings")
 				.put_array (l_list, "chapters")
 			Result := l_object.to_pretty_json
@@ -255,6 +342,14 @@ feature -- Keeping
 		end
 
 	build (a_notes_folder, a_pack, a_frameworks_pack: READABLE_STRING_GENERAL): detachable STRING_32
+			-- `build_with' the last read file's kind.
+		require
+			pack_named: not a_pack.is_empty
+		do
+			Result := build_with (schema, a_notes_folder, a_pack, a_frameworks_pack)
+		end
+
+	build_with (a_schema: BIB_TEXT_PACK_SCHEMA; a_notes_folder, a_pack, a_frameworks_pack: READABLE_STRING_GENERAL): detachable STRING_32
 			-- The notes pack `a_pack' built afresh from every manifest in `a_notes_folder' (names of
 			-- the frameworks pack `a_frameworks_pack' linked, when it exists); Void when it built, else
 			-- why not.
@@ -264,7 +359,7 @@ feature -- Keeping
 			l_builder: BIB_BOOK_BUILDER
 			l_frameworks: STRING_32
 		do
-			create l_builder.make_with_schema (bible.books, schema)
+			create l_builder.make_with_schema (bible.books, a_schema)
 			if not (create {SIMPLE_FILE}.make (a_pack)).parent_path.is_empty and then not (create {SIMPLE_FILE}.make ((create {SIMPLE_FILE}.make (a_pack)).parent_path)).is_directory then
 					-- scan 66: SQLite cannot open a pack in a folder that is not there (it raised, past the
 					-- restore of an earlier note)
@@ -435,6 +530,28 @@ feature {NONE} -- The header
 								source := l_value
 							elseif l_key.same_string ({STRING_32} "status") then
 								status := l_value.as_lower
+							elseif l_key.same_string ({STRING_32} "kind") then
+								if l_value.as_lower.same_string ({STRING_32} "guide") then
+									schema := Guide_schema
+								elseif not (l_value.as_lower.same_string ({STRING_32} "notes") or l_value.as_lower.same_string ({STRING_32} "note")) then
+									problem (i, {STRING_32} "kind must be notes or guide, not " + l_value)
+								end
+							elseif l_key.same_string ({STRING_32} "work_author") then
+								work_author := l_value
+							elseif l_key.same_string ({STRING_32} "work_title") then
+								work_title := l_value
+							elseif l_key.same_string ({STRING_32} "work_section") then
+								work_section := l_value
+							elseif l_key.same_string ({STRING_32} "work_chapter") then
+								if l_value.is_natural then
+									work_chapter := l_value.to_integer
+								else
+									problem (i, {STRING_32} "work_chapter must be a whole number (0 for an introduction)")
+								end
+							elseif l_key.same_string ({STRING_32} "publisher") then
+								publisher := l_value
+							elseif l_key.same_string ({STRING_32} "year") then
+								work_year := l_value
 							end
 						end
 					end
@@ -447,6 +564,8 @@ feature {NONE} -- The header
 					problem (1, {STRING_32} "the id %"" + id + {STRING_32} "%" must be lowercase letters and digits only")
 				elseif title.is_empty then
 					problem (1, "the header has no title")
+				elseif is_guide and work_title.is_empty then
+					problem (1, "a guide names the work it guides (work_title)")
 				end
 				if status.is_empty then
 					status := {STRING_32} "draft"
@@ -627,6 +746,17 @@ feature {NONE} -- Implementation
 					Result := l_trim.substring (l_first_end + 1, l_last_start - 1)
 				end
 			end
+		end
+
+	guide_description: STRING_32
+			-- What the Scholar Guides tab shows for a guide: the work, its publisher and year, and where
+			-- the guide came from.
+		do
+			Result := work_title.twin
+			if not publisher.is_empty or not work_year.is_empty then
+				Result.append ({STRING_32} " (" + publisher + (if not publisher.is_empty and not work_year.is_empty then {STRING_32} ", " else {STRING_32} "" end) + work_year + {STRING_32} ")")
+			end
+			Result.append ({STRING_32} ". A study guide by " + author + {STRING_32} ". " + description)
 		end
 
 	description: STRING_32

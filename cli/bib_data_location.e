@@ -58,6 +58,15 @@ feature -- Access
 			not_empty: not Result.is_empty
 		end
 
+	guides_folder: STRING
+			-- The scholar guides brought in through ingest kits, as files (2026-10-30), kept apart from the
+			-- notes: %LOCALAPPDATA%\simple_bible\guides.
+		do
+			Result := local_data ("guides")
+		ensure
+			not_empty: not Result.is_empty
+		end
+
 	notes_folder: STRING
 			-- The notes brought in through ingest kits, as files (0.7.32): %LOCALAPPDATA%\simple_bible\notes.
 		do

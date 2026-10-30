@@ -74,6 +74,13 @@ feature -- Constants
 			named: not Result.is_empty
 		end
 
+	Is_kept_apart: BOOLEAN
+			-- Is this kind kept apart from Larry's own writings: out of the Author Library, the Writings
+			-- search and a kit's names (2026-10-30: the scholar guides)?
+		do
+			Result := False
+		end
+
 	Statuses: ARRAY [STRING_8]
 			-- A book's status: in print, finished but unpublished, or still being written.
 		once

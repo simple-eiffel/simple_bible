@@ -457,6 +457,7 @@ feature {NONE} -- Suites
 			run_test (agent t.test_ingest_kit_writes_and_notes_import, "test_ingest_kit_writes_and_notes_import")
 			run_test (agent t.test_a_prepared_folder_imports_once, "test_a_prepared_folder_imports_once")
 			run_test (agent t.test_kits_for_a_folder, "test_kits_for_a_folder")
+			run_test (agent t.test_guides_kept_apart, "test_guides_kept_apart")
 			run_sources_tests
 			run_test (agent t.test_ask_helper_is_off_without_its_files_and_answers_with_them, "test_ask_helper_is_off_without_its_files_and_answers_with_them")
 			run_test (agent t.test_a_pack_breaking_the_rules_is_refused_and_named, "test_a_pack_breaking_the_rules_is_refused_and_named")
