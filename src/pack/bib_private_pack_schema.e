@@ -38,6 +38,17 @@ feature -- Constants
 	Pack_author: STRING_8 = "Larry Rix"
 			-- The `meta' author of every private pack.
 
+	pack_license: BIB_LICENSE
+			-- The license of the pack's own text (2026-10-30, Larry: "I can share my own material.
+			-- It's mine."): his own work, free to share. A kind built on another author's
+			-- copyrighted work redefines it.
+		do
+			create Result.make (Author_license, False, False, False, Pack_author)
+		end
+
+	Author_license: STRING_8 = "the author's own work, free to share"
+			-- `pack_license''s identifier for Larry's own writing.
+
 	Search_table: STRING_8 = "writing_search"
 			-- The pack's full-text table: one row per place a reader can open (research/20).
 

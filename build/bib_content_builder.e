@@ -211,9 +211,13 @@ feature -- Constants
 				>>
 		end
 
-	Versions_provenance_sql: STRING_8 = "INSERT INTO source_provenance SELECT 100 + v.id, 'bible.db bible_versions ' || v.abbreviation, v.name, coalesce(nullif(v.license, ''), 'unknown'), CASE WHEN coalesce(v.caveat, '') LIKE '%%BY-NC%%' THEN 1 ELSE 0 END, CASE WHEN coalesce(v.license, '') LIKE '%%SA%%' THEN 1 ELSE 0 END, CASE WHEN coalesce(v.license, '') LIKE 'personal%%' THEN 1 ELSE 0 END, v.name, coalesce(v.caveat, '') FROM src.bible_versions v ORDER BY v.id"
-			-- One source row per version (keys 100 and up): the vault's licence and caveat as given
-			-- (its licence column is not authoritative; the caveat says so), restricted when personal only.
+	Versions_provenance_sql: STRING_8 = "INSERT INTO source_provenance SELECT 100 + v.id, 'bible.db bible_versions ' || v.abbreviation, v.name, CASE WHEN p.ship_class IS NULL OR p.ship_class = 'unknown' THEN 'UNKNOWN' ELSE coalesce(nullif(p.license, ''), 'UNKNOWN') END, CASE WHEN p.ship_class = 'restricted_nc' OR coalesce(p.license, '') LIKE '%%BY-NC%%' THEN 1 ELSE 0 END, CASE WHEN p.ship_class = 'share_alike' OR coalesce(p.license, '') LIKE '%%-SA%%' THEN 1 ELSE 0 END, CASE WHEN p.ship_class IS NULL OR p.ship_class IN ('personal_only', 'unknown') OR coalesce(p.ship_note, '') LIKE '%%private until%%' THEN 1 ELSE 0 END, coalesce(nullif(p.attribution, ''), v.name), coalesce(v.caveat, '') || CASE WHEN p.ship_class IS NULL THEN ' || no provenance row in bible.db: not shared until traced' ELSE ' || ship class ' || p.ship_class || coalesce(': ' || nullif(p.ship_note, ''), '') END FROM src.bible_versions v LEFT JOIN src.source_provenance p ON p.target = v.abbreviation AND p.kind = 'version' ORDER BY v.id"
+			-- One source row per version (keys 100 and up), from the vault's own `source_provenance'
+			-- (2026-10-30, Larry: "get the licensing matters cleared up"): its license, attribution and
+			-- ship class, traced text by text on 2026-09-04. `bible_versions.license' said "MIT" for most
+			-- versions and is not used. Non-commercial and share-alike texts are shared, the tool being
+			-- free (D-002); personal-only, unknown and untraced texts, and Rahlfs while D-011 holds it
+			-- private, are restricted.
 
 	Version_info_sql: STRING_8
 			-- (The numbering names come from BIB_NUMBERING, design scan 53.)

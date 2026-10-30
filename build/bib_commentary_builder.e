@@ -133,8 +133,9 @@ feature {NONE} -- Writing
 				l_status := text_of (l_meta, "status")
 				l_book_title := l_book + {STRING_32} ": A Commentary"
 				if last_error = Void then
-					a_db.execute_with_args ("INSERT INTO source_provenance VALUES (?, ?, ?, ?, 1, 0, 1, ?, ?)",
-						<<l_key, {STRING_32} "Larry Rix: " + l_book_title, l_status, {STRING_32} "private (the author's own)", {STRING_32} "Larry Rix",
+					a_db.execute_with_args ("INSERT INTO source_provenance VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+						<<l_key, {STRING_32} "Larry Rix: " + l_book_title, l_status, schema.pack_license.identifier, schema.pack_license.is_non_commercial.to_integer,
+						schema.pack_license.is_share_alike.to_integer, schema.pack_license.is_restricted.to_integer, schema.pack_license.credit_line,
 						{STRING_32} "Tentatively approved by Larry Rix (2026-10-27). SOURCED claims cite his writings; DEDUCED claims reason from his frameworks and are not his words. Quotations: BSB (CC0) and WH (public domain).">>)
 					check_db (a_db, "The provenance could not be written.")
 				end

@@ -89,7 +89,7 @@ feature -- Commands
 			end
 			if last_error = Void then
 				l_db := begin_private_pack (a_pack, schema, "bible_build --frameworks")
-				put_private_provenance (l_db, 1, "frameworks sidecars", schema.Pack_title, "Plain-reader rewrites; a draft until Larry approves it.")
+				put_pack_provenance (l_db, 1, "frameworks sidecars", schema.Pack_title, "Plain-reader rewrites; a draft until Larry approves it.", schema.pack_license)
 				if last_error = Void then
 					across records as ic until last_error /= Void loop
 						write_framework (l_db, ic)

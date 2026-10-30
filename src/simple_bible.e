@@ -588,7 +588,7 @@ feature -- Convenience
 			-- notice table; nothing typed by hand (FR-003, settlement S4). Built 2026-10-30 for
 			-- Help > About (Larry): Markdown, a section for the Bible text (content.db), the
 			-- concordance (its corpora and meaning sources) and each attached pack, one line a source
-			-- with its license, and "personal use only" where it is restricted.
+			-- with its license, and "not to be shared" where it is restricted.
 		require
 			open: is_open
 		local
@@ -608,10 +608,10 @@ feature -- Convenience
 					Result.append (conc_pack_label)
 					Result.append ({STRING_32} ")%N%N")
 					across al_db.query ("SELECT name, license, ship_class FROM " + {BIB_CONC_PACK}.Pack_alias + ".corpus ORDER BY corpus_id").rows as ic loop
-						Result.append (credit_line (ic.string_value ("name"), "", ic.string_value ("license"), not ic.string_value ("ship_class").same_string_general ("open")))
+						Result.append (credit_line (ic.string_value ("name"), "", ic.string_value ("license"), is_unshared_class (ic.string_value ("ship_class"))))
 					end
 					across al_db.query ("SELECT credit, license, ship_class FROM " + {BIB_CONC_PACK}.Pack_alias + ".meaning_source WHERE credit <> '' ORDER BY rowid").rows as ic loop
-						Result.append (credit_line (ic.string_value ("credit"), "", ic.string_value ("license"), not ic.string_value ("ship_class").same_string_general ("open")))
+						Result.append (credit_line (ic.string_value ("credit"), "", ic.string_value ("license"), is_unshared_class (ic.string_value ("ship_class"))))
 					end
 				end
 				across private_packs as ic_pack loop
@@ -638,7 +638,8 @@ feature -- Convenience
 
 	credit_line (a_credit, a_edition, a_license: READABLE_STRING_GENERAL; a_restricted: BOOLEAN): STRING_32
 			-- "- <credit> (<license>)": the credit, or the edition when the credit is only its name;
-			-- "personal use only" when restricted.
+			-- "not to be shared" when restricted (2026-10-30: was "personal use only", wrong for the guides
+			-- the alpha testers read).
 		local
 			l_name: STRING_32
 		do
@@ -650,14 +651,33 @@ feature -- Convenience
 			if (not a_license.is_empty and then not l_name.has_substring (a_license.to_string_32)) or a_restricted then
 					-- a license the credit states already is not said twice
 				if l_name.has_substring (a_license.to_string_32) then
-					Result.append ({STRING_32} " (personal use only)")
+					Result.append ({STRING_32} " (not to be shared)")
 				else
-					Result.append ({STRING_32} " (" + a_license.to_string_32 + (if a_restricted then (if a_license.is_empty then {STRING_32} "" else {STRING_32} "; " end) + {STRING_32} "personal use only" else {STRING_32} "" end) + {STRING_32} ")")
+					Result.append ({STRING_32} " (" + a_license.to_string_32 + (if a_restricted then (if a_license.is_empty then {STRING_32} "" else {STRING_32} "; " end) + {STRING_32} "not to be shared" else {STRING_32} "" end) + {STRING_32} ")")
 				end
 			end
 			Result.append_character ('%N')
 		ensure
 			a_line: Result.ends_with ({STRING_32} "%N")
+		end
+
+	is_unshared_class (a_class: READABLE_STRING_GENERAL): BOOLEAN
+			-- Does a concordance ship class keep its source from being shared (D-002)? Restricted
+			-- ("restricted_nc (RESEARCH ONLY)"), personal, unknown, still-to-verify and internal classes
+			-- do; "open", "attribution" and "share_alike", each perhaps with a note, do not (2026-10-30:
+			-- 0.7.37 marked every class but "open").
+		local
+			l_class: STRING_32
+		do
+			create l_class.make_from_string_general (a_class)
+			l_class.to_lower
+			Result := across Unshared_classes as ic some l_class.starts_with (ic) end
+		end
+
+	Unshared_classes: ARRAY [STRING_32]
+			-- The ship-class beginnings `is_unshared_class' refuses.
+		once
+			Result := <<{STRING_32} "restricted", {STRING_32} "personal", {STRING_32} "unknown", {STRING_32} "verify", {STRING_32} "internal">>
 		end
 
 	conc_pack_label: STRING_32

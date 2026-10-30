@@ -117,7 +117,9 @@ feature -- Commands
 					l_linker.set_framework_names (create {BIB_FRAMEWORK_NAMES}.make (framework_spellings))
 				end
 				l_db := begin_private_pack (a_pack, schema, schema.Builder_command)
-				put_private_provenance (l_db, 1, schema.Pack_kind + " manifests", schema.Pack_title, "Larry's own text as his manuscripts hold it, corrections included.")
+				put_pack_provenance (l_db, 1, schema.Pack_kind + " manifests", schema.Pack_title,
+					(if schema.pack_license.is_restricted then "Study guides to another author's books, as their prepared files hold them." else "Larry's own text as his manuscripts hold it, corrections included." end),
+					schema.pack_license)
 				if last_error = Void then
 					from i := 1 until i > records.count or last_error /= Void loop
 						write_book (l_db, records.i_th (i), i, l_linker)
