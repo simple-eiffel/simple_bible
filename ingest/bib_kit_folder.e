@@ -8,6 +8,9 @@ note
 		NEVER NEEDLESSLY: a source whose kit is there already and newer than it
 		is passed over; a source changed since its kit was made gets a fresh
 		one. Kits and prepared files are never sources.
+
+		NEVER SHARED (scan 71): two sources with one name ("ch01.md" and
+		"ch01.txt") each get their own kit, named in full ("ch01.md.kit.md").
 	]"
 	author: "Larry Rix"
 	date: "$Date$"
@@ -69,7 +72,8 @@ feature -- Access
 		end
 
 	kit_path_for (a_source: READABLE_STRING_GENERAL): STRING_32
-			-- "notes.txt" "notes.kit.md": where the kit of `a_source' goes.
+			-- "notes.txt" "notes.kit.md": where the kit of `a_source' goes; "notes.txt.kit.md" when
+			-- another source beside it has its name ("notes.md": scan 71, they shared one kit).
 		local
 			l_source: STRING_32
 			l_dot, l_slash: INTEGER
@@ -77,7 +81,7 @@ feature -- Access
 			create l_source.make_from_string_general (a_source)
 			l_dot := l_source.last_index_of ('.', l_source.count)
 			l_slash := l_source.last_index_of ('\', l_source.count)
-			if l_dot > l_slash + 1 then
+			if l_dot > l_slash + 1 and then not has_namesake (l_source, l_slash, l_dot) then
 				Result := l_source.substring (1, l_dot - 1) + reader.Kit_extension
 			else
 				Result := l_source + reader.Kit_extension
@@ -86,13 +90,33 @@ feature -- Access
 			a_kit: Result.ends_with (reader.Kit_extension)
 		end
 
+	has_namesake (a_source: STRING_32; a_slash, a_dot: INTEGER): BOOLEAN
+			-- Is there another source beside `a_source' with its name before the ending?
+		require
+			name_has_an_ending: a_dot > a_slash + 1
+		local
+			l_folder, l_name, l_stem: STRING_32
+			l_dot: INTEGER
+		do
+			l_folder := if a_slash > 0 then a_source.substring (1, a_slash - 1) else {STRING_32} "." end
+			l_name := a_source.substring (a_slash + 1, a_source.count).as_lower
+			l_stem := a_source.substring (a_slash + 1, a_dot - 1).as_lower
+			if (create {SIMPLE_FILE}.make (l_folder)).is_directory then
+				across (create {SIMPLE_FILE}.make (l_folder)).files as ic until Result loop
+					l_dot := ic.last_index_of ('.', ic.count)
+					Result := l_dot > 1 and then not ic.as_lower.same_string (l_name) and then reader.is_source_name (ic)
+						and then ic.substring (1, l_dot - 1).as_lower.same_string (l_stem)
+				end
+			end
+		end
+
 	is_kit_current (a_source: READABLE_STRING_GENERAL): BOOLEAN
-			-- Is the kit of `a_source' there and no older than it?
+			-- Is the kit of `a_source' there and newer than it (scan 71: a tie makes it again)?
 		local
 			l_kit: SIMPLE_FILE
 		do
 			create l_kit.make (kit_path_for (a_source))
-			Result := l_kit.is_file and then l_kit.modified_time_100ns >= (create {SIMPLE_FILE}.make (a_source)).modified_time_100ns
+			Result := l_kit.is_file and then l_kit.modified_time_100ns > (create {SIMPLE_FILE}.make (a_source)).modified_time_100ns
 		end
 
 feature -- Making

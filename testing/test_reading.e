@@ -199,7 +199,10 @@ feature -- Tests
 			assert_true ("scan 70: a list in emphasis links each part", l_linker.linked ("**Genesis 1:26; 3:5**").has_substring ("; [3:5](bible:1.3.5)**"))
 			assert_true ("scan 70: after a chapter, a comma names another chapter", l_linker.linked ("Genesis 1, 2.").has_substring (", [2](bible:1.2.0)."))
 				-- 2026-10-30 (the Reversing Hermon guide): a book named inside another work's title.
-			assert_false ("a number before a book makes another work", l_linker.linked ("as 4 Isaiah 1:1 has it").has_substring ("bible:"))
+			assert_true ("4 Ezra is another work", l_linker.is_in_another_title ("as 4 Ezra 7:113 has it", 6))
+			assert_false ("scan 71: a year before a book is no work's number", l_linker.is_in_another_title ("In 1517 Matthew 5:3 changed", 9))
+			assert_true ("scan 71: and the reference links", l_linker.linked ("In 1517 Matthew 5:3 changed").has_substring ("[Matthew 5:3](bible:40.5.3)"))
+			assert_true ("scan 71: a note's number too", l_linker.linked ("see note 3 Matthew 5:3").has_substring ("[Matthew 5:3](bible:40.5.3)"))
 			assert_false ("Ascension of Isaiah", l_linker.linked ("Ascension of Isaiah 4:2").has_substring ("bible:"))
 			assert_false ("Testament of", l_linker.linked ("the Testament of Exodus 3:14").has_substring ("bible:"))
 			assert_true ("the book of Isaiah still a reference", l_linker.linked ("the book of Isaiah 53:5").has_substring ("[Isaiah 53:5](bible:23.53.5)"))
