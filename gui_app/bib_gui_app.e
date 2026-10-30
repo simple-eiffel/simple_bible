@@ -4504,17 +4504,9 @@ feature {NONE} -- The ingest kit (0.7.32, research/21)
 					l_error := l_importer.keep (l_folder, l_new, l_packs + {STRING_32} "\" + {BIB_FRAMEWORK_SCHEMA}.Pack_file_name)
 					if attached l_error as al_error then
 						show_import_report ({STRING_32} "The note could not be kept", create {ARRAYED_LIST [STRING_32]}.make_from_array (<<al_error>>), l_importer.warnings)
-					elseif attached swapped_notes_pack (l_pack, l_new) as al_swap_error then
-							-- scan 70: the note is kept as files; the next import builds the pack again
-						(create {BIB_NOTE_BATCH}.make (bible)).set_pack_stale (l_folder, True)
+					elseif attached notes_pack_put_in_place (l_pack, l_new, l_folder) as al_swap_error then
 						show_import_report ({STRING_32} "The new notes pack could not be put in place", create {ARRAYED_LIST [STRING_32]}.make_from_array (<<al_swap_error>>), l_importer.warnings)
 					else
-						(create {BIB_NOTE_BATCH}.make (bible)).set_pack_stale (l_folder, False)
-						framework_names_cache := Void
-						writing_names_cache := Void
-						create listed_book.make_empty
-						create listed_kind.make_empty
-						fill_books
 						show_book_place ({BIB_NOTE_SCHEMA}.Pack_kind, l_importer.id, 1, 0)
 						say ({STRING_32} "Imported " + l_importer.title + {STRING_32} ": " + l_importer.built_blocks.out.to_string_32 + {STRING_32} " paragraphs, "
 							+ l_importer.built_suggestions.out.to_string_32 + (if l_importer.built_suggestions = 1 then {STRING_32} " suggested passage." else {STRING_32} " suggested passages." end)
@@ -4565,16 +4557,7 @@ feature {NONE} -- The ingest kit (0.7.32, research/21)
 				create l_batch.make (bible)
 				l_batch.run (a_folder, l_folder, l_new, l_packs + {STRING_32} "\" + {BIB_FRAMEWORK_SCHEMA}.Pack_file_name)
 				if l_batch.is_built then
-					l_swap_error := swapped_notes_pack (l_pack, l_new)
-						-- scan 70: a pack not put in place is built again by the next import
-					l_batch.set_pack_stale (l_folder, l_swap_error /= Void)
-					if l_swap_error = Void then
-						framework_names_cache := Void
-						writing_names_cache := Void
-						create listed_book.make_empty
-						create listed_kind.make_empty
-						fill_books
-					end
+					l_swap_error := notes_pack_put_in_place (l_pack, l_new, l_folder)
 				end
 				show_folder_report (a_folder, l_batch, l_swap_error)
 			end
@@ -4617,17 +4600,13 @@ feature {NONE} -- The ingest kit (0.7.32, research/21)
 					create l_importer.make (bible)
 					l_error := l_importer.build (l_folder, l_new, l_packs + {STRING_32} "\" + {BIB_FRAMEWORK_SCHEMA}.Pack_file_name)
 					if l_error = Void then
-						l_error := swapped_notes_pack (l_pack, l_new)
+						l_error := notes_pack_put_in_place (l_pack, l_new, l_folder)
+					else
+						l_batch.set_pack_stale (l_folder, True)
 					end
-					l_batch.set_pack_stale (l_folder, l_error /= Void)
 					if attached l_error as al_error then
 						say ({STRING_32} "The notes could not be brought up to date: " + al_error)
 					else
-						framework_names_cache := Void
-						writing_names_cache := Void
-						create listed_book.make_empty
-						create listed_kind.make_empty
-						fill_books
 						say ({STRING_32} "The notes are up to date: " + l_importer.built_blocks.out.to_string_32 + {STRING_32} " paragraphs, "
 							+ l_importer.built_suggestions.out.to_string_32 + {STRING_32} " suggested passages.")
 					end
@@ -4686,6 +4665,23 @@ feature {NONE} -- The ingest kit (0.7.32, research/21)
 			book_view.set_document (commentary_reader.read (l_page))
 			say ({STRING_32} "Folder import: " + l_summary + {STRING_32} ".")
 			keep_snapshot_report (l_page)
+		end
+
+	notes_pack_put_in_place (a_pack, a_new, a_notes_folder: STRING_32): detachable STRING_32
+			-- The built notes pack `a_new' put in `a_pack''s place (`swapped_notes_pack'); the notes
+			-- folder `a_notes_folder' marked stale when it could not be (scan 70: the next import or start
+			-- builds it again), else the mark cleared and the lists the pack feeds filled afresh. Void
+			-- when in place, else why not. (Scan 71: once, for a note, a folder and a rebuild.)
+		do
+			Result := swapped_notes_pack (a_pack, a_new)
+			(create {BIB_NOTE_BATCH}.make (bible)).set_pack_stale (a_notes_folder, Result /= Void)
+			if Result = Void then
+				framework_names_cache := Void
+				writing_names_cache := Void
+				create listed_book.make_empty
+				create listed_kind.make_empty
+				fill_books
+			end
 		end
 
 	swapped_notes_pack (a_pack, a_new: STRING_32): detachable STRING_32

@@ -65,6 +65,11 @@ feature -- Reading
 				last_error := {STRING_32} "Not a kind of file a kit is made from: " + l_file.file_name
 			else
 				Result := l_file.read_text_utf_8
+				if l_file.last_error_code /= 0 then
+						-- scan 71: it could not be read, so no empty kit is made from it
+					last_error := {STRING_32} "It could not be read: " + l_file.file_name
+					Result := Void
+				end
 			end
 		ensure
 			read_or_why: (Result = Void) = (last_error /= Void)
