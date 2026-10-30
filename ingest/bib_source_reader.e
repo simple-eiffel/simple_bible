@@ -139,6 +139,10 @@ feature {NONE} -- The kinds
 			-- The text of `a_file' as UTF-8; Void, with `last_error', when it cannot be read.
 		do
 			Result := a_file.read_text_utf_8
+			if not Result.is_empty and then Result [1].code = 0xFEFF then
+					-- scan 72: a byte-order mark is no text
+				Result.remove_head (1)
+			end
 			if a_file.last_error_code /= 0 then
 					-- scan 71: it could not be read, so no empty kit is made from it
 				last_error := {STRING_32} "It could not be read: " + a_file.file_name
@@ -151,11 +155,11 @@ feature {NONE} -- The kinds
 			-- when the archive or the entry is not there.
 		local
 			l_zip: SIMPLE_ZIP
-			l_local: STRING_8
 		do
-			l_local := local_path (a_path)
 			create l_zip.make
-			if not l_zip.is_valid_archive (l_local) then
+			if not attached local_path (a_path) as l_local then
+					-- `last_error' says why
+			elseif not l_zip.is_valid_archive (l_local) then
 				last_error := {STRING_32} "Not a readable archive: " + (create {SIMPLE_FILE}.make (a_path)).file_name
 			elseif attached l_zip.extract_entry (l_local, {UTF_CONVERTER}.string_32_to_utf_8_string_8 (a_entry.to_string_32)) as al_bytes and then l_zip.last_error.is_empty then
 				Result := {UTF_CONVERTER}.utf_8_string_8_to_string_32 (al_bytes)
@@ -183,7 +187,7 @@ feature {NONE} -- The kinds
 					create l_pages.make (32)
 					across l_markup.tags_named (al_opf, "item") as ic loop
 						if attached l_markup.attribute_of (ic, "id") as al_id and then attached l_markup.attribute_of (ic, "href") as al_href then
-							l_pages.force (l_base + url_decoded (al_href), al_id)
+							l_pages.force (archive_path (l_base, url_decoded (al_href)), al_id)
 						end
 					end
 					create Result.make (20000)
@@ -202,6 +206,43 @@ feature {NONE} -- The kinds
 			end
 		end
 
+feature -- Text
+
+	archive_path (a_base, a_href: STRING_32): STRING_32
+			-- The entry a package in folder `a_base' names by `a_href': its "#part" dropped, "../" and
+			-- "./" read (scan 72: "../Text/ch1.xhtml" lost its page).
+		local
+			l_parts: LIST [STRING_32]
+			l_kept: ARRAYED_LIST [STRING_32]
+			l_href: STRING_32
+		do
+			l_href := a_href.twin
+			if l_href.has ('#') then
+				l_href := l_href.substring (1, l_href.index_of ('#', 1) - 1)
+			end
+			l_parts := (a_base + l_href).split ('/')
+			create l_kept.make (l_parts.count)
+			across l_parts as ic loop
+				if ic.same_string ({STRING_32} "..") then
+					if not l_kept.is_empty then
+						l_kept.finish
+						l_kept.remove
+					end
+				elseif not ic.is_empty and not ic.same_string ({STRING_32} ".") then
+					l_kept.extend (ic)
+				end
+			end
+			create Result.make (l_href.count + a_base.count)
+			across l_kept as ic loop
+				if not Result.is_empty then
+					Result.append_character ('/')
+				end
+				Result.append (ic)
+			end
+		end
+
+feature {NONE} -- PDF
+
 	pdf_text (a_path: STRING_32): detachable STRING_32
 			-- The text of the PDF at `a_path' in reading order (simple_pdf's flowing text), its lines
 			-- joined back into paragraphs (`prose_from_pdf').
@@ -213,46 +254,63 @@ feature {NONE} -- The kinds
 				last_error := {STRING_32} "Reading a PDF needs the pdf folder beside Simple Bible (its installer puts it there); not found at " + pdf_tool
 			else
 				create l_reader.make_with_path ({UTF_CONVERTER}.string_32_to_utf_8_string_8 (pdf_tool))
-				l_text := l_reader.extract_text_flowing (local_path (a_path))
-				if attached l_reader.last_error as al_error then
-					last_error := {STRING_32} "The PDF could not be read: " + al_error.to_string_32
-				else
-					Result := prose_from_pdf (l_text)
+				if attached local_path (a_path) as al_local then
+					l_text := l_reader.extract_text_flowing (al_local)
+					if attached l_reader.last_error as al_error then
+						last_error := {STRING_32} "The PDF could not be read: " + al_error.to_string_32
+					else
+						Result := prose_from_pdf (l_text)
+					end
 				end
 			end
 		end
 
-	prose_from_pdf (a_text: STRING_32): STRING_32
-			-- `a_text' as pdftotext writes it (a line per printed line, a blank line between blocks)
-			-- made paragraphs: each block's lines joined by a space, a word hyphenated at a line's end
-			-- joined whole, the marks that steer right-to-left text dropped (they split Hebrew). A short
-			-- line with no closing mark before a capital is a heading, a paragraph of its own (pdftotext
-			-- writes no blank line after one; wrapped prose runs the page's width).
+feature -- Text
+
+	prose_from_pdf (a_text: READABLE_STRING_GENERAL): STRING_32
+			-- `a_text' as pdftotext writes it (a line per printed line, a blank line between most
+			-- blocks) made paragraphs: each block's lines joined by a space, a word hyphenated at a
+			-- line's end joined whole, the marks that steer right-to-left text dropped (they split
+			-- Hebrew; an ending mark leaves a space). A heading (`is_heading_at') is a paragraph of its
+			-- own, as pdftotext often writes no blank line around one.
 		local
-			l_text, l_line, l_paragraph, l_last: STRING_32
+			l_text, l_line, l_paragraph: STRING_32
+			l_lines: ARRAYED_LIST [STRING_32]
+			i, l_width: INTEGER
 		do
-			create l_last.make_empty
 			create l_text.make_from_string_general (a_text)
 			l_text.replace_substring_all ({STRING_32} "%R%N", {STRING_32} "%N")
 			across Direction_marks as ic loop
-				l_text.prune_all (ic)
+				if ic.code = 0x202C or ic.code = 0x2069 then
+					l_text.replace_substring_all (create {STRING_32}.make_filled (ic, 1), {STRING_32} " ")
+				else
+					l_text.prune_all (ic)
+				end
 			end
-			create Result.make (l_text.count)
-			create l_paragraph.make (400)
+			create l_lines.make (200)
 			across l_text.split ('%N') as ic loop
 				l_line := ic.twin
 				l_line.left_adjust
 				l_line.right_adjust
-				if l_line.is_empty then
+				from until not l_line.has_substring ({STRING_32} "  ") loop
+					l_line.replace_substring_all ({STRING_32} "  ", {STRING_32} " ")
+				end
+				l_lines.extend (l_line)
+				l_width := l_width.max (l_line.count)
+			end
+			create Result.make (l_text.count)
+			create l_paragraph.make (400)
+			from i := 1 until i > l_lines.count loop
+				l_line := l_lines.i_th (i)
+				if l_line.is_empty or else is_heading_at (l_lines, i, l_width) then
 					if not l_paragraph.is_empty then
 						Result.append (l_paragraph + {STRING_32} "%N%N")
 						l_paragraph.wipe_out
 					end
+					if not l_line.is_empty then
+						Result.append (l_line + {STRING_32} "%N%N")
+					end
 				elseif l_paragraph.is_empty then
-					l_paragraph.append (l_line)
-				elseif is_heading_line (l_last) and then l_line [1].is_upper then
-					Result.append (l_paragraph + {STRING_32} "%N%N")
-					l_paragraph.wipe_out
 					l_paragraph.append (l_line)
 				elseif l_paragraph [l_paragraph.count] = '-' and then l_line [1].is_lower then
 						-- "resur-" "rection": one word
@@ -262,29 +320,51 @@ feature {NONE} -- The kinds
 					l_paragraph.append_character (' ')
 					l_paragraph.append (l_line)
 				end
-				l_last := l_line
+				i := i + 1
 			end
 			if not l_paragraph.is_empty then
-				Result.append (l_paragraph + {STRING_32} "%N")
+				Result.append (l_paragraph)
 			end
 			Result.right_adjust
 		end
 
-	is_heading_line (a_line: STRING_32): BOOLEAN
-			-- Does `a_line' look like a heading: short, ending in no closing mark?
+	is_heading_at (a_lines: LIST [STRING_32]; a_index, a_width: INTEGER): BOOLEAN
+			-- Is line `a_index' of `a_lines' (the widest `a_width' long) a heading: short beside the
+			-- page's lines, a capital first and no closing mark last, after a blank line or a sentence's
+			-- end and before a blank line or a capital? (Scan 72: a short line in a narrow column, or a
+			-- heading with no blank line before it, was read wrongly.)
+		require
+			in_range: a_index >= 1 and a_index <= a_lines.count
+		local
+			l_line: STRING_32
 		do
-			if not a_line.is_empty and then a_line.count < Heading_width then
+			l_line := a_lines.i_th (a_index)
+			if not l_line.is_empty and then l_line [1].is_upper and then l_line.count < Heading_width
+				and then l_line.count * 10 < a_width * 6 and then not ends_a_sentence (l_line, True)
+			then
+				Result := (a_index = 1 or else a_lines.i_th (a_index - 1).is_empty or else ends_a_sentence (a_lines.i_th (a_index - 1), False))
+					and then (a_index = a_lines.count or else a_lines.i_th (a_index + 1).is_empty or else a_lines.i_th (a_index + 1) [1].is_upper)
+			end
+		end
+
+	ends_a_sentence (a_line: STRING_32; a_any_mark: BOOLEAN): BOOLEAN
+			-- Does `a_line' end in a sentence's last mark (any closing mark when `a_any_mark')?
+		do
+			if not a_line.is_empty then
 				inspect a_line [a_line.count]
-				when '.', ',', ';', ':', '!', '?', ')', ']', '"', '%'', '%/0x201D/', '%/0x2019/' then
-					Result := False
-				else
+				when '.', '!', '?', ':', '"', '%/0x201D/' then
 					Result := True
+				when ',', ';', ')', ']', '%'', '%/0x2019/' then
+					Result := a_any_mark
+				else
 				end
 			end
 		end
 
 	Heading_width: INTEGER = 60
 			-- The longest a line read as a heading may be.
+
+feature {NONE} -- Decoding
 
 	Direction_marks: ARRAY [CHARACTER_32]
 			-- The invisible marks that steer right-to-left text (U+200E, U+200F, U+202A to U+202E,
@@ -325,9 +405,10 @@ feature {NONE} -- The kinds
 
 feature {NONE} -- Paths
 
-	local_path (a_path: READABLE_STRING_GENERAL): STRING_8
+	local_path (a_path: READABLE_STRING_GENERAL): detachable STRING_8
 			-- `a_path' for a tool that takes an 8-bit path: as it is when plain ASCII, else a copy in
-			-- the temporary folder (`drop_local_copy' removes it).
+			-- the temporary folder (`drop_local_copy' removes it); Void, with `last_error', when the
+			-- copy could not be made (scan 72: the tools were given a path to nothing).
 		local
 			l_path, l_copy: STRING_32
 			l_dot: INTEGER
@@ -339,11 +420,17 @@ feature {NONE} -- Paths
 			else
 				l_dot := l_path.last_index_of ('.', l_path.count)
 				l_copy := temp_folder + {STRING_32} "\simple_bible_source" + (if l_dot > 0 then l_path.substring (l_dot, l_path.count) else {STRING_32} "" end)
-				if not (attached local_copy as al_copy and then al_copy.same_string (l_copy)) then
+				if attached local_copy as al_copy and then al_copy.same_string (l_copy) then
+					Result := l_copy.to_string_8
+				else
 					l_ok := (create {SIMPLE_FILE}.make (l_path)).copy_to (l_copy)
-					local_copy := l_copy
+					if l_ok then
+						local_copy := l_copy
+						Result := l_copy.to_string_8
+					else
+						last_error := {STRING_32} "A copy to read could not be made in " + temp_folder
+					end
 				end
-				Result := l_copy.to_string_8
 			end
 		end
 

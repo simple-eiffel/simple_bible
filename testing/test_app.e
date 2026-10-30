@@ -419,6 +419,10 @@ feature {NONE} -- Suites
 			run_test (agent t.test_word_xml_becomes_markdown, "test_word_xml_becomes_markdown")
 			run_test (agent t.test_libreoffice_xml_becomes_markdown, "test_libreoffice_xml_becomes_markdown")
 			run_test (agent t.test_archives_read_as_their_kind, "test_archives_read_as_their_kind")
+			run_test (agent t.test_empty_marks_mark_nothing, "test_empty_marks_mark_nothing")
+			run_test (agent t.test_markup_that_is_not_tidy, "test_markup_that_is_not_tidy")
+			run_test (agent t.test_pdf_lines_become_paragraphs, "test_pdf_lines_become_paragraphs")
+			run_test (agent t.test_epub_page_names, "test_epub_page_names")
 			if t.is_pdf_runnable then
 				run_test (agent t.test_pdf_reads_as_prose, "test_pdf_reads_as_prose")
 			else
