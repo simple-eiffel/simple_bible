@@ -585,13 +585,90 @@ feature -- Convenience
 
 	credits: STRING_32
 			-- Credits generated from source_provenance and each attached pack's own
-			-- notice table; nothing typed by hand (FR-003, settlement S4).
+			-- notice table; nothing typed by hand (FR-003, settlement S4). Built 2026-10-30 for
+			-- Help > About (Larry): Markdown, a section for the Bible text (content.db), the
+			-- concordance (its corpora and meaning sources) and each attached pack, one line a source
+			-- with its license, and "personal use only" where it is restricted.
 		require
 			open: is_open
+		local
+			l_seen: HASH_TABLE [BOOLEAN, STRING_32]
+			l_line: STRING_32
 		do
-			check implemented_in_phase_4: False then end
+			create Result.make (6000)
+			if attached sources.database as al_db then
+				Result.append ({STRING_32} "## The Bible text%N%N")
+					-- a version by its full name ("King James Version (1769)", not "KJV")
+				across al_db.query ("SELECT p.edition, p.license_id, p.restricted, p.credit, coalesce(v.name, '') AS version_name FROM main.source_provenance p LEFT JOIN main.version_info v ON v.provenance_key = p.provenance_key ORDER BY p.provenance_key").rows as ic loop
+					Result.append (credit_line ((if ic.string_value ("version_name").is_empty then ic.string_value ("credit") else ic.string_value ("version_name") end),
+						ic.string_value ("edition"), ic.string_value ("license_id"), ic.integer_value ("restricted") /= 0))
+				end
+				if conc_pack.is_available then
+					Result.append ({STRING_32} "%N## The concordance (")
+					Result.append (conc_pack_label)
+					Result.append ({STRING_32} ")%N%N")
+					across al_db.query ("SELECT name, license, ship_class FROM " + {BIB_CONC_PACK}.Pack_alias + ".corpus ORDER BY corpus_id").rows as ic loop
+						Result.append (credit_line (ic.string_value ("name"), "", ic.string_value ("license"), not ic.string_value ("ship_class").same_string_general ("open")))
+					end
+					across al_db.query ("SELECT credit, license, ship_class FROM " + {BIB_CONC_PACK}.Pack_alias + ".meaning_source WHERE credit <> '' ORDER BY rowid").rows as ic loop
+						Result.append (credit_line (ic.string_value ("credit"), "", ic.string_value ("license"), not ic.string_value ("ship_class").same_string_general ("open")))
+					end
+				end
+				across private_packs as ic_pack loop
+					if ic_pack.is_open then
+						Result.append ({STRING_32} "%N## " + ic_pack.pack_title.to_string_32 + {STRING_32} "%N%N")
+						create l_seen.make (8)
+						across al_db.query ("SELECT source_key, license_id, restricted, credit FROM " + ic_pack.alias_name + ".source_provenance ORDER BY provenance_key").rows as ic loop
+							l_line := credit_line ((if ic.string_value ("credit").is_empty then ic.string_value ("source_key") else ic.string_value ("credit") end),
+								"", ic.string_value ("license_id"), ic.integer_value ("restricted") /= 0)
+							if not l_seen.has (l_line) then
+								l_seen.put (True, l_line)
+								Result.append (l_line)
+							end
+						end
+					end
+				end
+			end
+			if Result.is_empty then
+				Result.append ({STRING_32} "No data is open, so no source is named.%N")
+			end
 		ensure
 			not_empty: not Result.is_empty
+		end
+
+	credit_line (a_credit, a_edition, a_license: READABLE_STRING_GENERAL; a_restricted: BOOLEAN): STRING_32
+			-- "- <credit> (<license>)": the credit, or the edition when the credit is only its name;
+			-- "personal use only" when restricted.
+		local
+			l_name: STRING_32
+		do
+			create l_name.make_from_string_general (a_credit)
+			if not a_edition.is_empty and then (l_name.is_empty or else (a_edition.count > l_name.count and then a_edition.to_string_32.has_substring (l_name))) then
+				create l_name.make_from_string_general (a_edition)
+			end
+			Result := {STRING_32} "- " + l_name
+			if (not a_license.is_empty and then not l_name.has_substring (a_license.to_string_32)) or a_restricted then
+					-- a license the credit states already is not said twice
+				if l_name.has_substring (a_license.to_string_32) then
+					Result.append ({STRING_32} " (personal use only)")
+				else
+					Result.append ({STRING_32} " (" + a_license.to_string_32 + (if a_restricted then (if a_license.is_empty then {STRING_32} "" else {STRING_32} "; " end) + {STRING_32} "personal use only" else {STRING_32} "" end) + {STRING_32} ")")
+				end
+			end
+			Result.append_character ('%N')
+		ensure
+			a_line: Result.ends_with ({STRING_32} "%N")
+		end
+
+	conc_pack_label: STRING_32
+			-- The concordance's own name for its edition, or "conc.db".
+		do
+			Result := {STRING_32} "conc.db"
+			if attached sources.database as al_db then
+				across al_db.query ("SELECT value FROM " + {BIB_CONC_PACK}.Pack_alias + ".meta WHERE key = 'edition_label'").rows as ic loop
+					Result := ic.string_value ("value")
+				end
+			end
 		end
 
 feature -- Constants

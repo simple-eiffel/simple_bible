@@ -1159,6 +1159,12 @@ feature -- Ingest kit (0.7.32)
 			l_bible := bible ("", Folder)
 			l_bible.open
 			assert_integers_equal ("a guides pack attached", 1, l_bible.text_packs_of_kind ("guides").count)
+				-- Help > About's data credits (2026-10-30): generated, every source with its license
+			assert_true ("credits name the Bible text", l_bible.credits.has_substring ("## The Bible text"))
+			assert_true ("and each pack", l_bible.credits.has_substring ("## Scholar Guides"))
+			assert_strings_equal ("a credit line, restricted", {STRING_32} "- Name (CC BY; personal use only)%N", l_bible.credit_line ("Name", "", "CC BY", True))
+			assert_strings_equal ("the edition when the credit is only a name", {STRING_32} "- Westcott-Hort 1881%N", l_bible.credit_line ("Westcott-Hort", "Westcott-Hort 1881", "", False))
+			assert_strings_equal ("a license the credit states not said twice", {STRING_32} "- Data courtesy of X, CC BY.%N", l_bible.credit_line ("Data courtesy of X, CC BY.", "", "CC BY", False))
 			assert_false ("no kit names a guide", across (create {BIB_NAME_LIST}.make (l_bible)).names ("") as al_n some al_n.kind.same_string ("guides") end)
 			assert_true ("asked for, the guides are named", across (create {BIB_NAME_LIST}.make (l_bible)).names ("guides") as al_n some al_n.kind.same_string ("guides") end)
 			if attached l_bible.text_packs_of_kind ("guides").first as al_guides then
