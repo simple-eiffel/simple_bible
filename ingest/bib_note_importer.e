@@ -17,6 +17,10 @@ note
 		 A warning (the file still passes): a prepared text much shorter than its
 		 source (a summary passed off as the notes); a note that replaces an
 		 earlier one with the same id.
+
+		 KEPT ALREADY (2026-10-30, for BIB_NOTE_BATCH): `is_already_kept' compares
+		 the note's manifest and chapter files with what `write_files' would write,
+		 so a folder imported again brings nothing in twice.
 	]"
 	author: "Larry Rix"
 	date: "$Date$"
@@ -138,9 +142,6 @@ feature -- Keeping
 		local
 			l_folder: SIMPLE_FILE
 			l_dir: STRING_32
-			l_object: SIMPLE_JSON_OBJECT
-			l_list: SIMPLE_JSON_ARRAY
-			l_file: STRING_32
 			i: INTEGER
 		do
 			Result := True
@@ -153,23 +154,68 @@ feature -- Keeping
 			if not l_folder.is_directory and Result then
 				Result := l_folder.create_directory
 			end
-			create l_list.make
 			from i := 1 until i > chapters.count or not Result loop
-				l_file := (if i < 10 then {STRING_32} "0" else {STRING_32} "" end) + i.out.to_string_32 + {STRING_32} ".md"
-				Result := (create {SIMPLE_FILE}.make (l_dir + {STRING_32} "\" + l_file)).write_text_utf_8 (chapters.i_th (i).text)
-				l_list := l_list.add_object ((create {SIMPLE_JSON_OBJECT}.make).put_string (chapters.i_th (i).title, "title")
-					.put_string (l_file, "file").put_string ("chapter", "kind"))
+				Result := (create {SIMPLE_FILE}.make (l_dir + {STRING_32} "\" + chapter_file (i))).write_text_utf_8 (chapters.i_th (i).text)
 				i := i + 1
 			end
 			if Result then
-				create l_object.make
-				l_object := l_object.put_string (id, "id").put_string (title, "title").put_string ("", "subtitle").put_string (author, "author")
-					.put_string (status, "status").put_string ("", "edition").put_integer (year_of (date), "year")
-					.put_string (description, "description").put_string (id, "root").put_string (source, "source")
-					.put_array (create {SIMPLE_JSON_ARRAY}.make, "aliases").put_array (create {SIMPLE_JSON_ARRAY}.make, "skip_headings")
-					.put_array (l_list, "chapters")
-				Result := (create {SIMPLE_FILE}.make (a_notes_folder.to_string_32 + {STRING_32} "\" + id + schema.Manifest_extension)).write_text_utf_8 (l_object.to_pretty_json)
+				Result := (create {SIMPLE_FILE}.make (manifest_path (a_notes_folder))).write_text_utf_8 (manifest_text)
 			end
+		end
+
+	is_already_kept (a_notes_folder: READABLE_STRING_GENERAL): BOOLEAN
+			-- Is this very note kept in `a_notes_folder' already: its manifest and every chapter file
+			-- just as `write_files' would write them (2026-10-30: a folder imported again)?
+		require
+			accepted: is_accepted
+		local
+			l_file: SIMPLE_FILE
+			l_dir: STRING_32
+			i: INTEGER
+		do
+			create l_file.make (manifest_path (a_notes_folder))
+			if l_file.is_file and then l_file.read_text_utf_8.same_string (manifest_text) then
+				l_dir := a_notes_folder.to_string_32 + {STRING_32} "\" + id
+				Result := (create {SIMPLE_FILE}.make (l_dir)).is_directory
+					and then (create {SIMPLE_FILE}.make (l_dir)).files_with_extension (".md").count = chapters.count
+				from i := 1 until i > chapters.count or not Result loop
+					create l_file.make (l_dir + {STRING_32} "\" + chapter_file (i))
+					Result := l_file.is_file and then l_file.read_text_utf_8.same_string (chapters.i_th (i).text)
+					i := i + 1
+				end
+			end
+		end
+
+	manifest_text: STRING_32
+			-- The manifest `write_files' writes for the accepted note.
+		require
+			accepted: is_accepted
+		local
+			l_list: SIMPLE_JSON_ARRAY
+			l_object: SIMPLE_JSON_OBJECT
+			i: INTEGER
+		do
+			create l_list.make
+			from i := 1 until i > chapters.count loop
+				l_list := l_list.add_object ((create {SIMPLE_JSON_OBJECT}.make).put_string (chapters.i_th (i).title, "title")
+					.put_string (chapter_file (i), "file").put_string ("chapter", "kind"))
+				i := i + 1
+			end
+			create l_object.make
+			l_object := l_object.put_string (id, "id").put_string (title, "title").put_string ("", "subtitle").put_string (author, "author")
+				.put_string (status, "status").put_string ("", "edition").put_integer (year_of (date), "year")
+				.put_string (description, "description").put_string (id, "root").put_string (source, "source")
+				.put_array (create {SIMPLE_JSON_ARRAY}.make, "aliases").put_array (create {SIMPLE_JSON_ARRAY}.make, "skip_headings")
+				.put_array (l_list, "chapters")
+			Result := l_object.to_pretty_json
+		end
+
+	chapter_file (a_index: INTEGER): STRING_32
+			-- The file name of chapter `a_index': "01.md".
+		require
+			a_chapter: a_index >= 1
+		do
+			Result := (if a_index < 10 then {STRING_32} "0" else {STRING_32} "" end) + a_index.out.to_string_32 + {STRING_32} ".md"
 		end
 
 	keep (a_notes_folder, a_pack, a_frameworks_pack: READABLE_STRING_GENERAL): detachable STRING_32
@@ -238,7 +284,7 @@ feature -- Keeping
 	built_blocks, built_suggestions: INTEGER
 			-- What the last `build' wrote.
 
-feature {NONE} -- Setting an earlier note aside
+feature {BIB_NOTE_BATCH} -- Setting an earlier note aside
 
 	set_aside (a_notes_folder: READABLE_STRING_GENERAL)
 			-- An earlier note with this id: its chapter files and manifest renamed with ".aside", out of

@@ -17,6 +17,14 @@ note
 		"Numbers. 5 people" ends a sentence), nor text already inside a link or
 		inline code.
 
+		A LIST KEEPS ITS BOOK (2026-10-30, Larry, from the Unseen Realm guide):
+		"Genesis 1:26; 3:5, 22; 6:1-4; 10-11" links each part in Genesis. After
+		a ";" a number is a chapter (with ":verse", a place); after a "," that
+		follows a verse, a lone number is a verse of the same chapter. A page
+		note ("(p. 19)", "(pp. 19, 19n2)") before the ";" is passed over. A part
+		counts only when it ends as a reference ends (`ends_a_reference'), so
+		"Romans 8:28, 30 people" leaves the 30 alone (`continuation_at').
+
 		ONE READER FOR BOTH FACES (scan 41): the reference box reads with
 		`make_forgiving' and `place_in' - the same numbers, ranges, one-chapter
 		books and bounds (1 to 176, never verse 0) - and both name a book in one
@@ -135,6 +143,7 @@ feature -- Linking
 			i, l_end: INTEGER
 			l_in_code, l_in_label, l_in_target: BOOLEAN
 			l_found: like reference_at
+			l_more: like continuation_at
 			l_framework, l_writing: detachable TUPLE [last: INTEGER; id: STRING_32]
 		do
 			l_text := a_markdown.to_string_32
@@ -187,6 +196,17 @@ feature -- Linking
 						l_end := al_found.last
 						Result.append ({STRING_32} "[" + l_text.substring (i, l_end) + {STRING_32} "](" + range_target_text (al_found.book, al_found.chapter, al_found.verse, al_found.end_chapter, al_found.end_verse) + {STRING_32} ")")
 						i := l_end + 1
+							-- "; 3:5, 22; 6:1-4": the list after it keeps its book (2026-10-30)
+						from
+							l_more := continuation_at (l_text, i, al_found.book, al_found.end_chapter, al_found.end_verse > 0)
+						until
+							l_more = Void
+						loop
+							Result.append (l_text.substring (i, l_more.first - 1))
+							Result.append ({STRING_32} "[" + l_text.substring (l_more.first, l_more.last) + {STRING_32} "](" + range_target_text (l_more.book, l_more.chapter, l_more.verse, l_more.end_chapter, l_more.end_verse) + {STRING_32} ")")
+							i := l_more.last + 1
+							l_more := continuation_at (l_text, i, l_more.book, l_more.end_chapter, l_more.end_verse > 0)
+						end
 					else
 						Result.append_character (l_text [i])
 						i := i + 1
@@ -365,6 +385,97 @@ feature {NONE} -- Implementation
 			end
 		ensure
 			ends_after_it_starts: attached Result as r implies (r.end_chapter > r.chapter or (r.end_chapter = r.chapter and r.end_verse >= r.verse))
+		end
+
+	continuation_at (a_text: STRING_32; a_start, a_book, a_chapter: INTEGER; a_after_verse: BOOLEAN): detachable TUPLE [first, last, book, chapter, verse, end_chapter, end_verse: INTEGER]
+			-- The next part of a list at `a_start', just after a reference to `a_book' ending in chapter
+			-- `a_chapter' (at a verse when `a_after_verse'): "; 3:5", "; 10-11", ", 22", where its numbers
+			-- begin and end; Void when no part follows. A page note before the separator is passed over.
+		require
+			at_or_after_text: a_start >= 1 and a_start <= a_text.count + 1
+		local
+			l_separator, l_numbers, l_after, l_verse, l_end_verse: INTEGER
+			l_number: TUPLE [value, next: INTEGER]
+			l_found: like numbers_at
+		do
+			l_separator := after_page_note (a_text, a_start)
+			if l_separator <= a_text.count and then (a_text [l_separator] = ';' or a_text [l_separator] = ',') then
+				l_numbers := l_separator + 1
+				if l_numbers <= a_text.count and then a_text [l_numbers] = ' ' then
+					l_numbers := l_numbers + 1
+				end
+				if l_numbers <= a_text.count and then a_text [l_numbers].is_digit then
+					l_number := number_at (a_text, l_numbers)
+					if a_text [l_separator] = ',' and a_after_verse and not (l_number.next <= a_text.count and then a_text [l_number.next] = ':') then
+							-- "3:5, 22" or "3:5, 22-24": verses of the same chapter
+						l_verse := l_number.value
+						l_end_verse := l_verse
+						l_after := l_number.next
+						if l_after + 1 <= a_text.count and then (a_text [l_after] = '-' or a_text [l_after].natural_32_code = 0x2013) and then a_text [l_after + 1].is_digit then
+							l_number := number_at (a_text, l_after + 1)
+							l_end_verse := l_number.value.max (l_verse)
+							l_after := l_number.next
+						end
+						if l_verse >= 1 and l_end_verse <= Max_number then
+							l_found := [l_after - 1, a_book, a_chapter, l_verse, a_chapter, l_end_verse]
+						end
+					else
+						l_found := numbers_at (a_text, l_numbers, a_book)
+					end
+					if attached l_found as al_found and then ends_a_reference (a_text, al_found.last + 1) then
+						Result := [l_numbers, al_found.last, al_found.book, al_found.chapter, al_found.verse, al_found.end_chapter, al_found.end_verse]
+					end
+				end
+			end
+		ensure
+			after_start: attached Result as r implies (r.first > a_start and r.last >= r.first)
+			same_book: attached Result as r implies r.book = a_book
+		end
+
+	after_page_note (a_text: STRING_32; a_start: INTEGER): INTEGER
+			-- Past a page note (" (p. 19)", " (pp. 19, 19n2)") at `a_start' when a ";" or "," follows it,
+			-- else `a_start'.
+		require
+			at_or_after_text: a_start >= 1 and a_start <= a_text.count + 1
+		local
+			i: INTEGER
+			l_plain: BOOLEAN
+		do
+			Result := a_start
+			if a_start + 4 <= a_text.count and then a_text.substring (a_start, a_start + 3).same_string ({STRING_32} " (p.")
+				or else (a_start + 5 <= a_text.count and then a_text.substring (a_start, a_start + 4).same_string ({STRING_32} " (pp."))
+			then
+				l_plain := True
+				from i := a_start + 2 until i > a_text.count or else a_text [i] = ')' or else not l_plain loop
+					l_plain := a_text [i].is_alpha or a_text [i].is_digit or a_text [i] = ' ' or a_text [i] = ',' or a_text [i] = '.'
+						or a_text [i] = '-' or a_text [i].natural_32_code = 0x2013
+					i := i + 1
+				end
+				if l_plain and then i + 1 <= a_text.count and then a_text [i] = ')' and then (a_text [i + 1] = ';' or a_text [i + 1] = ',') then
+					Result := i + 1
+				end
+			end
+		ensure
+			passed_over_or_not: Result >= a_start and Result <= a_text.count + 1
+		end
+
+	ends_a_reference (a_text: STRING_32; a_position: INTEGER): BOOLEAN
+			-- Does a part of a list end before `a_position': the text's or line's end, a ";", ",", ")" or
+			-- closing period, or " (" before a note?
+		do
+			if a_position > a_text.count then
+				Result := True
+			else
+				inspect a_text [a_position]
+				when ';', ',', ')', '%N', '%R' then
+					Result := True
+				when '.' then
+					Result := a_position = a_text.count or else not a_text [a_position + 1].is_digit
+				when ' ' then
+					Result := a_position < a_text.count and then a_text [a_position + 1] = '('
+				else
+				end
+			end
 		end
 
 	number_at (a_text: STRING_32; a_start: INTEGER): TUPLE [value, next: INTEGER]

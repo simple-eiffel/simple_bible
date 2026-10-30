@@ -395,6 +395,8 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			elseif snapshot_tab.same_string ({STRING_32} "importnote") and then attached (create {SIMPLE_ENV}).get ("SIMPLE_BIBLE_SNAPSHOT_FILE") as al_file then
 				import_note (al_file.to_string_32)
 				commentary_tabs.select_tab (In_books_tab)
+			elseif snapshot_tab.same_string ({STRING_32} "importfolder") and then attached (create {SIMPLE_ENV}).get ("SIMPLE_BIBLE_SNAPSHOT_FILE") as al_folder then
+				import_folder (al_folder.to_string_32)
 			elseif snapshot_tab.same_string ({STRING_32} "ask") then
 				ask_box.set_text ("commentary on Galatians 2:16")
 				on_ask
@@ -924,6 +926,7 @@ feature {NONE} -- Menus and keys (C2)
 			create Result.make
 			Result.add_item ("Make ingest kit...", "", True, agent make_ingest_kit)
 			Result.add_item ("Import prepared notes...", "", True, agent import_prepared_notes)
+			Result.add_item ("Import prepared folder...", "", True, agent import_prepared_folder)
 			Result.add_separator
 			Result.add_item ("Export...", "", False, Void)
 			Result.add_item ("Print...", "", False, Void)
@@ -4451,6 +4454,109 @@ feature {NONE} -- The ingest kit (0.7.32, research/21)
 			end
 		end
 
+	import_prepared_folder
+			-- File > Import prepared folder (2026-10-30, Larry): pick any prepared file; every *.prepared.md
+			-- in its folder is checked and kept (BIB_NOTE_BATCH), a note in already, unchanged, passed over.
+			-- "Importing" is painted first; the work runs on the next window tick.
+		local
+			l_dialog: SW_FILE_DIALOG
+		do
+			create l_dialog.make_open (documents_folder)
+			l_dialog.set_extension_filter ("*.prepared.md")
+			l_dialog.set_on_accept (agent (a_path: STRING_32)
+				do
+					window.close_sheet
+					pending_folder := (create {SIMPLE_FILE}.make (a_path)).parent_path
+					pending_folder_ticks := 2
+					say ({STRING_32} "Importing every prepared file in its folder: this can take a moment...")
+					window.request_render
+				end)
+			l_dialog.set_on_cancel (agent window.close_sheet)
+			window.show_sheet (l_dialog, 680.0)
+		end
+
+	import_folder (a_folder: STRING_32)
+			-- Every prepared file in `a_folder' checked; the new and changed kept, the notes pack built once
+			-- and put in place, the engine reopened on it; what happened shown in the Author Library.
+		local
+			l_batch: BIB_NOTE_BATCH
+			l_folder, l_packs, l_pack, l_new: STRING_32
+			l_swap_error: detachable STRING_32
+			l_ok: BOOLEAN
+		do
+			if bible.is_open then
+				l_folder := (create {BIB_DATA_LOCATION}).notes_folder.to_string_32
+				l_packs := (create {BIB_DATA_LOCATION}).pack_folder.to_string_32
+				l_pack := l_packs + {STRING_32} "\" + {BIB_NOTE_SCHEMA}.Pack_file_name
+				l_new := l_pack + {STRING_32} ".new"
+				if (create {SIMPLE_FILE}.make (l_new)).is_file then
+					l_ok := (create {SIMPLE_FILE}.make (l_new)).delete
+				end
+				create l_batch.make (bible)
+				l_batch.run (a_folder, l_folder, l_new, l_packs + {STRING_32} "\" + {BIB_FRAMEWORK_SCHEMA}.Pack_file_name)
+				if l_batch.has_new_notes then
+					l_swap_error := swapped_notes_pack (l_pack, l_new)
+					if l_swap_error = Void then
+						framework_names_cache := Void
+						writing_names_cache := Void
+						create listed_book.make_empty
+						create listed_kind.make_empty
+						fill_books
+					end
+				end
+				show_folder_report (a_folder, l_batch, l_swap_error)
+			end
+		end
+
+	show_folder_report (a_folder: STRING_32; a_batch: BIB_NOTE_BATCH; a_swap_error: detachable STRING_32)
+			-- What a folder import did, in the Author Library's reader.
+		local
+			l_page, l_summary: STRING_32
+		do
+			l_summary := a_batch.kept.count.out.to_string_32 + {STRING_32} " imported, " + a_batch.skipped.count.out.to_string_32
+				+ {STRING_32} " already imported, " + a_batch.refused.count.out.to_string_32 + {STRING_32} " refused"
+			create l_page.make (4000)
+			l_page.append ({STRING_32} "# Folder import%N%N`" + a_folder + {STRING_32} "`%N%N" + l_summary + {STRING_32} " (of "
+				+ a_batch.file_count.out.to_string_32 + {STRING_32} " prepared files).%N%N")
+			if attached a_batch.last_error as al_error then
+				l_page.append ({STRING_32} "**Nothing was imported:** " + al_error + {STRING_32} "%N%N")
+			elseif attached a_swap_error as al_swap then
+				l_page.append ({STRING_32} "**The new notes pack could not be put in place:** " + al_swap + {STRING_32} "%N%N")
+			end
+			if a_batch.file_count = 0 then
+				l_page.append ({STRING_32} "No file in this folder ends in .prepared.md.%N%N")
+			end
+			if not a_batch.kept.is_empty then
+				l_page.append ({STRING_32} "## Imported (" + a_batch.kept.count.out.to_string_32 + {STRING_32} ")%N%N")
+				across a_batch.kept as ic loop
+					l_page.append ({STRING_32} "- " + ic.title + {STRING_32} " (" + ic.file
+						+ (if across a_batch.replaced as al_r some al_r.same_string (ic.file) end then {STRING_32} ", replacing its earlier version" else {STRING_32} "" end)
+						+ {STRING_32} ")%N")
+				end
+				l_page.append ({STRING_32} "%NThe notes pack holds " + a_batch.built_blocks.out.to_string_32 + {STRING_32} " paragraphs and "
+					+ a_batch.built_suggestions.out.to_string_32 + {STRING_32} " suggested passages.%N%N")
+			end
+			if not a_batch.refused.is_empty then
+				l_page.append ({STRING_32} "## Refused (" + a_batch.refused.count.out.to_string_32 + {STRING_32} ")%N%N")
+				across a_batch.refused as ic loop
+					l_page.append ({STRING_32} "- **" + ic.file + {STRING_32} "**%N")
+					across ic.problems as al_p loop
+						l_page.append ({STRING_32} "    - " + al_p + {STRING_32} "%N")
+					end
+				end
+				l_page.append ({STRING_32} "%NCorrect these files (or ask the AI to), then import the folder again: what is in already is passed over.%N%N")
+			end
+			if not a_batch.skipped.is_empty then
+				l_page.append ({STRING_32} "## Already imported, passed over (" + a_batch.skipped.count.out.to_string_32 + {STRING_32} ")%N%N")
+				across a_batch.skipped as ic loop
+					l_page.append ({STRING_32} "- " + ic + {STRING_32} "%N")
+				end
+			end
+			bring_into_view (results_panel, results_tabs, Author_library_tab)
+			book_view.set_document (commentary_reader.read (l_page))
+			say ({STRING_32} "Folder import: " + l_summary + {STRING_32} ".")
+		end
+
 	swapped_notes_pack (a_pack, a_new: STRING_32): detachable STRING_32
 			-- The new notes pack `a_new' put in `a_pack''s place, the engine closed for it and opened
 			-- again; the old pack kept as ".old" until the new one is in place, and put back when it
@@ -4558,6 +4664,12 @@ feature {NONE} -- Ask (C6.5, 0.7.31: plain words through the Cactus Needle helpe
 
 	pending_ask_ticks: INTEGER
 			-- Ticks left before `pending_ask' runs.
+
+	pending_folder: detachable STRING_32
+			-- A folder of prepared files waiting to be imported, so "Importing" is painted first.
+
+	pending_folder_ticks: INTEGER
+			-- Ticks left before `pending_folder' is imported.
 
 	needs_helper_start: BOOLEAN
 			-- Will the next request start the helper (about half a second)?
@@ -5461,7 +5573,8 @@ feature {NONE} -- Dictionary and lexicon (S3, P05)
 
 	on_window_tick
 			-- The window's heartbeat: a long every-place list's next pages; an Ask request waiting for
-			-- its helper to start, once "Starting Ask" has been painted (0.7.32).
+			-- its helper to start, once "Starting Ask" has been painted (0.7.32); a folder of prepared
+			-- files, once "Importing" has been painted (2026-10-30).
 		do
 			load_more_places
 			if attached pending_ask as al_text then
@@ -5469,6 +5582,13 @@ feature {NONE} -- Dictionary and lexicon (S3, P05)
 				if pending_ask_ticks <= 0 then
 					pending_ask := Void
 					answer_ask (al_text)
+				end
+			end
+			if attached pending_folder as al_folder then
+				pending_folder_ticks := pending_folder_ticks - 1
+				if pending_folder_ticks <= 0 then
+					pending_folder := Void
+					import_folder (al_folder)
 				end
 			end
 		end

@@ -152,7 +152,7 @@ feature -- Tests
 			-- one chapter takes a lone number as its verse; prose and existing links are left alone.
 		local
 			l_linker: BIB_REFERENCE_LINKER
-			l_out, l_text: STRING_32
+			l_out, l_text, l_list: STRING_32
 		do
 			create l_linker.make (bible.books)
 			l_out := l_linker.linked ("See Genesis 1:1 and Exodus 3:14-15, Matthew 5, Jude 9; it is 5 words.")
@@ -183,6 +183,21 @@ feature -- Tests
 			assert_true ("Matt, Mt", l_linker.linked ("Matt 5:3 and Mt 5:4").has_substring ("](bible:40.5.3)") and l_linker.linked ("Mt 5:4").has_substring ("](bible:40.5.4)"))
 			assert_true ("Isa", l_linker.linked ("Isa 53:5").has_substring ("](bible:23.53.5)"))
 			assert_true ("an abbreviation's period", l_linker.linked ("Exod. 3:14").has_substring ("](bible:2.3.14)"))
+				-- 2026-10-30 (Larry, the Unseen Realm guide): a list after a reference keeps its book.
+			l_list := l_linker.linked ("Genesis 1:26; 3:5, 22; 6:1-4; 10-11; 15:1; 48:15-16 (p. 19): Listed")
+			assert_true ("the first", l_list.has_substring ("[Genesis 1:26](bible:1.1.26)"))
+			assert_true ("a chapter and verse after a semicolon", l_list.has_substring ("; [3:5](bible:1.3.5)"))
+			assert_true ("a verse after a comma, same chapter", l_list.has_substring (", [22](bible:1.3.22)"))
+			assert_true ("a verse range", l_list.has_substring ("[6:1-4](bible:1.6.1-6.4)"))
+			assert_true ("whole chapters", l_list.has_substring ("[10-11](bible:1.10.0-11.0)"))
+			assert_true ("one more verse", l_list.has_substring ("[15:1](bible:1.15.1)"))
+			assert_true ("the last range, its page note left alone", l_list.has_substring ("[48:15-16](bible:1.48.15-48.16) (p. 19): Listed"))
+			l_list := l_linker.linked ("Exodus 3:8-9 (pp. 19, 19n2); 3:17 (p. 19)")
+			assert_true ("past a page note", l_list.has_substring ("; [3:17](bible:2.3.17)"))
+			assert_true ("page numbers are no verses", not l_list.has_substring ("[19]"))
+			assert_true ("a number in prose is no verse", not l_linker.linked ("Romans 8:28, 30 people came").has_substring ("[30]"))
+			assert_true ("a new book after a comma", l_linker.linked ("John 3:16, 1 John 4:8").has_substring (", [1 John 4:8](bible:62.4.8)"))
+			assert_true ("a new book after a semicolon", l_linker.linked ("Genesis 1; Exodus 3").has_substring ("; [Exodus 3](bible:2.3.0)"))
 				-- Scan 68: reading a reference leaves the caller's text as it was.
 			l_text := {STRING_32} "  Jude 9. "
 			assert_true ("a box reads it", (create {BIB_REFERENCE_LINKER}.make_forgiving (bible.books)).place_in (l_text) /= Void)
