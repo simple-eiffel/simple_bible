@@ -1074,12 +1074,16 @@ feature {NONE} -- Menus and keys (C2)
 			l_view: SW_DOCUMENT_VIEW
 			l_close: SW_BUTTON
 		do
-			create l_view.make (560.0)
+				-- the text follows the sheet (2026-10-30, Larry): it grows into whatever height the
+				-- sheet has, dragged or not, and asks for more than any screen so the sheet opens as
+				-- tall as the window allows and follows it; the column takes back what does not fit
+			create l_view.make (4000.0)
+			l_view := l_view.with_min_size (0.0, 160.0).growing
 			l_view.set_document (commentary_reader.read ((create {BIB_ABOUT_PAGE}.make (bible, status_text + {STRING_32} "; " + ask_status)).text))
 			create l_close.make ("Close", agent window.close_sheet)
 			l_close.set_tooltip ("Close the About window")
 			create l_column.make
-			l_column := l_column.with_padding (16.0)
+			l_column := l_column.with_padding (16.0).fitting
 			l_column.put (l_view)
 			l_column.put (l_close)
 			window.show_sheet (l_column, 820.0)
