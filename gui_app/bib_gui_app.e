@@ -274,6 +274,12 @@ feature {NONE} -- Initialization
 			if is_snapshot then
 				take_snapshot
 			else
+				if bible.is_open and then (create {BIB_NOTE_BATCH}.make (bible)).is_pack_stale ((create {BIB_DATA_LOCATION}).notes_folder) then
+						-- notes the installer brought (Larry's, for the alpha testers, 2026-10-30), or a pack
+						-- an import could not put in place: built again once the window is painted
+					pending_notes_rebuild_ticks := 2
+					say ("Bringing the notes up to date...")
+				end
 				window.run
 			end
 			if user_store.is_open then
@@ -397,6 +403,11 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 				commentary_tabs.select_tab (In_books_tab)
 			elseif snapshot_tab.same_string ({STRING_32} "importfolder") and then attached (create {SIMPLE_ENV}).get ("SIMPLE_BIBLE_SNAPSHOT_FILE") as al_folder then
 				import_folder (al_folder.to_string_32)
+			elseif snapshot_tab.same_string ({STRING_32} "kitfolder") and then attached (create {SIMPLE_ENV}).get ("SIMPLE_BIBLE_SNAPSHOT_FILE") as al_folder then
+				make_kits (al_folder.to_string_32)
+			elseif snapshot_tab.same_string ({STRING_32} "notesrebuild") then
+				rebuild_notes_pack
+				bring_into_view (results_panel, results_tabs, Author_library_tab)
 			elseif snapshot_tab.same_string ({STRING_32} "ask") then
 				ask_box.set_text ("commentary on Galatians 2:16")
 				on_ask
@@ -925,6 +936,7 @@ feature {NONE} -- Menus and keys (C2)
 		do
 			create Result.make
 			Result.add_item ("Make ingest kit...", "", True, agent make_ingest_kit)
+			Result.add_item ("Make ingest kits for a folder...", "", True, agent make_ingest_kits_for_folder)
 			Result.add_item ("Import prepared notes...", "", True, agent import_prepared_notes)
 			Result.add_item ("Import prepared folder...", "", True, agent import_prepared_folder)
 			Result.add_separator
@@ -4344,7 +4356,7 @@ feature {NONE} -- The ingest kit (0.7.32, research/21)
 			l_dialog: SW_FILE_DIALOG
 		do
 			create l_dialog.make_open (documents_folder)
-			l_dialog.set_extension_filter ("*.txt;*.md")
+			l_dialog.set_extension_filter ((create {BIB_SOURCE_READER}).dialog_filter)
 			l_dialog.set_on_accept (agent (a_path: STRING_32) do window.close_sheet; write_ingest_kit (a_path) end)
 			l_dialog.set_on_cancel (agent window.close_sheet)
 			window.show_sheet (l_dialog, 680.0)
@@ -4353,18 +4365,19 @@ feature {NONE} -- The ingest kit (0.7.32, research/21)
 	write_ingest_kit (a_source: STRING_32)
 			-- The kit for the source file `a_source', written beside it as <name>.kit.md.
 		local
-			l_file: SIMPLE_FILE
+			l_reader: BIB_SOURCE_READER
 			l_kit_path: STRING_32
 			l_ok: BOOLEAN
 		do
-			create l_file.make (a_source)
+			create l_reader
 			if not bible.is_open then
 				say ("No Bible content is open, so a kit cannot list what Simple Bible holds.")
-			elseif not l_file.is_file then
-				say ({STRING_32} "No file at " + a_source)
+			elseif not attached l_reader.text_of (a_source) as al_text then
+				say (if attached l_reader.last_error as al_why then al_why else {STRING_32} "The file could not be read." end)
 			else
-				l_kit_path := kit_path_for (a_source)
-				l_ok := (create {SIMPLE_FILE}.make (l_kit_path)).write_text_utf_8 ((create {BIB_INGEST_KIT}.make (bible)).kit_text (l_file.file_name, l_file.read_text_utf_8))
+					-- one reader and one naming rule for one kit and a folder's (2026-10-30)
+				l_kit_path := (create {BIB_KIT_FOLDER}.make (bible)).kit_path_for (a_source)
+				l_ok := (create {SIMPLE_FILE}.make (l_kit_path)).write_text_utf_8 ((create {BIB_INGEST_KIT}.make (bible)).kit_text ((create {SIMPLE_FILE}.make (a_source)).file_name, al_text))
 				if l_ok then
 					copy_to_clipboard (l_kit_path)
 					say ({STRING_32} "Ingest kit written: " + l_kit_path + {STRING_32} " (its path is on the clipboard). Give it to an AI chat; import what it returns with File > Import prepared notes.")
@@ -4374,20 +4387,74 @@ feature {NONE} -- The ingest kit (0.7.32, research/21)
 			end
 		end
 
-	kit_path_for (a_source: STRING_32): STRING_32
-			-- "notes.txt" "notes.kit.md".
+	make_ingest_kits_for_folder
+			-- File > Make ingest kits for a folder (2026-10-30, Larry): pick any source; every source in
+			-- its folder without an up-to-date kit gets one (BIB_KIT_FOLDER). "Making" is painted first.
 		local
-			l_dot, l_slash: INTEGER
+			l_dialog: SW_FILE_DIALOG
 		do
-			l_dot := a_source.last_index_of ('.', a_source.count)
-			l_slash := a_source.last_index_of ('\', a_source.count)
-			if l_dot > l_slash and l_dot > 1 then
-				Result := a_source.substring (1, l_dot - 1) + {STRING_32} ".kit.md"
+			create l_dialog.make_open (documents_folder)
+			l_dialog.set_extension_filter ((create {BIB_SOURCE_READER}).dialog_filter)
+			l_dialog.set_on_accept (agent (a_path: STRING_32)
+				do
+					window.close_sheet
+					pending_kit_folder := (create {SIMPLE_FILE}.make (a_path)).parent_path
+					pending_kit_folder_ticks := 2
+					say ({STRING_32} "Making ingest kits for every file in its folder...")
+					window.request_render
+				end)
+			l_dialog.set_on_cancel (agent window.close_sheet)
+			window.show_sheet (l_dialog, 680.0)
+		end
+
+	make_kits (a_folder: STRING_32)
+			-- A kit beside every source in `a_folder' that needs one; what happened shown in the Author
+			-- Library, the folder's path on the clipboard.
+		local
+			l_kits: BIB_KIT_FOLDER
+			l_page, l_summary: STRING_32
+		do
+			if not bible.is_open then
+				say ("No Bible content is open, so a kit cannot list what Simple Bible holds.")
 			else
-				Result := a_source + {STRING_32} ".kit.md"
+				create l_kits.make (bible)
+				l_kits.run (a_folder)
+				l_summary := (l_kits.written.count + l_kits.remade.count).out.to_string_32 + {STRING_32} " kits made, "
+					+ l_kits.skipped.count.out.to_string_32 + {STRING_32} " up to date already, " + l_kits.failed.count.out.to_string_32 + {STRING_32} " failed"
+				create l_page.make (4000)
+				l_page.append ({STRING_32} "# Ingest kits%N%N`" + a_folder + {STRING_32} "`%N%N" + l_summary + {STRING_32} ".%N%N")
+				if l_kits.sources (a_folder).is_empty then
+					l_page.append ({STRING_32} "No file in this folder is a source a kit is made from (" + l_kits.reader.dialog_filter + {STRING_32} ").%N%N")
+				end
+				if not l_kits.written.is_empty or not l_kits.remade.is_empty then
+					l_page.append ({STRING_32} "## Made (" + (l_kits.written.count + l_kits.remade.count).out.to_string_32 + {STRING_32} ")%N%N")
+					across l_kits.written as ic loop
+						l_page.append ({STRING_32} "- " + ic + {STRING_32} "%N")
+					end
+					across l_kits.remade as ic loop
+						l_page.append ({STRING_32} "- " + ic + {STRING_32} " (again: its source had changed)%N")
+					end
+					l_page.append ({STRING_32} "%NGive each kit to an AI chat; save what it returns as <name>.prepared.md, then File > Import prepared folder.%N%N")
+				end
+				if not l_kits.failed.is_empty then
+					l_page.append ({STRING_32} "## Failed (" + l_kits.failed.count.out.to_string_32 + {STRING_32} ")%N%N")
+					across l_kits.failed as ic loop
+						l_page.append ({STRING_32} "- " + ic.file + {STRING_32} ": " + ic.why + {STRING_32} "%N")
+					end
+					l_page.append ({STRING_32} "%N")
+				end
+				if not l_kits.skipped.is_empty then
+					l_page.append ({STRING_32} "## Up to date already (" + l_kits.skipped.count.out.to_string_32 + {STRING_32} ")%N%N")
+					across l_kits.skipped as ic loop
+						l_page.append ({STRING_32} "- " + ic + {STRING_32} "%N")
+					end
+				end
+				copy_to_clipboard (a_folder)
+				bring_into_view (results_panel, results_tabs, Author_library_tab)
+				book_view.set_document (commentary_reader.read (l_page))
+				keep_snapshot_report (l_page)
+				say ({STRING_32} "Ingest kits: " + l_summary + {STRING_32} ". The folder's path is on the clipboard.")
 			end
-		ensure
-			a_kit: Result.ends_with ({STRING_32} ".kit.md")
 		end
 
 	import_prepared_notes
@@ -4513,6 +4580,61 @@ feature {NONE} -- The ingest kit (0.7.32, research/21)
 			end
 		end
 
+	keep_snapshot_report (a_page: STRING_32)
+			-- In a snapshot, the whole report page `a_page' beside the picture as <picture>.md (2026-10-30:
+			-- a folder's dry run reports more than one window shows).
+		local
+			l_ok: BOOLEAN
+		do
+			if is_snapshot then
+				l_ok := (create {SIMPLE_FILE}.make (snapshot_path + {STRING_32} ".md")).write_text_utf_8 (a_page)
+			end
+		end
+
+	rebuild_notes_pack
+			-- The notes pack built again from every note in the notes folder and put in place, the stale
+			-- mark cleared (2026-10-30: notes the installer brought; a pack an import could not put in
+			-- place). A folder with no notes only loses the mark.
+		local
+			l_importer: BIB_NOTE_IMPORTER
+			l_batch: BIB_NOTE_BATCH
+			l_folder, l_packs, l_pack, l_new: STRING_32
+			l_error: detachable STRING_32
+			l_ok: BOOLEAN
+		do
+			if bible.is_open then
+				l_folder := (create {BIB_DATA_LOCATION}).notes_folder.to_string_32
+				l_packs := (create {BIB_DATA_LOCATION}).pack_folder.to_string_32
+				l_pack := l_packs + {STRING_32} "\" + {BIB_NOTE_SCHEMA}.Pack_file_name
+				l_new := l_pack + {STRING_32} ".new"
+				create l_batch.make (bible)
+				if not (create {SIMPLE_FILE}.make (l_folder)).is_directory or else (create {SIMPLE_FILE}.make (l_folder)).files_with_extension (".json").is_empty then
+					l_batch.set_pack_stale (l_folder, False)
+				else
+					if (create {SIMPLE_FILE}.make (l_new)).is_file then
+						l_ok := (create {SIMPLE_FILE}.make (l_new)).delete
+					end
+					create l_importer.make (bible)
+					l_error := l_importer.build (l_folder, l_new, l_packs + {STRING_32} "\" + {BIB_FRAMEWORK_SCHEMA}.Pack_file_name)
+					if l_error = Void then
+						l_error := swapped_notes_pack (l_pack, l_new)
+					end
+					l_batch.set_pack_stale (l_folder, l_error /= Void)
+					if attached l_error as al_error then
+						say ({STRING_32} "The notes could not be brought up to date: " + al_error)
+					else
+						framework_names_cache := Void
+						writing_names_cache := Void
+						create listed_book.make_empty
+						create listed_kind.make_empty
+						fill_books
+						say ({STRING_32} "The notes are up to date: " + l_importer.built_blocks.out.to_string_32 + {STRING_32} " paragraphs, "
+							+ l_importer.built_suggestions.out.to_string_32 + {STRING_32} " suggested passages.")
+					end
+				end
+			end
+		end
+
 	show_folder_report (a_folder: STRING_32; a_batch: BIB_NOTE_BATCH; a_swap_error: detachable STRING_32)
 			-- What a folder import did, in the Author Library's reader.
 		local
@@ -4563,6 +4685,7 @@ feature {NONE} -- The ingest kit (0.7.32, research/21)
 			bring_into_view (results_panel, results_tabs, Author_library_tab)
 			book_view.set_document (commentary_reader.read (l_page))
 			say ({STRING_32} "Folder import: " + l_summary + {STRING_32} ".")
+			keep_snapshot_report (l_page)
 		end
 
 	swapped_notes_pack (a_pack, a_new: STRING_32): detachable STRING_32
@@ -4678,6 +4801,15 @@ feature {NONE} -- Ask (C6.5, 0.7.31: plain words through the Cactus Needle helpe
 
 	pending_folder_ticks: INTEGER
 			-- Ticks left before `pending_folder' is imported.
+
+	pending_kit_folder: detachable STRING_32
+			-- A folder of sources waiting for kits, so "Making" is painted first.
+
+	pending_kit_folder_ticks: INTEGER
+			-- Ticks left before `pending_kit_folder''s kits are made.
+
+	pending_notes_rebuild_ticks: INTEGER
+			-- Ticks left before the notes pack is built again (`rebuild_notes_pack'); 0: none waiting.
 
 	needs_helper_start: BOOLEAN
 			-- Will the next request start the helper (about half a second)?
@@ -5597,6 +5729,19 @@ feature {NONE} -- Dictionary and lexicon (S3, P05)
 				if pending_folder_ticks <= 0 then
 					pending_folder := Void
 					import_folder (al_folder)
+				end
+			end
+			if attached pending_kit_folder as al_folder then
+				pending_kit_folder_ticks := pending_kit_folder_ticks - 1
+				if pending_kit_folder_ticks <= 0 then
+					pending_kit_folder := Void
+					make_kits (al_folder)
+				end
+			end
+			if pending_notes_rebuild_ticks > 0 then
+				pending_notes_rebuild_ticks := pending_notes_rebuild_ticks - 1
+				if pending_notes_rebuild_ticks = 0 then
+					rebuild_notes_pack
 				end
 			end
 		end
