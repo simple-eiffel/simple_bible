@@ -1039,7 +1039,53 @@ feature -- Ingest kit (0.7.32)
 			remove_test_files
 		end
 
+	test_kits_for_a_folder
+			-- 2026-10-30 (Larry): File > Make ingest kits for a folder gives every source a kit beside it,
+			-- passes over one whose kit is up to date, makes one again when its source changed, and
+			-- never takes a kit or a prepared file for a source.
+		local
+			l_bible: SIMPLE_BIBLE
+			l_kits: BIB_KIT_FOLDER
+			l_ok: BOOLEAN
+		do
+			close_leftovers
+			fixture.build_content (Content_file, {CONC_FIXTURE}.Content_version, False)
+			make_folder
+			if not (create {SIMPLE_FILE}.make (Kit_folder)).is_directory then
+				l_ok := (create {SIMPLE_FILE}.make (Kit_folder)).create_directory
+			end
+			l_ok := (create {SIMPLE_FILE}.make (Kit_folder + "\ch01.md")).write_text_utf_8 ("# One%N%NJude 5 here.%N")
+			l_ok := (create {SIMPLE_FILE}.make (Kit_folder + "\ch02.txt")).write_text_utf_8 ("Two. Jude 9.%N")
+			l_ok := (create {SIMPLE_FILE}.make (Kit_folder + "\ch01.prepared.md")).write_text_utf_8 (First_note)
+			l_ok := (create {SIMPLE_FILE}.make (Kit_folder + "\notes.docx")).write_text_utf_8 ("not read")
+			l_bible := bible ("", Folder)
+			l_bible.open
+			create l_kits.make (l_bible)
+			assert_strings_equal ("a kit's name", "x\notes.kit.md", l_kits.kit_path_for ("x\notes.txt"))
+			assert_strings_equal ("a name without an ending", "x\notes.kit.md", l_kits.kit_path_for ("x\notes"))
+			assert_integers_equal ("two sources: not the prepared file, not a kind it does not read", 2, l_kits.sources (Kit_folder).count)
+			l_kits.run (Kit_folder)
+			assert_integers_equal ("a kit for each", 2, l_kits.written.count)
+			assert_true ("beside its source", (create {SIMPLE_FILE}.make (Kit_folder + "\ch01.kit.md")).read_text_utf_8.has_substring ("Jude 5 here."))
+			assert_integers_equal ("kits are no sources", 2, l_kits.sources (Kit_folder).count)
+			l_kits.run (Kit_folder)
+			assert_true ("again: all up to date", l_kits.written.is_empty and l_kits.remade.is_empty and l_kits.skipped.count = 2)
+			l_ok := (create {SIMPLE_FILE}.make (Kit_folder + "\ch02.txt")).write_text_utf_8 ("Two, changed. Jude 9.%N")
+			l_kits.run (Kit_folder)
+			assert_true ("a changed source gets its kit again", l_kits.remade.count = 1 and then l_kits.remade.first.same_string ("ch02.kit.md"))
+			assert_true ("with its new text", (create {SIMPLE_FILE}.make (Kit_folder + "\ch02.kit.md")).read_text_utf_8.has_substring ("Two, changed."))
+			assert_integers_equal ("the other passed over", 1, l_kits.skipped.count)
+			l_bible.close
+			across <<"ch01.md", "ch02.txt", "ch01.prepared.md", "notes.docx", "ch01.kit.md", "ch02.kit.md">> as ic loop
+				fixture.delete_file (Kit_folder + "\" + ic)
+			end
+			l_ok := (create {SIMPLE_FILE}.make (Kit_folder)).delete_directory
+			remove_test_files
+		end
+
 feature {NONE} -- Fixture
+
+	Kit_folder: STRING = "facade_test_kits"
 
 	Prepared_folder: STRING = "facade_test_prepared"
 

@@ -198,6 +198,16 @@ feature -- Tests
 			assert_true ("a number in prose is no verse", not l_linker.linked ("Romans 8:28, 30 people came").has_substring ("[30]"))
 			assert_true ("scan 70: a list in emphasis links each part", l_linker.linked ("**Genesis 1:26; 3:5**").has_substring ("; [3:5](bible:1.3.5)**"))
 			assert_true ("scan 70: after a chapter, a comma names another chapter", l_linker.linked ("Genesis 1, 2.").has_substring (", [2](bible:1.2.0)."))
+				-- 2026-10-30 (the Reversing Hermon guide): a book named inside another work's title.
+			assert_false ("a number before a book makes another work", l_linker.linked ("as 4 Isaiah 1:1 has it").has_substring ("bible:"))
+			assert_false ("Ascension of Isaiah", l_linker.linked ("Ascension of Isaiah 4:2").has_substring ("bible:"))
+			assert_false ("Testament of", l_linker.linked ("the Testament of Exodus 3:14").has_substring ("bible:"))
+			assert_true ("the book of Isaiah still a reference", l_linker.linked ("the book of Isaiah 53:5").has_substring ("[Isaiah 53:5](bible:23.53.5)"))
+			assert_true ("a book named with its number still read", l_linker.linked ("see 1 John 4:8").has_substring ("[1 John 4:8](bible:62.4.8)"))
+			assert_true ("a section number is no work's number", l_linker.linked ("its III.6 Matthew 5 reading").has_substring ("[Matthew 5](bible:40.5.0)"))
+			assert_true ("the Old Testament to a reference", l_linker.linked ("the Old Testament to Matthew 5:3.").has_substring ("[Matthew 5:3](bible:40.5.3)"))
+			assert_true ("the Letter of Jude is Jude", l_linker.linked ("the Letter of Jude 3").has_substring ("[Jude 3](bible:65.1.3)"))
+			assert_true ("a reference after a list's number", l_linker.linked ("Jude 5; Isaiah 53:5").has_substring ("; [Isaiah 53:5](bible:23.53.5)"))
 			assert_true ("a new book after a comma", l_linker.linked ("John 3:16, 1 John 4:8").has_substring (", [1 John 4:8](bible:62.4.8)"))
 			assert_true ("a new book after a semicolon", l_linker.linked ("Genesis 1; Exodus 3").has_substring ("; [Exodus 3](bible:2.3.0)"))
 				-- Scan 68: reading a reference leaves the caller's text as it was.

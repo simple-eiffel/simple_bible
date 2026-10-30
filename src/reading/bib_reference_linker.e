@@ -17,6 +17,14 @@ note
 		"Numbers. 5 people" ends a sentence), nor text already inside a link or
 		inline code.
 
+		ANOTHER WORK'S TITLE (2026-10-30, from the Reversing Hermon guide): a book
+		name inside the title of a work outside the Bible is no reference: after
+		a number that makes no book with it ("4 Ezra 7:113", "3 Ezra"; "1 John"
+		is read from its number; "III.6 Romans 7" is Romans), or after
+		"Ascension of", "Testament of" and the like ("Ascension of Isaiah 4:2",
+		"Testament of Job 1:1"; "the Old Testament to Luke 14:26" and "the
+		Letter of Jude 3" are references) (`is_in_another_title').
+
 		A LIST KEEPS ITS BOOK (2026-10-30, Larry, from the Unseen Realm guide):
 		"Genesis 1:26; 3:5, 22; 6:1-4; 10-11" links each part in Genesis. After
 		a ";" a number is a chapter (with ":verse", a place); after a "," that
@@ -185,6 +193,9 @@ feature -- Linking
 					end
 					if l_framework = Void and then l_writing = Void and then (i = 1 or else not is_name_character (l_text [i - 1])) then
 						l_found := reference_at (l_text, i)
+						if attached l_found and then is_in_another_title (l_text, i) then
+							l_found := Void
+						end
 					end
 					if attached l_framework as al_framework then
 						Result.append ({STRING_32} "[" + l_text.substring (i, al_framework.last) + {STRING_32} "](" + {BIB_FRAMEWORK_SCHEMA}.Link_prefix + al_framework.id + {STRING_32} ")")
@@ -386,6 +397,58 @@ feature {NONE} -- Implementation
 			end
 		ensure
 			ends_after_it_starts: attached Result as r implies (r.end_chapter > r.chapter or (r.end_chapter = r.chapter and r.end_verse >= r.verse))
+		end
+
+	is_in_another_title (a_text: STRING_32; a_start: INTEGER): BOOLEAN
+			-- Is the book name at `a_start' part of another work's title: right after a number standing as
+			-- a word of its own ("4 Ezra", "3 Ezra"; not the "6" of "III.6 Romans 7"; a book named with its
+			-- number, "1 John", is read from the number and never comes here), after one of
+			-- `Other_title_words' and "of" ("Ascension of Isaiah"), after "Additions to", or "Letter of"
+			-- and "Epistle of" before Jeremiah (the Letter of Jeremiah; the Letter of Jude is Jude)?
+		require
+			in_text: a_start >= 1 and a_start <= a_text.count
+		local
+			l_word, l_before: STRING_32
+			l_end, l_first: INTEGER
+		do
+			if a_start > 2 and then a_text [a_start - 1] = ' ' then
+				l_word := word_ending_at (a_text, a_start - 2)
+				l_end := a_start - 2 - l_word.count
+				if not l_word.is_empty and then l_word.is_natural then
+					Result := l_end = 0 or else not (a_text [l_end].is_alpha or a_text [l_end].is_digit or a_text [l_end] = '.' or a_text [l_end] = ':')
+				elseif l_end > 1 and then a_text [l_end] = ' ' and then (l_word.same_string ({STRING_32} "of") or l_word.same_string ({STRING_32} "to")) then
+					l_before := word_ending_at (a_text, l_end - 1)
+					l_first := a_start
+					if l_word.same_string ({STRING_32} "to") then
+						Result := l_before.same_string ({STRING_32} "Additions")
+					elseif l_before.same_string ({STRING_32} "Letter") or l_before.same_string ({STRING_32} "Epistle") then
+						Result := a_text.substring (l_first, (l_first + 7).min (a_text.count)).same_string ({STRING_32} "Jeremiah")
+					else
+						Result := across Other_title_words as ic some ic.same_string (l_before) end
+					end
+				end
+			end
+		end
+
+	word_ending_at (a_text: STRING_32; a_last: INTEGER): STRING_32
+			-- The letters and digits running back from `a_last' (empty when `a_last' holds neither).
+		require
+			in_text: a_last >= 0 and a_last <= a_text.count
+		local
+			i: INTEGER
+		do
+			from i := a_last until i < 1 or else not (a_text [i].is_alpha or a_text [i].is_digit) loop
+				i := i - 1
+			end
+			Result := a_text.substring (i + 1, a_last)
+		end
+
+	Other_title_words: ARRAY [STRING_32]
+			-- The words that, with "of", begin titles of works outside the Bible naming a book of it.
+		once
+			Result := <<{STRING_32} "Ascension", {STRING_32} "Martyrdom", {STRING_32} "Apocalypse", {STRING_32} "Testament",
+				{STRING_32} "Testaments", {STRING_32} "Paralipomena", {STRING_32} "Assumption", {STRING_32} "Rest",
+				{STRING_32} "Life", {STRING_32} "Lives", {STRING_32} "Vision", {STRING_32} "Ladder", {STRING_32} "Questions">>
 		end
 
 	continuation_at (a_text: STRING_32; a_start, a_book, a_chapter: INTEGER; a_after_verse: BOOLEAN): detachable TUPLE [first, last, book, chapter, verse, end_chapter, end_verse: INTEGER]
