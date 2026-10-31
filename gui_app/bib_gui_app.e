@@ -369,6 +369,8 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			end
 			if snapshot_tab.same_string ({STRING_32} "interlinear") then
 				show_interlinear
+			elseif snapshot_tab.same_string ({STRING_32} "timeline") then
+				show_timeline
 			elseif snapshot_tab.same_string ({STRING_32} "parallel") then
 				show_parallel
 			elseif snapshot_tab.same_string ({STRING_32} "commentary") then
@@ -1827,6 +1829,7 @@ feature {NONE} -- Two layouts (C7)
 			center_tabs.add_page ("Bible", bible_page)
 			center_tabs.add_page ("Parallel", l_parallel_page)
 			center_tabs.add_page ("Interlinear", l_interlinear_page)
+			center_tabs.add_page ("Timeline", timeline_view.growing)
 			center_tabs.set_on_change (agent on_center_tab)
 			parallel_view.add_column ("").do_nothing
 			parallel_view.add_column ("").do_nothing
@@ -1847,6 +1850,7 @@ feature {NONE} -- Two layouts (C7)
 
 			tools_strip.add_tool ("Parallel", "Versions side by side (P02)", True, agent show_parallel)
 			tools_strip.add_tool ("Interlinear", "Word by word in the original (P03). Ctrl+I", True, agent show_interlinear)
+			tools_strip.add_tool ("Timeline", "The River of Time: when it happened, and who says so", True, agent show_timeline)
 			tools_strip.add_tool ("Guide", "A guide on one subject (P08): comes later", False, Void)
 			tools_strip.add_tool ("Word Study", "The word study (P05 Word Study): comes later", False, Void)
 			tools_strip.add_tool ("Count", "Census and checks (P09): comes later", False, Void)
@@ -3049,6 +3053,112 @@ feature {NONE} -- Notes (T2, P06)
 				fill_parallel
 			elseif a_index = Interlinear_tab then
 				fill_interlinear
+			elseif a_index = Timeline_tab then
+				fill_timeline
+			end
+		end
+
+	Timeline_tab: INTEGER = 4
+
+	timeline_view: SW_LANE_TIMELINE
+			-- The River of Time (Plan 22 phase 1, 2026-10-30): the lens on, filled when first shown.
+		attribute
+			create Result.make
+			Result.set_lens (True)
+		end
+
+	timeline_filled: BOOLEAN
+			-- Has `timeline_view' been filled from the timeline packs?
+
+	show_timeline
+			-- The Timeline tab (in Study; Simple has no tabs).
+		do
+			if not is_study then
+				arrange (True)
+			end
+			center_tabs.select_tab (Timeline_tab)
+			fill_timeline
+		end
+
+	fill_timeline
+			-- The River of Time from the attached timeline packs: a lane for each of theirs, an item
+			-- for each settled event, and for a disputed one a dispute with one position per claim
+			-- (its holder named, the lean marked); each claim's basis drawn as its certainty class.
+		local
+			l_lane_of: HASH_TABLE [INTEGER, STRING_32]
+			l_dispute, l_lane: INTEGER
+			it: SW_TIMELINE_ITEM
+			l_lo, l_hi: INTEGER
+		do
+			if not timeline_filled and then bible.is_open then
+				timeline_filled := True
+				create l_lane_of.make (8)
+				across bible.timeline_packs as ic_pack loop
+					if ic_pack.is_available then
+						across ic_pack.lanes as ic_lane loop
+							if not l_lane_of.has (ic_lane.id) then
+								l_lane_of.put (timeline_view.add_lane (ic_lane.title, ic_lane.group), ic_lane.id)
+							end
+						end
+						across ic_pack.events as ic_event loop
+							l_lane := l_lane_of.item (ic_event.lane)
+							if l_lane > 0 then
+								if ic_event.is_disputed then
+									l_dispute := timeline_view.add_dispute (ic_event.title, river_year (ic_event.earliest), river_year (ic_event.latest))
+									across ic_event.claims as ic_claim loop
+										it := timeline_view.add_position (l_dispute, l_lane, ic_event.title + {STRING_32} ": " + ic_claim.label,
+											river_year (ic_claim.earliest), river_year (ic_claim.latest), claim_class (ic_event, ic_claim))
+										if ic_claim.is_lean then
+											it.set_lean ("shown first")
+										end
+									end
+								else
+									l_lo := river_year (ic_event.claims.first.earliest)
+									l_hi := river_year (ic_event.claims.first.latest)
+									it := timeline_view.add_item (l_lane, ic_event.title, l_lo, l_hi, claim_class (ic_event, ic_event.claims.first))
+									it.set_importance (ic_event.importance)
+									if not ic_event.claims.first.chronology.is_empty then
+										it.set_badge (ic_event.claims.first.chronology)
+									end
+								end
+							end
+						end
+					end
+				end
+				if timeline_view.items.is_empty then
+					timeline_view.add_lane ("No timeline pack yet: bible_build --timeline writes one", "River of Time").do_nothing
+				else
+						-- open on the biblical world, 3500 BC to AD 135; prehistory is one zoom out
+					timeline_view.set_view (-3499.0, 140.0)
+				end
+			end
+		end
+
+	river_year (a_year: INTEGER): INTEGER
+			-- `a_year' inside what the lens can show (an open end stands at its edge).
+		do
+			Result := a_year.max ({SW_LANE_TIMELINE}.Lens_deepest.truncated_to_integer + 1).min (timeline_view.lens_anchor.truncated_to_integer - 1)
+		end
+
+	claim_class (a_event: BIB_TIMELINE_EVENT; a_claim: BIB_CLAIM): INTEGER
+			-- How a claim draws: a period as a soft band, tradition hatched, the text's own reckoning
+			-- dashed ("per the text"), a named chronology with its badge, an approximate or coarse date
+			-- graded, a dated day as a tick, otherwise a solid bar.
+		do
+			if a_event.kind.same_string ({STRING_32} "period") then
+				Result := {SW_TIMELINE_ITEM}.Class_e
+			elseif a_claim.basis.same_string ({STRING_32} "tradition") then
+				Result := {SW_TIMELINE_ITEM}.Class_g
+			elseif a_claim.basis.same_string ({STRING_32} "text") then
+				Result := {SW_TIMELINE_ITEM}.Class_f
+			elseif not a_claim.chronology.is_empty then
+				Result := {SW_TIMELINE_ITEM}.Class_c
+			elseif a_claim.edtf.is_approximate or a_claim.edtf.precision > 0 then
+				Result := {SW_TIMELINE_ITEM}.Class_d
+			elseif a_claim.edtf.has_day and a_claim.earliest = a_claim.latest then
+				Result := {SW_TIMELINE_ITEM}.Class_a
+			else
+				Result := {SW_TIMELINE_ITEM}.Class_b
 			end
 		end
 
@@ -3379,7 +3489,7 @@ feature {NONE} -- Notes (T2, P06)
 			window.add_reference_mark (mode_switch, "C7", "Mode switch, on Study: only the docking changes. Ctrl+M.", window.Corner_top_left)
 			window.add_reference_mark (navigator_tabs, "T1", "P11 Navigator, west: Books (chapter by chapter), Bookmarks (Ctrl+D bookmarks the verse read; click one to read it; Remove and Restore) and History (the last 50 chapters read, newest first, kept between runs; click one to read it again).", window.Corner_top_left)
 			window.add_reference_mark (notes_heading, "T2", "P06 Notes, west below T1, in tab order: Verse notes on the chapter read (add on the verse read; double-click to edit, each edit keeps the old version; Delete and Restore); Journal, notes on a subject (New; Save keeps the earlier version; Delete and Restore); Tags (tag the verse read; click a tag for its verses, a verse to read it; Remove and Restore); Highlights (a reason, not a color; washed amber in the Bible and Parallel tabs; click one to read it; Remove and Restore); Prayer (a title and the request; Open and Answered, with how it was answered; Remove and Restore); Memory (learn the verse read; recall today's card, Show the verse, grade Again, Hard, Good or Easy; the next date follows SuperMemo 2).", window.Corner_top_left)
-			window.add_reference_mark (center_tabs, "T3", "Centre tabs: the Bible text, Parallel (P02) and Interlinear (P03, Ctrl+I). More Bible tabs come later.", window.Corner_top_left)
+			window.add_reference_mark (center_tabs, "T3", "Centre tabs: the Bible text, Parallel (P02), Interlinear (P03, Ctrl+I) and the Timeline (the River of Time).", window.Corner_top_left)
 			window.add_reference_mark (analysis_title, "P03.2", "Verse analysis: the verse read, a row per word with its lemma, Strong's number, morphology, gloss, and how often its headword occurs in this testament. Click a row and T4 follows it.", window.Corner_top_left)
 			window.add_reference_mark (interlinear_note, "P03", "Interlinear: word by word in the original, right to left for Hebrew. A click makes the word's verse the place read and opens its headword in T4.", window.Corner_top_left)
 			window.add_reference_mark (lexicon_heading, "T4", "P05 Lexicon, east: follows the clicked word. Its Frameworks tab (P05.8) explains each FRAMEWORK(TM) for the common reader; a framework named anywhere is a link: rest on it for a summary, click it to open it here.", window.Corner_top_left)

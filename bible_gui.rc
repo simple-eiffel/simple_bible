@@ -7,8 +7,8 @@
 // The program's version (BIB_RELEASE.Program_version; a test holds the two equal). The installer
 // reads ProductVersion from the built exe, so one bump here and there sets all three.
 1 VERSIONINFO
-FILEVERSION 0,7,40,0
-PRODUCTVERSION 0,7,40,0
+FILEVERSION 0,7,41,0
+PRODUCTVERSION 0,7,41,0
 BEGIN
 	BLOCK "StringFileInfo"
 	BEGIN
@@ -16,8 +16,8 @@ BEGIN
 		BEGIN
 			VALUE "ProductName", "simple_bible"
 			VALUE "FileDescription", "simple_bible"
-			VALUE "ProductVersion", "0.7.40"
-			VALUE "FileVersion", "0.7.40"
+			VALUE "ProductVersion", "0.7.41"
+			VALUE "FileVersion", "0.7.41"
 		END
 	END
 	BLOCK "VarFileInfo"
