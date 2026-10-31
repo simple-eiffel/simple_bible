@@ -64,4 +64,16 @@
 		<cluster name="ingest" location=".\ingest\" recursive="true"/>
 		<cluster name="gui_app" location=".\gui_app\" recursive="true"/>
 	</target>
+	<!-- GUI state tests (research/23, 2026-10-31): state objects and bindings, no window shown. -->
+	<target name="bible_gui_tests" extends="bible_gui">
+		<root class="TEST_GUI_APP" feature="make"/>
+		<option warning="warning">
+			<assertions precondition="true" postcondition="true" check="true" invariant="true" loop="true" supplier_precondition="true"/>
+		</option>
+		<setting name="console_application" value="true"/>
+		<setting name="executable_name" value="bible_gui_tests"/>
+		<library name="testing" location="$ISE_LIBRARY\library\testing\testing.ecf"/>
+		<library name="simple_testing" location="$SIMPLE_EIFFEL/simple_testing/simple_testing.ecf"/>
+		<cluster name="testing_gui" location=".\testing_gui\" recursive="true"/>
+	</target>
 </system>
