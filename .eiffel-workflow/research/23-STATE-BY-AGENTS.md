@@ -1,6 +1,6 @@
 # 23 - State by agents (audit, plan, phases)
 
-Status: **audit done (2026-10-31); phase 0 shipped in 0.7.44; phase 1 shipped in 0.7.45; phase 2 shipped in 0.7.46; the window harness in 0.7.47; phases 3 onward next, test-first through the harness.** The library design (section 5) waits for a design session with Larry.
+Status: **audit done (2026-10-31); phase 0 shipped in 0.7.44; phase 1 shipped in 0.7.45; phase 2 shipped in 0.7.46; the window harness in 0.7.47; phase 4 built test-first for 0.7.48 (taken before phase 3: phase 3 fixes no observable bug); phase 3 and 5 onward next.** The library design (section 5) waits for a design session with Larry.
 
 ## 1. The rule
 
@@ -55,7 +55,7 @@ Other risks: buttons on missing data enabled while their handlers do nothing (9)
 1. **Foundation and test bench.** A GUI test target (`bible_gui_tests`) that builds state objects and bindings without showing a window. `BIB_TIME_PLACE_SELECTION` moved onto `SW_EVENT`, with binding that applies now (risk 15). A short how-to in this file.
 2. **Layout and settings (A, J). Built for 0.7.46:** `BIB_LAYOUT_STATE` (layout, river workspace, text size, dark), joined by `arrange`, `apply_river_workspace`, `apply_text_scale` and `apply_theme`; the window's own theme changes reach it; `fill_study_panes` on entering Study; each workspace keeps its own east width; the Focus button says what a press will do. Verified by 4 state tests and the snapshots (a harness that drives the whole window is still missing: section 5). One layout state (layout, workspace, results wanted, text scale, dark) replacing the copies; panels, mode switch, size buttons, dark switch and pills bound to it. Fixes risks 1, 2, 11, 13, 18.
 3. **Reading place (B).** One reading state with events for chapter, verse, version and history; navigation buttons and menu items from its queries; panes bound to what they show (a verse click no longer refills every pane). Fixes 3, 17, 20.
-4. **Search results (C).** One results state, one `has_results`, closing remembered. Fixes 4, 5, 6.
+4. **Search results (C). Built for 0.7.48, test-first:** `BIB_RESULTS_STATE` (choices, verses, closed by the reader) with one `has_results` and one `is_wanted`; the panel, its dot and Window > Search results follow it; Close in Study empties the results. Four harness tests, each seen failing on 0.7.47 (the menu greyed for a verse-only search; a closed panel back after Study and Simple; Close leaving 342 results in Study; the dot staying after Close). One results state, one `has_results`, closing remembered. Fixes 4, 5, 6.
 5. **Notes, collections and strip marks (D).** Change events from the user store drive the panes and the marks; selection-dependent buttons bound to their panel's choice. Fixes 6, 8, 21.
 6. **Commentary, packs, jobs and Ask (E, F, H).** A packs-changed event clears caches and refreshes what shows them; a jobs state shows busy and holds a second request. Fixes 7, 9, 10.
 7. **Library shelf, tabs, lexicon, time (I, K).** Named tabs per tab set; the lexicon bound to its word; a day-changed event. Fixes 8 (lexicon), 14, 19.

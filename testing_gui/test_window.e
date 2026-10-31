@@ -28,13 +28,76 @@ inherit
 			default_create
 		end
 
+feature -- Phase 4: search results (each test seen failing on 0.7.47 first)
+
+	test_verse_search_listed_in_the_window_menu
+			-- Risk 4: a search that finds only verses showed the panel, but Window > Search results
+			-- was greyed (it asked for dictionary choices only).
+		local
+			app: BIB_GUI_APP
+		do
+			app := new_window
+			app.harness_state.set_study (False)
+			app.harness_search ("%"born again%"")
+			assert_true ("verses found", app.harness_results_count > 0)
+			assert_true ("the panel shown", app.harness_results_visible)
+			assert_true ("and Window > Search results enabled", app.harness_window_menu_enabled ("Search results"))
+			app.shut_down
+		end
+
+	test_closed_results_stay_closed_across_layouts
+			-- Risk 4: results the reader closed came back on the next switch to Simple.
+		local
+			app: BIB_GUI_APP
+		do
+			app := new_window
+			app.harness_state.set_study (False)
+			app.harness_search ("love")
+			assert_true ("shown", app.harness_results_visible)
+			app.harness_close_results
+			assert_false ("closed", app.harness_results_visible)
+			app.harness_state.set_study (True)
+			app.harness_state.set_study (False)
+			assert_false ("still closed after Study and back", app.harness_results_visible)
+			app.shut_down
+		end
+
+	test_close_in_study_clears_the_results
+			-- Risk 5: Close did nothing in Study (the zone stays: it holds the Author Library and the
+			-- guides too), so the results now empty.
+		local
+			app: BIB_GUI_APP
+		do
+			app := new_window
+			app.harness_state.set_study (True)
+			app.harness_search ("love")
+			assert_true ("results", app.harness_results_count > 0)
+			app.harness_close_results
+			assert_integers_equal ("Close in Study empties them", 0, app.harness_results_count)
+			app.shut_down
+		end
+
+	test_results_dot_follows_closing
+			-- Risk 6: the results dot stayed after the results were closed.
+		local
+			app: BIB_GUI_APP
+		do
+			app := new_window
+			app.harness_state.set_study (False)
+			app.harness_search ("love")
+			assert_true ("the dot with results", app.harness_results_marked)
+			app.harness_close_results
+			assert_false ("no dot once closed", app.harness_results_marked)
+			app.shut_down
+		end
+
 feature -- Phase 2
 
 	test_entering_study_fills_the_study_panes
 		local
 			app: BIB_GUI_APP
 		do
-			create app.make_harness
+			app := new_window
 			app.harness_state.set_study (False)
 			app.harness_go_to (43, 3, 16)
 			app.harness_state.set_study (True)
@@ -46,7 +109,7 @@ feature -- Phase 2
 		local
 			app: BIB_GUI_APP
 		do
-			create app.make_harness
+			app := new_window
 			app.harness_state.set_text_scale (2.0)
 			assert_false ("at the largest, Larger is off", app.harness_larger_enabled)
 			assert_true ("and Smaller on", app.harness_smaller_enabled)
@@ -61,7 +124,7 @@ feature -- Phase 2
 			app: BIB_GUI_APP
 			l_dark: BOOLEAN
 		do
-			create app.make_harness
+			app := new_window
 			l_dark := not app.harness_window_dark
 			app.harness_theme_swapped_by_windows (l_dark)
 			assert_true ("the window wears it", app.harness_window_dark = l_dark)
@@ -74,7 +137,7 @@ feature -- Phase 2
 			app: BIB_GUI_APP
 			l_reading: REAL_64
 		do
-			create app.make_harness
+			app := new_window
 			app.harness_state.set_study (True)
 			app.harness_set_east_fraction (0.25)
 			l_reading := app.harness_east_fraction
@@ -91,7 +154,7 @@ feature -- Phase 2
 		local
 			app: BIB_GUI_APP
 		do
-			create app.make_harness
+			app := new_window
 			app.harness_state.set_study (True)
 			assert_strings_equal ("before: Focus", "Focus", app.harness_focus_label)
 			app.harness_toggle_focus
@@ -100,5 +163,21 @@ feature -- Phase 2
 			assert_strings_equal ("and back", "Focus", app.harness_focus_label)
 			app.shut_down
 		end
+
+feature {NONE} -- The window
+
+	new_window: BIB_GUI_APP
+			-- A fresh window; the last one shut down first (a failed assertion skips a test's own
+			-- `shut_down', and its open user.db then refused the next window: "Permission denied").
+		do
+			if attached last_window as al_last then
+				al_last.shut_down
+			end
+			create Result.make_harness
+			last_window := Result
+		end
+
+	last_window: detachable BIB_GUI_APP
+			-- The window the last test built.
 
 end
