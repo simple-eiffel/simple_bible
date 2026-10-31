@@ -21,6 +21,7 @@ feature {NONE} -- Initialization
 		do
 			print ("Running Simple Bible GUI state tests (research/23)...%N%N")
 			run_selection_tests
+			run_layout_tests
 			print ("%N========================%N")
 			print ("Results: " + passed.out + " passed, " + failed.out + " failed%N")
 			if failed > 0 then
@@ -42,6 +43,19 @@ feature {NONE} -- Suites
 			run_test (agent t.test_year_told_once_per_change, "test_year_told_once_per_change")
 			run_test (agent t.test_event_told_before_its_year, "test_event_told_before_its_year")
 			run_test (agent t.test_a_late_listener_learns_the_present, "test_a_late_listener_learns_the_present")
+		end
+
+	run_layout_tests
+			-- The layout and the look (phase 2).
+		local
+			t: TEST_LAYOUT_STATE
+		do
+			print ("TEST_LAYOUT_STATE%N")
+			create t
+			run_test (agent t.test_layout_told_once_per_change, "test_layout_told_once_per_change")
+			run_test (agent t.test_joining_tells_the_present, "test_joining_tells_the_present")
+			run_test (agent t.test_text_size_kept_to_a_tenth_in_range, "test_text_size_kept_to_a_tenth_in_range")
+			run_test (agent t.test_a_new_layout_puts_the_river_away, "test_a_new_layout_puts_the_river_away")
 		end
 
 feature {NONE} -- Runner

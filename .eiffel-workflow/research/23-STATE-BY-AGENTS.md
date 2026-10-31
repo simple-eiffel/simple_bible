@@ -1,6 +1,6 @@
 # 23 - State by agents (audit, plan, phases)
 
-Status: **audit done (2026-10-31); phase 0 shipped in 0.7.44; phase 1 built for 0.7.45; phases 2 onward next.** The library design (section 5) waits for a design session with Larry.
+Status: **audit done (2026-10-31); phase 0 shipped in 0.7.44; phase 1 shipped in 0.7.45; phase 2 built for 0.7.46; phases 3 onward next.** The library design (section 5) waits for a design session with Larry.
 
 ## 1. The rule
 
@@ -53,7 +53,7 @@ Other risks: buttons on missing data enabled while their handlers do nothing (9)
 
 0. **Shipped, 0.7.44**: the dock walk fixed (simple_widgets 0.48.2); the Atlas measuring buttons pushed by agents.
 1. **Foundation and test bench.** A GUI test target (`bible_gui_tests`) that builds state objects and bindings without showing a window. `BIB_TIME_PLACE_SELECTION` moved onto `SW_EVENT`, with binding that applies now (risk 15). A short how-to in this file.
-2. **Layout and settings (A, J).** One layout state (layout, workspace, results wanted, text scale, dark) replacing the copies; panels, mode switch, size buttons, dark switch and pills bound to it. Fixes risks 1, 2, 11, 13, 18.
+2. **Layout and settings (A, J). Built for 0.7.46:** `BIB_LAYOUT_STATE` (layout, river workspace, text size, dark), joined by `arrange`, `apply_river_workspace`, `apply_text_scale` and `apply_theme`; the window's own theme changes reach it; `fill_study_panes` on entering Study; each workspace keeps its own east width; the Focus button says what a press will do. Verified by 4 state tests and the snapshots (a harness that drives the whole window is still missing: section 5). One layout state (layout, workspace, results wanted, text scale, dark) replacing the copies; panels, mode switch, size buttons, dark switch and pills bound to it. Fixes risks 1, 2, 11, 13, 18.
 3. **Reading place (B).** One reading state with events for chapter, verse, version and history; navigation buttons and menu items from its queries; panes bound to what they show (a verse click no longer refills every pane). Fixes 3, 17, 20.
 4. **Search results (C).** One results state, one `has_results`, closing remembered. Fixes 4, 5, 6.
 5. **Notes, collections and strip marks (D).** Change events from the user store drive the panes and the marks; selection-dependent buttons bound to their panel's choice. Fixes 6, 8, 21.
@@ -102,7 +102,8 @@ Shipped with phase 1 (0.7.45): the Timeline's bar across time (simple_widgets 0.
 2. **Its shape**: a deferred ancestor (for example a state with `changed` events and `bind`, which subscribes and applies now), and possibly a mixin that makes a widget or pane declare how it binds, so descendants are forced to implement it between the abstraction and the concrete class.
 3. **Explicit state machines**: states, transitions, guard agents, entry and exit agent collections (the measuring tool is Idle, Running, Ended), as a class or as a pattern.
 4. **Pull conditions**: keep `enabled_when` for menus and simple cases, or retire it; a timing spike of push against pull at a thousand bound controls.
-5. **Enforcement**: contracts that check bound controls agree with their state; the `/eiffel-*` state-audit skill Larry proposed, built after the framework exists, to audit any GUI or state-machine task against it.
-6. **Order beyond Simple Bible**: which programs follow (simple_prompter, simple_taskman), one at a time.
+5. **A window harness**: tests that build the whole window offscreen and drive it (press Study, check that the notes pane filled), so a GUI risk is shown failing before its fix, as the engine's are. Today the state objects are tested and the window is checked by snapshots.
+6. **Enforcement**: contracts that check bound controls agree with their state; the `/eiffel-*` state-audit skill Larry proposed, built after the framework exists, to audit any GUI or state-machine task against it.
+7. **Order beyond Simple Bible**: which programs follow (simple_prompter, simple_taskman), one at a time.
 
 Phases 1 to 8 are written so they move onto the chosen ancestor later without rework: each state object already has the shape a deferred ancestor would demand.

@@ -271,14 +271,21 @@ feature {NONE} -- Initialization
 			add_accelerators
 			wire_events
 			show_start
-			arrange (settings.is_study_layout)
+				-- the layout and the look as one state (research/23 phase 2): each view joins, and
+				-- joining applies the present; the window's own theme changes (following Windows)
+				-- reach the state too
+			layout_state.set_dark (window.theme.is_dark)
+			layout_state.on_layout (agent arrange)
+			layout_state.on_workspace (agent apply_river_workspace)
+			layout_state.on_text_scale (agent apply_text_scale)
+			layout_state.on_theme (agent apply_theme)
+			window.set_on_theme_changed (agent (a_theme: SW_THEME) do layout_state.set_dark (a_theme.is_dark) end)
 				-- Genesis 1:1 selected, so the commentary has its cross-references from the start (Larry:
 				-- T5 was empty until a verse was clicked).
 			if bible.is_open and then not reading_version.is_empty and then bible.books.has_book (1) then
 				go_to (1, 1, 1)
 			end
 			show_no_word
-			dark_switch.set_on (window.theme.is_dark)
 				-- Typing goes straight into the reference box (keys typed before a click were lost once).
 			window.give_focus (reference_box)
 			if is_snapshot then
@@ -368,7 +375,7 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 				end
 			end
 			if not is_study then
-				arrange (True)
+				layout_state.set_study (True)
 			end
 			if snapshot_tab.same_string ({STRING_32} "interlinear") then
 				show_interlinear
@@ -1005,11 +1012,11 @@ feature {NONE} -- Menus and keys (C2)
 	view_menu: SW_MENU
 		do
 			create Result.make
-			Result.add_item ("Simple layout", "Ctrl+M", is_study, agent arrange (False))
-			Result.add_item ("Study layout", "Ctrl+M", not is_study, agent arrange (True))
+			Result.add_item ("Simple layout", "Ctrl+M", is_study, agent layout_state.set_study (False))
+			Result.add_item ("Study layout", "Ctrl+M", not is_study, agent layout_state.set_study (True))
 			Result.add_separator
-			Result.add_item ("Larger text", "Ctrl++", settings.text_scale < settings.Max_text_scale, agent change_text_size (1))
-			Result.add_item ("Smaller text", "Ctrl+-", settings.text_scale > settings.Min_text_scale, agent change_text_size (-1))
+			Result.add_item ("Larger text", "Ctrl++", layout_state.can_grow_text, agent change_text_size (1))
+			Result.add_item ("Smaller text", "Ctrl+-", layout_state.can_shrink_text, agent change_text_size (-1))
 			Result.add_separator
 			Result.add_item (focus_label, "Ctrl+Shift+F", True, agent toggle_focus_reading)
 			if dock.maximized_panel = commentary_panel then
@@ -1249,34 +1256,41 @@ feature {NONE} -- Toolbar (C3-C9)
 	on_mode (a_index: INTEGER)
 			-- C7: Simple (1) or Study (2); layout only, never data.
 		do
-			if (a_index = 2) /= is_study then
-				arrange (a_index = 2)
-			end
+			layout_state.set_study (a_index = 2)
 		end
 
 	toggle_mode
 			-- Ctrl+M.
 		do
-			arrange (not is_study)
+			layout_state.toggle_study
 		end
 
 	change_text_size (a_step: INTEGER)
 			-- C8: all the window's text larger (1) or smaller (-1), menus too, kept for the next run
-			-- (Larry, 2026-10-26: not the Bible text alone).
+			-- (Larry, 2026-10-26: not the Bible text alone). The state tells `apply_text_scale'.
+		do
+			layout_state.step_text_scale (a_step)
+			window.toast ({STRING_32} "Text size " + (layout_state.text_scale * 100.0).rounded.out + {STRING_32} "%%", 1)
+		end
+
+	apply_text_scale (a_scale: REAL_64)
+			-- The text size everywhere it shows: both themes, the two size buttons, the saved setting
+			-- (told by the layout state, and on joining, so the buttons are right from the start:
+			-- risk 2).
 		local
-			l_scale: REAL_64
 			l_saved: BOOLEAN
 		do
-			l_scale := ((settings.text_scale + 0.1 * a_step) * 10.0).rounded / 10.0
-			l_scale := l_scale.max (settings.Min_text_scale).min (settings.Max_text_scale)
-			settings.set_text_scale (l_scale)
-			light_theme.set_text_scale (l_scale)
-			dark_theme.set_text_scale (l_scale)
-			smaller_button.set_enabled (l_scale > settings.Min_text_scale)
-			larger_button.set_enabled (l_scale < settings.Max_text_scale)
-			l_saved := settings.save
+			light_theme.set_text_scale (a_scale)
+			dark_theme.set_text_scale (a_scale)
+			smaller_button.set_enabled (layout_state.can_shrink_text)
+			larger_button.set_enabled (layout_state.can_grow_text)
+			if settings.text_scale /= a_scale then
+				settings.set_text_scale (a_scale)
+				if not is_snapshot then
+					l_saved := settings.save
+				end
+			end
 			window.request_render
-			window.toast ({STRING_32} "Text size " + (l_scale * 100.0).rounded.out + {STRING_32} "%%", 1)
 		end
 
 	mark_selected_verse (a_view: SW_PARALLEL_TEXT; a_row, a_column: INTEGER; a_text: READABLE_STRING_32; a_highlighted: BOOLEAN)
@@ -1325,16 +1339,27 @@ feature {NONE} -- Toolbar (C3-C9)
 		end
 
 	set_dark (a_dark: BOOLEAN)
-			-- Wear the dark theme, or the light one (the reader's own choice: Windows no longer decides).
+			-- The reader's choice of the dark theme, or the light one; the state tells `apply_theme'.
 		do
-			if a_dark then
-				window.set_theme (dark_theme)
-			else
-				window.set_theme (light_theme)
+			layout_state.set_dark (a_dark)
+		end
+
+	apply_theme (a_dark: BOOLEAN)
+			-- The window and the switch wearing what the state says (told on joining, on the reader's
+			-- choice, and when following Windows swapped the theme: then the window already wears it,
+			-- so it is not set again and keeps following; the switch follows too: risk 11).
+		do
+			if window.theme.is_dark /= a_dark then
+				if a_dark then
+					window.set_theme (dark_theme)
+				else
+					window.set_theme (light_theme)
+				end
 			end
 			if dark_switch.is_on /= a_dark then
 				dark_switch.set_on (a_dark)
 			end
+			window.request_render
 		end
 
 	focus_reference
@@ -1499,21 +1524,29 @@ feature {NONE} -- Reading (S1, P01)
 				window.set_title (window_title)
 				status_bar.set_left (place_text (a_book, a_chapter, a_verse) + {STRING_32} " (" + reading_version.to_string_32 + {STRING_32} ")")
 				if is_study then
-					fill_parallel
-					if center_tabs.selected_index = Interlinear_tab then
-						fill_interlinear
-					end
-					fill_notes
-					fill_highlights
-					fill_bookmarks
-					fill_tags
-					fill_journal
-					fill_history
-					fill_prayers
-					fill_memory
+					fill_study_panes
 				end
 				refresh_strip_marks
 			end
+		end
+
+	fill_study_panes
+			-- Every Study pane for the place read: Parallel (and Interlinear when it shows), notes,
+			-- highlights, bookmarks, tags, journal, history, prayers, memory, and the strip marks.
+		do
+			fill_parallel
+			if center_tabs.selected_index = Interlinear_tab then
+				fill_interlinear
+			end
+			fill_notes
+			fill_highlights
+			fill_bookmarks
+			fill_tags
+			fill_journal
+			fill_history
+			fill_prayers
+			fill_memory
+			refresh_strip_marks
 		end
 
 	step_chapter (a_step: INTEGER)
@@ -1700,6 +1733,16 @@ feature {NONE} -- Reading (S1, P01)
 feature {NONE} -- Two layouts (C7)
 
 	is_study: BOOLEAN
+			-- The Study layout? (One copy: the layout state.)
+		do
+			Result := layout_state.is_study
+		end
+
+	layout_state: BIB_LAYOUT_STATE
+			-- The layout and the look, one copy of each fact (research/23 phase 2).
+		attribute
+			create Result.make (settings.is_study_layout, settings.text_scale, False)
+		end
 			-- Is the Study layout on?
 
 	center_holder: SW_COLUMN
@@ -1772,7 +1815,6 @@ feature {NONE} -- Two layouts (C7)
 			if tools_holder.children.has (tools_strip) then
 				tools_holder.remove (tools_strip)
 			end
-			is_study := a_study
 			if a_study then
 				bible_page.put (reading_column)
 				center_holder.put (center_tabs)
@@ -1786,12 +1828,14 @@ feature {NONE} -- Two layouts (C7)
 				dock.show_panel (notes_panel)
 				dock.show_panel (results_panel)
 				dock.hide_panel (atlas_panel)
-				is_river_workspace := False
+				river_applied := False
 				dock.set_fraction (dock.Zone_west, 0.18)
 				dock.set_fraction (dock.Zone_east, 0.34)
 				dock.set_fraction (dock.Zone_south, 0.30)
 				center_tabs.select_tab (1)
-				fill_parallel
+					-- every Study pane filled for the place read (risk 1: switching from Simple left
+					-- notes, journal, memory and the rest empty, their buttons as made)
+				fill_study_panes
 			else
 				center_holder.put (reading_column)
 				results_holder.put (results_column)
@@ -1801,7 +1845,7 @@ feature {NONE} -- Two layouts (C7)
 				dock.hide_panel (navigator_panel)
 				dock.hide_panel (notes_panel)
 				dock.hide_panel (atlas_panel)
-				is_river_workspace := False
+				river_applied := False
 				if choices.is_empty then
 					dock.hide_panel (results_panel)
 				else
@@ -1824,10 +1868,9 @@ feature {NONE} -- Two layouts (C7)
 			if not is_snapshot then
 				l_saved := settings.save
 			end
+			show_focus_label
 			keep_verse_in_view
 			window.request_render
-		ensure
-			set: is_study = a_study
 		end
 
 	detach (a_holder: SW_COLUMN; a_widget: SW_WIDGET)
@@ -3087,8 +3130,8 @@ feature {NONE} -- Notes (T2, P06)
 				fill_timeline
 				show_atlas
 			end
-			if a_index /= Timeline_tab and is_river_workspace then
-				leave_river_workspace
+			if a_index /= Timeline_tab then
+				layout_state.set_river_workspace (False)
 			end
 		end
 
@@ -3183,7 +3226,7 @@ feature {NONE} -- Notes (T2, P06)
 			-- The Timeline tab (in Study; Simple has no tabs).
 		do
 			if not is_study then
-				arrange (True)
+				layout_state.set_study (True)
 			end
 			center_tabs.select_tab (Timeline_tab)
 			fill_timeline
@@ -3419,51 +3462,76 @@ feature {NONE} -- The Atlas and the shared selection (Plan 22 phase 3, 2026-10-3
 			-- Has `atlas_view' been filled from the packs?
 
 	is_river_workspace: BOOLEAN
-			-- Is the east zone given to the Atlas beside the Timeline tab?
+			-- Is the east zone given to the Atlas beside the Timeline tab? (The layout state.)
+		do
+			Result := layout_state.is_river_workspace
+		end
+
+	river_applied: BOOLEAN
+			-- Does the dock show the river workspace now?
+
+	reading_east_fraction, river_east_fraction: REAL_64
+			-- The east zone's width the reader last had in each workspace (risk 13: a drag was lost
+			-- on every change).
+
+	apply_river_workspace (a_on: BOOLEAN)
+			-- The dock showing the river workspace or not, as the layout state says.
+		do
+			if a_on /= river_applied then
+				if a_on then
+					enter_river_workspace
+				else
+					leave_river_workspace
+				end
+			end
+		ensure
+			applied: river_applied = a_on
+		end
 
 	show_atlas
 			-- The Atlas beside the Timeline tab: the river workspace (in Study; Simple has no tabs).
 			-- Until the Atlas follows the reader (A10), it lives with the Timeline.
 		do
 			if not is_study then
-				arrange (True)
+				layout_state.set_study (True)
 			end
 			if center_tabs.selected_index /= Timeline_tab then
 				center_tabs.select_tab (Timeline_tab)
 			end
 			fill_timeline
-			if not is_river_workspace then
-				enter_river_workspace
-			end
+			layout_state.set_river_workspace (True)
 			fill_atlas
 			window.request_render
 		end
 
 	enter_river_workspace
-			-- The east zone given to the Atlas alone, at 42 percent (spike S9): the lexicon and the
-			-- commentary step aside while the Timeline tab is up.
+			-- The east zone given to the Atlas alone (42 percent at first, spike S9; then as wide as
+			-- the reader last left it): the lexicon and the commentary step aside.
 		require
 			study: is_study
 		do
+			reading_east_fraction := dock.fraction (dock.Zone_east)
 			dock.hide_panel (lexicon_panel)
 			dock.hide_panel (commentary_panel)
 			dock.show_panel (atlas_panel)
-			dock.set_fraction (dock.Zone_east, 0.42)
-			is_river_workspace := True
+			dock.set_fraction (dock.Zone_east, (if river_east_fraction > 0.0 then river_east_fraction else 0.42 end))
+			river_applied := True
 		ensure
-			entered: is_river_workspace
+			entered: river_applied
 		end
 
 	leave_river_workspace
-			-- The lexicon and the commentary back in the east zone, the Atlas put away.
+			-- The lexicon and the commentary back in the east zone as wide as the reader had it, the
+			-- Atlas put away.
 		do
+			river_east_fraction := dock.fraction (dock.Zone_east)
 			dock.hide_panel (atlas_panel)
 			dock.show_panel (lexicon_panel)
 			dock.show_panel (commentary_panel)
-			dock.set_fraction (dock.Zone_east, 0.34)
-			is_river_workspace := False
+			dock.set_fraction (dock.Zone_east, (if reading_east_fraction > 0.0 then reading_east_fraction else 0.34 end))
+			river_applied := False
 		ensure
-			left: not is_river_workspace
+			left: not river_applied
 		end
 
 	Atlas_zoom_scale: REAL_64 = 6.0
@@ -3669,7 +3737,7 @@ feature {NONE} -- The Atlas and the shared selection (Plan 22 phase 3, 2026-10-3
 			-- C10 Interlinear, Ctrl+I: the Interlinear tab (in Study; Simple has no tabs).
 		do
 			if not is_study then
-				arrange (True)
+				layout_state.set_study (True)
 			end
 			center_tabs.select_tab (Interlinear_tab)
 			fill_interlinear
@@ -3851,7 +3919,7 @@ feature {NONE} -- The Atlas and the shared selection (Plan 22 phase 3, 2026-10-3
 			-- C10 Parallel: the Parallel tab (in Study; Simple has no tabs).
 		do
 			if not is_study then
-				arrange (True)
+				layout_state.set_study (True)
 			end
 			center_tabs.select_tab (2)
 			fill_parallel
@@ -4100,7 +4168,7 @@ feature {NONE} -- Right-click menus and panes (Larry, 2026-10-28)
 			-- pane's maximizing put back, a folded zone opened (scan 59: three copies had drifted).
 		do
 			if not is_study then
-				arrange (True)
+				layout_state.set_study (True)
 			end
 			if dock.maximized_panel /= 0 and dock.maximized_panel /= a_panel then
 				dock.restore_maximized
@@ -4433,6 +4501,16 @@ feature {NONE} -- Right-click menus and panes (Larry, 2026-10-28)
 			end
 		end
 
+	show_focus_label
+			-- The Focus button says what a press will do (risk 18: it said "Focus" always).
+		do
+			if dock.is_focused_on_center then
+				focus_button.set_label ("Sides back")
+			else
+				focus_button.set_label ("Focus")
+			end
+		end
+
 	toggle_focus_reading
 			-- Fold every side so the Bible text has the window, or bring the sides back (Larry,
 			-- 2026-10-28). A folded side still names its panes, with a dot where one has something for
@@ -4445,6 +4523,7 @@ feature {NONE} -- Right-click menus and panes (Larry, 2026-10-28)
 				dock.set_all_collapsed (True)
 				say ("Focus reading. Ctrl+Shift+F brings the panes back.")
 			end
+			show_focus_label
 			keep_verse_in_view
 			window.request_render
 		end
@@ -5837,7 +5916,7 @@ feature {NONE} -- Ask (C6.5, 0.7.31: plain words through the Cactus Needle helpe
 				asked_parallel_versions := l_versions
 				go_to (al_place.book, al_place.chapter, al_place.verse)
 				if not is_study then
-					arrange (True)
+					layout_state.set_study (True)
 				end
 				center_tabs.select_tab (2)
 				fill_parallel
