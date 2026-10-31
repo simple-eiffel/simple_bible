@@ -374,6 +374,15 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 				show_interlinear
 			elseif snapshot_tab.same_string ({STRING_32} "timeline") then
 				show_timeline
+			elseif snapshot_tab.same_string ({STRING_32} "measure") then
+					-- the measuring tool: Jerusalem, Jericho, Bethlehem joined into a shape
+				show_atlas
+				atlas_view.set_view (128.0, 35.32, 31.79)
+				atlas_view.start_measuring
+				atlas_view.place_point (35.2345, 31.7767)
+				atlas_view.place_point (35.4440, 31.8710)
+				atlas_view.place_point (35.2003, 31.7054)
+				atlas_view.close_shape
 			elseif snapshot_tab.same_string ({STRING_32} "atlas") then
 					-- Sennacherib's campaign, 701 BC: Jerusalem and Lachish marked, Assyria on the map
 				show_timeline
@@ -750,7 +759,7 @@ feature {NONE} -- Window
 			navigator_panel := dock.add_panel ("NAVIGATOR", navigator_pane, dock.Zone_west)
 			notes_panel := dock.add_panel ("NOTES", notes_pane, dock.Zone_west)
 				-- the Atlas, docked beside the Timeline tab (Plan 22 phase 3, spike S9)
-			atlas_panel := dock.add_panel ("ATLAS", atlas_view.growing, dock.Zone_east)
+			atlas_panel := dock.add_panel ("ATLAS", atlas_pane, dock.Zone_east)
 			dock.set_maximizable (atlas_panel, True)
 				-- Panes worth reading larger (Larry, 2026-10-28): a maximize button on their bars. The
 				-- Navigator gains nothing from the room; the Bible text has Focus reading instead.
@@ -3231,6 +3240,96 @@ feature {NONE} -- The Atlas and the shared selection (Plan 22 phase 3, 2026-10-3
 			create Result.make
 		end
 
+	atlas_pane: SW_COLUMN
+			-- T7: the measuring tool's buttons over the Atlas (Larry, 2026-10-31: "something to
+			-- start and something to end", and to delete the whole path).
+		local
+			l_bar: SW_ROW
+		do
+			create l_bar.make
+			l_bar := l_bar.with_gap (6.0)
+			l_bar.put (measure_start_button)
+			l_bar.put (measure_undo_button)
+			l_bar.put (measure_end_button)
+			l_bar.put (measure_close_button)
+			l_bar.put (measure_delete_button)
+			create Result.make
+			Result := Result.fitting.with_gap (6.0)
+			Result.put (l_bar)
+			Result.put (atlas_view.growing)
+		end
+
+	measure_start_button: SW_BUTTON
+		attribute
+			create Result.make ("Start measuring", agent start_measuring)
+			Result.set_tooltip ("Start measuring: then click the map to place points, one after another. A drag still moves the map.")
+			Result.set_enabled_when (agent: BOOLEAN do Result := not atlas_view.is_measuring end)
+		end
+
+	measure_undo_button: SW_BUTTON
+		attribute
+			create Result.make ("Undo point", agent undo_measure_point)
+			Result.set_tooltip ("Take back the last point placed.")
+			Result.set_enabled_when (agent: BOOLEAN do Result := atlas_view.is_measuring and not atlas_view.measure_points.is_empty end)
+		end
+
+	measure_end_button: SW_BUTTON
+		attribute
+			create Result.make ("End", agent end_measuring)
+			Result.set_tooltip ("End: keep the path and its distance on the map; clicks move the map again. (A double-click on the map does the same.)")
+			Result.set_enabled_when (agent: BOOLEAN do Result := atlas_view.is_measuring and atlas_view.measure_points.count >= 2 end)
+		end
+
+	measure_close_button: SW_BUTTON
+		attribute
+			create Result.make ("Close shape", agent close_measure_shape)
+			Result.set_tooltip ("Close shape: join the last point to the first for the perimeter and the area. (A click on the first point does the same.)")
+			Result.set_enabled_when (agent: BOOLEAN do Result := atlas_view.can_close end)
+		end
+
+	measure_delete_button: SW_BUTTON
+		attribute
+			create Result.make ("Delete", agent delete_measure)
+			Result.set_tooltip ("Delete the whole path or shape and its readout.")
+			Result.set_enabled_when (agent: BOOLEAN do Result := atlas_view.measure_state /= atlas_view.Measure_idle end)
+		end
+
+	start_measuring
+		do
+			atlas_view.start_measuring
+			window.request_render
+		end
+
+	undo_measure_point
+		do
+			if atlas_view.is_measuring and not atlas_view.measure_points.is_empty then
+				atlas_view.undo_point
+			end
+			window.request_render
+		end
+
+	end_measuring
+		do
+			if atlas_view.is_measuring then
+				atlas_view.end_measuring
+			end
+			window.request_render
+		end
+
+	close_measure_shape
+		do
+			if atlas_view.can_close then
+				atlas_view.close_shape
+			end
+			window.request_render
+		end
+
+	delete_measure
+		do
+			atlas_view.delete_measure
+			window.request_render
+		end
+
 	atlas_filled: BOOLEAN
 			-- Has `atlas_view' been filled from the packs?
 
@@ -3805,7 +3904,7 @@ feature {NONE} -- The Atlas and the shared selection (Plan 22 phase 3, 2026-10-3
 			window.add_reference_mark (navigator_tabs, "T1", "P11 Navigator, west: Books (chapter by chapter), Bookmarks (Ctrl+D bookmarks the verse read; click one to read it; Remove and Restore) and History (the last 50 chapters read, newest first, kept between runs; click one to read it again).", window.Corner_top_left)
 			window.add_reference_mark (notes_heading, "T2", "P06 Notes, west below T1, in tab order: Verse notes on the chapter read (add on the verse read; double-click to edit, each edit keeps the old version; Delete and Restore); Journal, notes on a subject (New; Save keeps the earlier version; Delete and Restore); Tags (tag the verse read; click a tag for its verses, a verse to read it; Remove and Restore); Highlights (a reason, not a color; washed amber in the Bible and Parallel tabs; click one to read it; Remove and Restore); Prayer (a title and the request; Open and Answered, with how it was answered; Remove and Restore); Memory (learn the verse read; recall today's card, Show the verse, grade Again, Hard, Good or Easy; the next date follows SuperMemo 2).", window.Corner_top_left)
 			window.add_reference_mark (center_tabs, "T3", "Centre tabs: the Bible text, Parallel (P02), Interlinear (P03, Ctrl+I) and the Timeline (the River of Time).", window.Corner_top_left)
-			window.add_reference_mark (atlas_view, "T7", "The Atlas (Plan 22): empires by year from Cliopatria, places with their doubt (several candidates are dashed rings, each naming who holds it); choosing an event on the Timeline marks its places, choosing a place moves the Timeline. Window > Atlas.", window.Corner_top_left)
+			window.add_reference_mark (atlas_view, "T7", "The Atlas (Plan 22): empires by year from Cliopatria, places with their doubt (several candidates are dashed rings, each naming who holds it); choosing an event on the Timeline marks its places, choosing a place moves the Timeline; the scale in miles, kilometers and nautical miles; Start measuring, click points, End or Close shape for the area, Delete; an empire's card and a click on it give its area. Window > Atlas.", window.Corner_top_left)
 			window.add_reference_mark (analysis_title, "P03.2", "Verse analysis: the verse read, a row per word with its lemma, Strong's number, morphology, gloss, and how often its headword occurs in this testament. Click a row and T4 follows it.", window.Corner_top_left)
 			window.add_reference_mark (interlinear_note, "P03", "Interlinear: word by word in the original, right to left for Hebrew. A click makes the word's verse the place read and opens its headword in T4.", window.Corner_top_left)
 			window.add_reference_mark (lexicon_heading, "T4", "P05 Lexicon, east: follows the clicked word. Its Frameworks tab (P05.8) explains each FRAMEWORK(TM) for the common reader; a framework named anywhere is a link: rest on it for a summary, click it to open it here.", window.Corner_top_left)
