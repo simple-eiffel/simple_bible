@@ -75,6 +75,9 @@ feature {NONE} -- Suites
 			run_test (agent t.test_closed_results_stay_closed_across_layouts, "test_closed_results_stay_closed_across_layouts")
 			run_test (agent t.test_close_in_study_clears_the_results, "test_close_in_study_clears_the_results")
 			run_test (agent t.test_results_dot_follows_closing, "test_results_dot_follows_closing")
+			run_test (agent t.test_notes_dot_follows_adding_and_deleting, "test_notes_dot_follows_adding_and_deleting")
+			run_test (agent t.test_answered_waits_for_a_chosen_prayer, "test_answered_waits_for_a_chosen_prayer")
+			run_test (agent t.test_one_verse_reads_as_one, "test_one_verse_reads_as_one")
 		end
 
 feature {NONE} -- Runner

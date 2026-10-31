@@ -295,6 +295,12 @@ feature {NONE} -- Initialization
 			prayer_open_panel.set_actions (agent say, agent fill_prayers, agent read_hub_if_any)
 			prayer_answered_panel.set_actions (agent say, agent fill_prayers, agent read_hub_if_any)
 			memory_panel.set_actions (agent say, agent fill_memory, agent go_to_hub)
+				-- state by agents (research/23 phase 5): Answered follows the open list's choice, and
+				-- the strip's dots follow the facts they show
+			prayer_open_panel.on_choice (agent (a_id: INTEGER_64) do prayer_answered_button.set_enabled (a_id > 0) end)
+			notes_listed.subscribe (agent refresh_strip_marks)
+			commentary_found.subscribe (agent refresh_strip_marks)
+			word_opened.subscribe (agent refresh_strip_marks)
 			build_columns
 			fill_versions
 			mode_switch.add_segment ("Simple")
@@ -474,6 +480,51 @@ feature {BIB_WINDOW_HARNESS_CLIENT} -- The window harness (research/23, 2026-10-
 					Result := ic.enabled
 				end
 			end
+		end
+
+	harness_verses_heading: STRING_32
+			-- What the verses list's heading says.
+		do
+			Result := verses_heading.text
+		end
+
+	harness_add_note (a_text: READABLE_STRING_GENERAL)
+			-- Write `a_text' in the new-note box and press Add note.
+		do
+			new_note_box.set_text (a_text)
+			add_note
+		end
+
+	harness_delete_note (a_index: INTEGER)
+			-- Delete note `a_index' of the list.
+		do
+			delete_note_at (a_index)
+		end
+
+	harness_notes_marked: BOOLEAN
+			-- Has the Notes panel its dot (the chapter has notes)?
+		do
+			Result := dock.is_panel_marked (notes_panel)
+		end
+
+	harness_add_prayer (a_title, a_body: READABLE_STRING_GENERAL)
+			-- Write a prayer's title and request and press Add.
+		do
+			prayer_title_box.set_text (a_title)
+			prayer_body_box.set_text (a_body)
+			add_prayer
+		end
+
+	harness_choose_open_prayer (a_row: INTEGER)
+			-- Click open prayer `a_row'.
+		do
+			prayer_open_grid.select_model_row (a_row)
+		end
+
+	harness_answered_enabled: BOOLEAN
+			-- Is the Answered button enabled?
+		do
+			Result := prayer_answered_button.is_enabled
 		end
 
 	harness_theme_swapped_by_windows (a_dark: BOOLEAN)
@@ -2385,6 +2436,27 @@ feature {NONE} -- Notes (T2, P06)
 			add_note_button.set_enabled (user_store.is_open and reading_verse > 0)
 			delete_note_button.set_enabled (False)
 			restore_note_button.set_enabled (last_deleted_note > 0)
+			notes_listed.call (Void)
+		end
+
+	notes_listed: SW_EVENT [TUPLE]
+			-- Told whenever the chapter's notes are listed again (research/23 phase 5: the Notes dot
+			-- was set only when a chapter was read, so a first note or a last deletion left it wrong,
+			-- risk 6).
+		attribute
+			create Result.make
+		end
+
+	commentary_found: SW_EVENT [TUPLE]
+			-- Told whenever the commentary for the verse is looked up (`has_commentary' settled).
+		attribute
+			create Result.make
+		end
+
+	word_opened: SW_EVENT [TUPLE]
+			-- Told whenever a word opens in the lexicon (`study_lemma' set).
+		attribute
+			create Result.make
 		end
 
 	add_note
@@ -2603,7 +2675,6 @@ feature {NONE} -- Notes (T2, P06)
 				prayer_answered_heading.set_text ({STRING_32} "Answered (" + prayer_answered_rows.count.out + {STRING_32} "), latest first:")
 			end
 			prayer_add_button.set_enabled (user_store.is_open)
-			prayer_answered_button.set_enabled (not prayer_open_rows.is_empty)
 		end
 
 	add_prayer
@@ -6661,6 +6732,7 @@ feature {NONE} -- Commentary (S2, P04)
 				end
 			end
 			commentary_view.set_document (commentary_reader.read (l_page))
+			commentary_found.call (Void)
 		end
 
 	on_cross_ref (a_model: INTEGER)
@@ -6702,6 +6774,7 @@ feature {NONE} -- Dictionary and lexicon (S3, P05)
 			is_loading_places := False
 			if attached bible.conc_pack.word_entry (a_lemma_id) as al_entry then
 				study_lemma := a_lemma_id
+				word_opened.call (Void)
 				study_corpus := study_corpus_for (a_lemma_id, bible.conc_pack.corpus_of (al_entry.provenance))
 				lexicon_heading.set_text (al_entry.headword + {STRING_32} "   " + al_entry.translit)
 				l_gloss := bible.conc_pack.short_gloss (a_lemma_id)
@@ -7006,7 +7079,7 @@ feature {NONE} -- Search results (P07)
 			elseif a_total > verse_hits.count then
 				verses_heading.set_text ({STRING_32} "Verses in " + reading_version.to_string_32 + {STRING_32} ": " + a_total.out + {STRING_32} " match; the first " + verse_hits.count.out + {STRING_32} " in Bible order. Click one to read it." + l_note)
 			elseif a_total = 1 then
-				verses_heading.set_text ({STRING_32} "Verses in " + reading_version.to_string_32 + {STRING_32} ": 1 matches. Click it to read it." + l_note)
+				verses_heading.set_text ({STRING_32} "Verses in " + reading_version.to_string_32 + {STRING_32} ": 1 verse matches. Click it to read it." + l_note)
 			else
 				verses_heading.set_text ({STRING_32} "Verses in " + reading_version.to_string_32 + {STRING_32} ": " + a_total.out + {STRING_32} " match, in Bible order. Click one to read it." + l_note)
 			end
