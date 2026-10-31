@@ -22,6 +22,7 @@ feature {NONE} -- Initialization
 			print ("Running Simple Bible GUI state tests (research/23)...%N%N")
 			run_selection_tests
 			run_layout_tests
+			run_window_tests
 			print ("%N========================%N")
 			print ("Results: " + passed.out + " passed, " + failed.out + " failed%N")
 			if failed > 0 then
@@ -56,6 +57,20 @@ feature {NONE} -- Suites
 			run_test (agent t.test_joining_tells_the_present, "test_joining_tells_the_present")
 			run_test (agent t.test_text_size_kept_to_a_tenth_in_range, "test_text_size_kept_to_a_tenth_in_range")
 			run_test (agent t.test_a_new_layout_puts_the_river_away, "test_a_new_layout_puts_the_river_away")
+		end
+
+	run_window_tests
+			-- The whole window, offscreen (needs LOCALAPPDATA naming a data folder).
+		local
+			t: TEST_WINDOW
+		do
+			print ("TEST_WINDOW%N")
+			create t
+			run_test (agent t.test_entering_study_fills_the_study_panes, "test_entering_study_fills_the_study_panes")
+			run_test (agent t.test_size_buttons_follow_the_size, "test_size_buttons_follow_the_size")
+			run_test (agent t.test_dark_switch_follows_windows, "test_dark_switch_follows_windows")
+			run_test (agent t.test_each_workspace_keeps_its_east_width, "test_each_workspace_keeps_its_east_width")
+			run_test (agent t.test_focus_button_says_what_it_will_do, "test_focus_button_says_what_it_will_do")
 		end
 
 feature {NONE} -- Runner

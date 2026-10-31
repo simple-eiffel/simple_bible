@@ -25,10 +25,42 @@ class
 create
 	make
 
+create {BIB_WINDOW_HARNESS_CLIENT}
+	make_harness
+
 feature {NONE} -- Initialization
 
 	make
-			-- Open the engine, build the window, run it, close the engine.
+			-- Open the engine, build the window, run it (or take a snapshot), close the engine.
+		do
+			build
+			if is_snapshot then
+				take_snapshot
+			else
+				if bible.is_open and then ((create {BIB_NOTE_BATCH}.make (bible)).is_pack_stale ((create {BIB_DATA_LOCATION}).notes_folder)
+					or (create {BIB_NOTE_BATCH}.make (bible)).is_pack_stale ((create {BIB_DATA_LOCATION}).guides_folder))
+				then
+						-- notes the installer brought (Larry's, for the alpha testers, 2026-10-30), or a pack
+						-- an import could not put in place: built again once the window is painted
+					pending_notes_rebuild_ticks := 2
+					say ("Bringing the notes up to date...")
+				end
+				window.run
+			end
+			shut_down
+		end
+
+	make_harness
+			-- The whole window built offscreen for the GUI tests (research/23): the data LOCALAPPDATA
+			-- names, a user.db of its own emptied first (as a snapshot's), no settings saved, no event
+			-- loop. The tests drive it through the harness features, then call `shut_down'.
+		do
+			is_harness := True
+			build
+		end
+
+	build
+			-- Open the engine and build the window, at Genesis 1:1, the layout and look joined.
 		local
 			l_config: BIB_CONFIG
 			l_location: BIB_DATA_LOCATION
@@ -42,8 +74,9 @@ feature {NONE} -- Initialization
 			create settings.make
 			settings.load
 			read_snapshot_arguments
-			if is_snapshot then
-					-- A snapshot never touches the reader's notes: its own user.db, emptied first.
+			if is_offscreen then
+					-- A snapshot or the harness never touches the reader's notes: its own user.db,
+					-- emptied first.
 				fresh_snapshot_user_file
 				create user_store.make (snapshot_user_path)
 			else
@@ -288,24 +321,129 @@ feature {NONE} -- Initialization
 			show_no_word
 				-- Typing goes straight into the reference box (keys typed before a click were lost once).
 			window.give_focus (reference_box)
-			if is_snapshot then
-				take_snapshot
-			else
-				if bible.is_open and then ((create {BIB_NOTE_BATCH}.make (bible)).is_pack_stale ((create {BIB_DATA_LOCATION}).notes_folder)
-					or (create {BIB_NOTE_BATCH}.make (bible)).is_pack_stale ((create {BIB_DATA_LOCATION}).guides_folder))
-				then
-						-- notes the installer brought (Larry's, for the alpha testers, 2026-10-30), or a pack
-						-- an import could not put in place: built again once the window is painted
-					pending_notes_rebuild_ticks := 2
-					say ("Bringing the notes up to date...")
-				end
-				window.run
-			end
+		end
+
+feature {BIB_WINDOW_HARNESS_CLIENT} -- The window harness (research/23, 2026-10-31: GUI risks shown failing before their fixes)
+
+	is_harness: BOOLEAN
+			-- Was the window built by `make_harness'?
+
+	is_offscreen: BOOLEAN
+			-- A snapshot or the harness: no settings saved, a user.db of its own.
+		do
+			Result := is_snapshot or is_harness
+		end
+
+	shut_down
+			-- Close the reader's stores and the engine.
+		do
 			if user_store.is_open then
 				user_store.close
 			end
 			if bible.is_open then
 				bible.close
+			end
+		end
+
+	harness_state: BIB_LAYOUT_STATE
+			-- The layout and the look, to drive as the reader would.
+		do
+			Result := layout_state
+		end
+
+	harness_selection: BIB_TIME_PLACE_SELECTION
+			-- The Timeline and the Atlas's shared selection.
+		do
+			Result := selection
+		end
+
+	harness_render
+			-- One frame, as after any input.
+		do
+			window.request_render
+		end
+
+	harness_go_to (a_book, a_chapter, a_verse: INTEGER)
+			-- Read that place, as the reference box would.
+		do
+			go_to (a_book, a_chapter, a_verse)
+		end
+
+	harness_toggle_focus
+			-- Ctrl+Shift+F.
+		do
+			toggle_focus_reading
+		end
+
+	harness_show_timeline
+			-- The Timeline tab and its Atlas.
+		do
+			show_timeline
+		end
+
+	harness_select_tab (a_index: INTEGER)
+			-- A center tab, as a click on it would.
+		do
+			center_tabs.select_tab (a_index)
+		end
+
+	harness_east_fraction: REAL_64
+			-- The east zone's width as a share of the window.
+		do
+			Result := dock.fraction (dock.Zone_east)
+		end
+
+	harness_set_east_fraction (a_fraction: REAL_64)
+			-- The reader dragging the east zone's edge.
+		do
+			dock.set_fraction (dock.Zone_east, a_fraction)
+		end
+
+	harness_notes_heading: STRING_32
+			-- What the Notes pane's heading says.
+		do
+			Result := notes_heading.text
+		end
+
+	harness_smaller_enabled: BOOLEAN
+			-- Is the smaller-text button enabled?
+		do
+			Result := smaller_button.is_enabled
+		end
+
+	harness_larger_enabled: BOOLEAN
+		do
+			Result := larger_button.is_enabled
+		end
+
+	harness_focus_label: STRING_32
+			-- What the Focus button says.
+		do
+			Result := focus_button.label
+		end
+
+	harness_dark_switch_on: BOOLEAN
+		do
+			Result := dark_switch.is_on
+		end
+
+	harness_window_dark: BOOLEAN
+		do
+			Result := window.theme.is_dark
+		end
+
+	harness_theme_swapped_by_windows (a_dark: BOOLEAN)
+			-- What following Windows does when its setting flips: the window wears the theme and
+			-- tells `on_theme_changed'.
+		do
+			if a_dark then
+				window.follow_system_theme (light_theme, dark_theme)
+				window.set_theme (dark_theme)
+			else
+				window.set_theme (light_theme)
+			end
+			if attached window.on_theme_changed as al_told then
+				al_told.call ([window.theme])
 			end
 		end
 
@@ -1286,7 +1424,7 @@ feature {NONE} -- Toolbar (C3-C9)
 			larger_button.set_enabled (layout_state.can_grow_text)
 			if settings.text_scale /= a_scale then
 				settings.set_text_scale (a_scale)
-				if not is_snapshot then
+				if not is_offscreen then
 					l_saved := settings.save
 				end
 			end
@@ -1865,7 +2003,7 @@ feature {NONE} -- Two layouts (C7)
 				add_pills
 			end
 			settings.set_study_layout (a_study)
-			if not is_snapshot then
+			if not is_offscreen then
 				l_saved := settings.save
 			end
 			show_focus_label

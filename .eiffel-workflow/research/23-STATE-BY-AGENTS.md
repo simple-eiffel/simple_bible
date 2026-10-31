@@ -1,6 +1,6 @@
 # 23 - State by agents (audit, plan, phases)
 
-Status: **audit done (2026-10-31); phase 0 shipped in 0.7.44; phase 1 shipped in 0.7.45; phase 2 built for 0.7.46; phases 3 onward next.** The library design (section 5) waits for a design session with Larry.
+Status: **audit done (2026-10-31); phase 0 shipped in 0.7.44; phase 1 shipped in 0.7.45; phase 2 shipped in 0.7.46; the window harness in 0.7.47; phases 3 onward next, test-first through the harness.** The library design (section 5) waits for a design session with Larry.
 
 ## 1. The rule
 
@@ -102,7 +102,7 @@ Shipped with phase 1 (0.7.45): the Timeline's bar across time (simple_widgets 0.
 2. **Its shape**: a deferred ancestor (for example a state with `changed` events and `bind`, which subscribes and applies now), and possibly a mixin that makes a widget or pane declare how it binds, so descendants are forced to implement it between the abstraction and the concrete class.
 3. **Explicit state machines**: states, transitions, guard agents, entry and exit agent collections (the measuring tool is Idle, Running, Ended), as a class or as a pattern.
 4. **Pull conditions**: keep `enabled_when` for menus and simple cases, or retire it; a timing spike of push against pull at a thousand bound controls.
-5. **A window harness**: tests that build the whole window offscreen and drive it (press Study, check that the notes pane filled), so a GUI risk is shown failing before its fix, as the engine's are. Today the state objects are tested and the window is checked by snapshots.
+5. **A window harness (built, 0.7.47)**: `BIB_GUI_APP.make_harness` builds the whole window offscreen (its own user.db, no settings saved, no event loop); its harness features are exported selectively to `BIB_WINDOW_HARNESS_CLIENT`, which `TEST_WINDOW` inherits. Phase 2's five risks are pinned there (after their fix); from phase 3 each risk's harness test is written and seen failing first. Open question: whether such a harness belongs in simple_widgets or simple_testing as an ancestor for every program.
 6. **Enforcement**: contracts that check bound controls agree with their state; the `/eiffel-*` state-audit skill Larry proposed, built after the framework exists, to audit any GUI or state-machine task against it.
 7. **Order beyond Simple Bible**: which programs follow (simple_prompter, simple_taskman), one at a time.
 
