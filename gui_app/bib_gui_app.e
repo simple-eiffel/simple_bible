@@ -1858,7 +1858,7 @@ feature {NONE} -- Two layouts (C7)
 			center_tabs.add_page ("Bible", bible_page)
 			center_tabs.add_page ("Parallel", l_parallel_page)
 			center_tabs.add_page ("Interlinear", l_interlinear_page)
-			center_tabs.add_page ("Timeline", timeline_view.growing)
+			center_tabs.add_page ("Timeline", timeline_pane)
 			center_tabs.set_on_change (agent on_center_tab)
 			parallel_view.add_column ("").do_nothing
 			parallel_view.add_column ("").do_nothing
@@ -3104,6 +3104,81 @@ feature {NONE} -- Notes (T2, P06)
 	timeline_filled: BOOLEAN
 			-- Has `timeline_view' been filled from the timeline packs?
 
+	timeline_pane: SW_COLUMN
+			-- T8 and the river: the years in view as two boxes and a Set button over the Timeline
+			-- (Larry, 2026-10-31: "a pair of text boxes with a Set button that allows the user to
+			-- dictate what years from-and-to are in view").
+		local
+			l_bar: SW_ROW
+		do
+			create l_bar.make
+			l_bar := l_bar.with_gap (6.0)
+			l_bar.put (create {SW_LABEL}.make_ui ("From"))
+			l_bar.put (years_from_box.with_min_size (130.0, 0.0))
+			l_bar.put (create {SW_LABEL}.make_ui ("to"))
+			l_bar.put (years_to_box.with_min_size (130.0, 0.0))
+			l_bar.put (years_set_button)
+			l_bar.put (create {SW_SPACER}.make_weighted (1.0))
+			create Result.make
+			Result := Result.fitting.with_gap (6.0)
+			Result.put (l_bar)
+			Result.put (timeline_view.growing)
+				-- the boxes follow the years in view, pushed by the river (state by agents)
+			timeline_view.view_changed.subscribe (agent show_years_in_view)
+		end
+
+	years_from_box: BIB_LOOKUP_BOX
+		attribute
+			create Result.make_lookup
+			Result.set_tooltip ("The first year in view. Type one (1446 BC, AD 70, 200,000 BC) and press Set or Enter.")
+			Result.set_on_enter (agent set_years_in_view)
+		end
+
+	years_to_box: BIB_LOOKUP_BOX
+		attribute
+			create Result.make_lookup
+			Result.set_tooltip ("The last year in view. Type one (586 BC, AD 135) and press Set or Enter.")
+			Result.set_on_enter (agent set_years_in_view)
+		end
+
+	years_set_button: SW_BUTTON
+		attribute
+			create Result.make ("Set", agent set_years_in_view)
+			Result.set_tooltip ("Show the years typed in the two boxes. The bar under the river walks time; Home and End reach the first and last years of the data.")
+		end
+
+	show_years_in_view (a_from, a_to: REAL_64)
+			-- The boxes show the years now in view, unless the reader is typing in one.
+		do
+			if not years_from_box.is_focused and not years_to_box.is_focused then
+				years_from_box.set_text (timeline_view.era.label (a_from.ceiling))
+				years_to_box.set_text (timeline_view.era.label ((a_to.floor - 1).max (a_from.ceiling)))
+			end
+		end
+
+	set_years_in_view
+			-- The years typed in the two boxes, in view; a reason said when they cannot be read.
+		local
+			e: SW_ERA_YEARS
+			l_from, l_to: INTEGER
+		do
+			e := timeline_view.era
+			if not e.is_year_text (years_from_box.text) or not e.is_year_text (years_to_box.text) then
+				say ("Type two years, like 1446 BC and AD 70.")
+			else
+				l_from := e.year_of_text (years_from_box.text)
+				l_to := e.year_of_text (years_to_box.text)
+				if l_from >= l_to then
+					say ("The first year must come before the second.")
+				else
+					fill_timeline
+					timeline_view.show_years (l_from, l_to + 1)
+					window.give_focus (timeline_view)
+					window.request_render
+				end
+			end
+		end
+
 	show_timeline
 			-- The Timeline tab (in Study; Simple has no tabs).
 		do
@@ -3179,6 +3254,9 @@ feature {NONE} -- Notes (T2, P06)
 				end
 				timeline_view.set_on_select (agent on_timeline_item)
 				timeline_view.set_on_cursor (agent on_timeline_cursor)
+					-- the river follows the shared selection from now on, told the present on joining
+				selection.on_year (agent timeline_follow_year)
+				selection.on_place (agent timeline_follow_place)
 				if timeline_view.items.is_empty then
 					timeline_view.add_lane ("No timeline pack yet: bible_build --timeline writes one", "River of Time").do_nothing
 				else
@@ -3225,13 +3303,10 @@ feature {NONE} -- The Atlas and the shared selection (Plan 22 phase 3, 2026-10-3
 		end
 
 	selection: BIB_TIME_PLACE_SELECTION
-			-- What the Timeline and the Atlas share; each follows it, neither knows the other.
+			-- What the Timeline and the Atlas share; each follows it, neither knows the other. Each
+			-- view joins when it is filled, and joining tells it the present (research/23).
 		attribute
 			create Result.make
-			Result.on_year (agent atlas_follow_year)
-			Result.on_year (agent timeline_follow_year)
-			Result.on_event (agent atlas_follow_event)
-			Result.on_place (agent timeline_follow_place)
 		end
 
 	atlas_view: SW_ATLAS
@@ -3424,13 +3499,14 @@ feature {NONE} -- The Atlas and the shared selection (Plan 22 phase 3, 2026-10-3
 				end
 				atlas_view.set_on_site_select (agent on_atlas_site)
 				atlas_view.set_view (Atlas_zoom_scale, 38.0, 32.0)
-				if timeline_view.has_cursor then
-					selection.set_year (timeline_view.cursor_year)
-				elseif selection.has_year then
-					atlas_follow_year (selection.year)
-				else
-					selection.set_year (-999)
+					-- a needle first (the river's cursor, else 1000 BC), then the Atlas joins the
+					-- selection and is told the year AND the event chosen (risk 15: it learned the
+					-- year only, so an event chosen before the Atlas was filled had no marks)
+				if not selection.has_year then
+					selection.set_year (if timeline_view.has_cursor then timeline_view.cursor_year else -999 end)
 				end
+				selection.on_year (agent atlas_follow_year)
+				selection.on_event (agent atlas_follow_event)
 			end
 		end
 
@@ -3914,6 +3990,7 @@ feature {NONE} -- The Atlas and the shared selection (Plan 22 phase 3, 2026-10-3
 			window.add_reference_mark (navigator_tabs, "T1", "P11 Navigator, west: Books (chapter by chapter), Bookmarks (Ctrl+D bookmarks the verse read; click one to read it; Remove and Restore) and History (the last 50 chapters read, newest first, kept between runs; click one to read it again).", window.Corner_top_left)
 			window.add_reference_mark (notes_heading, "T2", "P06 Notes, west below T1, in tab order: Verse notes on the chapter read (add on the verse read; double-click to edit, each edit keeps the old version; Delete and Restore); Journal, notes on a subject (New; Save keeps the earlier version; Delete and Restore); Tags (tag the verse read; click a tag for its verses, a verse to read it; Remove and Restore); Highlights (a reason, not a color; washed amber in the Bible and Parallel tabs; click one to read it; Remove and Restore); Prayer (a title and the request; Open and Answered, with how it was answered; Remove and Restore); Memory (learn the verse read; recall today's card, Show the verse, grade Again, Hard, Good or Easy; the next date follows SuperMemo 2).", window.Corner_top_left)
 			window.add_reference_mark (center_tabs, "T3", "Centre tabs: the Bible text, Parallel (P02), Interlinear (P03, Ctrl+I) and the Timeline (the River of Time).", window.Corner_top_left)
+			window.add_reference_mark (years_from_box, "T8", "The years in view: From and to boxes and Set (or Enter) over the Timeline; the bar under the river walks time and names the first and last years of the data; Home and End reach them.", window.Corner_top_left)
 			window.add_reference_mark (atlas_view, "T7", "The Atlas (Plan 22): empires by year from Cliopatria, places with their doubt (several candidates are dashed rings, each naming who holds it); choosing an event on the Timeline marks its places, choosing a place moves the Timeline; the scale in miles, kilometers and nautical miles; Start measuring, click points, End or Close shape for the area, Delete; an empire's card and a click on it give its area. Window > Atlas.", window.Corner_top_left)
 			window.add_reference_mark (analysis_title, "P03.2", "Verse analysis: the verse read, a row per word with its lemma, Strong's number, morphology, gloss, and how often its headword occurs in this testament. Click a row and T4 follows it.", window.Corner_top_left)
 			window.add_reference_mark (interlinear_note, "P03", "Interlinear: word by word in the original, right to left for Hebrew. A click makes the word's verse the place read and opens its headword in T4.", window.Corner_top_left)
