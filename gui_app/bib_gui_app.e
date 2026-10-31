@@ -3235,9 +3235,11 @@ feature {NONE} -- The Atlas and the shared selection (Plan 22 phase 3, 2026-10-3
 		end
 
 	atlas_view: SW_ATLAS
-			-- The Atlas, filled when first shown.
+			-- The Atlas, filled when first shown; its measurement pushes each change to
+			-- `refresh_measure_buttons' (Larry, 2026-10-31: state machines through agents).
 		attribute
 			create Result.make
+			Result.on_measure_change (agent refresh_measure_buttons)
 		end
 
 	atlas_pane: SW_COLUMN
@@ -3257,41 +3259,49 @@ feature {NONE} -- The Atlas and the shared selection (Plan 22 phase 3, 2026-10-3
 			Result := Result.fitting.with_gap (6.0)
 			Result.put (l_bar)
 			Result.put (atlas_view.growing)
+			refresh_measure_buttons
+		end
+
+	refresh_measure_buttons
+			-- Each measuring button enabled by the tool's state, told by the Atlas on every change
+			-- (0.7.43's conditions were asked by a walk of the widget tree that never reached a
+			-- docked panel, so only Start, made enabled, ever worked).
+		do
+			measure_start_button.set_enabled (not atlas_view.is_measuring)
+			measure_undo_button.set_enabled (atlas_view.is_measuring and not atlas_view.measure_points.is_empty)
+			measure_end_button.set_enabled (atlas_view.is_measuring and atlas_view.measure_points.count >= 2)
+			measure_close_button.set_enabled (atlas_view.can_close)
+			measure_delete_button.set_enabled (atlas_view.measure_state /= atlas_view.Measure_idle)
 		end
 
 	measure_start_button: SW_BUTTON
 		attribute
 			create Result.make ("Start measuring", agent start_measuring)
 			Result.set_tooltip ("Start measuring: then click the map to place points, one after another. A drag still moves the map.")
-			Result.set_enabled_when (agent: BOOLEAN do Result := not atlas_view.is_measuring end)
 		end
 
 	measure_undo_button: SW_BUTTON
 		attribute
 			create Result.make ("Undo point", agent undo_measure_point)
 			Result.set_tooltip ("Take back the last point placed.")
-			Result.set_enabled_when (agent: BOOLEAN do Result := atlas_view.is_measuring and not atlas_view.measure_points.is_empty end)
 		end
 
 	measure_end_button: SW_BUTTON
 		attribute
 			create Result.make ("End", agent end_measuring)
 			Result.set_tooltip ("End: keep the path and its distance on the map; clicks move the map again. (A double-click on the map does the same.)")
-			Result.set_enabled_when (agent: BOOLEAN do Result := atlas_view.is_measuring and atlas_view.measure_points.count >= 2 end)
 		end
 
 	measure_close_button: SW_BUTTON
 		attribute
 			create Result.make ("Close shape", agent close_measure_shape)
 			Result.set_tooltip ("Close shape: join the last point to the first for the perimeter and the area. (A click on the first point does the same.)")
-			Result.set_enabled_when (agent: BOOLEAN do Result := atlas_view.can_close end)
 		end
 
 	measure_delete_button: SW_BUTTON
 		attribute
 			create Result.make ("Delete", agent delete_measure)
 			Result.set_tooltip ("Delete the whole path or shape and its readout.")
-			Result.set_enabled_when (agent: BOOLEAN do Result := atlas_view.measure_state /= atlas_view.Measure_idle end)
 		end
 
 	start_measuring
