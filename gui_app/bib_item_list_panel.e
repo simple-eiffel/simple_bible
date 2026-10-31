@@ -33,6 +33,7 @@ feature {NONE} -- Initialization
 			grid := a_grid
 			noun := a_noun.to_string_32
 			create rows.make (0)
+			create choice_changed.make
 			create remove_button.make ("Remove", Void)
 			create restore_button.make ("Restore", Void)
 				-- Agents on Current only once every attribute is set (VEVI).
@@ -61,6 +62,17 @@ feature -- Access
 
 	last_removed: INTEGER_64
 			-- The item Remove took away last; Restore brings it back (0: none).
+
+	choice_changed: SW_EVENT [TUPLE [id: INTEGER_64]]
+			-- Told whenever the chosen item changes (research/23 phase 5): a host button that needs a
+			-- choice follows it (Answered was enabled with none chosen, risk 8).
+
+	on_choice (a_action: PROCEDURE [INTEGER_64])
+			-- `a_action' told every change of the chosen item, and the one chosen now.
+		do
+			choice_changed.subscribe (a_action)
+			a_action.call ([chosen_id])
+		end
 
 feature -- Element change
 
@@ -100,7 +112,7 @@ feature -- Element change
 					i := i + 1
 				end
 				if l_index = 0 then
-					chosen_id := 0
+					set_chosen (0)
 				end
 			end
 			is_refilling := True
@@ -119,8 +131,7 @@ feature {NONE} -- Commands
 			-- An item clicked: chosen, and its verse read.
 		do
 			if not is_refilling and then a_row >= 1 and then a_row <= rows.count then
-				chosen_id := rows.i_th (a_row).id
-				remove_button.set_enabled (True)
+				set_chosen (rows.i_th (a_row).id)
 				if attached open as al_open then
 					al_open.call ([rows.i_th (a_row).hub_id])
 				end
@@ -143,7 +154,7 @@ feature {NONE} -- Commands
 				else
 					last_removed := a_id
 					if chosen_id = a_id then
-						chosen_id := 0
+						set_chosen (0)
 					end
 					redraw
 					tell (noun + {STRING_32} " removed. Restore brings it back.")
@@ -182,6 +193,18 @@ feature {NONE} -- Commands
 		end
 
 feature {NONE} -- Implementation
+
+	set_chosen (a_id: INTEGER_64)
+			-- The one door to `chosen_id': Remove follows it, and `choice_changed' is told.
+		do
+			if a_id /= chosen_id then
+				chosen_id := a_id
+				remove_button.set_enabled (a_id > 0)
+				choice_changed.call ([a_id])
+			end
+		ensure
+			set: chosen_id = a_id
+		end
 
 	is_refilling: BOOLEAN
 			-- Is `set_rows' selecting a row (no click to answer)?

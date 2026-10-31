@@ -28,6 +28,49 @@ inherit
 			default_create
 		end
 
+feature -- Phase 5: notes, collections, strip marks (each test seen failing on 0.7.48 first)
+
+	test_notes_dot_follows_adding_and_deleting
+			-- Risk 6: the Notes dot was set only when a chapter was read, so adding the chapter's
+			-- first note (or deleting its last) left it wrong.
+		local
+			app: BIB_GUI_APP
+		do
+			app := new_window
+			app.harness_state.set_study (True)
+			app.harness_go_to (43, 3, 16)
+			assert_false ("no notes, no dot", app.harness_notes_marked)
+			app.harness_add_note ("Born from above.")
+			assert_true ("the first note: a dot", app.harness_notes_marked)
+			app.harness_delete_note (1)
+			assert_false ("the last note deleted: no dot", app.harness_notes_marked)
+		end
+
+	test_one_verse_reads_as_one
+			-- The verses heading said "1 matches" (seen in the 0.7.48 search snapshot).
+		local
+			app: BIB_GUI_APP
+		do
+			app := new_window
+			app.harness_state.set_study (True)
+			app.harness_search ("%"full of grace%"")
+			assert_true ("one verse: " + app.harness_verses_heading.to_string_8, app.harness_verses_heading.has_substring ("1 verse matches"))
+		end
+
+	test_answered_waits_for_a_chosen_prayer
+			-- Risk 8: Answered was enabled whenever there was an open prayer, and a press with none
+			-- chosen only said "Click an open prayer first".
+		local
+			app: BIB_GUI_APP
+		do
+			app := new_window
+			app.harness_state.set_study (True)
+			app.harness_add_prayer ("For wisdom", "James 1:5")
+			assert_false ("an open prayer, none chosen: Answered off", app.harness_answered_enabled)
+			app.harness_choose_open_prayer (1)
+			assert_true ("one chosen: Answered on", app.harness_answered_enabled)
+		end
+
 feature -- Phase 4: search results (each test seen failing on 0.7.47 first)
 
 	test_verse_search_listed_in_the_window_menu
