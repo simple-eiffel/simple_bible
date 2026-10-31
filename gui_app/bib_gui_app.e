@@ -313,6 +313,7 @@ feature {NONE} -- Initialization
 			layout_state.on_text_scale (agent apply_text_scale)
 			layout_state.on_theme (agent apply_theme)
 			window.set_on_theme_changed (agent (a_theme: SW_THEME) do layout_state.set_dark (a_theme.is_dark) end)
+			results_state.on_change (agent apply_results)
 				-- Genesis 1:1 selected, so the commentary has its cross-references from the start (Larry:
 				-- T5 was empty until a verse was clicked).
 			if bible.is_open and then not reading_version.is_empty and then bible.books.has_book (1) then
@@ -430,6 +431,49 @@ feature {BIB_WINDOW_HARNESS_CLIENT} -- The window harness (research/23, 2026-10-
 	harness_window_dark: BOOLEAN
 		do
 			Result := window.theme.is_dark
+		end
+
+	harness_search (a_text: READABLE_STRING_GENERAL)
+			-- Type `a_text' in the search box and press Enter.
+		do
+			search_box.set_text (a_text)
+			on_search
+		end
+
+	harness_close_results
+			-- A press on the results panel's Close button.
+		do
+			if attached close_results_button.on_click as al_click then
+				al_click.call (Void)
+			end
+		end
+
+	harness_results_visible: BOOLEAN
+			-- Is the Search Results panel shown?
+		do
+			Result := dock.is_panel_visible (results_panel)
+		end
+
+	harness_results_marked: BOOLEAN
+			-- Has the Search Results panel its dot (results to show)?
+		do
+			Result := dock.is_panel_marked (results_panel)
+		end
+
+	harness_results_count: INTEGER
+			-- Choices and verses the results panel lists.
+		do
+			Result := choices.count + verse_hits.count
+		end
+
+	harness_window_menu_enabled (a_label: READABLE_STRING_GENERAL): BOOLEAN
+			-- Is the Window menu's item `a_label' enabled, as the menu would open now?
+		do
+			across window_menu.items as ic loop
+				if ic.label.same_string_general (a_label) then
+					Result := ic.enabled
+				end
+			end
 		end
 
 	harness_theme_swapped_by_windows (a_dark: BOOLEAN)
@@ -791,7 +835,7 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			search_word_button.set_on_click (agent show_every_place)
 			results_grid.set_on_select (agent on_choice)
 			verses_grid.set_on_select (agent on_verse_hit)
-			close_results_button.set_on_click (agent hide_results)
+			close_results_button.set_on_click (agent close_results)
 			places_grid.set_on_select (agent on_place)
 			window.set_on_tick (agent on_window_tick)
 			focus_button.set_on_click (agent toggle_focus_reading)
@@ -1218,7 +1262,7 @@ feature {NONE} -- Menus and keys (C2)
 	window_menu: SW_MENU
 		do
 			create Result.make
-			Result.add_item ("Search results", "", not choices.is_empty, agent show_results)
+			Result.add_item ("Search results", "", results_state.has_results, agent reopen_results)
 			Result.add_item ("Commentary", "", True, agent dock.show_panel (commentary_panel))
 			Result.add_item ("Dictionary and lexicon", "", True, agent dock.show_panel (lexicon_panel))
 			Result.add_item ("Atlas", "", True, agent show_atlas)
@@ -1984,10 +2028,10 @@ feature {NONE} -- Two layouts (C7)
 				dock.hide_panel (notes_panel)
 				dock.hide_panel (atlas_panel)
 				river_applied := False
-				if choices.is_empty then
-					dock.hide_panel (results_panel)
-				else
+				if results_state.is_wanted then
 					dock.show_panel (results_panel)
+				else
+					dock.hide_panel (results_panel)
 				end
 				dock.set_fraction (dock.Zone_west, 0.22)
 				dock.set_fraction (dock.Zone_east, 0.30)
@@ -4676,7 +4720,7 @@ feature {NONE} -- Right-click menus and panes (Larry, 2026-10-28)
 			dock.set_panel_marked (commentary_panel, has_commentary)
 			dock.set_panel_marked (notes_panel, not note_rows.is_empty)
 			dock.set_panel_marked (lexicon_panel, study_lemma > 0)
-			dock.set_panel_marked (results_panel, not choices.is_empty or not verse_hits.is_empty)
+			dock.set_panel_marked (results_panel, results_state.is_wanted)
 		end
 
 	snapshot_right_click_verse
@@ -6991,21 +7035,65 @@ feature {NONE} -- Search results (P07)
 		end
 
 	show_results
-			-- Dock P07 west (Simple), or bring Search Results to the front of T6 (Study).
+			-- New results listed: the state learns them (and shows the panel, `apply_results'); in
+			-- Study, Search Results to the front of T6.
 		do
-			refresh_strip_marks
-			dock.show_panel (results_panel)
+			results_state.set_found (choices.count, verse_hits.count)
 			if is_study then
 				results_tabs.select_tab (1)
 			end
-			keep_verse_in_view
 		end
 
 	hide_results
-			-- Collapse P07: an empty zone takes no room (C16). The Study layout keeps its T6 zone.
+			-- Nothing to list in P07 for this search (a word opened in the lexicon instead).
 		do
+			results_state.set_found (choices.count, verse_hits.count)
+			results_state.close
+		end
+
+	close_results
+			-- The Close button. Simple: the panel put away (the results stay, for Window > Search
+			-- results). Study: the results emptied, since the T6 zone also holds the Author Library
+			-- and the guides (risk 5: Close did nothing there).
+		do
+			if is_study then
+				create choices.make (0)
+				results_grid.set_rows (choices)
+				results_note.set_text ("")
+				clear_verse_hits
+				results_state.clear
+			else
+				results_state.close
+			end
+		end
+
+	reopen_results
+			-- Window > Search results.
+		do
+			results_state.reopen
+			if is_study then
+				results_tabs.select_tab (1)
+			end
+		end
+
+	results_state: BIB_RESULTS_STATE
+			-- What the results panel lists and whether the reader closed it (research/23 phase 4).
+		attribute
+			create Result.make
+		end
+
+	apply_results
+			-- The panel and its dot as the results state says: in Simple shown while the results are
+			-- wanted (P07 docks west, an empty zone takes no room, C16); in Study the T6 zone stays.
+			-- The dot: results the reader has not closed (risk 6: it stayed after Close).
+		do
+			dock.set_panel_marked (results_panel, results_state.is_wanted)
 			if not is_study then
-				dock.hide_panel (results_panel)
+				if results_state.is_wanted then
+					dock.show_panel (results_panel)
+				else
+					dock.hide_panel (results_panel)
+				end
 				keep_verse_in_view
 			end
 		end

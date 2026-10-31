@@ -71,6 +71,10 @@ feature {NONE} -- Suites
 			run_test (agent t.test_dark_switch_follows_windows, "test_dark_switch_follows_windows")
 			run_test (agent t.test_each_workspace_keeps_its_east_width, "test_each_workspace_keeps_its_east_width")
 			run_test (agent t.test_focus_button_says_what_it_will_do, "test_focus_button_says_what_it_will_do")
+			run_test (agent t.test_verse_search_listed_in_the_window_menu, "test_verse_search_listed_in_the_window_menu")
+			run_test (agent t.test_closed_results_stay_closed_across_layouts, "test_closed_results_stay_closed_across_layouts")
+			run_test (agent t.test_close_in_study_clears_the_results, "test_close_in_study_clears_the_results")
+			run_test (agent t.test_results_dot_follows_closing, "test_results_dot_follows_closing")
 		end
 
 feature {NONE} -- Runner
