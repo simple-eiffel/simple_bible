@@ -211,6 +211,15 @@ feature -- Status
 			end
 		end
 
+	empires_packs: ARRAYED_LIST [BIB_EMPIRES_PACK]
+			-- The attached packs whose kind is "empires" (BIB_EMPIRES_SCHEMA, Plan 22 phase 3, 2026-10-31).
+		do
+			create Result.make (1)
+			across packs_of_kind ({BIB_EMPIRES_SCHEMA}.Pack_kind) as ic loop
+				Result.extend (create {BIB_EMPIRES_PACK}.make (sources, ic.alias_name, ic.pack_title))
+			end
+		end
+
 	writings_search: BIB_WRITINGS_SEARCH
 			-- Search across the attached commentary, frameworks, books and essays packs, in that order
 			-- (research/20, 2026-10-28).

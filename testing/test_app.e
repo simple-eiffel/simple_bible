@@ -441,6 +441,10 @@ feature {NONE} -- Suites
 			run_test (agent t.test_edtf_reads_the_subset, "test_edtf_reads_the_subset")
 			run_test (agent t.test_timeline_pack_builds_attaches_and_reads, "test_timeline_pack_builds_attaches_and_reads")
 			run_test (agent t.test_timeline_builder_refuses_a_broken_sidecar, "test_timeline_builder_refuses_a_broken_sidecar")
+			run_test (agent t.test_timeline_places_build_and_read, "test_timeline_places_build_and_read")
+			run_test (agent t.test_timeline_places_refuse_a_broken_sidecar, "test_timeline_places_refuse_a_broken_sidecar")
+			run_test (agent t.test_empires_pack_builds_from_cliopatria_and_reads, "test_empires_pack_builds_from_cliopatria_and_reads")
+			run_test (agent t.test_empires_builder_refuses_a_wrong_file, "test_empires_builder_refuses_a_wrong_file")
 		end
 
 	run_facade_open_tests
