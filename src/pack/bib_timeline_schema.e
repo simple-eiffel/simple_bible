@@ -17,8 +17,15 @@ note
 		astronomical years it allows, its precision and whether it is
 		approximate or uncertain, the chronology, who holds it, its basis,
 		whether it is the view shown first, the citation, a note); each
-		citation's text; and the passages an event speaks to (phase 2 fills
+			citation's text; and the passages an event speaks to (phase 2 fills
 		`timeline_event_verse'; it is made now so the version stays 1).
+
+		THE ATLAS (phase 3, 2026-10-31; still version 1, the pack never
+		shipped): each place (name, kind, the zoom its label shows from) and
+		its location as claims in order (a point, the width of the doubt,
+		who holds it, its basis, the lean, the citation); which places each
+		event happened at; and routes (points, certain or debated, which
+		route they are an alternative to, their date as EDTF and years).
 	]"
 	author: "Larry Rix"
 	date: "$Date$"
@@ -58,6 +65,17 @@ feature -- Constants
 			Result := across Kinds as k some k.same_string_general (a_kind) end
 		end
 
+	Place_kinds: ARRAY [STRING_8]
+			-- What a place is.
+		once
+			Result := <<"city", "site", "region", "mountain", "water", "cave", "battlefield">>
+		end
+
+	is_place_kind (a_kind: READABLE_STRING_GENERAL): BOOLEAN
+		do
+			Result := across Place_kinds as k some k.same_string_general (a_kind) end
+		end
+
 	pack_tables: ARRAY [STRING_8]
 			-- The pack's own tables.
 		once
@@ -67,7 +85,11 @@ feature -- Constants
 				"CREATE TABLE timeline_claim(event_id TEXT NOT NULL REFERENCES timeline_event(event_id), ordinal INTEGER NOT NULL, edtf TEXT NOT NULL, earliest INTEGER NOT NULL, latest INTEGER NOT NULL, precision INTEGER NOT NULL, is_approximate INTEGER NOT NULL, is_uncertain INTEGER NOT NULL, chronology TEXT NOT NULL, held_by TEXT NOT NULL, basis TEXT NOT NULL CHECK (basis IN ('evidence', 'text', 'reckoning', 'tradition')), is_lean INTEGER NOT NULL, citation_id TEXT NOT NULL, note TEXT NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key), PRIMARY KEY (event_id, ordinal))",
 				"CREATE INDEX timeline_claim_span ON timeline_claim(earliest, latest)",
 				"CREATE TABLE timeline_citation(citation_id TEXT PRIMARY KEY, text TEXT NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key))",
-				"CREATE TABLE timeline_event_verse(event_id TEXT NOT NULL REFERENCES timeline_event(event_id), ordinal INTEGER NOT NULL, start_hub INTEGER NOT NULL, end_hub INTEGER NOT NULL, relation TEXT NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key), PRIMARY KEY (event_id, ordinal))">>
+				"CREATE TABLE timeline_event_verse(event_id TEXT NOT NULL REFERENCES timeline_event(event_id), ordinal INTEGER NOT NULL, start_hub INTEGER NOT NULL, end_hub INTEGER NOT NULL, relation TEXT NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key), PRIMARY KEY (event_id, ordinal))",
+				"CREATE TABLE timeline_place(place_id TEXT PRIMARY KEY, name TEXT NOT NULL, kind TEXT NOT NULL, min_zoom REAL NOT NULL CHECK (min_zoom >= 1), voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key))",
+				"CREATE TABLE timeline_place_claim(place_id TEXT NOT NULL REFERENCES timeline_place(place_id), ordinal INTEGER NOT NULL, lon REAL NOT NULL CHECK (lon BETWEEN -180 AND 180), lat REAL NOT NULL CHECK (lat BETWEEN -90 AND 90), radius_m REAL NOT NULL CHECK (radius_m >= 0), held_by TEXT NOT NULL, basis TEXT NOT NULL CHECK (basis IN ('evidence', 'text', 'reckoning', 'tradition')), is_lean INTEGER NOT NULL, citation_id TEXT NOT NULL, note TEXT NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key), PRIMARY KEY (place_id, ordinal))",
+				"CREATE TABLE timeline_event_place(event_id TEXT NOT NULL REFERENCES timeline_event(event_id), place_id TEXT NOT NULL REFERENCES timeline_place(place_id), voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key), PRIMARY KEY (event_id, place_id))",
+				"CREATE TABLE timeline_route(route_id TEXT PRIMARY KEY, name TEXT NOT NULL, points TEXT NOT NULL, is_certain INTEGER NOT NULL, alternative_of TEXT NOT NULL, edtf TEXT NOT NULL, earliest INTEGER NOT NULL, latest INTEGER NOT NULL, citation_id TEXT NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key))">>
 		end
 
 end

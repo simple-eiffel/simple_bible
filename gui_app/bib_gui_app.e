@@ -225,6 +225,9 @@ feature {NONE} -- Initialization
 			create study_corpus.make_empty
 			create history.make (40)
 			create center_holder.make
+				-- fitting: the Timeline asks for every row (it scrolls itself) and ran under the south
+				-- zone at its full height (seen 2026-10-31, hidden in 0.7.41 by the order zones paint in)
+			center_holder := center_holder.fitting
 			create center_tabs.make
 			create bible_page.make
 			create parallel_view.make (200.0)
@@ -371,6 +374,12 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 				show_interlinear
 			elseif snapshot_tab.same_string ({STRING_32} "timeline") then
 				show_timeline
+			elseif snapshot_tab.same_string ({STRING_32} "atlas") then
+					-- Sennacherib's campaign, 701 BC: Jerusalem and Lachish marked, Assyria on the map
+				show_timeline
+				if item_of_event ("sennacherib") > 0 then
+					selection.select_event ("sennacherib", timeline_view.items.i_th (item_of_event ("sennacherib")).year_from)
+				end
 			elseif snapshot_tab.same_string ({STRING_32} "parallel") then
 				show_parallel
 			elseif snapshot_tab.same_string ({STRING_32} "commentary") then
@@ -698,6 +707,9 @@ feature {NONE} -- Window
 	dark_switch: SW_SWITCH
 	dock: SW_DOCK_HOST
 	results_panel, commentary_panel, lexicon_panel: INTEGER
+
+	atlas_panel: INTEGER
+			-- The Atlas's dock panel (Plan 22 phase 3).
 			-- The dock's panels (C16): P07 west, P04 east, P05 south.
 	status_bar: SW_STATUS_BAR
 	numbering_label, link_label, editions_label: SW_LABEL
@@ -737,6 +749,9 @@ feature {NONE} -- Window
 			commentary_panel := dock.add_panel ("COMMENTARY", commentary_pane, dock.Zone_east)
 			navigator_panel := dock.add_panel ("NAVIGATOR", navigator_pane, dock.Zone_west)
 			notes_panel := dock.add_panel ("NOTES", notes_pane, dock.Zone_west)
+				-- the Atlas, docked beside the Timeline tab (Plan 22 phase 3, spike S9)
+			atlas_panel := dock.add_panel ("ATLAS", atlas_view.growing, dock.Zone_east)
+			dock.set_maximizable (atlas_panel, True)
 				-- Panes worth reading larger (Larry, 2026-10-28): a maximize button on their bars. The
 				-- Navigator gains nothing from the room; the Bible text has Focus reading instead.
 			dock.set_maximizable (commentary_panel, True)
@@ -1052,6 +1067,7 @@ feature {NONE} -- Menus and keys (C2)
 			Result.add_item ("Search results", "", not choices.is_empty, agent show_results)
 			Result.add_item ("Commentary", "", True, agent dock.show_panel (commentary_panel))
 			Result.add_item ("Dictionary and lexicon", "", True, agent dock.show_panel (lexicon_panel))
+			Result.add_item ("Atlas", "", True, agent show_atlas)
 		end
 
 	help_menu: SW_MENU
@@ -1760,6 +1776,8 @@ feature {NONE} -- Two layouts (C7)
 				dock.show_panel (navigator_panel)
 				dock.show_panel (notes_panel)
 				dock.show_panel (results_panel)
+				dock.hide_panel (atlas_panel)
+				is_river_workspace := False
 				dock.set_fraction (dock.Zone_west, 0.18)
 				dock.set_fraction (dock.Zone_east, 0.34)
 				dock.set_fraction (dock.Zone_south, 0.30)
@@ -1773,6 +1791,8 @@ feature {NONE} -- Two layouts (C7)
 				dock.move_panel (results_panel, dock.Zone_west)
 				dock.hide_panel (navigator_panel)
 				dock.hide_panel (notes_panel)
+				dock.hide_panel (atlas_panel)
+				is_river_workspace := False
 				if choices.is_empty then
 					dock.hide_panel (results_panel)
 				else
@@ -1851,6 +1871,7 @@ feature {NONE} -- Two layouts (C7)
 			tools_strip.add_tool ("Parallel", "Versions side by side (P02)", True, agent show_parallel)
 			tools_strip.add_tool ("Interlinear", "Word by word in the original (P03). Ctrl+I", True, agent show_interlinear)
 			tools_strip.add_tool ("Timeline", "The River of Time: when it happened, and who says so", True, agent show_timeline)
+			tools_strip.add_tool ("Atlas", "The Atlas: where it happened, empires by year, places and their doubt", True, agent show_atlas)
 			tools_strip.add_tool ("Guide", "A guide on one subject (P08): comes later", False, Void)
 			tools_strip.add_tool ("Word Study", "The word study (P05 Word Study): comes later", False, Void)
 			tools_strip.add_tool ("Count", "Census and checks (P09): comes later", False, Void)
@@ -3055,6 +3076,10 @@ feature {NONE} -- Notes (T2, P06)
 				fill_interlinear
 			elseif a_index = Timeline_tab then
 				fill_timeline
+				show_atlas
+			end
+			if a_index /= Timeline_tab and is_river_workspace then
+				leave_river_workspace
 			end
 		end
 
@@ -3078,6 +3103,7 @@ feature {NONE} -- Notes (T2, P06)
 			end
 			center_tabs.select_tab (Timeline_tab)
 			fill_timeline
+			show_atlas
 		end
 
 	fill_timeline
@@ -3108,6 +3134,7 @@ feature {NONE} -- Notes (T2, P06)
 									across ic_event.claims as ic_claim loop
 										it := timeline_view.add_position (l_dispute, l_lane, ic_event.title + {STRING_32} ": " + ic_claim.label,
 											river_year (ic_claim.earliest), river_year (ic_claim.latest), claim_class (ic_event, ic_claim))
+										item_events.put (ic_event.id, it.id)
 										if ic_claim.is_lean then
 											it.set_lean ("shown first")
 										end
@@ -3116,20 +3143,308 @@ feature {NONE} -- Notes (T2, P06)
 									l_lo := river_year (ic_event.claims.first.earliest)
 									l_hi := river_year (ic_event.claims.first.latest)
 									it := timeline_view.add_item (l_lane, ic_event.title, l_lo, l_hi, claim_class (ic_event, ic_event.claims.first))
+									item_events.put (ic_event.id, it.id)
 									it.set_importance (ic_event.importance)
 									if not ic_event.claims.first.chronology.is_empty then
 										it.set_badge (ic_event.claims.first.chronology)
 									end
 								end
+								event_titles.put (ic_event.title, ic_event.id)
+							end
+						end
+						across ic_pack.event_places as ic_ep loop
+							if not places_of_event.has (ic_ep.event_id) then
+								places_of_event.put (create {ARRAYED_LIST [STRING_32]}.make (1), ic_ep.event_id)
+							end
+							if attached places_of_event.item (ic_ep.event_id) as al_list then
+								al_list.extend (ic_ep.place_id)
+							end
+							if not events_at_place.has (ic_ep.place_id) then
+								events_at_place.put (create {ARRAYED_LIST [STRING_32]}.make (1), ic_ep.place_id)
+							end
+							if attached events_at_place.item (ic_ep.place_id) as al_list then
+								al_list.extend (ic_ep.event_id)
 							end
 						end
 					end
 				end
+				timeline_view.set_on_select (agent on_timeline_item)
+				timeline_view.set_on_cursor (agent on_timeline_cursor)
 				if timeline_view.items.is_empty then
 					timeline_view.add_lane ("No timeline pack yet: bible_build --timeline writes one", "River of Time").do_nothing
 				else
 						-- open on the biblical world, 3500 BC to AD 135; prehistory is one zoom out
 					timeline_view.set_view (-3499.0, 140.0)
+				end
+			end
+		end
+
+feature {NONE} -- The Atlas and the shared selection (Plan 22 phase 3, 2026-10-31)
+
+	item_events: HASH_TABLE [STRING_32, INTEGER]
+			-- Each timeline item's event id, by the item's id.
+		attribute
+			create Result.make (256)
+		end
+
+	event_titles: HASH_TABLE [STRING_32, STRING_32]
+			-- Each event's title, by its id.
+		attribute
+			create Result.make (256)
+		end
+
+	places_of_event: HASH_TABLE [ARRAYED_LIST [STRING_32], STRING_32]
+			-- The places each event happened at.
+		attribute
+			create Result.make (128)
+		end
+
+	events_at_place: HASH_TABLE [ARRAYED_LIST [STRING_32], STRING_32]
+			-- The events at each place.
+		attribute
+			create Result.make (128)
+		end
+
+	item_of_event (a_event: READABLE_STRING_GENERAL): INTEGER
+			-- The id of the first timeline item showing `a_event'; 0 for none.
+		do
+			across item_events as ic until Result > 0 loop
+				if ic.same_string_general (a_event) then
+					Result := @ic.key
+				end
+			end
+		end
+
+	selection: BIB_TIME_PLACE_SELECTION
+			-- What the Timeline and the Atlas share; each follows it, neither knows the other.
+		attribute
+			create Result.make
+			Result.on_year (agent atlas_follow_year)
+			Result.on_year (agent timeline_follow_year)
+			Result.on_event (agent atlas_follow_event)
+			Result.on_place (agent timeline_follow_place)
+		end
+
+	atlas_view: SW_ATLAS
+			-- The Atlas, filled when first shown.
+		attribute
+			create Result.make
+		end
+
+	atlas_filled: BOOLEAN
+			-- Has `atlas_view' been filled from the packs?
+
+	is_river_workspace: BOOLEAN
+			-- Is the east zone given to the Atlas beside the Timeline tab?
+
+	show_atlas
+			-- The Atlas beside the Timeline tab: the river workspace (in Study; Simple has no tabs).
+			-- Until the Atlas follows the reader (A10), it lives with the Timeline.
+		do
+			if not is_study then
+				arrange (True)
+			end
+			if center_tabs.selected_index /= Timeline_tab then
+				center_tabs.select_tab (Timeline_tab)
+			end
+			fill_timeline
+			if not is_river_workspace then
+				enter_river_workspace
+			end
+			fill_atlas
+			window.request_render
+		end
+
+	enter_river_workspace
+			-- The east zone given to the Atlas alone, at 42 percent (spike S9): the lexicon and the
+			-- commentary step aside while the Timeline tab is up.
+		require
+			study: is_study
+		do
+			dock.hide_panel (lexicon_panel)
+			dock.hide_panel (commentary_panel)
+			dock.show_panel (atlas_panel)
+			dock.set_fraction (dock.Zone_east, 0.42)
+			is_river_workspace := True
+		ensure
+			entered: is_river_workspace
+		end
+
+	leave_river_workspace
+			-- The lexicon and the commentary back in the east zone, the Atlas put away.
+		do
+			dock.hide_panel (atlas_panel)
+			dock.show_panel (lexicon_panel)
+			dock.show_panel (commentary_panel)
+			dock.set_fraction (dock.Zone_east, 0.34)
+			is_river_workspace := False
+		ensure
+			left: not is_river_workspace
+		end
+
+	Atlas_zoom_scale: REAL_64 = 6.0
+			-- A place's min_zoom counts from the Near East view (1 = that view); the Atlas counts
+			-- from the whole world, where the Near East view is zoom 6.
+
+	fill_atlas
+			-- The empires from the empires packs and the places from the timeline packs, each place
+			-- with every candidate location; the needle at the timeline's cursor, else 1000 BC.
+		local
+			l_site: INTEGER
+		do
+			if not atlas_filled and then bible.is_open then
+				atlas_filled := True
+				across bible.empires_packs as ic_pack loop
+					if ic_pack.is_available then
+						across ic_pack.areas as ic_area loop
+							atlas_view.add_area (ic_area.name, ic_area.ring, ic_area.year_from, ic_area.year_to, hue_of (ic_area.name),
+								(if ic_area.wikipedia.is_empty then {STRING_32} "" else {STRING_32} "Wikipedia: " + ic_area.wikipedia end)).do_nothing
+						end
+					end
+				end
+				across bible.timeline_packs as ic_pack loop
+					if ic_pack.is_available then
+						across ic_pack.places as ic_place loop
+							l_site := atlas_view.add_site (ic_place.id, ic_place.name, (ic_place.min_zoom * Atlas_zoom_scale).min (atlas_view.Max_zoom),
+								atlas_view.Always_from, atlas_view.Always_to, site_line (ic_place.id))
+							across ic_place.claims as ic_claim loop
+								atlas_view.add_candidate (l_site, ic_claim.lon, ic_claim.lat, ic_claim.radius_m, ic_claim.held_by, ic_claim.is_lean)
+							end
+						end
+					end
+				end
+				atlas_view.set_on_site_select (agent on_atlas_site)
+				atlas_view.set_view (Atlas_zoom_scale, 38.0, 32.0)
+				if timeline_view.has_cursor then
+					selection.set_year (timeline_view.cursor_year)
+				elseif selection.has_year then
+					atlas_follow_year (selection.year)
+				else
+					selection.set_year (-999)
+				end
+			end
+		end
+
+	site_line (a_place: STRING_32): STRING_32
+			-- A place's card line: its events, the first three named.
+		local
+			k: INTEGER
+		do
+			create Result.make_empty
+			if attached events_at_place.item (a_place) as al_events then
+				Result.append_integer (al_events.count)
+				Result.append (if al_events.count = 1 then {STRING_32} " event: " else {STRING_32} " events: " end)
+				across al_events as ic until k = 3 loop
+					k := k + 1
+					if k > 1 then
+						Result.append ({STRING_32} "; ")
+					end
+					if attached event_titles.item (ic) as al_title then
+						Result.append (al_title)
+					else
+						Result.append (ic)
+					end
+				end
+				if al_events.count > 3 then
+					Result.append ({STRING_32} "; ...")
+				end
+			end
+		end
+
+	hue_of (a_name: STRING_32): INTEGER
+			-- A polity's hue, the same every time for the same name.
+		local
+			l_sum: NATURAL_32
+		do
+			across a_name as c loop
+				l_sum := l_sum * 31 + c.natural_32_code
+			end
+			Result := (l_sum \\ atlas_view.Hue_count.to_natural_32).to_integer_32 + 1
+		ensure
+			known: Result >= 1 and Result <= atlas_view.Hue_count
+		end
+
+	on_timeline_item (a_item: SW_TIMELINE_ITEM)
+			-- An event chosen on the river: the selection learns it.
+		do
+			if attached item_events.item (a_item.id) as al_event then
+				selection.select_event (al_event, a_item.year_from)
+			end
+		end
+
+	on_timeline_cursor (a_year: INTEGER)
+		do
+			selection.set_year (a_year)
+		end
+
+	on_atlas_site (a_site: INTEGER)
+			-- A place chosen on the Atlas: the selection learns it.
+		do
+			selection.select_place (atlas_view.sites.i_th (a_site).key)
+		end
+
+	atlas_follow_year (a_year: INTEGER)
+			-- The Atlas at the needle's year, named in its title.
+		do
+			if atlas_filled then
+				atlas_view.set_year (a_year)
+				atlas_view.with_title ({STRING_32} "The world in " + atlas_view.era.label (a_year)).do_nothing
+				window.request_render
+			end
+		end
+
+	timeline_follow_year (a_year: INTEGER)
+			-- The river's cursor at the needle, brought into view.
+		local
+			l_span: REAL_64
+		do
+			if timeline_filled and then (not timeline_view.has_cursor or else timeline_view.cursor_year /= a_year) then
+				timeline_view.set_cursor (a_year)
+				if a_year < timeline_view.view_from or a_year > timeline_view.view_to then
+					l_span := timeline_view.view_to - timeline_view.view_from
+					timeline_view.set_view (a_year - l_span / 2.0, a_year + l_span / 2.0)
+				end
+				window.request_render
+			end
+		end
+
+	atlas_follow_event (a_event: STRING_32)
+			-- The event's places marked on the Atlas and brought into view.
+		local
+			l_marks: ARRAYED_LIST [INTEGER]
+		do
+			if atlas_filled then
+				create l_marks.make (2)
+				if attached places_of_event.item (a_event) as al_places then
+					across al_places as ic loop
+						if atlas_view.site_index (ic) > 0 then
+							l_marks.extend (atlas_view.site_index (ic))
+						end
+					end
+				end
+				atlas_view.set_marked (l_marks)
+				if not l_marks.is_empty then
+					atlas_view.fit_marked (40.0)
+				end
+				window.request_render
+			end
+		end
+
+	timeline_follow_place (a_place: STRING_32)
+			-- The needle at the earliest event at the place.
+		local
+			l_year: INTEGER
+			l_any: BOOLEAN
+		do
+			if attached events_at_place.item (a_place) as al_events then
+				across al_events as ic loop
+					if item_of_event (ic) > 0 and then (not l_any or else timeline_view.items.i_th (item_of_event (ic)).year_from < l_year) then
+						l_year := timeline_view.items.i_th (item_of_event (ic)).year_from
+						l_any := True
+					end
+				end
+				if l_any then
+					selection.set_year (l_year)
 				end
 			end
 		end
@@ -3490,6 +3805,7 @@ feature {NONE} -- Notes (T2, P06)
 			window.add_reference_mark (navigator_tabs, "T1", "P11 Navigator, west: Books (chapter by chapter), Bookmarks (Ctrl+D bookmarks the verse read; click one to read it; Remove and Restore) and History (the last 50 chapters read, newest first, kept between runs; click one to read it again).", window.Corner_top_left)
 			window.add_reference_mark (notes_heading, "T2", "P06 Notes, west below T1, in tab order: Verse notes on the chapter read (add on the verse read; double-click to edit, each edit keeps the old version; Delete and Restore); Journal, notes on a subject (New; Save keeps the earlier version; Delete and Restore); Tags (tag the verse read; click a tag for its verses, a verse to read it; Remove and Restore); Highlights (a reason, not a color; washed amber in the Bible and Parallel tabs; click one to read it; Remove and Restore); Prayer (a title and the request; Open and Answered, with how it was answered; Remove and Restore); Memory (learn the verse read; recall today's card, Show the verse, grade Again, Hard, Good or Easy; the next date follows SuperMemo 2).", window.Corner_top_left)
 			window.add_reference_mark (center_tabs, "T3", "Centre tabs: the Bible text, Parallel (P02), Interlinear (P03, Ctrl+I) and the Timeline (the River of Time).", window.Corner_top_left)
+			window.add_reference_mark (atlas_view, "T7", "The Atlas (Plan 22): empires by year from Cliopatria, places with their doubt (several candidates are dashed rings, each naming who holds it); choosing an event on the Timeline marks its places, choosing a place moves the Timeline. Window > Atlas.", window.Corner_top_left)
 			window.add_reference_mark (analysis_title, "P03.2", "Verse analysis: the verse read, a row per word with its lemma, Strong's number, morphology, gloss, and how often its headword occurs in this testament. Click a row and T4 follows it.", window.Corner_top_left)
 			window.add_reference_mark (interlinear_note, "P03", "Interlinear: word by word in the original, right to left for Hebrew. A click makes the word's verse the place read and opens its headword in T4.", window.Corner_top_left)
 			window.add_reference_mark (lexicon_heading, "T4", "P05 Lexicon, east: follows the clicked word. Its Frameworks tab (P05.8) explains each FRAMEWORK(TM) for the common reader; a framework named anywhere is a link: rest on it for a summary, click it to open it here.", window.Corner_top_left)

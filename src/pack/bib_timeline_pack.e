@@ -72,6 +72,78 @@ feature -- Access
 			every_event_claimed: across Result as al_e all not al_e.claims.is_empty end
 		end
 
+	places: ARRAYED_LIST [BIB_PLACE]
+			-- Every place with its location claims in order, by name (Plan 22 phase 3).
+		require
+			available: is_available
+		local
+			l_by_id: HASH_TABLE [BIB_PLACE, STRING_32]
+			l_place: BIB_PLACE
+		do
+			create Result.make (64)
+			create l_by_id.make (64)
+			run_query ("SELECT place_id, name, kind, min_zoom FROM " + pack_alias + ".timeline_place ORDER BY name, place_id", {ARRAY [detachable ANY]} <<>>)
+			if attached last_rows as al_rows then
+				across al_rows.rows as ic loop
+					create l_place.make (ic.string_value ("place_id"), ic.string_value ("name"), ic.string_value ("kind"), ic.real_value ("min_zoom").max (1.0))
+					Result.extend (l_place)
+					l_by_id.put (l_place, l_place.id)
+				end
+			end
+			run_query ("SELECT place_id, lon, lat, radius_m, held_by, basis, is_lean, citation_id, note FROM " + pack_alias + ".timeline_place_claim ORDER BY place_id, ordinal", {ARRAY [detachable ANY]} <<>>)
+			if attached last_rows as al_rows then
+				across al_rows.rows as ic loop
+						-- the schema's CHECKs keep every point on the planet and every basis known
+					if attached l_by_id.item (ic.string_value ("place_id")) as al_place then
+						al_place.add_claim (create {BIB_PLACE_CLAIM}.make (ic.real_value ("lon"), ic.real_value ("lat"), ic.real_value ("radius_m"),
+							ic.string_value ("held_by"), ic.string_value ("basis"), ic.string_value ("citation_id"), ic.string_value ("note"), ic.integer_value ("is_lean") /= 0))
+					end
+				end
+			end
+		end
+
+	event_places: ARRAYED_LIST [TUPLE [event_id, place_id: STRING_32]]
+			-- Which places each event happened at.
+		require
+			available: is_available
+		do
+			create Result.make (64)
+			run_query ("SELECT event_id, place_id FROM " + pack_alias + ".timeline_event_place ORDER BY event_id, place_id", {ARRAY [detachable ANY]} <<>>)
+			if attached last_rows as al_rows then
+				across al_rows.rows as ic loop
+					Result.extend ([ic.string_value ("event_id"), ic.string_value ("place_id")])
+				end
+			end
+		end
+
+	routes: ARRAYED_LIST [TUPLE [id, name: STRING_32; points: ARRAY [REAL_64]; is_certain: BOOLEAN; earliest, latest: INTEGER]]
+			-- Every route with an even list of points.
+		require
+			available: is_available
+		local
+			l_parts: LIST [STRING_32]
+			l_points: ARRAY [REAL_64]
+			i: INTEGER
+		do
+			create Result.make (4)
+			run_query ("SELECT route_id, name, points, is_certain, earliest, latest FROM " + pack_alias + ".timeline_route ORDER BY route_id", {ARRAY [detachable ANY]} <<>>)
+			if attached last_rows as al_rows then
+				across al_rows.rows as ic loop
+					l_parts := ic.string_value ("points").split (' ')
+					if l_parts.count >= 4 and l_parts.count \\ 2 = 0 and then across l_parts as p all p.is_double end then
+						create l_points.make_filled (0.0, 1, l_parts.count)
+						i := 0
+						across l_parts as p loop
+							i := i + 1
+							l_points [i] := p.to_double
+						end
+						Result.extend ([ic.string_value ("route_id"), ic.string_value ("name"), l_points, ic.integer_value ("is_certain") /= 0,
+							ic.integer_value ("earliest"), ic.integer_value ("latest")])
+					end
+				end
+			end
+		end
+
 	citation_text (a_id: READABLE_STRING_GENERAL): STRING_32
 			-- The text of citation `a_id', or empty.
 		require
