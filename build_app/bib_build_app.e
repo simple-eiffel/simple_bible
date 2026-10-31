@@ -8,6 +8,7 @@ note
 			bible_build --frameworks <folder of *.framework.json, or one> --out <frameworks.db> [--uses <commentary.db>]
 			bible_build --books <folder of *.book.json, or one> --out <books.db> [--content <content.db>] [--frameworks-pack <frameworks.db>]
 			bible_build --essays <folder of *.essay.json, or one> --out <essays.db> [--content <content.db>] [--frameworks-pack <frameworks.db>]
+			bible_build --timeline <folder of *.timeline.json, or one> --out <timeline.db>
 		Exit code 0 on success, 1 on failure (the reason is printed).
 	]"
 	author: "Larry Rix"
@@ -51,6 +52,7 @@ feature {NONE} -- Initialization
 			l_builder: BIB_CONTENT_BUILDER
 			l_commentary: BIB_COMMENTARY_BUILDER
 			l_frameworks: BIB_FRAMEWORK_BUILDER
+			l_timeline: BIB_TIMELINE_BUILDER
 			l_books: BIB_BOOK_BUILDER
 			l_reader: SIMPLE_BIBLE
 			l_build_id: STRING
@@ -61,6 +63,7 @@ feature {NONE} -- Initialization
 			l_cli.add_option_with_default ("b|bible", "The vault's bible.db", "path", "")
 			l_cli.add_option_with_default ("c|commentary", "The Commentaries folder (every book's _build sidecar) or one sidecar JSON: write the commentary pack instead", "path", "")
 			l_cli.add_option_with_default ("f|frameworks", "A folder of *.framework.json sidecars, or one: write the frameworks pack instead", "path", "")
+			l_cli.add_option_with_default ("r|timeline", "A folder of *.timeline.json sidecars, or one: write the River of Time pack instead", "path", "")
 			l_cli.add_option_with_default ("u|uses", "With --frameworks: the commentary pack whose Frameworks at work lists give each framework's uses (empty: none)", "path", "")
 			l_cli.add_option_with_default ("k|books", "A folder of *.book.json manifests, or one: write the books pack instead", "path", "")
 			l_cli.add_option_with_default ("e|essays", "A folder of *.essay.json manifests, or one: write the essays pack instead", "path", "")
@@ -117,6 +120,26 @@ feature {NONE} -- Initialization
 						end
 					end
 					l_reader.close
+				end
+			elseif attached l_cli.value_of ("timeline") as al_folder and then not al_folder.is_empty
+				and then attached l_cli.value_of ("out") as al_timeline_pack and then not al_timeline_pack.is_empty
+			then
+					-- the River of Time (Plan 22 phase 1, 2026-10-30)
+				create l_timeline.make
+				if l_timeline.sidecars_in (al_folder).is_empty then
+					print ("bible_build: no *" + l_timeline.schema.Sidecar_extension + " in " + al_folder + "%N")
+					l_failed := True
+				else
+					l_timeline.build (l_timeline.sidecars_in (al_folder), al_timeline_pack)
+					if attached l_timeline.last_error as al_error then
+						print ("bible_build failed: ")
+						print (al_error)
+						print ("%N")
+						l_failed := True
+					else
+						print ("bible_build: wrote " + al_timeline_pack + " (" + l_timeline.lane_count.out + " lanes, " + l_timeline.event_count.out + " events, "
+							+ l_timeline.claim_count.out + " claims, " + l_timeline.citation_count.out + " citations)%N")
+					end
 				end
 			elseif attached l_cli.value_of ("frameworks") as al_folder and then not al_folder.is_empty
 				and then attached l_cli.value_of ("out") as al_frameworks_pack and then not al_frameworks_pack.is_empty

@@ -40,6 +40,7 @@ feature {NONE} -- Initialization
 			run_source_set_tests
 			run_concordance_tests
 			run_facade_open_tests
+			run_timeline_tests
 			run_content_builder_tests
 			run_cli_command_tests
 			run_reading_tests
@@ -428,6 +429,18 @@ feature {NONE} -- Suites
 			else
 				run_skeletal (agent t.test_pdf_reads_as_prose, "test_pdf_reads_as_prose", "set SIMPLE_BIBLE_PDF")
 			end
+		end
+
+	run_timeline_tests
+			-- The River of Time pack (Plan 22 phase 1, 2026-10-30).
+		local
+			t: TEST_TIMELINE
+		do
+			print ("TEST_TIMELINE%N")
+			create t
+			run_test (agent t.test_edtf_reads_the_subset, "test_edtf_reads_the_subset")
+			run_test (agent t.test_timeline_pack_builds_attaches_and_reads, "test_timeline_pack_builds_attaches_and_reads")
+			run_test (agent t.test_timeline_builder_refuses_a_broken_sidecar, "test_timeline_builder_refuses_a_broken_sidecar")
 		end
 
 	run_facade_open_tests
