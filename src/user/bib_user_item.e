@@ -56,6 +56,16 @@ feature {BIB_USER_STORE, BIB_NOTE_STORE} -- Store bookkeeping
 			hub_unchanged: hub_id = old hub_id
 		end
 
+	mark_changed (a_at: SIMPLE_DATE_TIME)
+			-- Changed at `a_at' (a row read back, or renamed or moved).
+		require
+			stored: is_stored
+		do
+			changed_at := a_at
+		ensure
+			id_unchanged: id = old id
+		end
+
 	mark_deleted (a_at: SIMPLE_DATE_TIME)
 		require
 			stored: is_stored

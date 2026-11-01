@@ -100,6 +100,11 @@ feature {NONE} -- Suites
 			run_test (agent t.test_this_session_lists_every_verse_touched, "test_this_session_lists_every_verse_touched")
 			run_test (agent t.test_kept_history_lists_each_verse_once, "test_kept_history_lists_each_verse_once")
 			run_test (agent t.test_kept_history_follows_its_limit, "test_kept_history_follows_its_limit")
+			run_test (agent t.test_a_favorite_verse_wears_the_star, "test_a_favorite_verse_wears_the_star")
+			run_test (agent t.test_a_range_in_a_new_folder, "test_a_range_in_a_new_folder")
+			run_test (agent t.test_a_removed_folder_hides_its_stars_until_restored, "test_a_removed_folder_hides_its_stars_until_restored")
+			run_test (agent t.test_a_whole_chapter_stars_the_chapter_not_its_verses, "test_a_whole_chapter_stars_the_chapter_not_its_verses")
+			run_test (agent t.test_the_filter_finds_favorites_in_folders, "test_the_filter_finds_favorites_in_folders")
 		end
 
 feature {NONE} -- Runner

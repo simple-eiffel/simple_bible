@@ -58,3 +58,10 @@ One pebble, three ways to lift it, one drop hole.
   - While picking, clicking a folder's arrow opens it without dropping; clicking the folder drops.
   - The pointer carries a small card: the quote's opening words and its source ("For God so loved..." John 3:16, KJV). After the drop a notice names the folder and offers Undo.
 - **Where it is built**: the targeting (spring-open, the New folder row, edge scrolling, the card) in simple_widgets on `SW_TREE` and `SW_WINDOW`'s existing pick machinery, so drag and pick share one code path and any program gets it.
+
+## 6. Pills (Study board; the full table is gui/03-PILLS.md)
+
+- T1.1 Favorites tools: filter box, New folder, Rename, Remove, Restore.
+- T1.2 Favorites tree.
+- T1.3 History: This session or Kept, and the Kept list's length.
+- T1.4 History list.

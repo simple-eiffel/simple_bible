@@ -314,6 +314,87 @@ feature -- Tests
 			clean_user_file
 		end
 
+	test_favorites_in_folders
+			-- research/24 stage C: favorites kept in folders of the reader's own, with the version
+			-- they were saved in; renamed, moved, removed and restored softly; a removed folder's
+			-- row stays (the tree hides what is in it).
+		local
+			l_user: BIB_USER_STORE
+			l_hub: BIB_HUB_ID
+			l_grace, l_faith: BIB_FAVORITE_FOLDER
+			l_verse, l_range: BIB_FAVORITE
+		do
+			clean_user_file
+			create l_user.make (User_file)
+			l_user.open
+			create l_hub
+			create l_grace.make (0, "Grace")
+			l_user.add_favorite_folder (l_grace)
+			create l_faith.make (l_grace.id, "Faith")
+			l_user.add_favorite_folder (l_faith)
+			create l_verse.make_passage (l_hub.hub_id (43, 3, 16), l_hub.hub_id (43, 3, 16), "KJV", "John 3:16")
+			l_user.put_favorite_in (l_verse, l_faith.id)
+			l_user.add_favorite (l_verse)
+			create l_range.make_passage (l_hub.hub_id (45, 8, 28), l_hub.hub_id (45, 8, 30), "BSB", "Romans 8:28-30")
+			l_user.add_favorite (l_range)
+			assert_true ("all stored", l_user.write_error = Void and l_verse.is_stored and l_range.is_stored)
+			assert_integers_equal ("two folders", 2, l_user.favorite_folders.count)
+			assert_integers_equal ("two favorites", 2, l_user.favorites.count)
+			assert_true ("Faith in Grace", l_user.favorite_folders.i_th (2).parent_id = l_grace.id)
+			assert_true ("the verse in Faith, its version kept", l_user.favorites.first.folder_id = l_faith.id and l_user.favorites.first.version.same_string ("KJV"))
+			assert_true ("the range spans three verses", l_user.favorites.i_th (2).covers (l_hub.hub_id (45, 8, 29)) and not l_user.favorites.i_th (2).covers (l_hub.hub_id (45, 8, 31)))
+			l_user.rename_favorite_folder (l_faith, "Believing")
+			l_user.move_favorite (l_verse, 0)
+			assert_true ("renamed and moved", l_user.favorite_folders.i_th (2).name.same_string ("Believing") and l_user.favorites.first.folder_id = 0)
+			l_user.set_favorite_folder_removed (l_grace, True)
+			assert_integers_equal ("a removed folder is not listed", 1, l_user.favorite_folders.count)
+			l_user.set_favorite_folder_removed (l_grace, False)
+			assert_integers_equal ("and restored", 2, l_user.favorite_folders.count)
+			l_user.set_favorite_removed (l_range, True)
+			assert_integers_equal ("a removed favorite is not listed", 1, l_user.favorites.count)
+			l_user.close
+			clean_user_file
+		end
+
+	test_schema_2_is_upgraded_to_3
+			-- The reader's own user.db is at schema 2: it is backed up and upgraded to schema 3 by
+			-- adding the favorites' tables; its bookmarks are copied into a Bookmarks folder (a
+			-- removed one is not) and kept where they were; its prayers stay.
+		local
+			l_old: SIMPLE_SQL_DATABASE
+			l_user: BIB_USER_STORE
+		do
+			clean_user_file
+			create l_old.make (User_file)
+			across <<"CREATE TABLE note(note_id INTEGER PRIMARY KEY, hub_id INTEGER NOT NULL, title TEXT NOT NULL, created_at TEXT NOT NULL, changed_at TEXT NOT NULL, deleted INTEGER NOT NULL DEFAULT 0)",
+					"CREATE TABLE note_version(note_id INTEGER NOT NULL REFERENCES note(note_id), version INTEGER NOT NULL, body TEXT NOT NULL, written_at TEXT NOT NULL, PRIMARY KEY (note_id, version)) WITHOUT ROWID",
+					"CREATE TABLE user_item(item_id INTEGER PRIMARY KEY, kind INTEGER NOT NULL, hub_id INTEGER NOT NULL, label TEXT NOT NULL, created_at TEXT NOT NULL, changed_at TEXT NOT NULL, deleted INTEGER NOT NULL DEFAULT 0)",
+					"CREATE TABLE setting(key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+					"CREATE TABLE prayer(prayer_id INTEGER PRIMARY KEY, title TEXT NOT NULL, body TEXT NOT NULL, hub_id INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, answered_at TEXT NOT NULL DEFAULT '', answer TEXT NOT NULL DEFAULT '', deleted INTEGER NOT NULL DEFAULT 0)",
+					"CREATE TABLE memory_card(card_id INTEGER PRIMARY KEY, hub_id INTEGER NOT NULL, created_at TEXT NOT NULL, due_on TEXT NOT NULL, interval_days INTEGER NOT NULL DEFAULT 0, ease_percent INTEGER NOT NULL DEFAULT 250, repetitions INTEGER NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0)",
+					"CREATE TABLE memory_review(card_id INTEGER NOT NULL REFERENCES memory_card(card_id), reviewed_on TEXT NOT NULL, grade INTEGER NOT NULL, interval_days INTEGER NOT NULL, ease_percent INTEGER NOT NULL)",
+					"INSERT INTO prayer(title, body, created_at) VALUES ('For wisdom', 'James 1:5', '2026-10-28T08:00:00')",
+					"INSERT INTO user_item(kind, hub_id, label, created_at, changed_at) VALUES (3, 43003016, 'John 3:16', '2026-10-27T12:00:00', '2026-10-27T12:00:00')",
+					"INSERT INTO user_item(kind, hub_id, label, created_at, changed_at) VALUES (3, 65001006, 'Jude 1:6', '2026-10-28T12:00:00', '2026-10-28T12:00:00')",
+					"INSERT INTO user_item(kind, hub_id, label, created_at, changed_at, deleted) VALUES (3, 1001001, 'Genesis 1:1', '2026-10-28T13:00:00', '2026-10-28T13:00:00', 1)",
+					"PRAGMA user_version = 2">> as ic loop
+				l_old.execute (ic)
+			end
+			l_old.close
+			create l_user.make (User_file)
+			l_user.open
+			assert_true ("opened", l_user.is_open and l_user.last_error = Void)
+			assert_integers_equal ("upgraded to 3", 3, l_user.schema_version)
+			assert_true ("a schema-2 backup", l_user.last_backup_path.has_substring ("schema-2-backup") and then (create {SIMPLE_FILE}.make (l_user.last_backup_path)).is_file)
+			assert_integers_equal ("the two live bookmarks copied", 2, l_user.favorites.count)
+			assert_true ("oldest first, in the Bookmarks folder", l_user.favorites.first.hub_id = 43003016 and l_user.favorites.first.folder_id = l_user.favorite_folders.first.id)
+			assert_integers_equal ("the bookmarks kept", 2, l_user.item_count ({BIB_USER_STORE}.Kind_bookmark, 43003016) + l_user.item_count ({BIB_USER_STORE}.Kind_bookmark, 65001006))
+			assert_integers_equal ("the prayer kept", 1, l_user.prayers (False).count)
+			l_user.close
+			assert_true ("the backup removed", (create {SIMPLE_FILE}.make (l_user.last_backup_path)).delete)
+			clean_user_file
+		end
+
 	test_schema_1_is_upgraded_with_a_backup
 			-- user.db schema 2 (prayer, memory cards): a version-1 file is backed up, then upgraded by
 			-- adding tables only; every note version and setting survives. Before: version 1 was this
@@ -334,6 +415,7 @@ feature -- Tests
 					"INSERT INTO note VALUES (1, 65001006, '', '2026-10-27T12:00:00', '2026-10-27T12:00:00', 0)",
 					"INSERT INTO note_version VALUES (1, 1, 'The watchers kept not their estate.', '2026-10-27T12:00:00')",
 					"INSERT INTO setting VALUES ('layout', 'study')",
+					"INSERT INTO user_item(kind, hub_id, label, created_at, changed_at) VALUES (3, 43003016, 'John 3:16', '2026-10-27T12:00:00', '2026-10-27T12:00:00')",
 					"PRAGMA user_version = 1">> as ic loop
 				l_old.execute (ic)
 			end
@@ -341,7 +423,12 @@ feature -- Tests
 			create l_user.make (User_file)
 			l_user.open
 			assert_true ("opened", l_user.is_open and l_user.last_error = Void)
-			assert_integers_equal ("upgraded", 2, l_user.schema_version)
+			assert_integers_equal ("upgraded to the current schema", {BIB_USER_STORE}.User_schema_version, l_user.schema_version)
+			assert_integers_equal ("the bookmark kept where it was", 1, l_user.item_count ({BIB_USER_STORE}.Kind_bookmark, 43003016))
+			assert_integers_equal ("and copied into Favorites", 1, l_user.favorites.count)
+			assert_true ("in a root folder named Bookmarks", l_user.favorite_folders.count = 1 and then l_user.favorite_folders.first.name.same_string ("Bookmarks")
+				and then l_user.favorite_folders.first.parent_id = 0 and then l_user.favorites.first.folder_id = l_user.favorite_folders.first.id)
+			assert_true ("as the verse it marked", l_user.favorites.first.is_single_verse and l_user.favorites.first.hub_id = 43003016)
 			assert_integers_equal ("the note's version kept", 1, l_user.total_note_versions)
 			assert_true ("the setting kept", l_user.has_setting ("layout") and then l_user.setting ("layout").same_string ("study"))
 			assert_true ("a backup named", not l_user.last_backup_path.is_empty and then (create {SIMPLE_FILE}.make (l_user.last_backup_path)).is_file)

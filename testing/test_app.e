@@ -261,6 +261,8 @@ feature {NONE} -- Suites
 			run_test (agent t.test_one_rule_for_a_live_card, "test_one_rule_for_a_live_card")
 			run_test (agent t.test_recent_places_one_per_chapter, "test_recent_places_one_per_chapter")
 			run_test (agent t.test_recent_visits_one_per_verse, "test_recent_visits_one_per_verse")
+			run_test (agent t.test_favorites_in_folders, "test_favorites_in_folders")
+			run_test (agent t.test_schema_2_is_upgraded_to_3, "test_schema_2_is_upgraded_to_3")
 			run_test (agent t.test_tags_count_and_list_their_verses, "test_tags_count_and_list_their_verses")
 			run_test (agent t.test_a_failed_item_write_is_reported, "test_a_failed_item_write_is_reported")
 			run_test (agent t.test_highlights_and_bookmarks_keep_their_reason, "test_highlights_and_bookmarks_keep_their_reason")
