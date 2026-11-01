@@ -439,6 +439,108 @@ feature -- Frameworks pack (2026-10-28)
 			remove_test_files
 		end
 
+feature -- Memes (research/25, 2026-11-01)
+
+	test_memes_built_from_a_seed_and_added_to
+			-- meme.db written from a seed (its pictures beside it, its passages as written), read back
+			-- by BIB_MEME_STORE answering a verse, then a meme added (Larry: "I will add as I go"). A
+			-- missing picture leaves its meme out, and a passage that does not read is left out, each
+			-- with a warning. Kept out of `Folder', whose files attach as packs.
+		local
+			l_bible: SIMPLE_BIBLE
+			l_builder: BIB_MEME_BUILDER
+			l_store: BIB_MEME_STORE
+			l_hub: BIB_HUB_ID
+			l_passages: ARRAYED_LIST [TUPLE [hub_from, hub_to: INTEGER_64; wording: STRING_32]]
+			l_list: TUPLE [read: ARRAYED_LIST [TUPLE [hub_from, hub_to: INTEGER_64; wording: STRING_32]]; unread: ARRAYED_LIST [STRING_32]]
+			l_ok: BOOLEAN
+		do
+			close_leftovers
+			fixture.build_content (Content_file, {CONC_FIXTURE}.Content_version, False)
+			fixture.delete_file (Meme_file)
+			if not (create {SIMPLE_FILE}.make (Meme_folder)).is_directory then
+				l_ok := (create {SIMPLE_FILE}.make (Meme_folder)).create_directory
+			end
+			write_tiny_png (Meme_folder + "\one.png")
+			write_tiny_png (Meme_folder + "\one-square.png")
+			l_ok := (create {SIMPLE_FILE}.make (Meme_folder + "\memes.seed.json")).write_text_utf_8 (Meme_seed_text)
+			l_bible := bible ("", "")
+			l_bible.open
+			create l_builder.make (l_bible.books)
+			l_builder.build (Meme_folder + "\memes.seed.json", Meme_file)
+			l_list := (create {BIB_PASSAGE_TEXT}.make (l_bible.books)).ranges ({STRING_32} "Jude 5%/8211/7 %/183/ Jude 9; Hezekiah 4:1")
+			l_bible.close
+			assert_integers_equal ("a list: two read", 2, l_list.read.count)
+			assert_true ("the dash read as a range", l_list.read.first.hub_to > l_list.read.first.hub_from)
+			assert_integers_equal ("one does not", 1, l_list.unread.count)
+			assert_true ("built", l_builder.last_error = Void)
+			assert_integers_equal ("one meme: the other's picture is missing", 1, l_builder.meme_count)
+			assert_integers_equal ("its two pictures", 2, l_builder.picture_count)
+			assert_integers_equal ("Jude 5-7 and Jude 9 read", 2, l_builder.passage_count)
+			assert_integers_equal ("three warnings: the missing picture, its meme left out, the passage that does not read", 3, l_builder.warnings.count)
+			create l_hub
+			create l_store.make (Meme_file)
+			l_store.open
+			assert_true ("open", l_store.is_open and l_store.last_error = Void)
+			assert_integers_equal ("one meme read", 1, l_store.memes.count)
+			assert_true ("the feed picture first", l_store.memes.first.variants.count = 2 and then l_store.memes.first.variants.first.cut.same_string ("feed"))
+			assert_integers_equal ("Jude 6 names it", 1, l_store.memes_for_verse (l_hub.hub_id (65, 1, 6)).count)
+			assert_integers_equal ("Jude 8 does not", 0, l_store.memes_for_verse (l_hub.hub_id (65, 1, 8)).count)
+			assert_integers_equal ("Jude 1 holds it", 1, l_store.memes_for_chapter (65, 1).count)
+			assert_true ("its square picture is a PNG", attached l_store.picture (l_store.memes.first, "square") as al_png and then l_store.schema.is_png (al_png))
+			create l_passages.make (1)
+			l_passages.extend ([l_hub.hub_id (65, 1, 3), l_hub.hub_id (65, 1, 3), {STRING_32} "Jude 3"])
+			l_store.add_meme ("A second one", "Its words.", tiny_png, l_passages)
+			assert_true ("added", l_store.write_error = Void and l_store.memes.count = 2)
+			assert_true ("named from its title", attached l_store.meme_by_slug ("a-second-one"))
+			assert_integers_equal ("Jude 3 names it", 1, l_store.memes_for_verse (l_hub.hub_id (65, 1, 3)).count)
+			l_store.close
+			fixture.delete_file (Meme_file)
+			fixture.delete_file (Meme_folder + "\one.png")
+			fixture.delete_file (Meme_folder + "\one-square.png")
+			fixture.delete_file (Meme_folder + "\memes.seed.json")
+			l_ok := (create {SIMPLE_FILE}.make (Meme_folder)).delete_directory
+		end
+
+	Meme_folder: STRING = "facade_test_memes"
+	Meme_file: STRING = "facade_test_meme.db"
+
+	Meme_seed_text: STRING = "[
+		{"format": 1, "memes": [
+		 {"slug": "one", "title": "One", "description": "Words.", "passages": ["Jude 5-7", "Jude 9", "Hezekiah 4:1"],
+		  "images": [{"variant": "feed", "file": "one.png"}, {"variant": "square", "file": "one-square.png"}]},
+		 {"slug": "two", "title": "Two", "description": "More.", "passages": ["Jude 1"],
+		  "images": [{"variant": "feed", "file": "missing.png"}]}]}
+	]"
+
+	tiny_png: MANAGED_POINTER
+			-- A one-pixel PNG.
+		local
+			l_bytes: ARRAY [NATURAL_8]
+			i: INTEGER
+		do
+			l_bytes := <<0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+				0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+				0x89, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+				0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+				0x42, 0x60, 0x82>>
+			create Result.make (l_bytes.count)
+			from i := 1 until i > l_bytes.count loop
+				Result.put_natural_8 (l_bytes [i], i - 1)
+				i := i + 1
+			end
+		end
+
+	write_tiny_png (a_file: STRING)
+			-- `tiny_png' written to `a_file'.
+		local
+			l_file: RAW_FILE
+		do
+			create l_file.make_create_read_write (a_file)
+			l_file.put_managed_pointer (tiny_png, 0, tiny_png.count)
+			l_file.close
+		end
+
 feature -- Books pack (2026-10-28)
 
 	test_book_pack_builds_attaches_and_answers

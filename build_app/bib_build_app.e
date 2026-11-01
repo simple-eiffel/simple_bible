@@ -10,6 +10,7 @@ note
 			bible_build --essays <folder of *.essay.json, or one> --out <essays.db> [--content <content.db>] [--frameworks-pack <frameworks.db>]
 			bible_build --timeline <folder of *.timeline.json, or one> --out <timeline.db>
 			bible_build --empires <Cliopatria GeoJSON> --out <empires.db>
+			bible_build --memes <memes.seed.json> --out <meme.db>
 		Exit code 0 on success, 1 on failure (the reason is printed).
 	]"
 	author: "Larry Rix"
@@ -55,6 +56,7 @@ feature {NONE} -- Initialization
 			l_frameworks: BIB_FRAMEWORK_BUILDER
 			l_timeline: BIB_TIMELINE_BUILDER
 			l_empires: BIB_EMPIRES_BUILDER
+			l_memes: BIB_MEME_BUILDER
 			l_books: BIB_BOOK_BUILDER
 			l_reader: SIMPLE_BIBLE
 			l_build_id: STRING
@@ -67,6 +69,7 @@ feature {NONE} -- Initialization
 			l_cli.add_option_with_default ("f|frameworks", "A folder of *.framework.json sidecars, or one: write the frameworks pack instead", "path", "")
 			l_cli.add_option_with_default ("r|timeline", "A folder of *.timeline.json sidecars, or one: write the River of Time pack instead", "path", "")
 			l_cli.add_option_with_default ("m|empires", "Cliopatria's GeoJSON: write the empires pack (polity outlines by year, CC BY 4.0) instead", "path", "")
+			l_cli.add_option_with_default ("y|memes", "The meme seed (memes.seed.json, pictures beside it): write meme.db instead", "path", "")
 			l_cli.add_option_with_default ("u|uses", "With --frameworks: the commentary pack whose Frameworks at work lists give each framework's uses (empty: none)", "path", "")
 			l_cli.add_option_with_default ("k|books", "A folder of *.book.json manifests, or one: write the books pack instead", "path", "")
 			l_cli.add_option_with_default ("e|essays", "A folder of *.essay.json manifests, or one: write the essays pack instead", "path", "")
@@ -143,6 +146,34 @@ feature {NONE} -- Initialization
 						print ("bible_build: wrote " + al_timeline_pack + " (" + l_timeline.lane_count.out + " lanes, " + l_timeline.event_count.out + " events, "
 							+ l_timeline.claim_count.out + " claims, " + l_timeline.citation_count.out + " citations, " + l_timeline.place_count.out + " places, "
 							+ l_timeline.place_claim_count.out + " locations, " + l_timeline.event_place_count.out + " events placed, " + l_timeline.route_count.out + " routes)%N")
+					end
+				end
+			elseif attached l_cli.value_of ("memes") as al_seed and then not al_seed.is_empty
+				and then attached l_cli.value_of ("out") as al_meme_pack and then not al_meme_pack.is_empty
+			then
+					-- Larry's memes for the meme tool (research/25, 2026-11-01)
+				create l_reader.make (create {BIB_CONFIG}.make_with_core (content_path (l_cli.option_value_or_default ("content", ""))))
+				l_reader.open
+				if not l_reader.is_open then
+					print ("bible_build: content.db could not be opened, so passages cannot be read%N")
+					l_failed := True
+				else
+					create l_memes.make (l_reader.books)
+					l_memes.build (al_seed, al_meme_pack)
+					l_reader.close
+					across l_memes.warnings as ic_warning loop
+						print ("bible_build: warning: ")
+						print (ic_warning)
+						print ("%N")
+					end
+					if attached l_memes.last_error as al_error then
+						print ("bible_build failed: ")
+						print (al_error)
+						print ("%N")
+						l_failed := True
+					else
+						print ("bible_build: wrote " + al_meme_pack + " (" + l_memes.meme_count.out + " memes, " + l_memes.picture_count.out + " pictures, "
+							+ l_memes.passage_count.out + " passages)%N")
 					end
 				end
 			elseif attached l_cli.value_of ("empires") as al_geojson and then not al_geojson.is_empty

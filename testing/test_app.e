@@ -471,6 +471,7 @@ feature {NONE} -- Suites
 			run_test (agent t.test_framework_pack_builds_attaches_and_answers, "test_framework_pack_builds_attaches_and_answers")
 			run_test (agent t.test_framework_sidecar_breaking_a_rule_is_refused, "test_framework_sidecar_breaking_a_rule_is_refused")
 			run_test (agent t.test_book_pack_builds_attaches_and_answers, "test_book_pack_builds_attaches_and_answers")
+			run_test (agent t.test_memes_built_from_a_seed_and_added_to, "test_memes_built_from_a_seed_and_added_to")
 			run_test (agent t.test_writings_search_finds_plain_and_fuzzy, "test_writings_search_finds_plain_and_fuzzy")
 			run_test (agent t.test_essays_pack_builds_attaches_and_answers, "test_essays_pack_builds_attaches_and_answers")
 			run_test (agent t.test_markdown_blocks_edge_cases, "test_markdown_blocks_edge_cases")
