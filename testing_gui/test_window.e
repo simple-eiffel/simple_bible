@@ -28,6 +28,61 @@ inherit
 			default_create
 		end
 
+feature -- History (research/24 stage B, 2026-11-01)
+
+	test_this_session_lists_every_verse_touched
+			-- Larry: a History that lists every verse touched this session.
+		local
+			app: BIB_GUI_APP
+		do
+			app := new_window
+			app.harness_go_to (43, 3, 16)
+			app.harness_click_verse (17)
+			app.harness_click_verse (18)
+			app.harness_go_to (1, 1, 1)
+			app.harness_history_scope (1)
+			assert_integers_equal ("four verses, each once", 4, app.harness_history_count)
+			assert_true ("Genesis 1:1 newest (read at the start too, listed once)", app.harness_history_is (1, 1, 1, 1))
+			assert_true ("then John 3:18", app.harness_history_is (2, 43, 3, 18))
+			assert_true ("John 3:16 oldest", app.harness_history_is (4, 43, 3, 16))
+		end
+
+	test_kept_history_lists_each_verse_once
+			-- The kept history lists verses, not chapters, each at its newest visit.
+		local
+			app: BIB_GUI_APP
+		do
+			app := new_window
+			app.harness_go_to (43, 3, 16)
+			app.harness_click_verse (17)
+			app.harness_click_verse (16)
+			app.harness_history_scope (2)
+			assert_integers_equal ("three verses (Genesis 1:1 from the start)", 3, app.harness_history_count)
+			assert_true ("John 3:16 newest", app.harness_history_is (1, 43, 3, 16))
+			assert_true ("John 3:17 next", app.harness_history_is (2, 43, 3, 17))
+		end
+
+	test_kept_history_follows_its_limit
+			-- Larry: kept up to a number the reader can change (200 at first).
+		local
+			app: BIB_GUI_APP
+			i: INTEGER
+		do
+			app := new_window
+			assert_integers_equal ("200 at first", 200, app.harness_history_keep_value)
+			app.harness_set_history_limit (10)
+			app.harness_go_to (43, 3, 1)
+			from i := 2 until i > 15 loop
+				app.harness_click_verse (i)
+				i := i + 1
+			end
+			app.harness_history_scope (2)
+			assert_integers_equal ("ten listed", 10, app.harness_history_count)
+			assert_true ("John 3:15 newest", app.harness_history_is (1, 43, 3, 15))
+			app.harness_set_history_limit (5000)
+			assert_integers_equal ("kept to the longest allowed", 1000, app.harness_history_keep_value)
+		end
+
 feature -- Phase 3: the reading place (research/23; written 2026-11-01 and run on 0.7.49 first)
 
 	test_a_verse_click_keeps_the_chapter

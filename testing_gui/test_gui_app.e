@@ -97,6 +97,9 @@ feature {NONE} -- Suites
 			run_test (agent t.test_a_click_on_the_verse_read_adds_no_step, "test_a_click_on_the_verse_read_adds_no_step")
 			run_test (agent t.test_back_and_forward_follow_the_trail, "test_back_and_forward_follow_the_trail")
 			run_test (agent t.test_previous_and_next_stop_at_the_ends, "test_previous_and_next_stop_at_the_ends")
+			run_test (agent t.test_this_session_lists_every_verse_touched, "test_this_session_lists_every_verse_touched")
+			run_test (agent t.test_kept_history_lists_each_verse_once, "test_kept_history_lists_each_verse_once")
+			run_test (agent t.test_kept_history_follows_its_limit, "test_kept_history_follows_its_limit")
 		end
 
 feature {NONE} -- Runner
