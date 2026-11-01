@@ -207,3 +207,7 @@ Feature IDs, names and fit classes come from `research/09-FEATURE-PARITY - e-Swo
 1. Run the D-006 spike offscreen (Gen 1:1 WLC with cantillation, Gen 1:1 LXX Swete, John 1:1 WH in `SW_LABEL` and `SW_TEXT_BOX`), and file its defects as GW-01 to GW-03.
 2. Open the v1 gap items (design notes §9) against simple_widgets, simple_shaping and simple_shell.
 3. Feed `00-GUI-SPEC.md` into `/eiffel.spec` and `/eiffel.intent` for the GUI layer.
+
+## Design pills
+
+`03-PILLS.md` lists every design pill (View > Show design pills) with its board and tip. It is generated from the code by `tools/pill_table.py`; run it after any pill changes so the table and the running program agree.

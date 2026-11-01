@@ -362,6 +362,172 @@ feature -- Commands: annotations
 			restored: write_error = Void implies not is_kind_deleted (a_kind, a_id)
 		end
 
+feature -- Favorites (research/24 stage C, schema 3)
+
+	favorite_folders: ARRAYED_LIST [BIB_FAVORITE_FOLDER]
+			-- Every folder not removed, oldest first (a folder inside a removed one is listed; the
+			-- tree hides it with its parent).
+		require
+			open: is_open
+		local
+			l_folder: BIB_FAVORITE_FOLDER
+		do
+			create Result.make (16)
+			across connection.query ("SELECT folder_id, parent_id, name, created_at, changed_at FROM favorite_folder WHERE deleted = 0 AND name <> '' ORDER BY folder_id").rows as ic loop
+				create l_folder.make (ic.integer_64_value ("parent_id").max (0), ic.string_value ("name"))
+				l_folder.mark_stored (ic.integer_64_value ("folder_id"), time_of (ic.string_value ("created_at")))
+				l_folder.mark_changed (time_of (ic.string_value ("changed_at")))
+				Result.extend (l_folder)
+			end
+		end
+
+	favorites: ARRAYED_LIST [BIB_FAVORITE]
+			-- Every favorite not removed, oldest first.
+		require
+			open: is_open
+		local
+			l_favorite: BIB_FAVORITE
+		do
+			create Result.make (32)
+			across connection.query ("SELECT favorite_id, folder_id, kind, hub_id, end_hub_id, version, label, target, quote, anchor_from, anchor_to, created_at, changed_at FROM favorite WHERE deleted = 0 AND kind = 1 AND hub_id > 0 AND end_hub_id >= hub_id ORDER BY favorite_id").rows as ic loop
+				create l_favorite.make_passage (ic.integer_64_value ("hub_id"), ic.integer_64_value ("end_hub_id"), ic.string_value ("version").to_string_8, ic.string_value ("label"))
+				l_favorite.mark_stored (ic.integer_64_value ("favorite_id"), time_of (ic.string_value ("created_at")))
+				l_favorite.mark_changed (time_of (ic.string_value ("changed_at")))
+				l_favorite.set_folder (ic.integer_64_value ("folder_id").max (0))
+				Result.extend (l_favorite)
+			end
+		end
+
+	add_favorite_folder (a_folder: BIB_FAVORITE_FOLDER)
+		require
+			open: is_open
+			not_stored: not a_folder.is_stored
+		local
+			l_at: STRING_8
+		do
+			write_error := Void
+			l_at := now_text
+			connection.execute_with_args ("INSERT INTO favorite_folder(parent_id, name, created_at, changed_at) VALUES (?, ?, ?, ?)",
+				<<a_folder.parent_id, a_folder.name, l_at, l_at>>)
+			if connection.has_error then
+				create write_error.make ({BIB_ERROR}.Database_problem, failure_text (connection, "The folder could not be saved."))
+			else
+				a_folder.mark_stored (connection.last_insert_rowid, time_of (l_at))
+			end
+		ensure
+			stored: write_error = Void implies a_folder.is_stored
+		end
+
+	add_favorite (a_favorite: BIB_FAVORITE)
+		require
+			open: is_open
+			not_stored: not a_favorite.is_stored
+		local
+			l_at: STRING_8
+		do
+			write_error := Void
+			l_at := now_text
+			connection.execute_with_args ("INSERT INTO favorite(folder_id, kind, hub_id, end_hub_id, version, label, target, quote, anchor_from, anchor_to, created_at, changed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+				<<a_favorite.folder_id, a_favorite.favorite_kind, a_favorite.hub_id, a_favorite.end_hub_id, a_favorite.version, a_favorite.label,
+				a_favorite.target, a_favorite.quote, a_favorite.anchor_from, a_favorite.anchor_to, l_at, l_at>>)
+			if connection.has_error then
+				create write_error.make ({BIB_ERROR}.Database_problem, failure_text (connection, "The favorite could not be saved."))
+			else
+				a_favorite.mark_stored (connection.last_insert_rowid, time_of (l_at))
+			end
+		ensure
+			stored: write_error = Void implies a_favorite.is_stored
+		end
+
+	put_favorite_in (a_favorite: BIB_FAVORITE; a_folder_id: INTEGER_64)
+			-- Before it is stored: `a_favorite' goes in folder `a_folder_id' (0: the root).
+		require
+			not_stored: not a_favorite.is_stored
+			folder_non_negative: a_folder_id >= 0
+		do
+			a_favorite.set_folder (a_folder_id)
+		ensure
+			placed: a_favorite.folder_id = a_folder_id
+		end
+
+	rename_favorite (a_favorite: BIB_FAVORITE; a_label: READABLE_STRING_GENERAL)
+		require
+			open: is_open
+			stored: a_favorite.is_stored
+			named: not a_label.is_empty
+		do
+			change_favorite_row ("UPDATE favorite SET label = ?, changed_at = ? WHERE favorite_id = ?", a_label.to_string_32, a_favorite.id)
+			if write_error = Void then
+				a_favorite.set_label (a_label)
+			end
+		ensure
+			renamed: write_error = Void implies a_favorite.label.same_string_general (a_label)
+		end
+
+	move_favorite (a_favorite: BIB_FAVORITE; a_folder_id: INTEGER_64)
+			-- `a_favorite' into folder `a_folder_id' (0: the root).
+		require
+			open: is_open
+			stored: a_favorite.is_stored
+			folder_non_negative: a_folder_id >= 0
+		do
+			change_favorite_row ("UPDATE favorite SET folder_id = ?, changed_at = ? WHERE favorite_id = ?", a_folder_id, a_favorite.id)
+			if write_error = Void then
+				a_favorite.set_folder (a_folder_id)
+			end
+		ensure
+			moved: write_error = Void implies a_favorite.folder_id = a_folder_id
+		end
+
+	set_favorite_removed (a_favorite: BIB_FAVORITE; a_removed: BOOLEAN)
+			-- Remove `a_favorite' softly, or restore it.
+		require
+			open: is_open
+			stored: a_favorite.is_stored
+		do
+			change_favorite_row ("UPDATE favorite SET deleted = ?, changed_at = ? WHERE favorite_id = ?", a_removed.to_integer, a_favorite.id)
+		end
+
+	rename_favorite_folder (a_folder: BIB_FAVORITE_FOLDER; a_name: READABLE_STRING_GENERAL)
+		require
+			open: is_open
+			stored: a_folder.is_stored
+			named: not a_name.is_empty
+		do
+			change_folder_row ("UPDATE favorite_folder SET name = ?, changed_at = ? WHERE folder_id = ?", a_name.to_string_32, a_folder.id)
+			if write_error = Void then
+				a_folder.set_name (a_name)
+			end
+		ensure
+			renamed: write_error = Void implies a_folder.name.same_string_general (a_name)
+		end
+
+	move_favorite_folder (a_folder: BIB_FAVORITE_FOLDER; a_parent_id: INTEGER_64)
+			-- `a_folder' into folder `a_parent_id' (0: the root); the caller keeps a folder out of its
+			-- own subtree.
+		require
+			open: is_open
+			stored: a_folder.is_stored
+			parent_non_negative: a_parent_id >= 0
+			not_into_itself: a_parent_id /= a_folder.id
+		do
+			change_folder_row ("UPDATE favorite_folder SET parent_id = ?, changed_at = ? WHERE folder_id = ?", a_parent_id, a_folder.id)
+			if write_error = Void then
+				a_folder.set_parent (a_parent_id)
+			end
+		ensure
+			moved: write_error = Void implies a_folder.parent_id = a_parent_id
+		end
+
+	set_favorite_folder_removed (a_folder: BIB_FAVORITE_FOLDER; a_removed: BOOLEAN)
+			-- Remove `a_folder' softly (everything in it hides with it), or restore it.
+		require
+			open: is_open
+			stored: a_folder.is_stored
+		do
+			change_folder_row ("UPDATE favorite_folder SET deleted = ?, changed_at = ? WHERE folder_id = ?", a_removed.to_integer, a_folder.id)
+		end
+
 feature -- Prayer (E06, schema 2)
 
 	add_prayer_item (a_prayer: BIB_PRAYER)
@@ -583,8 +749,8 @@ feature -- Commands: schema
 			open: is_open
 			forward: a_to_version > a_from_version
 		do
-			if attached database as al_db and then a_from_version = 1 and then a_to_version = User_schema_version and then schema_version = 1 then
-				upgrade_from_1 (al_db)
+			if attached database as al_db and then a_from_version >= 1 and then a_to_version = User_schema_version and then schema_version = a_from_version then
+				upgrade_from (al_db, a_from_version)
 				if last_error = Void then
 					schema_version := first_integer (al_db.query ("PRAGMA user_version"))
 				end
@@ -628,9 +794,10 @@ feature -- Commands: schema
 					if l_version = 0 then
 						create_schema (l_db)
 						l_version := first_integer (l_db.query ("PRAGMA user_version"))
-					elseif l_version = 1 then
-							-- Schema 2 (2026-10-27): prayer and memory cards. A backup first, then tables added.
-						upgrade_from_1 (l_db)
+					elseif l_version >= 1 and l_version < User_schema_version then
+							-- Schema 2 (2026-10-27): prayer and memory cards; schema 3 (2026-11-01): favorites.
+							-- A backup first, then tables added.
+						upgrade_from (l_db, l_version)
 						l_version := first_integer (l_db.query ("PRAGMA user_version"))
 					end
 					if last_error = Void and l_version /= User_schema_version then
@@ -727,6 +894,31 @@ feature {NONE} -- Items
 			end
 		end
 
+	change_favorite_row (a_sql: STRING_8; a_value: ANY; a_id: INTEGER_64)
+			-- One favorite's row changed by `a_sql' (value, changed time, id); one row or a write error.
+		do
+			change_one_row (a_sql, a_value, a_id, "The favorite could not be changed.")
+		end
+
+	change_folder_row (a_sql: STRING_8; a_value: ANY; a_id: INTEGER_64)
+			-- One folder's row changed by `a_sql' (value, changed time, id).
+		do
+			change_one_row (a_sql, a_value, a_id, "The folder could not be changed.")
+		end
+
+	change_one_row (a_sql: STRING_8; a_value: ANY; a_id: INTEGER_64; a_failure: STRING_8)
+			-- `a_sql' with its value, the time now and the row's id; anything but one changed row is a
+			-- write error (scan 42: an id that names no row is no success).
+		do
+			write_error := Void
+			connection.execute_with_args (a_sql, {ARRAY [detachable ANY]} <<a_value, now_text, a_id>>)
+			if connection.has_error then
+				create write_error.make ({BIB_ERROR}.Database_problem, failure_text (connection, a_failure))
+			elseif connection.changes_count /= 1 then
+				create write_error.make ({BIB_ERROR}.Not_found, {STRING_32} "No such row: " + a_id.out)
+			end
+		end
+
 	set_item_deleted (a_kind: INTEGER; a_id: INTEGER_64; a_deleted: BOOLEAN)
 			-- Mark item `a_id' of `a_kind' deleted or live.
 		local
@@ -778,17 +970,30 @@ feature {NONE} -- Schema
 	database: detachable SIMPLE_SQL_DATABASE
 			-- user.db while open.
 
-	upgrade_from_1 (a_db: SIMPLE_SQL_DATABASE)
-			-- Schema 1 to 2: copy the file first (SQLite's VACUUM INTO, a consistent copy beside it),
-			-- then add the prayer and memory tables in one transaction; a failure leaves version 1 as
-			-- it was. Nothing existing is changed (DR-024: user data is never lost by an upgrade).
+	upgrade_from (a_db: SIMPLE_SQL_DATABASE; a_version: INTEGER)
+			-- Schema `a_version' to `User_schema_version': copy the file first (SQLite's VACUUM INTO, a
+			-- consistent copy beside it), then every later schema's additions in one transaction; a
+			-- failure leaves the file as it was. Nothing existing is changed (DR-024: user data is never
+			-- lost by an upgrade; schema 3 copies the bookmarks into Favorites and keeps them).
+		require
+			older: a_version >= 1 and a_version < User_schema_version
 		local
 			l_backup: STRING_32
+			l_statements: ARRAYED_LIST [STRING_8]
 			n: INTEGER
 		do
-			l_backup := path + {STRING_32} ".schema-1-backup.db"
+			create l_statements.make (12)
+			if a_version <= 1 then
+				across Upgrade_2_statements as ic loop
+					l_statements.extend (ic)
+				end
+			end
+			across Upgrade_3_statements as ic loop
+				l_statements.extend (ic)
+			end
+			l_backup := path + {STRING_32} ".schema-" + a_version.out + {STRING_32} "-backup.db"
 			from n := 2 until not (create {SIMPLE_FILE}.make (l_backup)).exists loop
-				l_backup := path + {STRING_32} ".schema-1-backup-" + n.out + {STRING_32} ".db"
+				l_backup := path + {STRING_32} ".schema-" + a_version.out + {STRING_32} "-backup-" + n.out + {STRING_32} ".db"
 				n := n + 1
 			end
 			a_db.execute_with_args ("VACUUM INTO ?", {ARRAY [detachable ANY]} <<l_backup>>)
@@ -799,7 +1004,7 @@ feature {NONE} -- Schema
 				end
 			else
 				a_db.begin_transaction
-				across Upgrade_2_statements as ic until last_error /= Void loop
+				across l_statements as ic until last_error /= Void loop
 					a_db.execute (ic)
 					if a_db.has_error then
 						create last_error.make ({BIB_ERROR}.Database_problem, failure_text (a_db, "user.db could not be upgraded; it is as it was."))
@@ -834,6 +1039,22 @@ feature {NONE} -- Schema
 				"PRAGMA user_version = 2">>
 		end
 
+	Upgrade_3_statements: ARRAY [STRING_8]
+			-- Schema 3's additions (research/24 stage C, 2026-11-01): favorites in folders of the
+			-- reader's own. A favorite is a passage (verses `hub_id' to `end_hub_id', in `version'), a
+			-- document (`target') or a quotation (`quote', the characters `anchor_from' to `anchor_to'
+			-- of its source). The bookmarks are copied into a root folder named Bookmarks (Larry:
+			-- bookmarks are favorites); their rows stay where they were.
+		once
+			Result := <<
+				"CREATE TABLE favorite_folder(folder_id INTEGER PRIMARY KEY, parent_id INTEGER NOT NULL DEFAULT 0, name TEXT NOT NULL, created_at TEXT NOT NULL, changed_at TEXT NOT NULL, deleted INTEGER NOT NULL DEFAULT 0)",
+				"CREATE TABLE favorite(favorite_id INTEGER PRIMARY KEY, folder_id INTEGER NOT NULL DEFAULT 0, kind INTEGER NOT NULL, hub_id INTEGER NOT NULL DEFAULT 0, end_hub_id INTEGER NOT NULL DEFAULT 0, version TEXT NOT NULL DEFAULT '', label TEXT NOT NULL, target TEXT NOT NULL DEFAULT '', quote TEXT NOT NULL DEFAULT '', anchor_from INTEGER NOT NULL DEFAULT 0, anchor_to INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, changed_at TEXT NOT NULL, deleted INTEGER NOT NULL DEFAULT 0)",
+				"CREATE INDEX ix_favorite_place ON favorite(deleted, hub_id, end_hub_id)",
+				"INSERT INTO favorite_folder(folder_id, parent_id, name, created_at, changed_at) SELECT 1, 0, 'Bookmarks', min(created_at), min(created_at) FROM user_item WHERE kind = 3 AND " + Live_item_filter + " HAVING count(*) > 0",
+				"INSERT INTO favorite(folder_id, kind, hub_id, end_hub_id, version, label, created_at, changed_at) SELECT 1, 1, hub_id, hub_id, '', label, created_at, changed_at FROM user_item WHERE kind = 3 AND " + Live_item_filter + " ORDER BY item_id",
+				"PRAGMA user_version = 3">>
+		end
+
 	create_schema (a_db: SIMPLE_SQL_DATABASE)
 			-- Schema version 1 (2026-10-27): notes with every version kept, the other user items,
 			-- and settings. Every row keyed to a verse carries its hub id (BIB_HUB_ID). One
@@ -849,8 +1070,14 @@ feature {NONE} -- Schema
 					create last_error.make ({BIB_ERROR}.Database_problem, failure_text (a_db, "user.db could not be set up."))
 				end
 			end
-				-- A new user.db is born at the current schema: version 1's tables, then 2's additions.
+				-- A new user.db is born at the current schema: version 1's tables, then 2's and 3's additions.
 			across Upgrade_2_statements as ic until last_error /= Void loop
+				a_db.execute (ic)
+				if a_db.has_error then
+					create last_error.make ({BIB_ERROR}.Database_problem, failure_text (a_db, "user.db could not be set up."))
+				end
+			end
+			across Upgrade_3_statements as ic until last_error /= Void loop
 				a_db.execute (ic)
 				if a_db.has_error then
 					create last_error.make ({BIB_ERROR}.Database_problem, failure_text (a_db, "user.db could not be set up."))
@@ -902,7 +1129,7 @@ feature -- Model
 
 feature -- Constants
 
-	User_schema_version: INTEGER = 2
+	User_schema_version: INTEGER = 3
 			-- 1: notes, user items, settings (2026-10-27); 2: prayer and memory cards (2026-10-27).
 
 	Kind_note: INTEGER = 1
@@ -912,6 +1139,9 @@ feature -- Constants
 	Kind_visit: INTEGER = 5
 	Kind_prayer: INTEGER = 6
 	Kind_memory_card: INTEGER = 7
+	Kind_favorite_folder: INTEGER = 8
+	Kind_favorite: INTEGER = 9
+			-- Favorites (schema 3) keep their own tables, like prayers and memory cards.
 			-- Listed kinds outside user_item (their own tables, schema 2).
 
 	Max_recent_places: INTEGER = 1000

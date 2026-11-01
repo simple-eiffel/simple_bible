@@ -98,8 +98,24 @@ feature {NONE} -- Initialization
 			create highlight_button.make ("Highlight", Void)
 			create highlights_grid.make (100.0)
 			create navigator_tabs.make
-			create bookmarks_heading.make_ui ("")
-			create bookmarks_grid.make (100.0)
+			create favorites_heading.make_ui ("")
+			create favorites_tree.make (100.0)
+			create favorites_filter_box.make_single_line ("")
+			favorites_filter_box.set_tooltip ("Filter: the favorites and folders whose names hold these words.")
+			create favorites_new_folder_button.make ("", Void)
+			favorites_new_folder_button.set_glyph ({SW_PAINTER}.Glyph_folder)
+			favorites_new_folder_button.set_tooltip ("New folder: inside the folder chosen (or the chosen favorite's), named at once.")
+			create favorites_rename_button.make ("", Void)
+			favorites_rename_button.set_glyph ({SW_PAINTER}.Glyph_pencil)
+			favorites_rename_button.set_tooltip ("Rename the chosen folder or favorite.")
+			create favorites_remove_button.make ("", Void)
+			favorites_remove_button.set_glyph ({SW_PAINTER}.Glyph_trash)
+			favorites_remove_button.set_tooltip ("Remove the chosen folder (and everything in it) or favorite. Restore brings it back.")
+			create favorites_restore_button.make ("", Void)
+			favorites_restore_button.set_glyph ({SW_PAINTER}.Glyph_refresh)
+			favorites_restore_button.set_tooltip ("Restore what Remove took away last.")
+			create favorites_state.make
+			create favorite_nodes.make (32)
 			create history_grid.make (100.0)
 			create history_heading.make_ui ("")
 			create history_rows.make (0)
@@ -290,14 +306,12 @@ feature {NONE} -- Initialization
 			create dock.make (center_holder)
 				-- The item panels get agents on Current once both exist and every attribute is set (VEVI).
 			create highlights_panel.make (user_store, {BIB_USER_STORE}.Kind_highlight, highlights_grid, "Highlight")
-			create bookmarks_panel.make (user_store, {BIB_USER_STORE}.Kind_bookmark, bookmarks_grid, "Bookmark")
 			create tagged_panel.make (user_store, {BIB_USER_STORE}.Kind_tag, tagged_grid, "Tag")
 			create prayer_open_panel.make (user_store, {BIB_USER_STORE}.Kind_prayer, prayer_open_grid, "Prayer")
 			create prayer_answered_panel.make (user_store, {BIB_USER_STORE}.Kind_prayer, prayer_answered_grid, "Prayer")
 			create memory_panel.make (user_store, {BIB_USER_STORE}.Kind_memory_card, memory_grid, "Card")
 			tagged_panel.set_actions (agent say, agent fill_tags, agent go_to_hub)
 			highlights_panel.set_actions (agent say, agent reopen_reading, agent go_to_hub)
-			bookmarks_panel.set_actions (agent say, agent fill_bookmarks, agent go_to_hub)
 			prayer_open_panel.set_actions (agent say, agent fill_prayers, agent read_hub_if_any)
 			prayer_answered_panel.set_actions (agent say, agent fill_prayers, agent read_hub_if_any)
 			memory_panel.set_actions (agent say, agent fill_memory, agent go_to_hub)
@@ -339,6 +353,29 @@ feature {NONE} -- Initialization
 			history_keep_box.set_on_change (agent set_history_limit)
 			history_scope.set_on_change (agent (a_index: INTEGER) do fill_history end)
 			reading.on_verse (agent note_visit)
+				-- Favorites (research/24 stage C): one state; the tree and every star join it
+			favorites_tree.set_label (agent {BIB_FAVORITE_NODE}.label)
+			favorites_tree.set_children (agent favorite_children)
+			favorites_tree.set_icon (agent favorite_icon)
+			favorites_tree.set_on_select (agent on_favorite)
+			favorites_new_folder_button.set_on_click (agent new_favorite_folder)
+			favorites_rename_button.set_on_click (agent rename_chosen_favorite)
+			favorites_remove_button.set_on_click (agent remove_chosen_favorite)
+			favorites_restore_button.set_on_click (agent restore_favorite)
+			favorites_new_folder_button.set_enabled (user_store.is_open)
+			favorite_choice_changed.subscribe (agent show_favorite_buttons)
+			show_favorite_buttons
+			favorites_filter_box.set_on_change (agent fill_favorites)
+			navigator_tree.set_icon (agent nav_icon)
+			if user_store.has_setting (Favorites_sort_key) and then user_store.setting (Favorites_sort_key).is_integer
+				and then user_store.setting (Favorites_sort_key).to_integer >= {BIB_FAVORITE_SET}.By_name
+				and then user_store.setting (Favorites_sort_key).to_integer <= {BIB_FAVORITE_SET}.By_created_oldest
+			then
+				favorites_state.set_sort_order (user_store.setting (Favorites_sort_key).to_integer)
+			end
+			favorites_state.on_change (agent fill_favorites)
+			favorites_state.on_change (agent show_stars)
+			reload_favorites
 				-- Genesis 1:1 selected, so the commentary has its cross-references from the start (Larry:
 				-- T5 was empty until a verse was clicked).
 			if bible.is_open and then not reading_version.is_empty and then bible.books.has_book (1) then
@@ -654,6 +691,71 @@ feature {BIB_WINDOW_HARNESS_CLIENT} -- The window harness (research/23, 2026-10-
 			Result := history_keep_box.value
 		end
 
+	harness_add_favorite (a_kind, a_end_verse: INTEGER; a_name: READABLE_STRING_GENERAL; a_folder_id: INTEGER_64)
+			-- Add the place read as the Add sheet would: verse (1), verses through `a_end_verse' (2),
+			-- whole chapter (3).
+		do
+			add_favorite (a_kind, a_end_verse, a_name, a_folder_id)
+		end
+
+	harness_new_folder (a_name: READABLE_STRING_GENERAL): INTEGER_64
+			-- New folder, then its name typed in the sheet that opens; its id.
+		do
+			new_favorite_folder
+			window.close_sheet
+			if attached favorites_tree.selected_node as al_node and then attached al_node.folder as al_folder then
+				rename_favorite_node (al_node, a_name)
+				Result := al_folder.id
+			end
+		end
+
+	harness_favorite_roots: INTEGER
+			-- Lines at the top of the Favorites tree.
+		do
+			Result := favorites_tree.roots.count
+		end
+
+	harness_favorite_root_label (a_index: INTEGER): STRING_32
+			-- Line `a_index' at the top of the tree.
+		do
+			Result := favorites_tree.roots.i_th (a_index).label
+		end
+
+	harness_choose_favorite_root (a_index: INTEGER)
+			-- Click line `a_index' at the top of the tree.
+		do
+			choose_favorite (favorites_tree.roots.i_th (a_index))
+		end
+
+	harness_remove_chosen_favorite
+		do
+			remove_chosen_favorite
+		end
+
+	harness_restore_favorite
+		do
+			restore_favorite
+		end
+
+	harness_filter_favorites (a_words: READABLE_STRING_GENERAL)
+			-- Type `a_words' in the filter box.
+		do
+			favorites_filter_box.set_text (a_words)
+			fill_favorites
+		end
+
+	harness_verse_starred (a_row: INTEGER): BOOLEAN
+			-- Does row `a_row' of the Bible tab wear the star?
+		do
+			Result := reading_view.is_row_starred (a_row)
+		end
+
+	harness_chapter_starred (a_book, a_chapter: INTEGER): BOOLEAN
+			-- Is that chapter among the favorites (its star in the Books tree)?
+		do
+			Result := favorites_state.is_chapter_starred (a_book, a_chapter)
+		end
+
 	harness_theme_swapped_by_windows (a_dark: BOOLEAN)
 			-- What following Windows does when its setting flips: the window wears the theme and
 			-- tells `on_theme_changed'.
@@ -909,9 +1011,11 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 				go_to (65, 1, 6)
 				navigator_tabs.select_tab (History_tab)
 				history_scope.select_segment (2)
-			elseif snapshot_tab.same_string ({STRING_32} "bookmarks") then
-				bookmark_verse
-				navigator_tabs.select_tab (Bookmarks_tab)
+			elseif snapshot_tab.same_string ({STRING_32} "bookmarks") or snapshot_tab.same_string ({STRING_32} "favorites") then
+				snapshot_favorites
+				navigator_tabs.select_tab (Favorites_tab)
+			elseif snapshot_tab.same_string ({STRING_32} "addfavorite") then
+				add_to_favorites
 			elseif snapshot_tab.same_string ({STRING_32} "highlights") then
 				highlight_reason_box.set_text ("A sample reason written by the snapshot run")
 				add_highlight
@@ -1267,12 +1371,11 @@ feature {NONE} -- Window
 		do
 			results_grid.add_column (create {SW_GRID_COLUMN [BIB_LOOKUP_CHOICE]}.make ("Word", 150.0, agent {BIB_LOOKUP_CHOICE}.label))
 			results_grid.add_column ((create {SW_GRID_COLUMN [BIB_LOOKUP_CHOICE]}.make ("Details", 200.0, agent {BIB_LOOKUP_CHOICE}.detail)).growing)
-			verses_grid.add_column (create {SW_GRID_COLUMN [BIB_READING_VERSE]}.make ("Verse", 110.0, agent hit_place))
+			verses_grid.add_column ((create {SW_GRID_COLUMN [BIB_READING_VERSE]}.make ("Verse", 110.0, agent hit_place)).with_star (agent hit_starred))
 			verses_grid.add_column ((create {SW_GRID_COLUMN [BIB_READING_VERSE]}.make ("Text", 400.0, agent {BIB_READING_VERSE}.display_text)).growing)
-			cross_refs_grid.add_column ((create {SW_GRID_COLUMN [BIB_READING_CROSS_REF]}.make ("Reference", 180.0, agent cross_ref_text)).growing)
+			cross_refs_grid.add_column ((create {SW_GRID_COLUMN [BIB_READING_CROSS_REF]}.make ("Reference", 180.0, agent cross_ref_text)).growing.with_star (agent cross_ref_starred))
 			highlights_grid.add_column (create {SW_GRID_COLUMN [BIB_HIGHLIGHT]}.make ("Verse", 120.0, agent item_place ({BIB_HIGHLIGHT} ?)))
-			bookmarks_grid.add_column ((create {SW_GRID_COLUMN [BIB_BOOKMARK]}.make ("Verse", 140.0, agent item_place ({BIB_BOOKMARK} ?))).growing)
-			history_grid.add_column ((create {SW_GRID_COLUMN [BIB_VISIT]}.make ("Place", 120.0, agent item_place ({BIB_VISIT} ?))).growing)
+			history_grid.add_column ((create {SW_GRID_COLUMN [BIB_VISIT]}.make ("Place", 120.0, agent item_place ({BIB_VISIT} ?))).growing.with_star (agent visit_starred))
 			history_grid.add_column (create {SW_GRID_COLUMN [BIB_VISIT]}.make ("When", 120.0, agent visit_when))
 			history_grid.set_on_select (agent on_history_row)
 			tag_names_grid.add_column ((create {SW_GRID_COLUMN [TUPLE [tag: STRING_32; verses: INTEGER]]}.make ("Tag", 160.0, agent tag_name_text)).growing)
@@ -1349,7 +1452,7 @@ feature {NONE} -- Menus and keys (C2)
 			window.register_accelerator (Key_minus, True, False, False, agent change_text_size (-1))
 			window.register_accelerator (Key_m, True, False, False, agent toggle_mode)
 			window.register_accelerator (Key_i, True, False, False, agent show_interlinear)
-			window.register_accelerator (Key_d, True, False, False, agent bookmark_verse)
+			window.register_accelerator (Key_d, True, False, False, agent add_to_favorites)
 			window.register_accelerator (Key_f, True, False, True, agent toggle_focus_reading)
 		end
 
@@ -1415,7 +1518,7 @@ feature {NONE} -- Menus and keys (C2)
 				Result.add_item ({STRING_32} "Back to " + place_text (held_book, held_chapter, held_verse), "", True, agent back_to_commentary_verse)
 			end
 			Result.add_separator
-			Result.add_item ("Bookmark this verse", "Ctrl+D", reading.has_verse, agent bookmark_verse)
+			Result.add_item ("Add to Favorites...", "Ctrl+D", reading.has_place and user_store.is_open, agent add_to_favorites)
 		end
 
 	search_menu: SW_MENU
@@ -1905,6 +2008,7 @@ feature {NONE} -- Reading (S1, P01)
 				create l_lookup.make (bible)
 				reading_view.add_note (l_lookup.empty_chapter_text (l_chapter, place_text (reading_book, reading_chapter, 0))).do_nothing
 			end
+			star_rows (reading_view)
 			previous_button.set_enabled (has_previous_chapter)
 			next_button.set_enabled (has_next_chapter)
 			window.set_title (window_title)
@@ -2032,7 +2136,7 @@ feature {NONE} -- Reading (S1, P01)
 
 	fill_study_panes
 			-- Every Study pane for the place read: Parallel (and Interlinear when it shows), notes,
-			-- highlights, bookmarks, tags, journal, history, prayers, memory, and the strip marks.
+			-- highlights, tags, journal, history, prayers, memory, and the strip marks.
 		do
 			fill_parallel
 			if center_tabs.selected_index = Interlinear_tab then
@@ -2040,7 +2144,6 @@ feature {NONE} -- Reading (S1, P01)
 			end
 			fill_notes
 			fill_highlights
-			fill_bookmarks
 			fill_tags
 			fill_journal
 			fill_history
@@ -2432,8 +2535,8 @@ feature {NONE} -- Two layouts (C7)
 		end
 
 	navigator_pane: SW_COLUMN
-			-- T1, P11 Navigator: the books, testament by testament, chapter by chapter; and the
-			-- bookmarks.
+			-- T1, P11 Navigator: the books, testament by testament, chapter by chapter; the
+			-- favorites; and the history.
 		local
 			l_roots: ARRAYED_LIST [BIB_NAV_NODE]
 			l_books, l_marks, l_history: SW_COLUMN
@@ -2451,14 +2554,19 @@ feature {NONE} -- Two layouts (C7)
 			l_books.put (navigator_tree.growing)
 			create l_marks.make
 			l_marks := l_marks.with_gap (6.0)
-			l_marks.put (bookmarks_heading)
-			l_marks.put (bookmarks_grid.growing)
+				-- the filter box on a row of its own, the four buttons and the count under it: one row
+				-- for all of them ran past a Navigator's width (seen in the 0.7.52 snapshot)
+			l_marks.put (favorites_filter_box)
 			create l_buttons.make
-			l_buttons.put (bookmarks_panel.remove_button)
-			l_buttons.put (bookmarks_panel.restore_button)
+			l_buttons.put (favorites_new_folder_button)
+			l_buttons.put (favorites_rename_button)
+			l_buttons.put (favorites_remove_button)
+			l_buttons.put (favorites_restore_button)
+			l_buttons.put (favorites_heading)
 			l_marks.put (l_buttons)
+			l_marks.put (favorites_tree.growing)
 			navigator_tabs.add_page ("Books", l_books)
-			navigator_tabs.add_page ("Bookmarks", l_marks)
+			navigator_tabs.add_page ("Favorites", l_marks)
 			create l_history.make
 				-- the Kept list's length beside the switch: a row of its own did not fit a short Navigator
 			l_history := l_history.with_gap (6.0)
@@ -2474,44 +2582,723 @@ feature {NONE} -- Two layouts (C7)
 		end
 
 	navigator_tabs: SW_TABS
-	bookmarks_heading: SW_LABEL
-	bookmarks_grid: SW_DATA_GRID [BIB_BOOKMARK]
-			-- T1's Books and Bookmarks tabs (2026-10-27).
+	favorites_heading: SW_LABEL
+	favorites_tree: SW_TREE [BIB_FAVORITE_NODE]
+	favorites_filter_box: SW_TEXT_BOX
+	favorites_new_folder_button, favorites_rename_button, favorites_remove_button, favorites_restore_button: SW_BUTTON
+			-- T1's Favorites page (research/24 stage C, 2026-11-01; it took the Bookmarks page's place:
+			-- Larry, bookmarks are favorites).
 
-	bookmarks_panel: BIB_ITEM_LIST_PANEL [BIB_BOOKMARK]
-			-- The bookmarks list, newest first, with Remove and Restore.
+	favorites_state: BIB_FAVORITE_SET
+			-- The folders and favorites user.db holds, their order and their stars.
 
-	Bookmarks_tab: INTEGER = 2
-			-- T1's Bookmarks page.
+	favorite_nodes: HASH_TABLE [BIB_FAVORITE_NODE, INTEGER_64]
+			-- One tree line per row (by `{BIB_FAVORITE_NODE}.key'), so a reload keeps open folders open.
 
-	fill_bookmarks
-			-- Every bookmark, newest first (a click opens its verse).
+	last_removed_favorite: detachable BIB_FAVORITE_NODE
+			-- What Remove took away last; Restore brings it back (`set_last_removed_favorite').
+
+	favorite_choice_changed: SW_EVENT [TUPLE]
+			-- Told whenever the chosen line or the line Restore would bring back changes; Rename,
+			-- Remove and Restore join it (Larry's rule: GUI state by agents, research/23).
+		attribute
+			create Result.make
+		end
+
+	choose_favorite (a_node: detachable BIB_FAVORITE_NODE)
+			-- The one door to the tree's chosen line from the window (a click comes through
+			-- `on_favorite'); `favorite_choice_changed' is told once, on a real change (a line chosen is
+			-- told by `on_favorite', which the tree calls).
+		do
+			if a_node /= favorites_tree.selected_node then
+				favorites_tree.select_node (a_node)
+				if a_node = Void then
+					favorite_choice_changed.call (Void)
+				end
+			end
+		ensure
+			chosen: favorites_tree.selected_node = a_node
+		end
+
+	set_last_removed_favorite (a_node: detachable BIB_FAVORITE_NODE)
+			-- The one door to `last_removed_favorite'; `favorite_choice_changed' is told.
+		do
+			last_removed_favorite := a_node
+			favorite_choice_changed.call (Void)
+		ensure
+			set: last_removed_favorite = a_node
+		end
+
+	last_favorite_folder: INTEGER_64
+			-- The folder the Add sheet offers first: the one used last (0: the top level).
+
+	Favorites_tab: INTEGER = 2
+			-- T1's Favorites page.
+
+	Favorites_sort_key: STRING_8 = "favorites_sort"
+			-- The user.db setting that keeps the tree's order.
+
+	reload_favorites
+			-- What user.db lists, into `favorites_state', which tells the tree and the stars.
 		do
 			if user_store.is_open then
-				bookmarks_panel.set_rows (user_store.bookmarks)
-			else
-				bookmarks_panel.set_rows (create {ARRAYED_LIST [BIB_BOOKMARK]}.make (0))
-			end
-			if bookmarks_panel.rows.is_empty then
-				bookmarks_heading.set_text ("No bookmarks yet: Ctrl+D bookmarks the verse read.")
-			else
-				bookmarks_heading.set_text ({STRING_32} "Your bookmarks (" + bookmarks_panel.rows.count.out + {STRING_32} "), newest first. Ctrl+D adds the verse read.")
+				favorites_state.load (user_store.favorite_folders, user_store.favorites)
 			end
 		end
 
-	bookmark_verse
-			-- Ctrl+D: the verse read is bookmarked.
+	folder_node (a_folder: BIB_FAVORITE_FOLDER): BIB_FAVORITE_NODE
+			-- The tree line of `a_folder', made once.
 		do
-			if not reading.has_verse then
-				window.toast ("Click a verse to bookmark it.", 1)
-			elseif user_store.is_open then
-				user_store.add_bookmark (create {BIB_BOOKMARK}.make (reading_hub, place_text (reading_book, reading_chapter, reading_verse)))
+			if attached favorite_nodes.item (- a_folder.id) as al_node and then al_node.is_folder then
+				al_node.refresh_folder (a_folder)
+				Result := al_node
+			else
+				create Result.make_folder (a_folder)
+				favorite_nodes.force (Result, - a_folder.id)
+			end
+		end
+
+	item_node (a_item: BIB_FAVORITE): BIB_FAVORITE_NODE
+			-- The tree line of `a_item', made once.
+		do
+			if attached favorite_nodes.item (a_item.id) as al_node and then not al_node.is_folder then
+				al_node.refresh_item (a_item)
+				Result := al_node
+			else
+				create Result.make_item (a_item)
+				favorite_nodes.force (Result, a_item.id)
+			end
+		end
+
+	nodes_in (a_folder_id: INTEGER_64): ARRAYED_LIST [BIB_FAVORITE_NODE]
+			-- Folder `a_folder_id''s lines (0: the top level): its folders first, then its favorites.
+		do
+			create Result.make (8)
+			across favorites_state.child_folders (a_folder_id) as ic loop
+				Result.extend (folder_node (ic))
+			end
+			across favorites_state.child_items (a_folder_id) as ic loop
+				Result.extend (item_node (ic))
+			end
+		end
+
+	favorite_children (a_node: BIB_FAVORITE_NODE): ARRAYED_LIST [BIB_FAVORITE_NODE]
+			-- A folder's lines; a favorite has none.
+		do
+			if attached a_node.folder as al_folder then
+				Result := nodes_in (al_folder.id)
+			else
+				create Result.make (0)
+			end
+		end
+
+	favorite_icon (a_node: BIB_FAVORITE_NODE): INTEGER
+			-- A folder's glyph, or a favorite's gold star.
+		do
+			if a_node.is_folder then
+				Result := {SW_PAINTER}.Glyph_folder
+			else
+				Result := {SW_PAINTER}.Glyph_star
+			end
+		end
+
+	fill_favorites
+			-- The tree: the top level's folders and favorites, or, with words in the filter box, every
+			-- shown folder and favorite whose name holds them; the heading counts them (`favorites_state'
+			-- tells, and the filter box).
+		local
+			l_roots: ARRAYED_LIST [BIB_FAVORITE_NODE]
+			l_words: STRING_32
+		do
+			l_words := favorites_filter_box.text.as_lower
+			l_words.left_adjust
+			l_words.right_adjust
+			if l_words.is_empty then
+				l_roots := nodes_in (0)
+			else
+				create l_roots.make (8)
+				across favorites_state.folders as ic loop
+					if favorites_state.is_folder_shown (ic.id) and then ic.name.as_lower.has_substring (l_words) then
+						l_roots.extend (folder_node (ic))
+					end
+				end
+				across favorites_state.items as ic loop
+					if favorites_state.is_folder_shown (ic.folder_id) and then ic.label.as_lower.has_substring (l_words) then
+						l_roots.extend (item_node (ic))
+					end
+				end
+			end
+			favorites_tree.set_roots (l_roots)
+			if attached favorites_tree.selected_node as al_node and then not is_node_shown (al_node) then
+				choose_favorite (Void)
+			end
+			if not user_store.is_open then
+				favorites_heading.set_text ("Favorites are not kept: user.db is not open.")
+			elseif favorites_state.shown_item_count = 0 and favorites_state.shown_folder_count = 0 then
+				favorites_heading.set_text ("None yet: Ctrl+D adds one.")
+			elseif not l_words.is_empty then
+				favorites_heading.set_text (l_roots.count.out.to_string_32 + {STRING_32} " found")
+			else
+				favorites_heading.set_text (favorites_state.shown_item_count.out.to_string_32 + {STRING_32} " in "
+					+ favorites_state.shown_folder_count.out + {STRING_32} " folders")
+			end
+		end
+
+	is_node_shown (a_node: BIB_FAVORITE_NODE): BOOLEAN
+			-- Is `a_node''s row still listed and in a shown folder?
+		do
+			if attached a_node.folder as al_folder then
+				Result := favorites_state.folder (al_folder.id) /= Void and then favorites_state.is_folder_shown (al_folder.id)
+			elseif attached a_node.item as al_item then
+				Result := favorites_state.item (al_item.id) /= Void and then favorites_state.is_folder_shown (al_item.folder_id)
+			end
+		end
+
+	show_favorite_buttons
+			-- Rename and Remove need a chosen line; Restore, something removed (`favorite_choice_changed'
+			-- tells).
+		do
+			favorites_rename_button.set_enabled (favorites_tree.selected_node /= Void)
+			favorites_remove_button.set_enabled (favorites_tree.selected_node /= Void)
+			favorites_restore_button.set_enabled (last_removed_favorite /= Void)
+		end
+
+	on_favorite (a_node: BIB_FAVORITE_NODE)
+			-- A favorite chosen: read its passage, in the version read (its own version is a menu item
+			-- away). A folder chosen: the place New folder, Rename and Remove act on.
+		do
+			favorite_choice_changed.call (Void)
+			if attached a_node.item as al_item and then al_item.is_passage then
+				go_to_hub (al_item.hub_id)
+			end
+		end
+
+	chosen_folder_id: INTEGER_64
+			-- The folder chosen, or the chosen favorite's (0: the top level).
+		do
+			if attached favorites_tree.selected_node as al_node then
+				if attached al_node.folder as al_folder then
+					Result := al_folder.id
+				elseif attached al_node.item as al_item then
+					Result := al_item.folder_id
+				end
+			end
+		end
+
+	open_favorite_in_its_version (a_item: BIB_FAVORITE)
+			-- Read `a_item' in the version it was saved in.
+		local
+			i: INTEGER
+		do
+			from i := 1 until i > bible.text_reader.versions.count loop
+				if bible.text_reader.versions.i_th (i).code.same_string (a_item.version) then
+					version_select.select_index (i)
+				end
+				i := i + 1
+			end
+			go_to_hub (a_item.hub_id)
+		end
+
+	favorites_menu (a_menu: SW_MENU; a_px, a_py: REAL_64)
+			-- A line of the tree: open, rename, move, remove; then New folder and the tree's order.
+		local
+			o: INTEGER
+			l_mark: STRING_32
+		do
+			if attached favorites_tree.context_node as al_node then
+				if attached al_node.item as al_item then
+					a_menu.add_item ("Open", "", al_item.is_passage, agent go_to_hub (al_item.hub_id))
+					if not al_item.version.is_empty and then not al_item.version.same_string (reading_version)
+						and then attached bible.text_reader.version (al_item.version) as al_version
+					then
+						a_menu.add_item ({STRING_32} "Open in " + al_version.name, "", True, agent open_favorite_in_its_version (al_item))
+					end
+				end
+				a_menu.add_item ("Rename...", "", True, agent open_rename_sheet (al_node))
+				a_menu.add_item ("Move to...", "", True, agent open_move_sheet (al_node))
+				a_menu.add_item ("Remove", "", True, agent remove_favorite_node (al_node))
+				a_menu.add_separator
+			end
+			a_menu.add_item ("New folder", "", user_store.is_open, agent new_favorite_folder)
+			a_menu.add_separator
+			from o := {BIB_FAVORITE_SET}.By_name until o > {BIB_FAVORITE_SET}.By_created_oldest loop
+				if o = favorites_state.sort_order then
+					l_mark := {STRING_32} "Sorted by "
+				else
+					l_mark := {STRING_32} "Sort by "
+				end
+				a_menu.add_item (l_mark + favorites_state.order_name (o), "", o /= favorites_state.sort_order, agent set_favorites_sort (o))
+				o := o + 1
+			end
+		end
+
+	set_favorites_sort (a_order: INTEGER)
+			-- The tree lists by `a_order' from now on, kept in user.db.
+		require
+			known: a_order >= {BIB_FAVORITE_SET}.By_name and a_order <= {BIB_FAVORITE_SET}.By_created_oldest
+		do
+			user_store.set_setting (Favorites_sort_key, a_order.out)
+			favorites_state.set_sort_order (a_order)
+		end
+
+	add_to_favorites
+			-- Ctrl+D: the Add to Favorites sheet for the place read: its verse, its verses through
+			-- another, or its whole chapter; a name; a folder (the last one used); the version read.
+		local
+			l_column: SW_COLUMN
+			l_row: SW_ROW
+			l_kind: SW_SEGMENTED
+			l_end: SW_NUMBER_BOX
+			l_name: SW_TEXT_BOX
+			l_folder: SW_SELECT
+			l_folders: ARRAYED_LIST [BIB_FAVORITE_FOLDER]
+			l_add, l_cancel: SW_BUTTON
+			l_first, l_last, i: INTEGER
+		do
+			if not user_store.is_open then
+				say ("Favorites are kept in user.db, which is not open.")
+			elseif not reading.has_place then
+				say ("Open a chapter first.")
+			else
+				l_first := reading_verse.max (1)
+				l_last := l_first
+				if not reading_verses.is_empty then
+					l_last := reading_verses.last.verse.max (l_first)
+				end
+				create l_kind.make
+				l_kind.add_segment ("This verse")
+				l_kind.add_segment ("Verses")
+				l_kind.add_segment ("Whole chapter")
+				if not reading.has_verse then
+					l_kind.select_segment (3)
+				end
+				create l_end.make ((l_first + 1).min (l_last), l_first, l_last, Void)
+				l_end.set_enabled (l_kind.selected_index = 2)
+				create l_name.make_single_line (favorite_default_name (l_kind.selected_index, l_end.value))
+				create l_folder.make
+				l_folder.add_option ("Top level")
+				l_folders := favorites_state.shown_folders_by_path
+				l_folder.select_index (1)
+				from i := 1 until i > l_folders.count loop
+					l_folder.add_option (favorites_state.folder_path (l_folders.i_th (i).id))
+					if l_folders.i_th (i).id = last_favorite_folder then
+						l_folder.select_index (i + 1)
+					end
+					i := i + 1
+				end
+				l_kind.set_on_change (agent favorite_kind_changed (?, l_end, l_name))
+				l_end.set_on_change (agent favorite_end_changed (?, l_kind, l_name))
+				create l_add.make ("Add", agent confirm_add_favorite (l_kind, l_end, l_name, l_folder, l_folders))
+				l_add.set_tooltip ("Keep it in Favorites (Enter)")
+				create l_cancel.make ("Cancel", agent window.close_sheet)
+				create l_column.make
+				l_column := l_column.with_padding (16.0).with_gap (10.0)
+				l_column.put (create {SW_LABEL}.make_ui ("Add to Favorites"))
+				l_column.put (l_kind)
+				create l_row.make
+				l_row.put (create {SW_LABEL}.make_ui ("Through verse"))
+				l_row.put (l_end)
+				l_column.put (l_row)
+				create l_row.make
+				l_row.put (create {SW_LABEL}.make_ui ("Name"))
+				l_row.put (l_name.growing)
+				l_column.put (l_row)
+				create l_row.make
+				l_row.put (create {SW_LABEL}.make_ui ("Folder"))
+				l_row.put (l_folder)
+				l_column.put (l_row)
+				if attached bible.text_reader.version (reading_version) as al_version then
+					l_column.put (create {SW_LABEL}.make_ui ({STRING_32} "Saved in " + al_version.name))
+				end
+				create l_row.make
+				l_row.put (l_add)
+				l_row.put (l_cancel)
+				l_column.put (l_row)
+				window.show_sheet (l_column, 460.0)
+				window.give_focus (l_name)
+			end
+		end
+
+	favorite_kind_changed (a_kind: INTEGER; a_end: SW_NUMBER_BOX; a_name: SW_TEXT_BOX)
+			-- The Add sheet's choice changed: the name follows, and Through verse matters only for Verses.
+		do
+			a_name.set_text (favorite_default_name (a_kind, a_end.value))
+			a_end.set_enabled (a_kind = 2)
+		end
+
+	favorite_end_changed (a_end: INTEGER; a_kind: SW_SEGMENTED; a_name: SW_TEXT_BOX)
+			-- Through verse changed: Verses chosen, the name follows.
+		do
+			if a_kind.selected_index /= 2 then
+				a_kind.select_segment (2)
+			end
+			a_name.set_text (favorite_default_name (2, a_end))
+		end
+
+	confirm_add_favorite (a_kind: SW_SEGMENTED; a_end: SW_NUMBER_BOX; a_name: SW_TEXT_BOX; a_folder: SW_SELECT; a_folders: ARRAYED_LIST [BIB_FAVORITE_FOLDER])
+			-- Add pressed.
+		local
+			l_folder_id: INTEGER_64
+		do
+			if a_folder.selected_index >= 2 and a_folder.selected_index - 1 <= a_folders.count then
+				l_folder_id := a_folders.i_th (a_folder.selected_index - 1).id
+			end
+			window.close_sheet
+			add_favorite (a_kind.selected_index, a_end.value, a_name.text, l_folder_id)
+		end
+
+	favorite_default_name (a_kind, a_end_verse: INTEGER): STRING_32
+			-- "John 3:16", "John 3:16-18" or "John 3" for the place read.
+		do
+			inspect a_kind
+			when 1 then
+				Result := place_text (reading_book, reading_chapter, reading_verse.max (1))
+			when 2 then
+				Result := place_text (reading_book, reading_chapter, reading_verse.max (1))
+				if a_end_verse > reading_verse.max (1) then
+					Result.append ({STRING_32} "-" + a_end_verse.out)
+				end
+			else
+				Result := place_text (reading_book, reading_chapter, 0)
+			end
+		end
+
+	add_favorite (a_kind, a_end_verse: INTEGER; a_name: READABLE_STRING_GENERAL; a_folder_id: INTEGER_64)
+			-- Keep the place read in folder `a_folder_id' (0: the top level): its verse (`a_kind' 1), its
+			-- verses through `a_end_verse' (2) or its whole chapter (3), named `a_name' (its place when
+			-- empty), with the version read.
+		require
+			a_place: reading.has_place
+			known_kind: a_kind >= 1 and a_kind <= 3
+			folder_non_negative: a_folder_id >= 0
+		local
+			l_hub: BIB_HUB_ID
+			l_from, l_to: INTEGER_64
+			l_name: STRING_32
+			l_favorite: BIB_FAVORITE
+		do
+			if user_store.is_open then
+				create l_hub
+				inspect a_kind
+				when 1 then
+					l_from := l_hub.hub_id (reading_book, reading_chapter, reading_verse.max (1))
+					l_to := l_from
+				when 2 then
+					l_from := l_hub.hub_id (reading_book, reading_chapter, reading_verse.max (1))
+					l_to := l_hub.hub_id (reading_book, reading_chapter, a_end_verse.max (reading_verse.max (1)))
+				else
+					l_from := l_hub.hub_id (reading_book, reading_chapter, 1)
+					l_to := l_hub.hub_id (reading_book, reading_chapter, l_hub.Max_part)
+				end
+				l_name := a_name.to_string_32
+				l_name.left_adjust
+				l_name.right_adjust
+				if l_name.is_empty then
+					l_name := favorite_default_name (a_kind, a_end_verse)
+				end
+				create l_favorite.make_passage (l_from, l_to, reading_version, l_name)
+				user_store.put_favorite_in (l_favorite, a_folder_id)
+				user_store.add_favorite (l_favorite)
 				if attached user_store.write_error as al_error then
 					say (al_error.message)
 				else
-					fill_bookmarks
-					window.toast ({STRING_32} "Bookmarked " + place_text (reading_book, reading_chapter, reading_verse) + {STRING_32} ".", 1)
+					last_favorite_folder := a_folder_id
+					reload_favorites
+					if a_folder_id = 0 then
+						window.toast ({STRING_32} "Added " + l_name + {STRING_32} " to Favorites.", 1)
+					else
+						window.toast ({STRING_32} "Added " + l_name + {STRING_32} " to " + favorites_state.folder_path (a_folder_id) + {STRING_32} ".", 1)
+					end
 				end
+			end
+		end
+
+	new_favorite_folder
+			-- An "Untitled" folder in the folder chosen (or the chosen favorite's, or the top level),
+			-- chosen and named at once, as a notes app does.
+		local
+			l_folder: BIB_FAVORITE_FOLDER
+			l_parent: INTEGER_64
+			l_node: BIB_FAVORITE_NODE
+		do
+			if user_store.is_open then
+				l_parent := chosen_folder_id
+				create l_folder.make (l_parent, "Untitled")
+				user_store.add_favorite_folder (l_folder)
+				if attached user_store.write_error as al_error then
+					say (al_error.message)
+				else
+					reload_favorites
+					if l_parent /= 0 and then attached favorites_state.folder (l_parent) as al_parent then
+						favorites_tree.expand_node (folder_node (al_parent))
+					end
+					l_node := folder_node (l_folder)
+					choose_favorite (l_node)
+					open_rename_sheet (l_node)
+				end
+			end
+		end
+
+	rename_chosen_favorite
+			-- The pencil: rename the chosen line.
+		do
+			if attached favorites_tree.selected_node as al_node then
+				open_rename_sheet (al_node)
+			end
+		end
+
+	open_rename_sheet (a_node: BIB_FAVORITE_NODE)
+			-- A sheet with the line's name, selected, to type over.
+		local
+			l_column: SW_COLUMN
+			l_row: SW_ROW
+			l_name: SW_TEXT_BOX
+			l_ok, l_cancel: SW_BUTTON
+		do
+			if attached a_node.folder as al_folder then
+				create l_name.make_single_line (al_folder.name)
+			elseif attached a_node.item as al_item then
+				create l_name.make_single_line (al_item.label)
+			else
+				create l_name.make_single_line ("")
+			end
+			create l_ok.make ("Rename", agent confirm_rename (a_node, l_name))
+			create l_cancel.make ("Cancel", agent window.close_sheet)
+			create l_column.make
+			l_column := l_column.with_padding (16.0).with_gap (10.0)
+			if a_node.is_folder then
+				l_column.put (create {SW_LABEL}.make_ui ("Folder name"))
+			else
+				l_column.put (create {SW_LABEL}.make_ui ("Favorite name"))
+			end
+			l_column.put (l_name)
+			create l_row.make
+			l_row.put (l_ok)
+			l_row.put (l_cancel)
+			l_column.put (l_row)
+			window.show_sheet (l_column, 420.0)
+			window.give_focus (l_name)
+		end
+
+	confirm_rename (a_node: BIB_FAVORITE_NODE; a_box: SW_TEXT_BOX)
+			-- Rename pressed.
+		do
+			window.close_sheet
+			rename_favorite_node (a_node, a_box.text)
+		end
+
+	rename_favorite_node (a_node: BIB_FAVORITE_NODE; a_name: READABLE_STRING_GENERAL)
+			-- `a_node''s row named `a_name' (nothing when it is blank).
+		local
+			l_name: STRING_32
+		do
+			l_name := a_name.to_string_32
+			l_name.left_adjust
+			l_name.right_adjust
+			if not l_name.is_empty and user_store.is_open then
+				if attached a_node.folder as al_folder then
+					user_store.rename_favorite_folder (al_folder, l_name)
+				elseif attached a_node.item as al_item then
+					user_store.rename_favorite (al_item, l_name)
+				end
+				if attached user_store.write_error as al_error then
+					say (al_error.message)
+				end
+				reload_favorites
+			end
+		end
+
+	open_move_sheet (a_node: BIB_FAVORITE_NODE)
+			-- A sheet to choose the folder `a_node' goes to (a folder never into itself or below itself).
+		local
+			l_column: SW_COLUMN
+			l_row: SW_ROW
+			l_folder: SW_SELECT
+			l_folders: ARRAYED_LIST [BIB_FAVORITE_FOLDER]
+			l_ok, l_cancel: SW_BUTTON
+		do
+			create l_folders.make (8)
+			across favorites_state.shown_folders_by_path as ic loop
+				if not (attached a_node.folder as al_moving and then favorites_state.is_inside (ic.id, al_moving.id)) then
+					l_folders.extend (ic)
+				end
+			end
+			create l_folder.make
+			l_folder.add_option ("Top level")
+			across l_folders as ic loop
+				l_folder.add_option (favorites_state.folder_path (ic.id))
+			end
+			l_folder.select_index (1)
+			create l_ok.make ("Move", agent confirm_move (a_node, l_folder, l_folders))
+			create l_cancel.make ("Cancel", agent window.close_sheet)
+			create l_column.make
+			l_column := l_column.with_padding (16.0).with_gap (10.0)
+			l_column.put (create {SW_LABEL}.make_ui ({STRING_32} "Move " + a_node.label + {STRING_32} " to"))
+			l_column.put (l_folder)
+			create l_row.make
+			l_row.put (l_ok)
+			l_row.put (l_cancel)
+			l_column.put (l_row)
+			window.show_sheet (l_column, 420.0)
+		end
+
+	confirm_move (a_node: BIB_FAVORITE_NODE; a_folder: SW_SELECT; a_folders: ARRAYED_LIST [BIB_FAVORITE_FOLDER])
+			-- Move pressed.
+		local
+			l_target: INTEGER_64
+		do
+			if a_folder.selected_index >= 2 and a_folder.selected_index - 1 <= a_folders.count then
+				l_target := a_folders.i_th (a_folder.selected_index - 1).id
+			end
+			window.close_sheet
+			move_favorite_node (a_node, l_target)
+		end
+
+	move_favorite_node (a_node: BIB_FAVORITE_NODE; a_target: INTEGER_64)
+			-- `a_node''s row into folder `a_target' (0: the top level); a folder never into itself or
+			-- below itself.
+		do
+			if user_store.is_open then
+				if attached a_node.folder as al_folder then
+					if not favorites_state.is_inside (a_target, al_folder.id) or a_target = 0 then
+						user_store.move_favorite_folder (al_folder, a_target)
+					end
+				elseif attached a_node.item as al_item then
+					user_store.move_favorite (al_item, a_target)
+				end
+				if attached user_store.write_error as al_error then
+					say (al_error.message)
+				end
+				reload_favorites
+			end
+		end
+
+	remove_chosen_favorite
+			-- The bin: remove the chosen line.
+		do
+			if attached favorites_tree.selected_node as al_node then
+				remove_favorite_node (al_node)
+			end
+		end
+
+	remove_favorite_node (a_node: BIB_FAVORITE_NODE)
+			-- `a_node''s row removed softly (a folder hides everything in it); Restore brings it back.
+		do
+			if user_store.is_open then
+				if attached a_node.folder as al_folder then
+					user_store.set_favorite_folder_removed (al_folder, True)
+				elseif attached a_node.item as al_item then
+					user_store.set_favorite_removed (al_item, True)
+				end
+				if attached user_store.write_error as al_error then
+					say (al_error.message)
+				else
+					set_last_removed_favorite (a_node)
+					if favorites_tree.selected_node = a_node then
+						choose_favorite (Void)
+					end
+					reload_favorites
+					window.toast ({STRING_32} "Removed " + a_node.label + {STRING_32} ". Restore brings it back.", 1)
+				end
+			end
+		end
+
+	restore_favorite
+			-- Restore: what Remove took away last.
+		do
+			if attached last_removed_favorite as al_node and user_store.is_open then
+				if attached al_node.folder as al_folder then
+					user_store.set_favorite_folder_removed (al_folder, False)
+				elseif attached al_node.item as al_item then
+					user_store.set_favorite_removed (al_item, False)
+				end
+				if attached user_store.write_error as al_error then
+					say (al_error.message)
+				else
+					set_last_removed_favorite (Void)
+					reload_favorites
+				end
+			end
+		end
+
+	show_stars
+			-- The chapter's verse rows (and Parallel's) follow the favorites (`favorites_state' tells);
+			-- the grids, History and the Books tree ask as they draw.
+		do
+			if reading.has_place then
+				star_rows (reading_view)
+				if is_study then
+					star_rows (parallel_view)
+				end
+			end
+			window.request_render
+		end
+
+	star_rows (a_view: SW_PARALLEL_TEXT)
+			-- Each verse row of `a_view' (which lists `reading_verses') starred when a verse or range
+			-- among the favorites takes it in.
+		local
+			l_hub: BIB_HUB_ID
+			i: INTEGER
+		do
+			create l_hub
+			from i := 1 until i > reading_verses.count or i > a_view.row_count loop
+				if not a_view.is_note_row (i) then
+					a_view.set_row_starred (i, favorites_state.is_verse_starred (l_hub.hub_id (reading_book, reading_chapter, reading_verses.i_th (i).verse)))
+				end
+				i := i + 1
+			end
+		end
+
+	visit_starred (a_visit: BIB_VISIT): BOOLEAN
+			-- History: is the verse among the favorites?
+		do
+			Result := favorites_state.is_verse_starred (a_visit.hub_id)
+		end
+
+	hit_starred (a_verse: BIB_READING_VERSE): BOOLEAN
+			-- Search results: is the verse among the favorites?
+		do
+			Result := favorites_state.is_verse_starred ((create {BIB_HUB_ID}).hub_id (a_verse.book_id, a_verse.chapter, a_verse.verse))
+		end
+
+	cross_ref_starred (a_ref: BIB_READING_CROSS_REF): BOOLEAN
+			-- Cross-references: is a verse of the target among the favorites?
+		local
+			l_hub: BIB_HUB_ID
+			v: INTEGER
+		do
+			create l_hub
+			from v := a_ref.verse_start until Result or v > a_ref.verse_end.max (a_ref.verse_start) loop
+				Result := favorites_state.is_verse_starred (l_hub.hub_id (a_ref.to_book, a_ref.to_chapter, v))
+				v := v + 1
+			end
+		end
+
+	nav_icon (a_node: BIB_NAV_NODE): INTEGER
+			-- The Books tree: a chapter among the favorites wears the star.
+		do
+			if a_node.is_chapter and then favorites_state.is_chapter_starred (a_node.book_id, a_node.chapter) then
+				Result := {SW_PAINTER}.Glyph_star
+			end
+		end
+
+	snapshot_favorites
+			-- For a snapshot: two folders, one inside the other, a verse, a range and a whole chapter,
+			-- the folders open.
+		local
+			l_grace, l_faith: BIB_FAVORITE_FOLDER
+		do
+			if user_store.is_open then
+				create l_grace.make (0, "Grace")
+				user_store.add_favorite_folder (l_grace)
+				create l_faith.make (l_grace.id, "Faith")
+				user_store.add_favorite_folder (l_faith)
+				add_favorite (1, 0, "", l_faith.id)
+				add_favorite (2, reading_verse + 2, "", l_grace.id)
+				add_favorite (3, 0, "", 0)
+				favorites_tree.expand_node (folder_node (l_grace))
+				favorites_tree.expand_node (folder_node (l_faith))
 			end
 		end
 
@@ -4606,6 +5393,7 @@ feature {NONE} -- The Atlas and the shared selection (Plan 22 phase 3, 2026-10-3
 				end
 				parallel_marked_row := 0
 				mark_parallel_verse
+				star_rows (parallel_view)
 				if not l_codes.is_empty and then attached bible.text_reader.version (l_codes.last) as al_last
 					and then not al_last.numbers_like_english
 				then
@@ -4620,7 +5408,11 @@ feature {NONE} -- The Atlas and the shared selection (Plan 22 phase 3, 2026-10-3
 			add_chrome_pills
 			window.add_reference_mark (tools_strip, "C10", "Study tools strip: Parallel and Interlinear work; Guide, Word Study, Count and Ledger come later.", window.Corner_top_left)
 			window.add_reference_mark (mode_switch, "C7", "Mode switch, on Study: only the docking changes. Ctrl+M.", window.Corner_top_left)
-			window.add_reference_mark (navigator_tabs, "T1", "P11 Navigator, west: Books (chapter by chapter), Bookmarks (Ctrl+D bookmarks the verse read; click one to read it; Remove and Restore) and History (the last 50 chapters read, newest first, kept between runs; click one to read it again).", window.Corner_top_left)
+			window.add_reference_mark (navigator_tabs, "T1", "P11 Navigator, west: Books (chapter by chapter; a favorite chapter wears the star), Favorites (folders of your own; Ctrl+D adds the verse read; New folder, Rename, Remove, Restore; right-click to move or sort) and History (this session's verses, or the kept ones; the box sets how many).", window.Corner_top_left)
+			window.add_reference_mark (favorites_filter_box, "T1.1", "Favorites tools: the filter box (favorites and folders whose names hold its words), New folder (named at once), Rename, Remove (a folder hides everything in it) and Restore.", window.Corner_top_left)
+			window.add_reference_mark (favorites_tree, "T1.2", "Favorites tree: folders first, then favorites (each named with the version it was saved in), in one order for the whole tree; click a favorite to read it; right-click to open it in its version, rename, move, remove, make a folder or sort.", window.Corner_top_left)
+			window.add_reference_mark (history_scope, "T1.3", "History: This session (every verse touched since the window opened) or Kept (between sessions); the number box sets how many verses the Kept list shows (10 to 1,000; every visit stays stored).", window.Corner_top_left)
+			window.add_reference_mark (history_grid, "T1.4", "History list: newest first, the verse read selected, a favorite starred; click one to read it again.", window.Corner_top_left)
 			window.add_reference_mark (notes_heading, "T2", "P06 Notes, west below T1, in tab order: Verse notes on the chapter read (add on the verse read; double-click to edit, each edit keeps the old version; Delete and Restore); Journal, notes on a subject (New; Save keeps the earlier version; Delete and Restore); Tags (tag the verse read; click a tag for its verses, a verse to read it; Remove and Restore); Highlights (a reason, not a color; washed amber in the Bible and Parallel tabs; click one to read it; Remove and Restore); Prayer (a title and the request; Open and Answered, with how it was answered; Remove and Restore); Memory (learn the verse read; recall today's card, Show the verse, grade Again, Hard, Good or Easy; the next date follows SuperMemo 2).", window.Corner_top_left)
 			window.add_reference_mark (center_tabs, "T3", "Centre tabs: the Bible text, Parallel (P02), Interlinear (P03, Ctrl+I) and the Timeline (the River of Time).", window.Corner_top_left)
 			window.add_reference_mark (years_from_box, "T8", "The years in view: From and to boxes and Set (or Enter) over the Timeline; the bar under the river walks time and names the first and last years of the data; Home and End reach them.", window.Corner_top_left)
@@ -4654,7 +5446,7 @@ feature {NONE} -- Right-click menus and panes (Larry, 2026-10-28)
 			history_grid.set_menu_extension (agent history_menu)
 			journal_grid.set_menu_extension (agent journal_menu)
 			tag_names_grid.set_menu_extension (agent tag_name_menu)
-			bookmarks_panel.set_menu_items (agent listed_menu_items)
+			favorites_tree.set_menu_extension (agent favorites_menu)
 			highlights_panel.set_menu_items (agent listed_menu_items)
 			tagged_panel.set_menu_items (agent listed_menu_items)
 			prayer_open_panel.set_menu_items (agent listed_menu_items)
@@ -4664,7 +5456,7 @@ feature {NONE} -- Right-click menus and panes (Larry, 2026-10-28)
 
 	verse_menu (a_view: SW_PARALLEL_TEXT; a_menu: SW_MENU; a_px, a_py: REAL_64)
 			-- A verse in the Bible or Parallel tab: copy it with its reference or the chapter; keep it
-			-- (bookmark, highlight, note, tag, card, prayer); open it in the other tabs; Focus reading.
+			-- (favorite, highlight, note, tag, card, prayer); open it in the other tabs; Focus reading.
 			-- Each item reads the verse first, as a click would.
 		local
 			l_row, l_verse: INTEGER
@@ -4676,7 +5468,7 @@ feature {NONE} -- Right-click menus and panes (Larry, 2026-10-28)
 					"", True, agent on_verse_do (l_verse, agent copy_verse))
 				a_menu.add_item ({STRING_32} "Copy " + place_text (reading_book, reading_chapter, 0), "", True, agent copy_chapter)
 				a_menu.add_separator
-				a_menu.add_item ("Bookmark", "Ctrl+D", user_store.is_open, agent on_verse_do (l_verse, agent bookmark_verse))
+				a_menu.add_item ("Add to Favorites...", "Ctrl+D", user_store.is_open, agent on_verse_do (l_verse, agent add_to_favorites))
 				a_menu.add_item ("Highlight...", "", user_store.is_open, agent on_verse_do (l_verse, agent start_in_notes (Highlights_tab, highlight_reason_box)))
 				a_menu.add_item ("Add a note...", "", user_store.is_open, agent on_verse_do (l_verse, agent start_in_notes (Verse_notes_tab, new_note_box)))
 				a_menu.add_item ("Tag...", "", user_store.is_open, agent on_verse_do (l_verse, agent start_in_notes (Tags_tab, tag_box)))

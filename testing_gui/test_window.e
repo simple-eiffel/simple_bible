@@ -28,6 +28,87 @@ inherit
 			default_create
 		end
 
+feature -- Favorites (research/24 stage C, 2026-11-01)
+
+	test_a_favorite_verse_wears_the_star
+			-- Larry: a favorite verse is marked with the gold star; its version is kept.
+		local
+			app: BIB_GUI_APP
+		do
+			app := new_window
+			app.harness_go_to (43, 3, 16)
+			app.harness_add_favorite (1, 0, "", 0)
+			assert_integers_equal ("one line at the top", 1, app.harness_favorite_roots)
+			assert_true ("named with its version: " + app.harness_favorite_root_label (1).to_string_8, app.harness_favorite_root_label (1).same_string ("John 3:16 (KJV)"))
+			assert_true ("verse 16 starred", app.harness_verse_starred (16))
+			assert_false ("verse 17 not", app.harness_verse_starred (17))
+		end
+
+	test_a_range_in_a_new_folder
+			-- Folders of the reader's own; a range stars each of its verses.
+		local
+			app: BIB_GUI_APP
+			l_grace: INTEGER_64
+		do
+			app := new_window
+			app.harness_go_to (43, 3, 16)
+			l_grace := app.harness_new_folder ("Grace")
+			assert_true ("a folder made", l_grace > 0)
+			assert_true ("named Grace", app.harness_favorite_roots = 1 and then app.harness_favorite_root_label (1).same_string ("Grace"))
+			app.harness_add_favorite (2, 18, "", l_grace)
+			assert_integers_equal ("the range is inside the folder", 1, app.harness_favorite_roots)
+			assert_true ("verses 16 to 18 starred", app.harness_verse_starred (16) and app.harness_verse_starred (17) and app.harness_verse_starred (18))
+			assert_false ("verse 19 not", app.harness_verse_starred (19))
+		end
+
+	test_a_removed_folder_hides_its_stars_until_restored
+		local
+			app: BIB_GUI_APP
+			l_grace: INTEGER_64
+		do
+			app := new_window
+			app.harness_go_to (43, 3, 16)
+			l_grace := app.harness_new_folder ("Grace")
+			app.harness_add_favorite (1, 0, "", l_grace)
+			app.harness_choose_favorite_root (1)
+			app.harness_remove_chosen_favorite
+			assert_integers_equal ("the folder gone", 0, app.harness_favorite_roots)
+			assert_false ("and its verse's star", app.harness_verse_starred (16))
+			app.harness_restore_favorite
+			assert_integers_equal ("restored", 1, app.harness_favorite_roots)
+			assert_true ("the star back", app.harness_verse_starred (16))
+		end
+
+	test_a_whole_chapter_stars_the_chapter_not_its_verses
+		local
+			app: BIB_GUI_APP
+		do
+			app := new_window
+			app.harness_go_to (43, 3, 16)
+			app.harness_add_favorite (3, 0, "", 0)
+			assert_true ("John 3 starred", app.harness_chapter_starred (43, 3))
+			assert_false ("its verses are not", app.harness_verse_starred (16))
+			assert_true ("named for the chapter", app.harness_favorite_root_label (1).has_substring ("John 3"))
+		end
+
+	test_the_filter_finds_favorites_in_folders
+		local
+			app: BIB_GUI_APP
+			l_grace: INTEGER_64
+		do
+			app := new_window
+			app.harness_go_to (43, 3, 16)
+			l_grace := app.harness_new_folder ("Grace")
+			app.harness_add_favorite (1, 0, "For God so loved", l_grace)
+			app.harness_go_to (1, 1, 1)
+			app.harness_add_favorite (1, 0, "", 0)
+			app.harness_filter_favorites ("loved")
+			assert_integers_equal ("one found", 1, app.harness_favorite_roots)
+			assert_true ("from inside its folder", app.harness_favorite_root_label (1).has_substring ("For God so loved"))
+			app.harness_filter_favorites ("")
+			assert_integers_equal ("the tree again: the folder and Genesis 1:1", 2, app.harness_favorite_roots)
+		end
+
 feature -- History (research/24 stage B, 2026-11-01)
 
 	test_this_session_lists_every_verse_touched
