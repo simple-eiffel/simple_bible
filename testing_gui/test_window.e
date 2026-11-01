@@ -28,6 +28,78 @@ inherit
 			default_create
 		end
 
+feature -- Phase 3: the reading place (research/23; written 2026-11-01 and run on 0.7.49 first)
+
+	test_a_verse_click_keeps_the_chapter
+			-- Risk 17: a click on another verse of the chapter read rebuilt the chapter, Parallel and
+			-- every Study pane, though only the selected verse changed.
+		local
+			app: BIB_GUI_APP
+			l_bible, l_parallel, l_highlights: ANY
+		do
+			app := new_window
+			app.harness_state.set_study (True)
+			app.harness_go_to (43, 3, 16)
+			l_bible := app.harness_bible_cell (1)
+			l_parallel := app.harness_parallel_cell (1)
+			l_highlights := app.harness_highlight_rows
+			app.harness_click_verse (17)
+			assert_true ("the Bible tab's rows kept", l_bible = app.harness_bible_cell (1))
+			assert_true ("Parallel's rows kept", l_parallel = app.harness_parallel_cell (1))
+			assert_true ("the highlights list not read again", l_highlights = app.harness_highlight_rows)
+			assert_false ("verse 16 no longer selected", app.harness_verse_selected (16))
+			assert_true ("verse 17 selected", app.harness_verse_selected (17))
+			assert_false ("Parallel: verse 16 no longer selected", app.harness_parallel_verse_selected (16))
+			assert_true ("Parallel: verse 17 selected", app.harness_parallel_verse_selected (17))
+		end
+
+	test_a_click_on_the_verse_read_adds_no_step
+			-- A second click on the verse already read added the same place to the trail again, so
+			-- Back stood still once.
+		local
+			app: BIB_GUI_APP
+		do
+			app := new_window
+			app.harness_go_to (1, 1, 1)
+			app.harness_go_to (43, 3, 16)
+			app.harness_click_verse (16)
+			app.harness_step_history (-1)
+			assert_true ("one Back returns to Genesis 1:1", app.harness_is_at (1, 1, 1))
+		end
+
+	test_back_and_forward_follow_the_trail
+			-- Back and Forward, on the toolbar and in the Go menu, follow the trail.
+		local
+			app: BIB_GUI_APP
+		do
+			app := new_window
+			app.harness_go_to (1, 1, 1)
+			app.harness_go_to (43, 3, 16)
+			assert_true ("Back on", app.harness_back_enabled and app.harness_go_menu_enabled ("Back"))
+			assert_false ("Forward off", app.harness_forward_enabled or app.harness_go_menu_enabled ("Forward"))
+			app.harness_step_history (-1)
+			assert_true ("at Genesis 1:1", app.harness_is_at (1, 1, 1))
+			assert_true ("Forward on", app.harness_forward_enabled and app.harness_go_menu_enabled ("Forward"))
+			app.harness_step_history (1)
+			assert_true ("at John 3:16", app.harness_is_at (43, 3, 16))
+			assert_false ("Forward off at the end", app.harness_forward_enabled or app.harness_go_menu_enabled ("Forward"))
+		end
+
+	test_previous_and_next_stop_at_the_ends
+			-- Risk 3: the Go menu's Previous and Next chapter asked the toolbar buttons; both ask the
+			-- reading place now.
+		local
+			app: BIB_GUI_APP
+		do
+			app := new_window
+			app.harness_go_to (1, 1, 1)
+			assert_false ("Genesis 1: no previous chapter", app.harness_previous_enabled or app.harness_go_menu_enabled ("Previous chapter"))
+			assert_true ("Genesis 1: a next chapter", app.harness_next_enabled and app.harness_go_menu_enabled ("Next chapter"))
+			app.harness_go_to (66, 22, 21)
+			assert_false ("Revelation 22: no next chapter", app.harness_next_enabled or app.harness_go_menu_enabled ("Next chapter"))
+			assert_true ("Revelation 22: a previous chapter", app.harness_previous_enabled and app.harness_go_menu_enabled ("Previous chapter"))
+		end
+
 feature -- Phase 5: notes, collections, strip marks (each test seen failing on 0.7.48 first)
 
 	test_notes_dot_follows_adding_and_deleting

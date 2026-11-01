@@ -198,7 +198,7 @@ feature {NONE} -- Initialization
 			focus_button.set_tooltip ("Fold the sides so the Bible text has the window (Ctrl+Shift+F); again to bring them back.")
 			create reading_view.make (120.0)
 			create reading_verses.make (0)
-			create reading_version.make_empty
+			create reading.make
 			create commentary_title.make ("", {SW_PAINTER}.Role_ui, 13.0, True)
 			create commentary_tabs.make
 			create commentary_view.make (200.0)
@@ -256,7 +256,6 @@ feature {NONE} -- Initialization
 			create renderings.make (0)
 			create places.make (0)
 			create study_corpus.make_empty
-			create history.make (40)
 			create center_holder.make
 				-- fitting: the Timeline asks for every row (it scrolls itself) and ran under the south
 				-- zone at its full height (seen 2026-10-31, hidden in 0.7.41 by the order zones paint in)
@@ -320,6 +319,13 @@ feature {NONE} -- Initialization
 			layout_state.on_theme (agent apply_theme)
 			window.set_on_theme_changed (agent (a_theme: SW_THEME) do layout_state.set_dark (a_theme.is_dark) end)
 			results_state.on_change (agent apply_results)
+				-- the place read as one state (research/23 phase 3): the version, the chapter, the verse
+				-- and the history buttons each join it
+			reading.on_version (agent show_version)
+			reading.on_chapter (agent show_chapter)
+			reading.on_verse (agent show_verse)
+			reading.on_history (agent show_trail_buttons)
+			show_verse_tools
 				-- Genesis 1:1 selected, so the commentary has its cross-references from the start (Larry:
 				-- T5 was empty until a verse was clicked).
 			if bible.is_open and then not reading_version.is_empty and then bible.books.has_book (1) then
@@ -525,6 +531,84 @@ feature {BIB_WINDOW_HARNESS_CLIENT} -- The window harness (research/23, 2026-10-
 			-- Is the Answered button enabled?
 		do
 			Result := prayer_answered_button.is_enabled
+		end
+
+	harness_click_verse (a_row: INTEGER)
+			-- Click row `a_row' of the Bible tab (away from any word).
+		do
+			on_verse_click (a_row, 1)
+		end
+
+	harness_bible_cell (a_row: INTEGER): ANY
+			-- The text object of row `a_row' in the Bible tab (a rebuilt chapter makes new ones).
+		do
+			Result := reading_view.cell (a_row, 1)
+		end
+
+	harness_parallel_cell (a_row: INTEGER): ANY
+			-- The text object of row `a_row', first column, in Parallel.
+		do
+			Result := parallel_view.cell (a_row, 1)
+		end
+
+	harness_highlight_rows: ANY
+			-- The list the Highlights tab shows (read again, it is a new list).
+		do
+			Result := highlights_panel.rows
+		end
+
+	harness_verse_selected (a_row: INTEGER): BOOLEAN
+			-- Does row `a_row' of the Bible tab carry the selected-verse mark?
+		do
+			Result := across reading_view.cell_marks (a_row, 1).reasons as ic some ic.same_string ("selected verse") end
+		end
+
+	harness_parallel_verse_selected (a_row: INTEGER): BOOLEAN
+			-- Does row `a_row' of Parallel, first column, carry the selected-verse mark?
+		do
+			Result := across parallel_view.cell_marks (a_row, 1).reasons as ic some ic.same_string ("selected verse") end
+		end
+
+	harness_step_history (a_step: INTEGER)
+			-- Back (-1) or Forward (1).
+		do
+			move_in_history (a_step)
+		end
+
+	harness_back_enabled: BOOLEAN
+		do
+			Result := back_button.is_enabled
+		end
+
+	harness_forward_enabled: BOOLEAN
+		do
+			Result := forward_button.is_enabled
+		end
+
+	harness_previous_enabled: BOOLEAN
+		do
+			Result := previous_button.is_enabled
+		end
+
+	harness_next_enabled: BOOLEAN
+		do
+			Result := next_button.is_enabled
+		end
+
+	harness_go_menu_enabled (a_label: READABLE_STRING_GENERAL): BOOLEAN
+			-- Is the Go menu's item `a_label' enabled, as the menu would open now?
+		do
+			across go_menu.items as ic loop
+				if ic.label.same_string_general (a_label) then
+					Result := ic.enabled
+				end
+			end
+		end
+
+	harness_is_at (a_book, a_chapter, a_verse: INTEGER): BOOLEAN
+			-- Is that the place read?
+		do
+			Result := reading_book = a_book and reading_chapter = a_chapter and reading_verse = a_verse
 		end
 
 	harness_theme_swapped_by_windows (a_dark: BOOLEAN)
@@ -1238,7 +1322,7 @@ feature {NONE} -- Menus and keys (C2)
 	edit_menu: SW_MENU
 		do
 			create Result.make
-			Result.add_item ("Copy verse", "", reading_verse > 0, agent copy_verse)
+			Result.add_item ("Copy verse", "", reading.has_verse, agent copy_verse)
 			Result.add_item ("Find in chapter...", "", False, Void)
 		end
 
@@ -1273,17 +1357,17 @@ feature {NONE} -- Menus and keys (C2)
 	go_menu: SW_MENU
 		do
 			create Result.make
-			Result.add_item ("Back", "Alt+Left", history_index > 1, agent move_in_history (-1))
-			Result.add_item ("Forward", "Alt+Right", history_index < history.count, agent move_in_history (1))
+			Result.add_item ("Back", "Alt+Left", reading.can_go_back, agent move_in_history (-1))
+			Result.add_item ("Forward", "Alt+Right", reading.can_go_forward, agent move_in_history (1))
 			Result.add_separator
-			Result.add_item ("Previous chapter", "", previous_button.is_enabled, agent step_chapter (-1))
-			Result.add_item ("Next chapter", "", next_button.is_enabled, agent step_chapter (1))
+			Result.add_item ("Previous chapter", "", has_previous_chapter, agent step_chapter (-1))
+			Result.add_item ("Next chapter", "", has_next_chapter, agent step_chapter (1))
 			Result.add_item ("Go to reference", "Ctrl+L", True, agent focus_reference)
 			if is_commentary_held then
 				Result.add_item ({STRING_32} "Back to " + place_text (held_book, held_chapter, held_verse), "", True, agent back_to_commentary_verse)
 			end
 			Result.add_separator
-			Result.add_item ("Bookmark this verse", "Ctrl+D", reading_verse > 0, agent bookmark_verse)
+			Result.add_item ("Bookmark this verse", "Ctrl+D", reading.has_verse, agent bookmark_verse)
 		end
 
 	search_menu: SW_MENU
@@ -1358,11 +1442,9 @@ feature {NONE} -- Menus and keys (C2)
 
 feature {NONE} -- Toolbar (C3-C9)
 
-	history: ARRAYED_LIST [TUPLE [book, chapter, verse: INTEGER]]
-			-- Places read, for Back and Forward (C3).
-
-	history_index: INTEGER
-			-- Where Back and Forward stand in `history'.
+	reading: BIB_READING_STATE
+			-- The place read and the trail Back and Forward walk (research/23 phase 3): the version,
+			-- the chapter, the verse and the history buttons each join it.
 
 	settings: BIB_SETTINGS
 			-- The reader's choices kept between runs: the text size (C8).
@@ -1476,13 +1558,7 @@ feature {NONE} -- Toolbar (C3-C9)
 			-- C5: read the same place in the version picked.
 		do
 			if version_select.selected_index >= 1 and version_select.selected_index <= bible.text_reader.versions.count then
-				reading_version := bible.text_reader.versions.i_th (version_select.selected_index).code
-				if reading_book > 0 then
-					open_reading (reading_book, reading_chapter, reading_verse)
-				end
-				if study_lemma > 0 then
-					renderings_grid.set_rows (renderings_for_version (renderings))
-				end
+				reading.set_version (bible.text_reader.versions.i_th (version_select.selected_index).code)
 			end
 		end
 
@@ -1526,19 +1602,26 @@ feature {NONE} -- Toolbar (C3-C9)
 			window.request_render
 		end
 
-	mark_selected_verse (a_view: SW_PARALLEL_TEXT; a_row, a_column: INTEGER; a_text: READABLE_STRING_32; a_highlighted: BOOLEAN)
-			-- Mark the selected verse's text `a_text' in cell `a_row', `a_column' of `a_view': the one
-			-- mark the Bible and Parallel tabs both use (scan 36). Washed blue; outlined instead when
-			-- the verse is `a_highlighted', so its amber wash still shows (scan 42).
+	mark_selected_verse (a_view: SW_PARALLEL_TEXT; a_row, a_column: INTEGER)
+			-- Mark cell `a_row', `a_column' of `a_view' as the selected verse's: the one mark the Bible
+			-- and Parallel tabs both use (scan 36). Washed blue; outlined instead when the cell carries
+			-- another mark (a highlight), so its amber wash still shows (scan 42).
+		require
+			valid_row: a_row >= 1 and a_row <= a_view.row_count
+			verse_row: not a_view.is_note_row (a_row)
+			valid_column: a_column >= 1 and a_column <= a_view.column_count
 		local
+			l_marks: SW_MARKED_TEXT
 			l_mark: SW_MARK
 		do
-			if not a_text.is_empty then
+			l_marks := a_view.cell_marks (a_row, a_column)
+			l_marks.remove_reason (Selected_verse_reason)
+			if l_marks.text_count > 0 then
 				create l_mark.make ({SW_MARK}.Hue_blue)
-				if a_highlighted then
-					a_view.cell_marks (a_row, a_column).mark_range_with (0, a_text.count, "selected verse", l_mark).do_nothing
+				if l_marks.count > 0 then
+					l_marks.mark_range_with (0, l_marks.text_count, Selected_verse_reason, l_mark).do_nothing
 				else
-					a_view.cell_marks (a_row, a_column).mark_range_with (0, a_text.count, "selected verse", l_mark.with_wash).do_nothing
+					l_marks.mark_range_with (0, l_marks.text_count, Selected_verse_reason, l_mark.with_wash).do_nothing
 				end
 			end
 		end
@@ -1614,7 +1697,7 @@ feature {NONE} -- Toolbar (C3-C9)
 			-- Edit > Copy verse: the selected verse with its reference (scan 56: `copy_hub_verse', the
 			-- one verse copier).
 		do
-			if reading_verse > 0 then
+			if reading.has_verse then
 				copy_hub_verse (reading_hub)
 			end
 		end
@@ -1633,9 +1716,27 @@ feature {NONE} -- Reading (S1, P01)
 
 	reading_version: STRING_8
 			-- The version S1 reads (C5's choice); empty when content.db holds none.
+		do
+			Result := reading.version
+		end
 
-	reading_book, reading_chapter, reading_verse: INTEGER
-			-- The chapter shown and its selected verse (0: none).
+	reading_book: INTEGER
+			-- The book shown (0: none yet).
+		do
+			Result := reading.book
+		end
+
+	reading_chapter: INTEGER
+			-- The chapter shown.
+		do
+			Result := reading.chapter
+		end
+
+	reading_verse: INTEGER
+			-- Its selected verse (0: none).
+		do
+			Result := reading.verse
+		end
 
 	fill_versions
 			-- C5 lists every version content.db holds; the King James Version is chosen first.
@@ -1660,7 +1761,7 @@ feature {NONE} -- Reading (S1, P01)
 				end
 				if l_chosen > 0 then
 					version_select.select_index (l_chosen)
-					reading_version := bible.text_reader.versions.i_th (l_chosen).code
+					reading.set_version (bible.text_reader.versions.i_th (l_chosen).code)
 				end
 			end
 		end
@@ -1671,97 +1772,217 @@ feature {NONE} -- Reading (S1, P01)
 			book_positive: a_book > 0
 			chapter_positive: a_chapter > 0
 			verse_not_negative: a_verse >= 0
+		local
+			l_released: BOOLEAN
 		do
-			if not is_following_commentary then
-					-- Anything but a commentary link: the commentary follows the Bible text again.
-				release_commentary
+			if bible.text_reader.has_version (reading_version) then
+				if not is_following_commentary and is_commentary_held then
+						-- Anything but a commentary link: the commentary follows the Bible text again.
+					release_commentary
+					l_released := True
+				end
+				reading.go_to (a_book, a_chapter, a_verse)
+				if l_released then
+					show_cross_refs
+				end
+				record_place (a_book, a_chapter, a_verse)
 			end
-			from until history.count <= history_index loop
-				history.finish
-				history.remove
-			end
-			history.extend ([a_book, a_chapter, a_verse])
-			history_index := history.count
-			record_place (a_book, a_chapter, a_verse)
-			open_reading (a_book, a_chapter, a_verse)
 		end
 
 	move_in_history (a_step: INTEGER)
 			-- C3: Back (-1) or Forward (1).
 		do
-			if history_index + a_step >= 1 and history_index + a_step <= history.count then
+			if (a_step = -1 and reading.can_go_back) or (a_step = 1 and reading.can_go_forward) then
 				release_commentary
-				history_index := history_index + a_step
-				open_reading (history.i_th (history_index).book, history.i_th (history_index).chapter, history.i_th (history_index).verse)
+				reading.step_history (a_step)
 			end
 		end
 
-	open_reading (a_book, a_chapter, a_verse: INTEGER)
-			-- Show chapter `a_chapter' of book `a_book' in S1, verse `a_verse' marked (0: none); S2,
-			-- the title and the status bar follow.
+	has_previous_chapter: BOOLEAN
+			-- Is there a chapter before the one read (across books)?
+		do
+			Result := reading.has_place and then (reading.chapter > 1 or reading.book > 1)
+		end
+
+	has_next_chapter: BOOLEAN
+			-- Is there a chapter after the one read (across books)?
+		do
+			Result := reading.has_place and then (reading.chapter < bible.text_reader.last_chapter (reading.version, reading.book) or reading.book < {BIB_CANON}.Last_book)
+		end
+
+	show_version (a_code: STRING_8)
+			-- What names the version read follows it (`reading' tells): C5's chip, the numbering notes,
+			-- the size of the script, and the Lexicon's renderings.
+		do
+			if attached bible.text_reader.version (a_code) as al_version then
+				version_chip.set_text (al_version.name)
+				reading_note.set_text (numbering_note (al_version))
+				numbering_label.set_text (numbering_name (al_version))
+			end
+			apply_reading_scale
+			if study_lemma > 0 then
+				renderings_grid.set_rows (renderings_for_version (renderings))
+			end
+		end
+
+	show_chapter
+			-- S1 shows the chapter read, verse by verse, and in Study Parallel, Interlinear, the notes
+			-- and History follow it (`reading' tells when the chapter's text is another). The selected
+			-- verse is `show_verse''s, told next.
 		require
-			book_positive: a_book > 0
-			chapter_positive: a_chapter > 0
-			verse_not_negative: a_verse >= 0
+			a_place: reading.has_place
 		local
 			l_chapter: BIB_LIST_RESULT [BIB_READING_VERSE]
-			l_row, l_selected_row, i: INTEGER
+			l_row, i: INTEGER
 			l_lookup: BIB_LOOKUP
 			l_reasons: HASH_TABLE [STRING_32, INTEGER]
 		do
-			if bible.text_reader.has_version (reading_version) then
-				reading_book := a_book
-				reading_chapter := a_chapter
-				reading_verse := a_verse
-				l_chapter := bible.text_reader.chapter (reading_version, a_book, a_chapter)
-				create reading_verses.make (l_chapter.count)
-				from i := 1 until i > l_chapter.count loop
-					reading_verses.extend (l_chapter.item (i))
-					i := i + 1
+			l_chapter := bible.text_reader.chapter (reading_version, reading_book, reading_chapter)
+			create reading_verses.make (l_chapter.count)
+			from i := 1 until i > l_chapter.count loop
+				reading_verses.extend (l_chapter.item (i))
+				i := i + 1
+			end
+			reading_title.set_text (place_text (reading_book, reading_chapter, 0))
+			reading_view.wipe_out
+			reading_marked_row := 0
+			l_reasons := chapter_highlight_reasons (reading_book, reading_chapter)
+			across reading_verses as ic loop
+				l_row := reading_view.add_row (ic.verse.out)
+				reading_view.set_cell (l_row, 1, ic.display_text)
+				if attached l_reasons.item (ic.verse) as al_reason then
+					mark_highlighted_verse (reading_view, l_row, 1, ic.display_text, al_reason)
 				end
-				reading_title.set_text (place_text (a_book, a_chapter, 0))
-				if attached bible.text_reader.version (reading_version) as al_version then
-					version_chip.set_text (al_version.name)
-					reading_note.set_text (numbering_note (al_version))
-					numbering_label.set_text (numbering_name (al_version))
-				end
-				apply_reading_scale
-				reading_view.wipe_out
-				l_reasons := chapter_highlight_reasons (a_book, a_chapter)
-				across reading_verses as ic loop
-					l_row := reading_view.add_row (ic.verse.out)
-					reading_view.set_cell (l_row, 1, ic.display_text)
-					if attached l_reasons.item (ic.verse) as al_reason then
-						mark_highlighted_verse (reading_view, l_row, 1, ic.display_text, al_reason)
-					end
-					if ic.verse = a_verse then
-						l_selected_row := l_row
-						mark_selected_verse (reading_view, l_row, 1, ic.display_text, l_reasons.has (ic.verse))
-					end
-				end
+			end
+			if l_chapter.count = 0 then
 				create l_lookup.make (bible)
-				if l_chapter.count = 0 then
-					reading_view.add_note (l_lookup.empty_chapter_text (l_chapter, place_text (a_book, a_chapter, 0))).do_nothing
+				reading_view.add_note (l_lookup.empty_chapter_text (l_chapter, place_text (reading_book, reading_chapter, 0))).do_nothing
+			end
+			previous_button.set_enabled (has_previous_chapter)
+			next_button.set_enabled (has_next_chapter)
+			window.set_title (window_title)
+			if is_study then
+				fill_parallel
+				if center_tabs.selected_index = Interlinear_tab then
+					fill_interlinear
 				end
-				if l_selected_row > 0 then
-					reading_view.scroll_to_row (l_selected_row)
-				end
-				previous_button.set_enabled (a_chapter > 1 or a_book > 1)
-				next_button.set_enabled (a_chapter < bible.text_reader.last_chapter (reading_version, a_book) or a_book < {BIB_CANON}.Last_book)
-				back_button.set_enabled (history_index > 1)
-				forward_button.set_enabled (history_index < history.count)
-				show_cross_refs
-					-- C4 shows the place S1 reads, however S1 got there (Larry, 2026-10-26: a verse
-					-- or cross-reference click left it showing what was typed last).
-				reference_box.set_text (place_text (a_book, a_chapter, a_verse))
-				window.set_title (window_title)
-				status_bar.set_left (place_text (a_book, a_chapter, a_verse) + {STRING_32} " (" + reading_version.to_string_32 + {STRING_32} ")")
-				if is_study then
-					fill_study_panes
-				end
-				refresh_strip_marks
+				fill_notes
+				fill_history
 			end
 		end
+
+	show_verse
+			-- The verse read is marked in S1 (and in Study, Parallel and Interlinear) and brought into
+			-- view; S2's cross-references, C4, the status bar and the verse's tools follow it (`reading'
+			-- tells: a click on another verse of the chapter changes only these).
+		require
+			a_place: reading.has_place
+		do
+			reading_marked_row := moved_verse_mark (reading_view, reading_marked_row)
+			if reading_marked_row > 0 then
+				reading_view.scroll_to_row (reading_marked_row)
+			end
+			show_cross_refs
+				-- C4 shows the place S1 reads, however S1 got there (Larry, 2026-10-26: a verse
+				-- or cross-reference click left it showing what was typed last).
+			reference_box.set_text (place_text (reading_book, reading_chapter, reading_verse))
+			status_bar.set_left (place_text (reading_book, reading_chapter, reading_verse) + {STRING_32} " (" + reading_version.to_string_32 + {STRING_32} ")")
+			show_verse_tools
+			if is_study then
+				mark_parallel_verse
+				if center_tabs.selected_index = Interlinear_tab then
+					fill_interlinear
+				end
+			end
+		end
+
+	show_trail_buttons
+			-- Back and Forward (C3) follow the trail (`reading' tells).
+		do
+			back_button.set_enabled (reading.can_go_back)
+			forward_button.set_enabled (reading.can_go_forward)
+		end
+
+	show_verse_tools
+			-- The tools that act on the verse read name it, or ask for one: a new note, a highlight, a
+			-- tag, a memory card.
+		local
+			l_place: STRING_32
+			l_can: BOOLEAN
+		do
+			l_can := user_store.is_open and reading.has_verse
+			if reading.has_verse then
+				l_place := place_text (reading_book, reading_chapter, reading_verse)
+				new_note_label.set_text ({STRING_32} "A new note on " + l_place + {STRING_32} ":")
+				highlight_reason_label.set_text ({STRING_32} "Why highlight " + l_place + {STRING_32} "?")
+				tag_label.set_text ({STRING_32} "Tag " + l_place + {STRING_32} ":")
+			else
+				new_note_label.set_text ("Click a verse to write a note on it.")
+				highlight_reason_label.set_text ("Click a verse to highlight it.")
+				tag_label.set_text ("Click a verse to tag it.")
+			end
+			add_note_button.set_enabled (l_can)
+			highlight_button.set_enabled (l_can)
+			tag_button.set_enabled (l_can)
+			memory_add_button.set_enabled (l_can)
+		end
+
+	mark_parallel_verse
+			-- Parallel's selected-verse mark moves to the verse read, brought into view.
+		do
+			parallel_marked_row := moved_verse_mark (parallel_view, parallel_marked_row)
+			if parallel_marked_row > 0 then
+				parallel_view.scroll_to_row (parallel_marked_row)
+			end
+		end
+
+	moved_verse_mark (a_view: SW_PARALLEL_TEXT; a_old_row: INTEGER): INTEGER
+			-- Move `a_view''s selected-verse mark from row `a_old_row' (0: none) to the verse read's row,
+			-- in every column; that row (0: no verse, or none in `a_view').
+		local
+			c: INTEGER
+		do
+			if a_old_row >= 1 and a_old_row <= a_view.row_count and then not a_view.is_note_row (a_old_row) then
+				from c := 1 until c > a_view.column_count loop
+					a_view.cell_marks (a_old_row, c).remove_reason (Selected_verse_reason)
+					c := c + 1
+				end
+			end
+			Result := verse_row
+			if Result > a_view.row_count or else (Result > 0 and then a_view.is_note_row (Result)) then
+				Result := 0
+			end
+			if Result > 0 then
+				from c := 1 until c > a_view.column_count loop
+					mark_selected_verse (a_view, Result, c)
+					c := c + 1
+				end
+			end
+		ensure
+			in_the_view: Result >= 0 and Result <= a_view.row_count
+		end
+
+	verse_row: INTEGER
+			-- The row of the verse read in the chapter's views, which list `reading_verses' in order
+			-- (0: no verse, or not in the chapter).
+		local
+			i: INTEGER
+		do
+			if reading.has_verse then
+				from i := 1 until i > reading_verses.count or Result > 0 loop
+					if reading_verses.i_th (i).verse = reading_verse then
+						Result := i
+					end
+					i := i + 1
+				end
+			end
+		end
+
+	reading_marked_row, parallel_marked_row: INTEGER
+			-- The rows the selected-verse mark stands on in S1 and in Parallel (0: none).
+
+	Selected_verse_reason: STRING_32 = "selected verse"
+			-- The selected-verse mark's reason, the handle that moves it.
 
 	fill_study_panes
 			-- Every Study pane for the place read: Parallel (and Interlinear when it shows), notes,
@@ -1779,6 +2000,7 @@ feature {NONE} -- Reading (S1, P01)
 			fill_history
 			fill_prayers
 			fill_memory
+			show_verse_tools
 			refresh_strip_marks
 		end
 
@@ -1843,7 +2065,7 @@ feature {NONE} -- Reading (S1, P01)
 			l_found: detachable BIB_LIST_RESULT [BIB_WORD_ENTRY]
 			l_ref: BIB_REF
 		do
-			if bible.conc_pack.is_available and then bible.books.has_book (reading_book) and then reading_verse > 0 then
+			if bible.conc_pack.is_available and then bible.books.has_book (reading_book) and then reading.has_verse then
 				create l_lookup.make (bible)
 				create l_ref.make (reading_book, reading_chapter, reading_verse, create {BIB_VERSIFICATION_SYSTEM}.make_kjv)
 				l_english := l_lookup.english_corpus_for_version (a_version)
@@ -2229,7 +2451,7 @@ feature {NONE} -- Two layouts (C7)
 	bookmark_verse
 			-- Ctrl+D: the verse read is bookmarked.
 		do
-			if reading_verse = 0 then
+			if not reading.has_verse then
 				window.toast ("Click a verse to bookmark it.", 1)
 			elseif user_store.is_open then
 				user_store.add_bookmark (create {BIB_BOOKMARK}.make (reading_hub, place_text (reading_book, reading_chapter, reading_verse)))
@@ -2428,12 +2650,6 @@ feature {NONE} -- Notes (T2, P06)
 					notes_heading.set_text ({STRING_32} "Notes on " + place_text (reading_book, reading_chapter, 0) + {STRING_32} " (double-click one to edit)")
 				end
 			end
-			if reading_verse > 0 then
-				new_note_label.set_text ({STRING_32} "A new note on " + place_text (reading_book, reading_chapter, reading_verse) + {STRING_32} ":")
-			else
-				new_note_label.set_text ("Click a verse to write a note on it.")
-			end
-			add_note_button.set_enabled (user_store.is_open and reading_verse > 0)
 			delete_note_button.set_enabled (False)
 			restore_note_button.set_enabled (last_deleted_note > 0)
 			notes_listed.call (Void)
@@ -2470,7 +2686,7 @@ feature {NONE} -- Notes (T2, P06)
 			l_body.right_adjust
 			if l_body.is_empty then
 				say ("Write the note in the box first.")
-			elseif user_store.is_open and reading_verse > 0 and note_store.is_writable then
+			elseif user_store.is_open and reading.has_verse and note_store.is_writable then
 				create l_note.make (reading_hub, "", l_body)
 				note_store.add_note (l_note)
 				if attached note_store.last_error as al_error then
@@ -2807,7 +3023,6 @@ feature {NONE} -- Notes (T2, P06)
 			else
 				memory_place_label.set_text ({STRING_32} "Recall " + hub_place (memory_due.first.hub_id) + {STRING_32} ", then Show the verse and grade yourself.")
 			end
-			memory_add_button.set_enabled (user_store.is_open and reading_verse > 0)
 			memory_show_button.set_enabled (not memory_due.is_empty)
 			memory_again_button.set_enabled (False)
 			memory_hard_button.set_enabled (False)
@@ -2820,7 +3035,7 @@ feature {NONE} -- Notes (T2, P06)
 		local
 			l_card: BIB_MEMORY_CARD
 		do
-			if reading_verse = 0 then
+			if not reading.has_verse then
 				say ("Click a verse to learn it.")
 			elseif user_store.is_open then
 				if user_store.has_memory_card (reading_hub) then
@@ -3065,7 +3280,7 @@ feature {NONE} -- Notes (T2, P06)
 	reading_hub: INTEGER_64
 			-- The verse read as a hub id (scan 44: the expression was written at each use).
 		require
-			a_verse_read: reading_book > 0 and reading_chapter > 0 and reading_verse > 0
+			a_verse_read: reading.has_verse
 		do
 			Result := (create {BIB_HUB_ID}).hub_id (reading_book, reading_chapter, reading_verse)
 		end
@@ -3130,12 +3345,6 @@ feature {NONE} -- Notes (T2, P06)
 				tagged_panel.set_rows (user_store.assignments_tagged (chosen_tag))
 				tagged_heading.set_text ({STRING_32} "Verses tagged " + chosen_tag + {STRING_32} ":")
 			end
-			if reading_verse > 0 then
-				tag_label.set_text ({STRING_32} "Tag " + place_text (reading_book, reading_chapter, reading_verse) + {STRING_32} ":")
-			else
-				tag_label.set_text ("Click a verse to tag it.")
-			end
-			tag_button.set_enabled (user_store.is_open and reading_verse > 0)
 		end
 
 	tag_verse
@@ -3148,7 +3357,7 @@ feature {NONE} -- Notes (T2, P06)
 			l_tag.right_adjust
 			if l_tag.is_empty then
 				say ("Name the tag first.")
-			elseif user_store.is_open and reading_verse > 0 then
+			elseif user_store.is_open and reading.has_verse then
 				user_store.tag_verse (create {BIB_TAG_ASSIGNMENT}.make (reading_hub, l_tag))
 				if attached user_store.write_error as al_error then
 					say (al_error.message)
@@ -3217,12 +3426,6 @@ feature {NONE} -- Notes (T2, P06)
 			else
 				highlights_heading.set_text ({STRING_32} "Your highlights (" + highlights_panel.rows.count.out + {STRING_32} "), in Bible order:")
 			end
-			if reading_verse > 0 then
-				highlight_reason_label.set_text ({STRING_32} "Why highlight " + place_text (reading_book, reading_chapter, reading_verse) + {STRING_32} "?")
-			else
-				highlight_reason_label.set_text ("Click a verse to highlight it.")
-			end
-			highlight_button.set_enabled (user_store.is_open and reading_verse > 0)
 		end
 
 	chapter_highlight_reasons (a_book, a_chapter: INTEGER): HASH_TABLE [STRING_32, INTEGER]
@@ -3255,13 +3458,13 @@ feature {NONE} -- Notes (T2, P06)
 			l_reason.right_adjust
 			if l_reason.is_empty then
 				window.toast ("Say why first: a highlight is a reason.", 1)
-			elseif user_store.is_open and reading_verse > 0 then
+			elseif user_store.is_open and reading.has_verse then
 				user_store.add_highlight (create {BIB_HIGHLIGHT}.make (reading_hub, l_reason))
 				if attached user_store.write_error as al_error then
 					say (al_error.message)
 				else
 					highlight_reason_box.set_text ("")
-					open_reading (reading_book, reading_chapter, reading_verse)
+					reopen_reading
 				end
 			end
 		end
@@ -3284,11 +3487,10 @@ feature {NONE} -- Notes (T2, P06)
 		end
 
 	reopen_reading
-			-- Read the place read again (a highlight changed its washes).
+			-- A highlight changed: the chapter's washes and the Highlights list.
 		do
-			if reading_book > 0 and reading_chapter > 0 then
-				open_reading (reading_book, reading_chapter, reading_verse)
-			end
+			reading.redraw
+			fill_highlights
 		end
 
 	hub_place (a_hub: INTEGER_64): STRING_32
@@ -4089,7 +4291,7 @@ feature {NONE} -- The Atlas and the shared selection (Plan 22 phase 3, 2026-10-3
 		do
 			create analysis_rows.make (24)
 			analysis_uses.wipe_out
-			if reading_verse > 0 then
+			if reading.has_verse then
 				from i := 1 until i > interlinear_words.count loop
 					if interlinear_words.i_th (i).verse = reading_verse then
 						analysis_rows.extend (interlinear_words.i_th (i))
@@ -4225,7 +4427,7 @@ feature {NONE} -- The Atlas and the shared selection (Plan 22 phase 3, 2026-10-3
 			l_chapters: ARRAYED_LIST [HASH_TABLE [STRING_32, INTEGER]]
 			l_chapter: BIB_LIST_RESULT [BIB_READING_VERSE]
 			l_text: HASH_TABLE [STRING_32, INTEGER]
-			l_row, l_selected, i, c: INTEGER
+			l_row, i, c: INTEGER
 			l_lookup: BIB_LOOKUP
 			l_notes: ARRAYED_LIST [STRING_32]
 			l_name, l_note: STRING_32
@@ -4278,22 +4480,15 @@ feature {NONE} -- The Atlas and the shared selection (Plan 22 phase 3, 2026-10-3
 							if attached l_reasons.item (ic.verse) as al_reason then
 								mark_highlighted_verse (parallel_view, l_row, c, al_cell, al_reason)
 							end
-							if ic.verse = reading_verse then
-								mark_selected_verse (parallel_view, l_row, c, al_cell, l_reasons.has (ic.verse))
-							end
 						end
 						c := c + 1
-					end
-					if ic.verse = reading_verse then
-						l_selected := l_row
 					end
 				end
 				across l_notes as ic loop
 					parallel_view.add_note (ic).do_nothing
 				end
-				if l_selected > 0 then
-					parallel_view.scroll_to_row (l_selected)
-				end
+				parallel_marked_row := 0
+				mark_parallel_verse
 				if not l_codes.is_empty and then attached bible.text_reader.version (l_codes.last) as al_last
 					and then not al_last.numbers_like_english
 				then
@@ -4437,7 +4632,7 @@ feature {NONE} -- Right-click menus and panes (Larry, 2026-10-28)
 	start_prayer
 			-- A prayer resting on the verse read: titled by it, the request to be written.
 		do
-			if reading_verse > 0 then
+			if reading.has_verse then
 				prayer_hub := reading_hub
 				prayer_hub_title := place_text (reading_book, reading_chapter, reading_verse)
 				prayer_title_box.set_text (prayer_hub_title)
@@ -4540,7 +4735,7 @@ feature {NONE} -- Right-click menus and panes (Larry, 2026-10-28)
 				a_menu.add_item ("Delete", "", note_store.is_writable, agent delete_note_at (l_index))
 				a_menu.add_separator
 			end
-			if reading_verse > 0 then
+			if reading.has_verse then
 				a_menu.add_item ({STRING_32} "A new note on " + place_text (reading_book, reading_chapter, reading_verse) + {STRING_32} "...",
 					"", user_store.is_open, agent start_in_notes (Verse_notes_tab, new_note_box))
 			end
@@ -4692,7 +4887,7 @@ feature {NONE} -- Right-click menus and panes (Larry, 2026-10-28)
 			if l_model >= 1 and l_model <= tag_name_rows.count then
 				l_tag := tag_name_rows.i_th (l_model).tag.twin
 				a_menu.add_item ("Show its verses", "", True, agent show_tag_row (l_model))
-				if reading_verse > 0 then
+				if reading.has_verse then
 					a_menu.add_item ({STRING_32} "Tag " + place_text (reading_book, reading_chapter, reading_verse) + {STRING_32} " with it",
 						"", user_store.is_open, agent tag_read_verse_with (l_tag))
 				end
@@ -7178,7 +7373,7 @@ feature {NONE} -- Search results (P07)
 			i: INTEGER
 		do
 			from i := 1 until i > reading_verses.count or i > reading_view.row_count loop
-				if reading_verses.i_th (i).verse = reading_verse and reading_verse > 0 then
+				if reading_verses.i_th (i).verse = reading_verse and reading.has_verse then
 					reading_view.scroll_to_row (i)
 				end
 				i := i + 1
@@ -7215,8 +7410,6 @@ feature {NONE} -- Start and status (C1, C11-C15)
 				show_results
 			end
 			editions_label.set_text (status_text)
-			back_button.set_enabled (False)
-			forward_button.set_enabled (False)
 		end
 
 	window_title: STRING_32

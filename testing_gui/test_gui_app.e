@@ -22,6 +22,7 @@ feature {NONE} -- Initialization
 			print ("Running Simple Bible GUI state tests (research/23)...%N%N")
 			run_selection_tests
 			run_layout_tests
+			run_reading_tests
 			run_window_tests
 			print ("%N========================%N")
 			print ("Results: " + passed.out + " passed, " + failed.out + " failed%N")
@@ -59,6 +60,20 @@ feature {NONE} -- Suites
 			run_test (agent t.test_a_new_layout_puts_the_river_away, "test_a_new_layout_puts_the_river_away")
 		end
 
+	run_reading_tests
+			-- The place read (phase 3).
+		local
+			t: TEST_READING_STATE
+		do
+			print ("TEST_READING_STATE%N")
+			create t
+			run_test (agent t.test_a_verse_tells_only_the_verse, "test_a_verse_tells_only_the_verse")
+			run_test (agent t.test_a_chapter_tells_the_chapter_then_the_verse, "test_a_chapter_tells_the_chapter_then_the_verse")
+			run_test (agent t.test_a_version_tells_the_version_and_the_chapter, "test_a_version_tells_the_version_and_the_chapter")
+			run_test (agent t.test_the_trail_drops_the_steps_ahead, "test_the_trail_drops_the_steps_ahead")
+			run_test (agent t.test_joining_tells_the_present, "test_joining_tells_the_present")
+		end
+
 	run_window_tests
 			-- The whole window, offscreen (needs LOCALAPPDATA naming a data folder).
 		local
@@ -78,6 +93,10 @@ feature {NONE} -- Suites
 			run_test (agent t.test_notes_dot_follows_adding_and_deleting, "test_notes_dot_follows_adding_and_deleting")
 			run_test (agent t.test_answered_waits_for_a_chosen_prayer, "test_answered_waits_for_a_chosen_prayer")
 			run_test (agent t.test_one_verse_reads_as_one, "test_one_verse_reads_as_one")
+			run_test (agent t.test_a_verse_click_keeps_the_chapter, "test_a_verse_click_keeps_the_chapter")
+			run_test (agent t.test_a_click_on_the_verse_read_adds_no_step, "test_a_click_on_the_verse_read_adds_no_step")
+			run_test (agent t.test_back_and_forward_follow_the_trail, "test_back_and_forward_follow_the_trail")
+			run_test (agent t.test_previous_and_next_stop_at_the_ends, "test_previous_and_next_stop_at_the_ends")
 		end
 
 feature {NONE} -- Runner
