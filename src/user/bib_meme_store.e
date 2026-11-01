@@ -197,6 +197,55 @@ feature -- Commands
 			one_more: write_error = Void implies memes.count = old memes.count + 1
 		end
 
+	edit_meme (a_meme: BIB_MEME; a_title, a_description: READABLE_STRING_GENERAL;
+			a_passages: ARRAYED_LIST [TUPLE [hub_from, hub_to: INTEGER_64; wording: STRING_32]])
+			-- `a_meme' retitled, its words replaced and its passages replaced by `a_passages' (Larry,
+			-- 2026-11-01: edit the description and the passages as he finds them). One transaction; the
+			-- memes are read again, so a caller finds the meme anew by its slug.
+		require
+			open: is_open
+			titled: not a_title.is_empty
+			passages_ordered: across a_passages as ic all ic.hub_from > 0 and ic.hub_to >= ic.hub_from end
+		local
+			l_slug: STRING_32
+		do
+			write_error := Void
+			l_slug := a_meme.slug
+			if attached database as al_db then
+				al_db.begin_transaction
+				al_db.execute_with_args ("UPDATE meme SET title = ?, description = ? WHERE meme_id = ?",
+					<<a_title.to_string_32, a_description.to_string_32, a_meme.id>>)
+				if not al_db.has_error and then al_db.changes_count /= 1 then
+					write_error := {STRING_32} "No such meme: " + l_slug
+				end
+				if write_error = Void and not al_db.has_error then
+					al_db.execute_with_args ("DELETE FROM meme_passage WHERE meme_id = ?", <<a_meme.id>>)
+				end
+				across a_passages as ic until al_db.has_error or write_error /= Void loop
+					al_db.execute_with_args ("INSERT INTO meme_passage (meme_id, hub_from, hub_to, reference) VALUES (?, ?, ?, ?)",
+						<<a_meme.id, ic.hub_from, ic.hub_to, ic.wording>>)
+				end
+				if write_error = Void and al_db.has_error then
+					if attached al_db.last_error_message as al_message then
+						write_error := {STRING_32} "The meme could not be changed: " + al_message
+					else
+						write_error := {STRING_32} "The meme could not be changed."
+					end
+				end
+				if write_error /= Void then
+					al_db.rollback
+				else
+					al_db.commit
+					memes.wipe_out
+					load
+				end
+			end
+		ensure
+			same_count: memes.count = old memes.count
+			changed: write_error = Void implies (attached meme_by_slug (a_meme.slug) as al_meme and then
+				(al_meme.title.same_string_general (a_title) and al_meme.description.same_string_general (a_description) and al_meme.passages.count = a_passages.count))
+		end
+
 feature -- Names
 
 	slug_of (a_title: READABLE_STRING_GENERAL): STRING_32

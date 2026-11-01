@@ -140,6 +140,8 @@ feature {NONE} -- Initialization
 			meme_copy_text_button.set_tooltip ("Copy description: the meme's words on the clipboard, to paste with it.")
 			create meme_favorite_button.make ("", Void)
 			meme_favorite_button.set_glyph ({SW_PAINTER}.Glyph_star)
+			create meme_edit_button.make ("Edit...", Void)
+			meme_edit_button.set_tooltip ("Edit: change the meme's title, its words (type over them, or paste new ones) and its passages.")
 			create meme_add_button.make ("Add meme...", Void)
 			meme_add_button.set_tooltip ("Add meme: a picture, its words and its passages, kept in meme.db.")
 			create history_grid.make (100.0)
@@ -419,6 +421,7 @@ feature {NONE} -- Initialization
 			meme_copy_text_button.set_on_click (agent copy_meme_description)
 			meme_favorite_button.set_on_click (agent toggle_meme_favorite)
 			meme_add_button.set_on_click (agent add_meme_sheet)
+			meme_edit_button.set_on_click (agent edit_meme_sheet)
 			meme_view.set_on_link_click (agent on_commentary_link)
 			meme_choice_changed.subscribe (agent show_meme_buttons)
 			show_meme_buttons
@@ -1070,7 +1073,7 @@ feature {NONE} -- The meme tool (research/25, 2026-11-01)
 	meme_scope: SW_SEGMENTED
 	meme_heading: SW_LABEL
 	meme_view: SW_DOCUMENT_VIEW
-	meme_copy_picture_button, meme_copy_text_button, meme_favorite_button, meme_add_button: SW_BUTTON
+	meme_copy_picture_button, meme_copy_text_button, meme_edit_button, meme_favorite_button, meme_add_button: SW_BUTTON
 			-- T6's Memes tab.
 
 	meme_card_picture: detachable CAIRO_SURFACE
@@ -1119,6 +1122,7 @@ feature {NONE} -- The meme tool (research/25, 2026-11-01)
 			create l_buttons.make
 			l_buttons.put (meme_copy_picture_button)
 			l_buttons.put (meme_copy_text_button)
+			l_buttons.put (meme_edit_button)
 			l_buttons.put (meme_favorite_button)
 			l_buttons.put (meme_cut_select)
 			l_buttons.put (meme_add_button)
@@ -1372,6 +1376,7 @@ feature {NONE} -- The meme tool (research/25, 2026-11-01)
 		do
 			meme_copy_picture_button.set_enabled (chosen_meme /= Void)
 			meme_copy_text_button.set_enabled (chosen_meme /= Void)
+			meme_edit_button.set_enabled (chosen_meme /= Void and meme_store.is_open)
 			meme_favorite_button.set_enabled (chosen_meme /= Void and user_store.is_open)
 			if attached chosen_meme as al_meme and then is_meme_favorite (al_meme) then
 				meme_favorite_button.set_tooltip ("A favorite: it stays at the top of the list. Press to take it out of Favorites.")
@@ -1398,6 +1403,91 @@ feature {NONE} -- The meme tool (research/25, 2026-11-01)
 					say ("That picture does not decode.")
 				end
 				l_surface.destroy
+			end
+		end
+
+	edit_meme_sheet
+			-- Edit...: the chosen meme's title, its words (type over them, or paste new ones) and its
+			-- passages, saved to meme.db (Larry, 2026-11-01).
+		local
+			l_column: SW_COLUMN
+			l_row: SW_ROW
+			l_title, l_words, l_passages: SW_TEXT_BOX
+			l_save, l_cancel: SW_BUTTON
+		do
+			if attached chosen_meme as al_meme then
+				create l_title.make_single_line (al_meme.title)
+				create l_words.make (al_meme.description)
+				l_words := l_words.with_min_size (0.0, 220.0)
+				create l_passages.make_wrapping_line (passages_line (al_meme))
+				create l_save.make ("Save", agent confirm_edit_meme (al_meme, l_title, l_words, l_passages))
+				l_save.set_tooltip ("Save the title, the words and the passages to meme.db.")
+				create l_cancel.make ("Cancel", agent window.close_sheet)
+				create l_column.make
+				l_column := l_column.with_padding (16.0).with_gap (8.0)
+				l_column.put (create {SW_LABEL}.make_ui ({STRING_32} "Edit the meme: " + al_meme.title))
+				l_column.put (create {SW_LABEL}.make_ui ("Title"))
+				l_column.put (l_title)
+				l_column.put (create {SW_LABEL}.make_ui ("Its words: type over them, or select all (Ctrl+A) and paste new ones"))
+				l_column.put (l_words)
+				l_column.put (create {SW_LABEL}.make_ui ("Passages, separated by semicolons (John 3:16; Romans 8:1-4; Psalm 23)"))
+				l_column.put (l_passages)
+				create l_row.make
+				l_row.put (l_save)
+				l_row.put (l_cancel)
+				l_column.put (l_row)
+				window.show_sheet (l_column, 680.0)
+				window.give_focus (l_words)
+			end
+		end
+
+	passages_line (a_meme: BIB_MEME): STRING_32
+			-- Its passages as an editable line: "John 3:16; Romans 8:1".
+		do
+			create Result.make (40)
+			across a_meme.passages as ic loop
+				if not Result.is_empty then
+					Result.append ({STRING_32} "; ")
+				end
+				Result.append (ic.wording)
+			end
+		end
+
+	confirm_edit_meme (a_meme: BIB_MEME; a_title, a_words, a_passages: SW_TEXT_BOX)
+			-- Save pressed: kept, or told what is wrong (the sheet stays open to fix it).
+		do
+			if save_meme_edit (a_meme, a_title.text, a_words.text, a_passages.text) then
+				window.close_sheet
+			end
+		end
+
+	save_meme_edit (a_meme: BIB_MEME; a_title, a_words, a_passages: READABLE_STRING_GENERAL): BOOLEAN
+			-- `a_meme' retitled, its words and passages replaced; True when saved. A blank title, or a
+			-- passage that does not read, is told and nothing is changed.
+		local
+			l_title, l_slug: STRING_32
+			l_read: TUPLE [read: ARRAYED_LIST [TUPLE [hub_from, hub_to: INTEGER_64; wording: STRING_32]]; unread: ARRAYED_LIST [STRING_32]]
+		do
+			l_title := a_title.to_string_32
+			l_title.left_adjust
+			l_title.right_adjust
+			l_read := (create {BIB_PASSAGE_TEXT}.make (bible.books)).ranges (a_passages)
+			if l_title.is_empty then
+				say ("Give the meme a title.")
+			elseif not l_read.unread.is_empty then
+				say ({STRING_32} "This does not read as a passage: " + l_read.unread.first)
+			elseif meme_store.is_open then
+				l_slug := a_meme.slug
+				meme_store.edit_meme (a_meme, l_title, a_words, l_read.read)
+				if attached meme_store.write_error as al_error then
+					say (al_error)
+				else
+					Result := True
+					fill_memes
+					choose_meme (meme_store.meme_by_slug (l_slug))
+					show_meme
+					window.toast ({STRING_32} "Saved " + l_title + {STRING_32} ".", 1)
+				end
 			end
 		end
 
@@ -2080,6 +2170,40 @@ feature {BIB_WINDOW_HARNESS_CLIENT} -- The window harness (research/23, 2026-10-
 			Result := meme_card_picture
 		end
 
+	harness_edit_meme (a_slug, a_title, a_words, a_passages: READABLE_STRING_GENERAL): BOOLEAN
+			-- Edit...'s sheet filled in and saved.
+		do
+			if attached meme_store.meme_by_slug (a_slug) as al_meme then
+				Result := save_meme_edit (al_meme, a_title, a_words, a_passages)
+			end
+		end
+
+	harness_meme_words (a_slug: READABLE_STRING_GENERAL): STRING_32
+			-- That meme's words as kept.
+		do
+			create Result.make_empty
+			if attached meme_store.meme_by_slug (a_slug) as al_meme then
+				Result := al_meme.description
+			end
+		end
+
+	harness_meme_passages (a_slug: READABLE_STRING_GENERAL): STRING_32
+			-- That meme's passages as Edit shows them.
+		do
+			create Result.make_empty
+			if attached meme_store.meme_by_slug (a_slug) as al_meme then
+				Result := passages_line (al_meme)
+			end
+		end
+
+	harness_meme_title (a_slug: READABLE_STRING_GENERAL): STRING_32
+		do
+			create Result.make_empty
+			if attached meme_store.meme_by_slug (a_slug) as al_meme then
+				Result := al_meme.title
+			end
+		end
+
 	harness_meme_count: INTEGER
 			-- Memes the list shows.
 		do
@@ -2453,6 +2577,11 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 				dock.maximize_panel (results_panel)
 				fill_memes
 				choose_meme (meme_store.meme_by_slug ("john-3-16"))
+			elseif snapshot_tab.same_string ({STRING_32} "editmeme") then
+				bring_into_view (results_panel, results_tabs, Memes_tab)
+				fill_memes
+				choose_meme (meme_store.meme_by_slug ("john-3-16"))
+				edit_meme_sheet
 			elseif snapshot_tab.same_string ({STRING_32} "versequote") then
 				snapshot_verse_quotation
 			elseif snapshot_tab.same_string ({STRING_32} "quotation") or snapshot_tab.same_string ({STRING_32} "quotemenu") then
@@ -6986,7 +7115,7 @@ feature {NONE} -- The Atlas and the shared selection (Plan 22 phase 3, 2026-10-3
 			window.add_reference_mark (results_tabs, "T6", "South results zone: Search Results (word choices, then the verses holding the words; click one to read it); Author Library (Larry's books); Writings (the search box with My writings as its scope); Guides, Census and Ledger come later.", window.Corner_top_left)
 			window.add_reference_mark (writings_grid, "T6.5", "Writings: what the search box found in your commentary, frameworks and books (scope My writings; My writings (fuzzy) forgives a misspelt word). Click one to open it.", window.Corner_top_right)
 			window.add_reference_mark (memes_grid, "T6.6", "Memes list: all, or those naming the verse or chapter read; search box above; click a heading to sort (title, words, passages, set); your favorite memes stay at the top (the star); hover the picture icon to see the meme.", window.Corner_top_left)
-			window.add_reference_mark (meme_view, "T6.7", "The chosen meme: Copy picture and Copy description put either on the clipboard; the star makes it a favorite; its passages open the Bible text; Add meme keeps a new one.", window.Corner_top_left)
+			window.add_reference_mark (meme_view, "T6.7", "The chosen meme: Copy picture and Copy description put either on the clipboard; Edit changes its title, words and passages; the star makes it a favorite; its passages open the Bible text; Add meme keeps a new one.", window.Corner_top_left)
 		end
 
 feature {NONE} -- Right-click menus and panes (Larry, 2026-10-28)

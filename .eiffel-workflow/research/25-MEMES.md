@@ -37,3 +37,4 @@ The seed (`memes.seed.json`) sits beside the memes in the vault, picture paths r
 - Copy picture (in the cut chosen: feed, typographic, square or wide) and Copy description; the star makes a meme a favorite (a Memes folder in Favorites); Add meme keeps a new one.
 - Pictures decode from bytes with simple_cairo 1.7.0's make_from_png_data.
 - Pills T6.6 (the list) and T6.7 (the chosen meme).
+- 0.7.57 (Larry, the same night): Edit... opens a sheet with the meme's title, its words (type over them, or select all and paste new ones) and its passages as one line separated by semicolons; Save replaces them in meme.db in one transaction (BIB_MEME_STORE.edit_meme), and a passage that does not read is told, changing nothing.

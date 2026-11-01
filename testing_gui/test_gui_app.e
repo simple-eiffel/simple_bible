@@ -117,6 +117,7 @@ feature {NONE} -- Suites
 			run_test (agent t.test_copy_a_memes_words_and_picture, "test_copy_a_memes_words_and_picture")
 			run_test (agent t.test_a_memes_picture_loads_only_when_hovered, "test_a_memes_picture_loads_only_when_hovered")
 			run_test (agent t.test_a_folder_copies_its_references, "test_a_folder_copies_its_references")
+			run_test (agent t.test_a_memes_words_and_passages_are_edited, "test_a_memes_words_and_passages_are_edited")
 		end
 
 feature {NONE} -- Runner
