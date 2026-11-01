@@ -28,6 +28,78 @@ inherit
 			default_create
 		end
 
+feature -- Quotations and documents (research/24 stage D, 2026-11-01)
+
+	test_a_framework_quotation_is_marked_and_found_again
+			-- Larry: a selected part of a framework kept as a quotation; marked inside the framework;
+			-- chosen in Favorites, the framework opens with the words selected.
+		local
+			app: BIB_GUI_APP
+			v: SW_DOCUMENT_VIEW
+			l_quote: STRING_32
+		do
+			app := new_window
+			assert_true ("the test data has frameworks", app.harness_framework_count >= 2)
+			app.harness_show_framework (1)
+			app.harness_render
+			v := app.harness_document_view (1)
+			assert_true ("laid out", v.unit_count >= 2)
+			v.select_range (2, 0, 2, v.text_of (2).count.min (24))
+			l_quote := v.selected_text
+			assert_false ("something selected", l_quote.is_empty)
+			app.harness_quote_selection (1, 0)
+			assert_integers_equal ("kept", 1, app.harness_favorite_roots)
+			assert_integers_equal ("a quotation's mark in the tree", {SW_PAINTER}.Glyph_quote, app.harness_favorite_root_icon (1))
+			assert_integers_equal ("marked in the framework", 1, v.standing_ranges.count)
+			app.harness_show_framework (2)
+			assert_integers_equal ("not in another", 0, v.standing_ranges.count)
+			app.harness_open_favorite_root (1)
+			assert_true ("chosen: its framework back, the words selected", v.selected_text.same_string (l_quote))
+			assert_integers_equal ("and marked", 1, v.standing_ranges.count)
+		end
+
+	test_a_book_quotation_names_its_block
+			-- A quotation from a book chapter is kept with a link to its block ("book:x/2#n"), and
+			-- chosen in Favorites it opens the chapter with the words selected.
+		local
+			app: BIB_GUI_APP
+			v: SW_DOCUMENT_VIEW
+			l_quote: STRING_32
+		do
+			app := new_window
+			assert_true ("the test data has books", app.harness_book_count >= 1)
+			app.harness_show_first_book (2)
+			app.harness_render
+			v := app.harness_document_view (2)
+			assert_true ("laid out", v.unit_count >= 3)
+			v.select_range (3, 0, 3, v.text_of (3).count.min (30))
+			l_quote := v.selected_text
+			app.harness_quote_selection (2, 0)
+			assert_integers_equal ("kept", 1, app.harness_favorite_roots)
+			assert_true ("its link names the block: " + app.harness_favorite_target (1).to_string_8, app.harness_favorite_target (1).has ('#'))
+			assert_true ("one favorite, no folders", app.harness_favorites_heading.same_string ("1 favorite"))
+			v.clear_selection
+			app.harness_open_favorite_root (1)
+			assert_true ("found again, selected", v.selected_text.same_string (l_quote))
+		end
+
+	test_a_favorite_document_marks_its_title_and_its_row
+		local
+			app: BIB_GUI_APP
+			v: SW_DOCUMENT_VIEW
+		do
+			app := new_window
+			assert_true ("the test data has frameworks", app.harness_framework_count >= 1)
+			app.harness_show_framework (1)
+			app.harness_render
+			v := app.harness_document_view (1)
+			app.harness_keep_document (1)
+			assert_integers_equal ("kept", 1, app.harness_favorite_roots)
+			assert_integers_equal ("a document's page in the tree", {SW_PAINTER}.Glyph_document, app.harness_favorite_root_icon (1))
+			assert_integers_equal ("its title marked", 1, v.standing_ranges.count)
+			assert_true ("its row in the list starred", app.harness_framework_starred (1))
+		end
+
 feature -- Favorites (research/24 stage C, 2026-11-01)
 
 	test_a_favorite_verse_wears_the_star

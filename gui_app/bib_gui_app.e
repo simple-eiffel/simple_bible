@@ -375,6 +375,7 @@ feature {NONE} -- Initialization
 			end
 			favorites_state.on_change (agent fill_favorites)
 			favorites_state.on_change (agent show_stars)
+			favorites_state.on_change (agent mark_quotations)
 			reload_favorites
 				-- Genesis 1:1 selected, so the commentary has its cross-references from the start (Larry:
 				-- T5 was empty until a verse was clicked).
@@ -384,6 +385,449 @@ feature {NONE} -- Initialization
 			show_no_word
 				-- Typing goes straight into the reference box (keys typed before a click were lost once).
 			window.give_focus (reference_box)
+		end
+
+feature {NONE} -- Quotations and documents in Favorites (research/24 stage D, 2026-11-01)
+
+	shown_book_document: detachable SIMPLE_DOCUMENT
+			-- The document `show_book_place' put in `book_view' (a report or a placeholder since is
+			-- another object, and names nothing a favorite can keep).
+
+	shown_book_kind: STRING_32
+		attribute
+			create Result.make_empty
+		end
+
+	shown_book_id: STRING_32
+		attribute
+			create Result.make_empty
+		end
+
+	shown_book_chapter: INTEGER
+			-- What `shown_book_document' is: the pack kind, the book and the chapter.
+
+	shown_framework_document: detachable SIMPLE_DOCUMENT
+			-- The document `show_framework' put in `framework_view'.
+
+	shown_framework_id: STRING_32
+		attribute
+			create Result.make_empty
+		end
+
+	shown_commentary_document: detachable SIMPLE_DOCUMENT
+			-- The document `show_commentary' put in `commentary_view' when it held a verse's commentary.
+
+	shown_commentary_hub: INTEGER_64
+			-- That verse.
+
+	Commentary_prefix: STRING_32 = "commentary:"
+			-- A favorite's target for a verse's commentary: "commentary:<hub id>".
+
+	document_target (a_view: SW_DOCUMENT_VIEW): detachable STRING_32
+			-- The link of the document `a_view' shows, when a favorite can name it.
+		do
+			if a_view = book_view and then shown_book_document = book_view.document
+				and then attached (create {BIB_TEXT_PACKS}).schema_of_kind (shown_book_kind) as al_schema
+				and then al_schema.is_book_id (shown_book_id) and then shown_book_chapter >= 0 and then shown_book_chapter <= al_schema.Max_part
+			then
+				Result := al_schema.link_text (shown_book_id, shown_book_chapter, 0)
+			elseif a_view = framework_view and then shown_framework_document = framework_view.document and then not shown_framework_id.is_empty then
+				Result := {BIB_FRAMEWORK_SCHEMA}.Link_prefix + shown_framework_id
+			elseif a_view = commentary_view and then shown_commentary_document = commentary_view.document and then shown_commentary_hub > 0 then
+				Result := Commentary_prefix + shown_commentary_hub.out
+			end
+		end
+
+	quote_target (a_view: SW_DOCUMENT_VIEW; a_unit: INTEGER): detachable STRING_32
+			-- The link to unit `a_unit' of the document `a_view' shows: a book's block, else the document.
+		local
+			l_block: INTEGER
+		do
+			Result := document_target (a_view)
+			if a_view = book_view and then Result /= Void and then a_unit >= 1 and then a_unit <= a_view.unit_count
+				and then attached (create {BIB_TEXT_PACKS}).schema_of_kind (shown_book_kind) as al_schema
+			then
+					-- one document block per book block, after the book's title (`show_book_place')
+				l_block := a_view.unit_block (a_unit) - 1
+				if l_block >= 1 and l_block <= al_schema.Max_part and shown_book_chapter >= 1 then
+					Result := al_schema.link_text (shown_book_id, shown_book_chapter, l_block)
+				end
+			end
+		end
+
+	document_title (a_view: SW_DOCUMENT_VIEW): STRING_32
+			-- What the document `a_view' shows is called: "Zakar, 4. Remembering", a framework's name,
+			-- "Commentary on John 3:16".
+		do
+			create Result.make_empty
+			if a_view = book_view then
+				across book_rows as ic loop
+					if ic.id.same_string (shown_book_id) and ic.pack_kind.same_string_general (shown_book_kind) then
+						Result := ic.full_title.twin
+					end
+				end
+				across chapter_rows as ic loop
+					if ic.chapter = shown_book_chapter and shown_book_chapter > 0 then
+						Result.append ({STRING_32} ", " + ic.title)
+					end
+				end
+				if Result.is_empty then
+					Result := shown_book_id.twin
+				end
+			elseif a_view = framework_view then
+				across framework_rows as ic loop
+					if ic.id.same_string (shown_framework_id) then
+						Result := ic.display_name.twin
+					end
+				end
+				if Result.is_empty then
+					Result := shown_framework_id.twin
+				end
+			elseif shown_commentary_hub > 0 then
+				Result := {STRING_32} "Commentary on " + hub_place (shown_commentary_hub)
+			end
+		end
+
+	document_menu (a_view: SW_DOCUMENT_VIEW; a_panel: INTEGER; a_menu: SW_MENU; a_px, a_py: REAL_64)
+			-- A document's own items (Larry: the selection kept as a quotation; the document itself
+			-- kept), then the pane's.
+		do
+			if document_target (a_view) /= Void then
+				a_menu.add_item ("Add to Favorites as a quotation...", "", user_store.is_open and a_view.has_selection, agent add_quotation_of (a_view))
+				a_menu.add_item ({STRING_32} "Add " + document_title (a_view) + {STRING_32} " to Favorites...", "", user_store.is_open, agent add_document_of (a_view))
+				a_menu.add_separator
+			end
+			pane_menu (a_panel, a_menu, a_px, a_py)
+		end
+
+	quotation_of (a_view: SW_DOCUMENT_VIEW): detachable BIB_FAVORITE
+			-- `a_view''s selection as a quotation favorite, not yet kept; Void with no selection.
+		local
+			l_lo_item, l_lo_offset, l_hi_item, l_hi_offset: INTEGER
+			l_quote: STRING_32
+			l_hub: INTEGER_64
+		do
+			if a_view.has_selection then
+				if a_view.anchor_item < a_view.caret_item or (a_view.anchor_item = a_view.caret_item and a_view.anchor_offset <= a_view.caret_offset) then
+					l_lo_item := a_view.anchor_item
+					l_lo_offset := a_view.anchor_offset
+					l_hi_item := a_view.caret_item
+					l_hi_offset := a_view.caret_offset
+				else
+					l_lo_item := a_view.caret_item
+					l_lo_offset := a_view.caret_offset
+					l_hi_item := a_view.anchor_item
+					l_hi_offset := a_view.anchor_offset
+				end
+				l_quote := a_view.selected_text
+				l_quote.left_adjust
+				l_quote.right_adjust
+				if a_view = commentary_view then
+					l_hub := shown_commentary_hub
+				end
+				if not l_quote.is_empty and then attached quote_target (a_view, l_lo_item) as al_target then
+					create Result.make_quotation (al_target, a_view.selected_text, l_hub, "",
+						l_lo_item * {BIB_FAVORITE}.Anchor_scale + l_lo_offset, l_hi_item * {BIB_FAVORITE}.Anchor_scale + l_hi_offset,
+						quotation_name (l_quote, document_title (a_view)))
+				end
+			end
+		end
+
+	add_quotation_of (a_view: SW_DOCUMENT_VIEW)
+			-- Right-click, "Add to Favorites as a quotation": the selection kept, named and foldered in
+			-- a sheet.
+		do
+			if attached quotation_of (a_view) as al_quote then
+				open_favorite_sheet (al_quote, "Add to Favorites as a quotation")
+			end
+		end
+
+	add_document_of (a_view: SW_DOCUMENT_VIEW)
+			-- Right-click, "Add ... to Favorites": the whole document kept.
+		do
+			if attached document_target (a_view) as al_target then
+				open_favorite_sheet (create {BIB_FAVORITE}.make_document (al_target, document_title (a_view)), "Add to Favorites")
+			end
+		end
+
+	quotation_name (a_quote, a_source: READABLE_STRING_GENERAL): STRING_32
+			-- A quotation's first name: its opening words in quotation marks, then its source.
+		local
+			l_words: STRING_32
+		do
+			l_words := a_quote.to_string_32
+			l_words.replace_substring_all ({STRING_32} "%N", {STRING_32} " ")
+			l_words.replace_substring_all ({STRING_32} "%T", {STRING_32} " ")
+			if l_words.count > 48 then
+				l_words := l_words.substring (1, 47) + {STRING_32} "%/8230/"
+			end
+			Result := {STRING_32} "%/8220/" + l_words + {STRING_32} "%/8221/ (" + a_source.to_string_32 + {STRING_32} ")"
+		end
+
+	open_favorite_sheet (a_favorite: BIB_FAVORITE; a_title: READABLE_STRING_GENERAL)
+			-- A sheet to name `a_favorite' (not yet kept) and choose its folder (the last used).
+		local
+			l_column: SW_COLUMN
+			l_row: SW_ROW
+			l_name: SW_TEXT_BOX
+			l_folder: SW_SELECT
+			l_folders: ARRAYED_LIST [BIB_FAVORITE_FOLDER]
+			l_add, l_cancel: SW_BUTTON
+			i: INTEGER
+		do
+			create l_name.make_single_line (a_favorite.label)
+			create l_folder.make
+			l_folder.add_option ("Top level")
+			l_folder.select_index (1)
+			l_folders := favorites_state.shown_folders_by_path
+			from i := 1 until i > l_folders.count loop
+				l_folder.add_option (favorites_state.folder_path (l_folders.i_th (i).id))
+				if l_folders.i_th (i).id = last_favorite_folder then
+					l_folder.select_index (i + 1)
+				end
+				i := i + 1
+			end
+			create l_add.make ("Add", agent confirm_favorite_sheet (a_favorite, l_name, l_folder, l_folders))
+			create l_cancel.make ("Cancel", agent window.close_sheet)
+			create l_column.make
+			l_column := l_column.with_padding (16.0).with_gap (10.0)
+			l_column.put (create {SW_LABEL}.make_ui (a_title))
+			if a_favorite.is_quotation then
+				l_column.put (create {SW_LABEL}.make_ui (quotation_name (a_favorite.quote, "")))
+			end
+			create l_row.make
+			l_row.put (create {SW_LABEL}.make_ui ("Name"))
+			l_row.put (l_name.growing)
+			l_column.put (l_row)
+			create l_row.make
+			l_row.put (create {SW_LABEL}.make_ui ("Folder"))
+			l_row.put (l_folder)
+			l_column.put (l_row)
+			create l_row.make
+			l_row.put (l_add)
+			l_row.put (l_cancel)
+			l_column.put (l_row)
+			window.show_sheet (l_column, 460.0)
+			window.give_focus (l_name)
+		end
+
+	confirm_favorite_sheet (a_favorite: BIB_FAVORITE; a_name: SW_TEXT_BOX; a_folder: SW_SELECT; a_folders: ARRAYED_LIST [BIB_FAVORITE_FOLDER])
+			-- Add pressed.
+		local
+			l_folder_id: INTEGER_64
+		do
+			if a_folder.selected_index >= 2 and a_folder.selected_index - 1 <= a_folders.count then
+				l_folder_id := a_folders.i_th (a_folder.selected_index - 1).id
+			end
+			window.close_sheet
+			keep_favorite (a_favorite, a_name.text, l_folder_id)
+		end
+
+	keep_favorite (a_favorite: BIB_FAVORITE; a_name: READABLE_STRING_GENERAL; a_folder_id: INTEGER_64)
+			-- `a_favorite' kept in folder `a_folder_id' (0: the top level), named `a_name' when that is
+			-- not blank.
+		require
+			not_kept: not a_favorite.is_stored
+			folder_non_negative: a_folder_id >= 0
+		local
+			l_name: STRING_32
+		do
+			if user_store.is_open then
+				user_store.put_favorite_in (a_favorite, a_folder_id)
+				user_store.add_favorite (a_favorite)
+				l_name := a_name.to_string_32
+				l_name.left_adjust
+				l_name.right_adjust
+				if user_store.write_error = Void and then not l_name.is_empty and then not l_name.same_string (a_favorite.label) then
+					user_store.rename_favorite (a_favorite, l_name)
+				end
+				if attached user_store.write_error as al_error then
+					say (al_error.message)
+				else
+					last_favorite_folder := a_folder_id
+					reload_favorites
+					window.toast ({STRING_32} "Added " + a_favorite.label + {STRING_32} " to Favorites.", 1)
+				end
+			end
+		end
+
+	open_favorite_source (a_item: BIB_FAVORITE)
+			-- A document or a quotation chosen: its document opened; a quotation's words selected there
+			-- and brought into view.
+		local
+			l_view: detachable SW_DOCUMENT_VIEW
+			l_hub: STRING_32
+			l_target: BIB_LINK_TARGET
+		do
+			if a_item.target.starts_with (Commentary_prefix) then
+				l_hub := a_item.target.substring (Commentary_prefix.count + 1, a_item.target.count)
+				if l_hub.is_integer_64 then
+					go_to_hub (l_hub.to_integer_64)
+					bring_into_view (commentary_panel, commentary_tabs, 1)
+					l_view := commentary_view
+				end
+			else
+				create l_target.make (a_item.target, bible.books)
+				on_commentary_link (a_item.target)
+				if l_target.is_framework then
+					l_view := framework_view
+				elseif l_target.is_book then
+					l_view := book_view
+				end
+			end
+			if a_item.is_quotation and then attached l_view as al_view then
+				window.request_render
+				if attached quotation_range (al_view, a_item) as al_range then
+					al_view.select_range (al_range.from_item, al_range.from_offset, al_range.to_item, al_range.to_offset)
+					al_view.scroll_to (al_view.stacked_scroll_for (al_view.unit_block (al_range.from_item)))
+					window.request_render
+				else
+					say ("The quoted words are not in it any more: the document has changed.")
+				end
+			end
+		end
+
+	quotation_range (a_view: SW_DOCUMENT_VIEW; a_item: BIB_FAVORITE): detachable TUPLE [from_item, from_offset, to_item, to_offset: INTEGER]
+			-- Where `a_item''s words stand in `a_view' now: at its anchors when the text there is the
+			-- quote, else where its opening words are found (to the end of that text when the quote
+			-- runs on); Void when they are nowhere. `a_view' laid out.
+		require
+			a_quotation: a_item.is_quotation
+		local
+			fi, fo, ti, t_o, u, p, l_cut: INTEGER
+			l_head: STRING_32
+		do
+			fi := a_item.anchor_item (a_item.anchor_from)
+			fo := a_item.anchor_offset (a_item.anchor_from)
+			ti := a_item.anchor_item (a_item.anchor_to)
+			t_o := a_item.anchor_offset (a_item.anchor_to)
+			if fi >= 1 and ti >= fi and ti <= a_view.unit_count and then fo <= a_view.text_of (fi).count and then t_o <= a_view.text_of (ti).count
+				and then (fi < ti or fo <= t_o) and then range_text (a_view, fi, fo, ti, t_o).same_string (a_item.quote)
+			then
+				Result := [fi, fo, ti, t_o]
+			else
+				l_head := a_item.quote.twin
+				l_cut := l_head.index_of ('%N', 1)
+				if l_head.index_of ('%T', 1) > 0 and (l_cut = 0 or l_head.index_of ('%T', 1) < l_cut) then
+					l_cut := l_head.index_of ('%T', 1)
+				end
+				if l_cut > 1 then
+					l_head := l_head.substring (1, l_cut - 1)
+				end
+				if not l_head.is_empty then
+					from u := 1 until u > a_view.unit_count or Result /= Void loop
+						p := a_view.text_of (u).to_string_32.substring_index (l_head, 1)
+						if p > 0 then
+							if l_head.count = a_item.quote.count then
+								Result := [u, p - 1, u, p - 1 + l_head.count]
+							else
+								Result := [u, p - 1, u, a_view.text_of (u).count]
+							end
+						end
+						u := u + 1
+					end
+				end
+			end
+		end
+
+	range_text (a_view: SW_DOCUMENT_VIEW; fi, fo, ti, t_o: INTEGER): STRING_32
+			-- The text from offset `fo' of unit `fi' to offset `t_o' of unit `ti', units joined as a
+			-- selection's text is (`item_separator').
+		require
+			ordered: 1 <= fi and fi <= ti and ti <= a_view.unit_count
+		local
+			k, l_lo, l_hi: INTEGER
+		do
+			create Result.make (64)
+			from k := fi until k > ti loop
+				if k = fi then
+					l_lo := fo.min (a_view.text_of (k).count)
+				else
+					l_lo := 0
+				end
+				if k = ti then
+					l_hi := t_o.min (a_view.text_of (k).count)
+				else
+					l_hi := a_view.text_of (k).count
+				end
+				if l_lo < l_hi then
+					Result.append (a_view.text_of (k).substring (l_lo + 1, l_hi))
+				end
+				if k < ti then
+					Result.append (a_view.item_separator (k))
+				end
+				k := k + 1
+			end
+		end
+
+	mark_quotations
+			-- Each document view marks what the favorites hold of the document it shows: every quoted
+			-- part, and the title of a favorite document (Larry: marked inside the document itself).
+			-- `favorites_state' tells, and each view when it shows a document.
+		do
+			mark_view (book_view)
+			mark_view (framework_view)
+			mark_view (commentary_view)
+		end
+
+	mark_view (a_view: SW_DOCUMENT_VIEW)
+			-- `a_view''s standing ranges: its document's quoted parts and, for a favorite document, its title.
+		do
+			a_view.clear_standing_ranges
+			if attached document_target (a_view) as al_target then
+				window.request_render
+				across favorites_state.items as ic loop
+					if favorites_state.is_folder_shown (ic.folder_id) then
+						if ic.is_quotation and then is_in_document (ic.target, al_target) then
+							if attached quotation_range (a_view, ic) as al_range then
+								a_view.add_standing_range (al_range.from_item, al_range.from_offset, al_range.to_item, al_range.to_offset)
+							end
+						elseif ic.is_document and then ic.target.same_string (al_target) and then a_view.unit_count >= 1 then
+							a_view.add_standing_range (1, 0, 1, a_view.text_of (1).count)
+						end
+					end
+				end
+			end
+		end
+
+	is_in_document (a_target, a_document: READABLE_STRING_32): BOOLEAN
+			-- Does link `a_target' name document `a_document' or a block of it ("book:zakar/4#12" in
+			-- "book:zakar/4")?
+		do
+			Result := a_target.same_string (a_document) or else a_target.starts_with (a_document + {STRING_32} "#")
+		end
+
+	has_kept_link (a_link: READABLE_STRING_32): BOOLEAN
+			-- Does a shown document or quotation favorite name `a_link' or something inside it?
+		do
+			Result := across favorites_state.items as ic some
+				(ic.is_document or ic.is_quotation) and then favorites_state.is_folder_shown (ic.folder_id)
+				and then (ic.target.same_string (a_link) or ic.target.starts_with (a_link + {STRING_32} "/") or ic.target.starts_with (a_link + {STRING_32} "#"))
+			end
+		end
+
+	book_starred (a_book: BIB_AUTHOR_BOOK): BOOLEAN
+			-- The Author Library's books: is it, or something in it, among the favorites?
+		do
+			if attached (create {BIB_TEXT_PACKS}).schema_of_kind (a_book.pack_kind) as al_schema and then al_schema.is_book_id (a_book.id) then
+				Result := has_kept_link (al_schema.link_text (a_book.id, 0, 0))
+			end
+		end
+
+	chapter_starred (a_row: TUPLE [chapter: INTEGER; title, kind: STRING_32]): BOOLEAN
+			-- The chapters of the book listed: is the chapter, or something in it, among the favorites?
+		do
+			if attached (create {BIB_TEXT_PACKS}).schema_of_kind (listed_kind) as al_schema and then al_schema.is_book_id (listed_book)
+				and then a_row.chapter >= 1 and then a_row.chapter <= al_schema.Max_part
+			then
+				Result := has_kept_link (al_schema.link_text (listed_book, a_row.chapter, 0))
+			end
+		end
+
+	framework_starred (a_framework: BIB_FRAMEWORK): BOOLEAN
+			-- The frameworks: is it, or a part of it, among the favorites?
+		do
+			Result := has_kept_link ({BIB_FRAMEWORK_SCHEMA}.Link_prefix + a_framework.id)
 		end
 
 feature {BIB_WINDOW_HARNESS_CLIENT} -- The window harness (research/23, 2026-10-31: GUI risks shown failing before their fixes)
@@ -756,6 +1200,91 @@ feature {BIB_WINDOW_HARNESS_CLIENT} -- The window harness (research/23, 2026-10-
 			Result := favorites_state.is_chapter_starred (a_book, a_chapter)
 		end
 
+	harness_show_first_book (a_chapter: INTEGER)
+			-- The Author Library's first book at chapter `a_chapter'.
+		do
+			if not book_rows.is_empty then
+				show_book_place (book_rows.first.pack_kind, book_rows.first.id, a_chapter, 0)
+			end
+		end
+
+	harness_book_count: INTEGER
+		do
+			Result := book_rows.count
+		end
+
+	harness_favorite_target (a_index: INTEGER): STRING_32
+			-- The target of the favorite at line `a_index' at the top of the tree.
+		do
+			create Result.make_empty
+			if attached favorites_tree.roots.i_th (a_index).item as al_item then
+				Result := al_item.target
+			end
+		end
+
+	harness_favorites_heading: STRING_32
+		do
+			Result := favorites_heading.text
+		end
+
+	harness_framework_count: INTEGER
+		do
+			Result := framework_rows.count
+		end
+
+	harness_show_framework (a_index: INTEGER)
+			-- Framework `a_index' of the list in T4.
+		do
+			show_framework (framework_rows.i_th (a_index).id)
+		end
+
+	harness_document_view (a_which: INTEGER): SW_DOCUMENT_VIEW
+			-- 1 the framework view, 2 the book view, 3 the commentary view.
+		do
+			inspect a_which
+			when 1 then
+				Result := framework_view
+			when 2 then
+				Result := book_view
+			else
+				Result := commentary_view
+			end
+		end
+
+	harness_quote_selection (a_which: INTEGER; a_folder_id: INTEGER_64)
+			-- "Add to Favorites as a quotation" on that view's selection, the sheet accepted as it opens.
+		do
+			if attached quotation_of (harness_document_view (a_which)) as al_quote then
+				keep_favorite (al_quote, "", a_folder_id)
+			end
+		end
+
+	harness_keep_document (a_which: INTEGER)
+			-- "Add ... to Favorites" on that view's document, the sheet accepted as it opens.
+		do
+			if attached document_target (harness_document_view (a_which)) as al_target then
+				keep_favorite (create {BIB_FAVORITE}.make_document (al_target, document_title (harness_document_view (a_which))), "", 0)
+			end
+		end
+
+	harness_open_favorite_root (a_index: INTEGER)
+			-- Click line `a_index' at the top of the Favorites tree (a quotation opens its source).
+		do
+			choose_favorite (Void)
+			choose_favorite (favorites_tree.roots.i_th (a_index))
+		end
+
+	harness_favorite_root_icon (a_index: INTEGER): INTEGER
+		do
+			Result := favorite_icon (favorites_tree.roots.i_th (a_index))
+		end
+
+	harness_framework_starred (a_index: INTEGER): BOOLEAN
+			-- Does framework `a_index' of the list wear the star?
+		do
+			Result := framework_starred (framework_rows.i_th (a_index))
+		end
+
 	harness_theme_swapped_by_windows (a_dark: BOOLEAN)
 			-- What following Windows does when its setting flips: the window wears the theme and
 			-- tells `on_theme_changed'.
@@ -972,6 +1501,8 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 				end
 			elseif snapshot_tab.same_string ({STRING_32} "fwcard") then
 				snapshot_framework_card
+			elseif snapshot_tab.same_string ({STRING_32} "quotation") or snapshot_tab.same_string ({STRING_32} "quotemenu") then
+				snapshot_quotation (snapshot_tab.same_string ({STRING_32} "quotemenu"))
 			elseif snapshot_tab.same_string ({STRING_32} "books") then
 				if not book_rows.is_empty then
 					show_book_place (book_rows.first.pack_kind, book_rows.first.id, 2, 0)
@@ -1131,7 +1662,7 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			commentary_view.set_hover_card_builder (agent link_card (commentary_view, ?, ?))
 			framework_view.set_hover_card_builder (agent link_card (framework_view, ?, ?))
 			framework_view.set_on_link_click (agent on_commentary_link)
-			framework_view.set_menu_extension (agent pane_menu (lexicon_panel, ?, ?, ?))
+			framework_view.set_menu_extension (agent document_menu (framework_view, lexicon_panel, ?, ?, ?))
 			frameworks_grid.set_on_select (agent on_framework_row)
 			books_grid.set_on_select (agent on_book_row)
 			chapters_grid.set_on_select (agent on_chapter_row)
@@ -1140,7 +1671,7 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			writings_grid.set_on_select (agent on_writing_row)
 			book_view.set_on_link_click (agent on_commentary_link)
 			book_view.set_hover_card_builder (agent link_card (book_view, ?, ?))
-			book_view.set_menu_extension (agent pane_menu (results_panel, ?, ?, ?))
+			book_view.set_menu_extension (agent document_menu (book_view, results_panel, ?, ?, ?))
 			wire_menus
 		end
 
@@ -1406,11 +1937,11 @@ feature {NONE} -- Window
 			places_grid.add_column (create {SW_GRID_COLUMN [BIB_PLACE_ROW]}.make ("Word", 150.0, agent {BIB_PLACE_ROW}.surface))
 			places_grid.add_column ((create {SW_GRID_COLUMN [BIB_PLACE_ROW]}.make ("Transliteration", 160.0, agent {BIB_PLACE_ROW}.translit)).growing)
 			reading_view.add_column ("").do_nothing
-			frameworks_grid.add_column ((create {SW_GRID_COLUMN [BIB_FRAMEWORK]}.make ("Framework", 120.0, agent {BIB_FRAMEWORK}.display_name)).growing)
-			books_grid.add_column ((create {SW_GRID_COLUMN [BIB_AUTHOR_BOOK]}.make ("Book", 160.0, agent {BIB_AUTHOR_BOOK}.full_title)).growing)
+			frameworks_grid.add_column ((create {SW_GRID_COLUMN [BIB_FRAMEWORK]}.make ("Framework", 120.0, agent {BIB_FRAMEWORK}.display_name)).growing.with_star (agent framework_starred))
+			books_grid.add_column ((create {SW_GRID_COLUMN [BIB_AUTHOR_BOOK]}.make ("Book", 160.0, agent {BIB_AUTHOR_BOOK}.full_title)).growing.with_star (agent book_starred))
 			books_grid.add_column (create {SW_GRID_COLUMN [BIB_AUTHOR_BOOK]}.make ("Kind", 70.0, agent library_kind_name))
 			books_grid.add_column (create {SW_GRID_COLUMN [BIB_AUTHOR_BOOK]}.make ("Status", 90.0, agent {BIB_AUTHOR_BOOK}.status))
-			chapters_grid.add_column ((create {SW_GRID_COLUMN [TUPLE [chapter: INTEGER; title, kind: STRING_32]]}.make ("Chapter", 200.0, agent chapter_row_title)).growing)
+			chapters_grid.add_column ((create {SW_GRID_COLUMN [TUPLE [chapter: INTEGER; title, kind: STRING_32]]}.make ("Chapter", 200.0, agent chapter_row_title)).growing.with_star (agent chapter_starred))
 			in_books_grid.add_column (create {SW_GRID_COLUMN [BIB_BOOK_BLOCK]}.make ("Book", 120.0, agent {BIB_BOOK_BLOCK}.book_title))
 			in_books_grid.add_column (create {SW_GRID_COLUMN [BIB_BOOK_BLOCK]}.make ("Chapter", 140.0, agent {BIB_BOOK_BLOCK}.chapter_title))
 			in_books_grid.add_column ((create {SW_GRID_COLUMN [BIB_BOOK_BLOCK]}.make ("Text", 300.0, agent block_snippet)).growing)
@@ -2697,6 +3228,10 @@ feature {NONE} -- Two layouts (C7)
 		do
 			if a_node.is_folder then
 				Result := {SW_PAINTER}.Glyph_folder
+			elseif attached a_node.item as al_item and then al_item.is_document then
+				Result := {SW_PAINTER}.Glyph_document
+			elseif attached a_node.item as al_item and then al_item.is_quotation then
+				Result := {SW_PAINTER}.Glyph_quote
 			else
 				Result := {SW_PAINTER}.Glyph_star
 			end
@@ -2739,8 +3274,24 @@ feature {NONE} -- Two layouts (C7)
 			elseif not l_words.is_empty then
 				favorites_heading.set_text (l_roots.count.out.to_string_32 + {STRING_32} " found")
 			else
-				favorites_heading.set_text (favorites_state.shown_item_count.out.to_string_32 + {STRING_32} " in "
-					+ favorites_state.shown_folder_count.out + {STRING_32} " folders")
+				favorites_heading.set_text (favorites_count_text (favorites_state.shown_item_count, favorites_state.shown_folder_count))
+			end
+		end
+
+	favorites_count_text (a_favorites, a_folders: INTEGER): STRING_32
+			-- "1 favorite", "3 favorites", "3 in 2 folders", "1 in 1 folder" (short: it shares a row
+			-- with four buttons).
+		do
+			if a_folders = 0 then
+				if a_favorites = 1 then
+					Result := {STRING_32} "1 favorite"
+				else
+					Result := a_favorites.out.to_string_32 + {STRING_32} " favorites"
+				end
+			elseif a_folders = 1 then
+				Result := a_favorites.out.to_string_32 + {STRING_32} " in 1 folder"
+			else
+				Result := a_favorites.out.to_string_32 + {STRING_32} " in " + a_folders.out + {STRING_32} " folders"
 			end
 		end
 
@@ -2768,8 +3319,12 @@ feature {NONE} -- Two layouts (C7)
 			-- away). A folder chosen: the place New folder, Rename and Remove act on.
 		do
 			favorite_choice_changed.call (Void)
-			if attached a_node.item as al_item and then al_item.is_passage then
-				go_to_hub (al_item.hub_id)
+			if attached a_node.item as al_item then
+				if al_item.is_passage then
+					go_to_hub (al_item.hub_id)
+				else
+					open_favorite_source (al_item)
+				end
 			end
 		end
 
@@ -2807,7 +3362,11 @@ feature {NONE} -- Two layouts (C7)
 		do
 			if attached favorites_tree.context_node as al_node then
 				if attached al_node.item as al_item then
-					a_menu.add_item ("Open", "", al_item.is_passage, agent go_to_hub (al_item.hub_id))
+					if al_item.is_passage then
+						a_menu.add_item ("Open", "", True, agent go_to_hub (al_item.hub_id))
+					else
+						a_menu.add_item ("Open", "", True, agent open_favorite_source (al_item))
+					end
 					if not al_item.version.is_empty and then not al_item.version.same_string (reading_version)
 						and then attached bible.text_reader.version (al_item.version) as al_version
 					then
@@ -5435,7 +5994,7 @@ feature {NONE} -- Right-click menus and panes (Larry, 2026-10-28)
 			interlinear_view.set_menu_extension (agent interlinear_menu)
 			analysis_grid.set_menu_extension (agent analysis_menu)
 			navigator_tree.set_menu_extension (agent navigator_menu)
-			commentary_view.set_menu_extension (agent pane_menu (commentary_panel, ?, ?, ?))
+			commentary_view.set_menu_extension (agent document_menu (commentary_view, commentary_panel, ?, ?, ?))
 			entries_list.set_menu_extension (agent pane_menu (lexicon_panel, ?, ?, ?))
 			notes_list.set_menu_extension (agent notes_menu)
 			cross_refs_grid.set_menu_extension (agent cross_ref_menu)
@@ -5896,6 +6455,32 @@ feature {NONE} -- Right-click menus and panes (Larry, 2026-10-28)
 			dock.set_panel_marked (notes_panel, not note_rows.is_empty)
 			dock.set_panel_marked (lexicon_panel, study_lemma > 0)
 			dock.set_panel_marked (results_panel, results_state.is_wanted)
+		end
+
+	snapshot_quotation (a_menu: BOOLEAN)
+			-- For a snapshot: the first framework with a quotation kept from its third text (marked) and
+			-- Favorites open; with `a_menu', a selection in its second text right-clicked instead.
+		local
+			u: INTEGER
+		do
+			if not framework_rows.is_empty then
+				show_framework (framework_rows.first.id)
+				window.request_render
+				if framework_view.unit_count >= 3 then
+					if a_menu then
+						u := 2
+						framework_view.select_range (u, 0, u, framework_view.text_of (u).count.min (40))
+						window.simulate_context_click ((framework_view.unit_origin_x (u) + 30.0).truncated_to_integer, (framework_view.unit_origin_y (u) + 6.0).truncated_to_integer)
+					else
+						framework_view.select_range (3, 0, 3, framework_view.text_of (3).count.min (60))
+						if attached quotation_of (framework_view) as al_quote then
+							keep_favorite (al_quote, "", 0)
+						end
+						framework_view.clear_selection
+						navigator_tabs.select_tab (Favorites_tab)
+					end
+				end
+			end
 		end
 
 	snapshot_right_click_verse
@@ -6461,6 +7046,10 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 					i := i + 1
 				end
 				book_view.set_document (commentary_reader.read (chapter_page (al_pack, al_result.item (1), l_chapter)))
+				shown_book_document := book_view.document
+				shown_book_kind := a_kind.to_string_32
+				shown_book_id := a_book.to_string_32
+				shown_book_chapter := l_chapter
 				if a_block > 0 then
 						-- one document block per book block, after the book's title
 					window.request_render
@@ -6470,6 +7059,7 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 				book_view.set_document (commentary_reader.read ({STRING_32} "No " + a_book.to_string_32 + {STRING_32} " in the " + a_kind.to_string_32 + {STRING_32} " pack."))
 			end
 			window.request_render
+			mark_view (book_view)
 		end
 
 	chapter_page (a_pack: BIB_BOOK_PACK; a_book: BIB_AUTHOR_BOOK; a_chapter: INTEGER): STRING_32
@@ -7606,6 +8196,8 @@ feature {NONE} -- Frameworks explained (P05.8, Larry, 2026-10-28)
 				and then al_result.is_success and then al_result.count = 1
 			then
 				framework_view.set_document (commentary_reader.read (framework_page (al_result.item (1))))
+				shown_framework_document := framework_view.document
+				shown_framework_id := a_id.to_string_32
 				from i := 1 until i > framework_rows.count loop
 					if framework_rows.i_th (i).id.same_string_general (a_id) then
 						reselect (frameworks_grid, i)
@@ -7616,6 +8208,7 @@ feature {NONE} -- Frameworks explained (P05.8, Larry, 2026-10-28)
 				framework_view.set_document (commentary_reader.read ({STRING_32} "No framework " + a_id.to_string_32 + {STRING_32} " in the frameworks pack yet."))
 			end
 			window.request_render
+			mark_view (framework_view)
 		end
 
 	framework_page (a_framework: BIB_FRAMEWORK): STRING_32
@@ -7836,6 +8429,14 @@ feature {NONE} -- Commentary (S2, P04)
 				end
 			end
 			commentary_view.set_document (commentary_reader.read (l_page))
+			if commentary_verse > 0 and has_commentary then
+				shown_commentary_document := commentary_view.document
+				shown_commentary_hub := (create {BIB_HUB_ID}).hub_id (commentary_book, commentary_chapter, commentary_verse)
+			else
+				shown_commentary_document := Void
+				shown_commentary_hub := 0
+			end
+			mark_view (commentary_view)
 			commentary_found.call (Void)
 		end
 

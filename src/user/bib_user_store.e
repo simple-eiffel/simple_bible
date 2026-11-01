@@ -389,8 +389,15 @@ feature -- Favorites (research/24 stage C, schema 3)
 			l_favorite: BIB_FAVORITE
 		do
 			create Result.make (32)
-			across connection.query ("SELECT favorite_id, folder_id, kind, hub_id, end_hub_id, version, label, target, quote, anchor_from, anchor_to, created_at, changed_at FROM favorite WHERE deleted = 0 AND kind = 1 AND hub_id > 0 AND end_hub_id >= hub_id ORDER BY favorite_id").rows as ic loop
-				create l_favorite.make_passage (ic.integer_64_value ("hub_id"), ic.integer_64_value ("end_hub_id"), ic.string_value ("version").to_string_8, ic.string_value ("label"))
+			across connection.query ("SELECT favorite_id, folder_id, kind, hub_id, end_hub_id, version, label, target, quote, anchor_from, anchor_to, created_at, changed_at FROM favorite WHERE deleted = 0 AND ((kind = 1 AND hub_id > 0 AND end_hub_id >= hub_id) OR (kind = 2 AND target <> '') OR (kind = 3 AND target <> '' AND quote <> '' AND hub_id >= 0 AND anchor_from >= 0 AND anchor_to >= anchor_from)) ORDER BY favorite_id").rows as ic loop
+				if ic.integer_value ("kind") = {BIB_FAVORITE}.Document then
+					create l_favorite.make_document (ic.string_value ("target"), ic.string_value ("label"))
+				elseif ic.integer_value ("kind") = {BIB_FAVORITE}.Quotation then
+					create l_favorite.make_quotation (ic.string_value ("target"), ic.string_value ("quote"), ic.integer_64_value ("hub_id"), ic.string_value ("version").to_string_8,
+						ic.integer_64_value ("anchor_from"), ic.integer_64_value ("anchor_to"), ic.string_value ("label"))
+				else
+					create l_favorite.make_passage (ic.integer_64_value ("hub_id"), ic.integer_64_value ("end_hub_id"), ic.string_value ("version").to_string_8, ic.string_value ("label"))
+				end
 				l_favorite.mark_stored (ic.integer_64_value ("favorite_id"), time_of (ic.string_value ("created_at")))
 				l_favorite.mark_changed (time_of (ic.string_value ("changed_at")))
 				l_favorite.set_folder (ic.integer_64_value ("folder_id").max (0))

@@ -105,6 +105,9 @@ feature {NONE} -- Suites
 			run_test (agent t.test_a_removed_folder_hides_its_stars_until_restored, "test_a_removed_folder_hides_its_stars_until_restored")
 			run_test (agent t.test_a_whole_chapter_stars_the_chapter_not_its_verses, "test_a_whole_chapter_stars_the_chapter_not_its_verses")
 			run_test (agent t.test_the_filter_finds_favorites_in_folders, "test_the_filter_finds_favorites_in_folders")
+			run_test (agent t.test_a_framework_quotation_is_marked_and_found_again, "test_a_framework_quotation_is_marked_and_found_again")
+			run_test (agent t.test_a_favorite_document_marks_its_title_and_its_row, "test_a_favorite_document_marks_its_title_and_its_row")
+			run_test (agent t.test_a_book_quotation_names_its_block, "test_a_book_quotation_names_its_block")
 		end
 
 feature {NONE} -- Runner

@@ -356,6 +356,32 @@ feature -- Tests
 			clean_user_file
 		end
 
+	test_documents_and_quotations_as_favorites
+			-- research/24 stage D: a whole document (its link) and a quotation (its text, its source
+			-- and where it stands there) kept and read back.
+		local
+			l_user: BIB_USER_STORE
+			l_document, l_quote: BIB_FAVORITE
+		do
+			clean_user_file
+			create l_user.make (User_file)
+			l_user.open
+			create l_document.make_document ("framework:divine-council", "The Divine Council")
+			l_user.add_favorite (l_document)
+			create l_quote.make_quotation ("book:zakar/4#12", "Remembering is covenant action.", 0, "",
+				13 * {BIB_FAVORITE}.Anchor_scale + 5, 13 * {BIB_FAVORITE}.Anchor_scale + 36, "Zakar 4")
+			l_user.add_favorite (l_quote)
+			assert_true ("both stored", l_user.write_error = Void and l_document.is_stored and l_quote.is_stored)
+			assert_integers_equal ("both listed", 2, l_user.favorites.count)
+			assert_true ("the document by its link", l_user.favorites.first.is_document and l_user.favorites.first.target.same_string ("framework:divine-council"))
+			assert_true ("the quotation's text", l_user.favorites.i_th (2).is_quotation and l_user.favorites.i_th (2).quote.same_string ("Remembering is covenant action."))
+			assert_integers_equal ("where it starts: item", 13, l_user.favorites.i_th (2).anchor_item (l_user.favorites.i_th (2).anchor_from))
+			assert_integers_equal ("and offset", 5, l_user.favorites.i_th (2).anchor_offset (l_user.favorites.i_th (2).anchor_from))
+			assert_false ("neither stars a verse", l_user.favorites.first.covers (43003016) or l_user.favorites.i_th (2).covers (43003016))
+			l_user.close
+			clean_user_file
+		end
+
 	test_schema_2_is_upgraded_to_3
 			-- The reader's own user.db is at schema 2: it is backed up and upgraded to schema 3 by
 			-- adding the favorites' tables; its bookmarks are copied into a Bookmarks folder (a
