@@ -526,7 +526,7 @@ feature {NONE} -- Quotations and documents in Favorites (research/24 stage D, 20
 					l_hub := shown_commentary_hub
 				end
 				if not l_quote.is_empty and then attached quote_target (a_view, l_lo_item) as al_target then
-					create Result.make_quotation (al_target, a_view.selected_text, l_hub, "",
+					create Result.make_quotation (al_target, a_view.selected_text, l_hub, l_hub, "",
 						l_lo_item * {BIB_FAVORITE}.Anchor_scale + l_lo_offset, l_hi_item * {BIB_FAVORITE}.Anchor_scale + l_hi_offset,
 						quotation_name (l_quote, document_title (a_view)))
 				end
@@ -659,7 +659,9 @@ feature {NONE} -- Quotations and documents in Favorites (research/24 stage D, 20
 			l_hub: STRING_32
 			l_target: BIB_LINK_TARGET
 		do
-			if a_item.target.starts_with (Commentary_prefix) then
+			if a_item.is_verse_quotation then
+				open_verse_quotation (a_item)
+			elseif a_item.target.starts_with (Commentary_prefix) then
 				l_hub := a_item.target.substring (Commentary_prefix.count + 1, a_item.target.count)
 				if l_hub.is_integer_64 then
 					go_to_hub (l_hub.to_integer_64)
@@ -768,6 +770,7 @@ feature {NONE} -- Quotations and documents in Favorites (research/24 stage D, 20
 			mark_view (book_view)
 			mark_view (framework_view)
 			mark_view (commentary_view)
+			mark_bible_quotations
 		end
 
 	mark_view (a_view: SW_DOCUMENT_VIEW)
@@ -828,6 +831,177 @@ feature {NONE} -- Quotations and documents in Favorites (research/24 stage D, 20
 			-- The frameworks: is it, or a part of it, among the favorites?
 		do
 			Result := has_kept_link ({BIB_FRAMEWORK_SCHEMA}.Link_prefix + a_framework.id)
+		end
+
+feature {NONE} -- Quotations of verses (research/24 stage D2, 2026-11-01)
+
+	Bible_prefix: STRING_32 = "bible:"
+			-- A verse quotation's target: "bible:<book>.<chapter>.<verse>" (BIB_LINK_TARGET's form).
+
+	view_unit (a_view: SW_PARALLEL_TEXT; a_row, a_column: INTEGER): INTEGER
+			-- The unit of cell `a_row', `a_column' of `a_view' (0: none laid out).
+		local
+			u: INTEGER
+		do
+			from u := 1 until u > a_view.unit_count or Result > 0 loop
+				if a_view.unit_block (u) = a_row and a_view.unit_column (u) = a_column then
+					Result := u
+				end
+				u := u + 1
+			end
+		end
+
+	view_version (a_view: SW_PARALLEL_TEXT; a_column: INTEGER): STRING_8
+			-- The version column `a_column' of `a_view' shows.
+		do
+			if a_view = parallel_view and then a_column >= 1 and then a_column <= parallel_codes.count then
+				Result := parallel_codes.i_th (a_column)
+			else
+				Result := reading_version
+			end
+		end
+
+	verse_quotation_of (a_view: SW_PARALLEL_TEXT): detachable BIB_FAVORITE
+			-- The selected part of a verse in the Bible text or Parallel as a quotation favorite (Larry:
+			-- an optional way to keep a passage, where the whole verse is not wanted), not yet kept.
+		local
+			l_lo, l_lo_offset, l_hi, l_hi_offset, l_row, l_end_row: INTEGER
+			l_quote: STRING_32
+			l_hub: BIB_HUB_ID
+			l_version: STRING_8
+		do
+			if a_view.has_selection and reading.has_place then
+				if a_view.anchor_item < a_view.caret_item or (a_view.anchor_item = a_view.caret_item and a_view.anchor_offset <= a_view.caret_offset) then
+					l_lo := a_view.anchor_item
+					l_lo_offset := a_view.anchor_offset
+					l_hi := a_view.caret_item
+					l_hi_offset := a_view.caret_offset
+				else
+					l_lo := a_view.caret_item
+					l_lo_offset := a_view.caret_offset
+					l_hi := a_view.anchor_item
+					l_hi_offset := a_view.anchor_offset
+				end
+				l_row := a_view.unit_block (l_lo)
+				l_end_row := a_view.unit_block (l_hi).max (l_row)
+				l_quote := a_view.selected_text
+				l_quote.left_adjust
+				l_quote.right_adjust
+				if not l_quote.is_empty and then l_row >= 1 and then l_end_row <= reading_verses.count then
+					create l_hub
+					l_version := view_version (a_view, a_view.unit_column (l_lo))
+					create Result.make_quotation (Bible_prefix + reading_book.out + "." + reading_chapter.out + "." + reading_verses.i_th (l_row).verse.out,
+						a_view.selected_text,
+						l_hub.hub_id (reading_book, reading_chapter, reading_verses.i_th (l_row).verse),
+						l_hub.hub_id (reading_book, reading_chapter, reading_verses.i_th (l_end_row).verse),
+						l_version,
+						l_lo * {BIB_FAVORITE}.Anchor_scale + l_lo_offset, l_hi * {BIB_FAVORITE}.Anchor_scale + l_hi_offset,
+						quotation_name (l_quote, place_text (reading_book, reading_chapter, reading_verses.i_th (l_row).verse) + {STRING_32} ", " + l_version.to_string_32))
+				end
+			end
+		end
+
+	add_verse_quotation_of (a_view: SW_PARALLEL_TEXT)
+			-- The verse menu's "Add to Favorites as a quotation": the selected words kept.
+		do
+			if attached verse_quotation_of (a_view) as al_quote then
+				open_favorite_sheet (al_quote, "Add to Favorites as a quotation")
+			end
+		end
+
+	open_verse_quotation (a_item: BIB_FAVORITE)
+			-- A verse quotation chosen: the verse read in the version it was taken from, its words
+			-- selected in the Bible text.
+		require
+			a_verse_quotation: a_item.is_verse_quotation
+		local
+			i, l_row, u: INTEGER
+		do
+			from i := 1 until i > bible.text_reader.versions.count loop
+				if bible.text_reader.versions.i_th (i).code.same_string (a_item.version) and then not reading_version.same_string (a_item.version) then
+					version_select.select_index (i)
+				end
+				i := i + 1
+			end
+			go_to_hub (a_item.hub_id)
+			window.request_render
+			l_row := verse_row
+			u := view_unit (reading_view, l_row, 1)
+			if u > 0 and then attached quote_in_unit (reading_view, u, a_item.quote) as al_part then
+				reading_view.select_range (u, al_part.lo, u, al_part.hi)
+				window.request_render
+			end
+		end
+
+	quote_in_unit (a_view: SW_DOC_UNITS; a_unit: INTEGER; a_quote: READABLE_STRING_32): detachable TUPLE [lo, hi: INTEGER]
+			-- Where `a_quote''s opening words stand in unit `a_unit' (to the unit's end when the quote
+			-- runs on into the next verse); Void when they are not there.
+		local
+			l_head: STRING_32
+			p, l_cut: INTEGER
+		do
+			l_head := a_quote.to_string_32
+			l_cut := l_head.index_of ('%T', 1)
+			if l_head.index_of ('%N', 1) > 0 and (l_cut = 0 or l_head.index_of ('%N', 1) < l_cut) then
+				l_cut := l_head.index_of ('%N', 1)
+			end
+			if l_cut > 1 then
+				l_head := l_head.substring (1, l_cut - 1)
+			end
+			if not l_head.is_empty then
+				p := a_view.text_of (a_unit).to_string_32.substring_index (l_head, 1)
+				if p > 0 then
+					if l_head.count = a_quote.count then
+						Result := [p - 1, p - 1 + l_head.count]
+					else
+						Result := [p - 1, a_view.text_of (a_unit).count]
+					end
+				end
+			end
+		end
+
+	mark_bible_quotations
+			-- The Bible text, and Parallel in Study, mark the quoted words of the chapter's verses in the
+			-- column of the version each was taken from (`favorites_state' tells, and `show_chapter').
+		do
+			mark_verse_quotes (reading_view)
+			if is_study then
+				mark_verse_quotes (parallel_view)
+			end
+		end
+
+	mark_verse_quotes (a_view: SW_PARALLEL_TEXT)
+			-- `a_view''s standing ranges: each shown verse quotation of the chapter read, in its
+			-- version's column.
+		local
+			l_hub: BIB_HUB_ID
+			c, i, u: INTEGER
+		do
+			a_view.clear_standing_ranges
+			if reading.has_place then
+				window.request_render
+				create l_hub
+				across favorites_state.items as ic loop
+					if ic.is_verse_quotation and then favorites_state.is_folder_shown (ic.folder_id)
+						and then l_hub.book_of (ic.hub_id) = reading_book and then l_hub.chapter_of (ic.hub_id) = reading_chapter
+					then
+						from c := 1 until c > a_view.column_count loop
+							if view_version (a_view, c).same_string (ic.version) then
+								from i := 1 until i > reading_verses.count loop
+									if reading_verses.i_th (i).verse = l_hub.verse_of (ic.hub_id) then
+										u := view_unit (a_view, i, c)
+										if u > 0 and then attached quote_in_unit (a_view, u, ic.quote) as al_part then
+											a_view.add_standing_range (u, al_part.lo, u, al_part.hi)
+										end
+									end
+									i := i + 1
+								end
+							end
+							c := c + 1
+						end
+					end
+				end
+			end
 		end
 
 feature {BIB_WINDOW_HARNESS_CLIENT} -- The window harness (research/23, 2026-10-31: GUI risks shown failing before their fixes)
@@ -1227,6 +1401,21 @@ feature {BIB_WINDOW_HARNESS_CLIENT} -- The window harness (research/23, 2026-10-
 			Result := favorites_heading.text
 		end
 
+	harness_quote_verse_selection (a_folder_id: INTEGER_64)
+			-- The verse menu's "Add to Favorites as a quotation" on the Bible text's selection, the
+			-- sheet accepted as it opens.
+		do
+			if attached verse_quotation_of (reading_view) as al_quote then
+				keep_favorite (al_quote, "", a_folder_id)
+			end
+		end
+
+	harness_bible_view: SW_PARALLEL_TEXT
+			-- The Bible tab.
+		do
+			Result := reading_view
+		end
+
 	harness_framework_count: INTEGER
 		do
 			Result := framework_rows.count
@@ -1501,6 +1690,8 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 				end
 			elseif snapshot_tab.same_string ({STRING_32} "fwcard") then
 				snapshot_framework_card
+			elseif snapshot_tab.same_string ({STRING_32} "versequote") then
+				snapshot_verse_quotation
 			elseif snapshot_tab.same_string ({STRING_32} "quotation") or snapshot_tab.same_string ({STRING_32} "quotemenu") then
 				snapshot_quotation (snapshot_tab.same_string ({STRING_32} "quotemenu"))
 			elseif snapshot_tab.same_string ({STRING_32} "books") then
@@ -2540,6 +2731,7 @@ feature {NONE} -- Reading (S1, P01)
 				reading_view.add_note (l_lookup.empty_chapter_text (l_chapter, place_text (reading_book, reading_chapter, 0))).do_nothing
 			end
 			star_rows (reading_view)
+			mark_verse_quotes (reading_view)
 			previous_button.set_enabled (has_previous_chapter)
 			next_button.set_enabled (has_next_chapter)
 			window.set_title (window_title)
@@ -5953,6 +6145,7 @@ feature {NONE} -- The Atlas and the shared selection (Plan 22 phase 3, 2026-10-3
 				parallel_marked_row := 0
 				mark_parallel_verse
 				star_rows (parallel_view)
+				mark_verse_quotes (parallel_view)
 				if not l_codes.is_empty and then attached bible.text_reader.version (l_codes.last) as al_last
 					and then not al_last.numbers_like_english
 				then
@@ -6028,6 +6221,7 @@ feature {NONE} -- Right-click menus and panes (Larry, 2026-10-28)
 				a_menu.add_item ({STRING_32} "Copy " + place_text (reading_book, reading_chapter, 0), "", True, agent copy_chapter)
 				a_menu.add_separator
 				a_menu.add_item ("Add to Favorites...", "Ctrl+D", user_store.is_open, agent on_verse_do (l_verse, agent add_to_favorites))
+				a_menu.add_item ("Add to Favorites as a quotation...", "", user_store.is_open and a_view.has_selection, agent add_verse_quotation_of (a_view))
 				a_menu.add_item ("Highlight...", "", user_store.is_open, agent on_verse_do (l_verse, agent start_in_notes (Highlights_tab, highlight_reason_box)))
 				a_menu.add_item ("Add a note...", "", user_store.is_open, agent on_verse_do (l_verse, agent start_in_notes (Verse_notes_tab, new_note_box)))
 				a_menu.add_item ("Tag...", "", user_store.is_open, agent on_verse_do (l_verse, agent start_in_notes (Tags_tab, tag_box)))
@@ -6455,6 +6649,24 @@ feature {NONE} -- Right-click menus and panes (Larry, 2026-10-28)
 			dock.set_panel_marked (notes_panel, not note_rows.is_empty)
 			dock.set_panel_marked (lexicon_panel, study_lemma > 0)
 			dock.set_panel_marked (results_panel, results_state.is_wanted)
+		end
+
+	snapshot_verse_quotation
+			-- For a snapshot: words of the verse read kept as a quotation (its verse starred, the words
+			-- washed), Favorites open.
+		local
+			u: INTEGER
+		do
+			window.request_render
+			u := view_unit (reading_view, verse_row, 1)
+			if u > 0 then
+				reading_view.select_range (u, 0, u, reading_view.text_of (u).count.min (31))
+				if attached verse_quotation_of (reading_view) as al_quote then
+					keep_favorite (al_quote, "", 0)
+				end
+				reading_view.clear_selection
+				navigator_tabs.select_tab (Favorites_tab)
+			end
 		end
 
 	snapshot_quotation (a_menu: BOOLEAN)

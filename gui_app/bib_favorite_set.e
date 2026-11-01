@@ -237,7 +237,7 @@ feature -- Doors
 			starred_chapters.wipe_out
 			create l_hub
 			across items as ic loop
-				if ic.is_passage and then is_folder_shown (ic.folder_id) then
+				if (ic.is_passage or ic.is_verse_quotation) and then is_folder_shown (ic.folder_id) then
 					if ic.is_whole_chapter then
 						starred_chapters.extend (l_hub.book_of (ic.hub_id) * 1000 + l_hub.chapter_of (ic.hub_id))
 					else

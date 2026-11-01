@@ -83,6 +83,39 @@ feature -- Quotations and documents (research/24 stage D, 2026-11-01)
 			assert_true ("found again, selected", v.selected_text.same_string (l_quote))
 		end
 
+	test_a_verse_quotation_stars_marks_and_opens
+			-- Larry: part of a verse kept as a quotation (an optional way to keep a passage): its verse
+			-- starred, its words marked in the Bible text, and chosen in Favorites the verse is read
+			-- in its version with the words selected.
+		local
+			app: BIB_GUI_APP
+			v: SW_PARALLEL_TEXT
+			u: INTEGER
+			l_quote: STRING_32
+		do
+			app := new_window
+			app.harness_go_to (43, 3, 16)
+			app.harness_render
+			v := app.harness_bible_view
+			from u := 1 until u > v.unit_count or else v.unit_block (u) = 16 loop
+				u := u + 1
+			end
+			assert_true ("verse 16 laid out", u <= v.unit_count)
+			v.select_range (u, 4, u, 26)
+			l_quote := v.selected_text
+			app.harness_quote_verse_selection (0)
+			assert_integers_equal ("kept", 1, app.harness_favorite_roots)
+			assert_integers_equal ("a quotation's mark in the tree", {SW_PAINTER}.Glyph_quote, app.harness_favorite_root_icon (1))
+			assert_true ("verse 16 starred", app.harness_verse_starred (16))
+			assert_integers_equal ("its words marked", 1, v.standing_ranges.count)
+			app.harness_go_to (1, 1, 1)
+			assert_integers_equal ("not in Genesis", 0, v.standing_ranges.count)
+			app.harness_open_favorite_root (1)
+			assert_true ("back at John 3:16", app.harness_is_at (43, 3, 16))
+			assert_true ("the words selected", v.selected_text.same_string (l_quote))
+			assert_integers_equal ("and marked", 1, v.standing_ranges.count)
+		end
+
 	test_a_favorite_document_marks_its_title_and_its_row
 		local
 			app: BIB_GUI_APP

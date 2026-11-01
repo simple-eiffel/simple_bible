@@ -60,23 +60,25 @@ feature {NONE} -- Initialization
 			target_kept: target.same_string_general (a_target)
 		end
 
-	make_quotation (a_target, a_quote: READABLE_STRING_GENERAL; a_hub: INTEGER_64; a_version: READABLE_STRING_8;
+	make_quotation (a_target, a_quote: READABLE_STRING_GENERAL; a_hub, a_end_hub: INTEGER_64; a_version: READABLE_STRING_8;
 			a_from, a_to: INTEGER_64; a_label: READABLE_STRING_GENERAL)
 			-- The text `a_quote' selected in the document `a_target' opens (Larry: a part of a
 			-- framework, a commentary, a book), from position `a_from' to `a_to' of it (item * 1,000,000
 			-- + offset, as `Anchor_scale' says: a hint, the quote itself is what is found again);
-			-- verse `a_hub' and `a_version' when it is a verse's part (0 and empty otherwise).
+			-- verses `a_hub' to `a_end_hub' and `a_version' when it is taken from the Bible text, the
+			-- verse of a commentary (`a_end_hub' the same), else 0 and empty.
 		require
 			has_target: not a_target.is_empty
 			has_quote: not a_quote.is_empty
 			hub_non_negative: a_hub >= 0
+			hubs_ordered: a_end_hub >= a_hub
 			anchors_ordered: 0 <= a_from and a_from <= a_to
 		do
 			favorite_kind := Quotation
 			target := a_target.to_string_32
 			quote := a_quote.to_string_32
 			hub_id := a_hub
-			end_hub_id := a_hub
+			end_hub_id := a_end_hub
 			version := a_version.to_string_8
 			anchor_from := a_from
 			anchor_to := a_to
@@ -149,15 +151,21 @@ feature -- Status
 			Result := favorite_kind = Quotation
 		end
 
+	is_verse_quotation: BOOLEAN
+			-- Is it words taken from the Bible text (Larry: an optional way to keep a passage)?
+		do
+			Result := is_quotation and then hub_id > 0 and then target.starts_with ({STRING_32} "bible:")
+		end
+
 	is_single_verse: BOOLEAN
 		do
 			Result := is_passage and end_hub_id = hub_id
 		end
 
 	covers (a_hub: INTEGER_64): BOOLEAN
-			-- Does this passage take in verse `a_hub'?
+			-- Does this passage, or these words of the Bible text, take in verse `a_hub'?
 		do
-			Result := is_passage and hub_id <= a_hub and a_hub <= end_hub_id
+			Result := (is_passage or is_verse_quotation) and hub_id <= a_hub and a_hub <= end_hub_id
 		end
 
 	is_whole_chapter: BOOLEAN

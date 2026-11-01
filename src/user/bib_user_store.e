@@ -393,7 +393,8 @@ feature -- Favorites (research/24 stage C, schema 3)
 				if ic.integer_value ("kind") = {BIB_FAVORITE}.Document then
 					create l_favorite.make_document (ic.string_value ("target"), ic.string_value ("label"))
 				elseif ic.integer_value ("kind") = {BIB_FAVORITE}.Quotation then
-					create l_favorite.make_quotation (ic.string_value ("target"), ic.string_value ("quote"), ic.integer_64_value ("hub_id"), ic.string_value ("version").to_string_8,
+					create l_favorite.make_quotation (ic.string_value ("target"), ic.string_value ("quote"), ic.integer_64_value ("hub_id"),
+						ic.integer_64_value ("end_hub_id").max (ic.integer_64_value ("hub_id")), ic.string_value ("version").to_string_8,
 						ic.integer_64_value ("anchor_from"), ic.integer_64_value ("anchor_to"), ic.string_value ("label"))
 				else
 					create l_favorite.make_passage (ic.integer_64_value ("hub_id"), ic.integer_64_value ("end_hub_id"), ic.string_value ("version").to_string_8, ic.string_value ("label"))

@@ -368,7 +368,7 @@ feature -- Tests
 			l_user.open
 			create l_document.make_document ("framework:divine-council", "The Divine Council")
 			l_user.add_favorite (l_document)
-			create l_quote.make_quotation ("book:zakar/4#12", "Remembering is covenant action.", 0, "",
+			create l_quote.make_quotation ("book:zakar/4#12", "Remembering is covenant action.", 0, 0, "",
 				13 * {BIB_FAVORITE}.Anchor_scale + 5, 13 * {BIB_FAVORITE}.Anchor_scale + 36, "Zakar 4")
 			l_user.add_favorite (l_quote)
 			assert_true ("both stored", l_user.write_error = Void and l_document.is_stored and l_quote.is_stored)
@@ -378,6 +378,8 @@ feature -- Tests
 			assert_integers_equal ("where it starts: item", 13, l_user.favorites.i_th (2).anchor_item (l_user.favorites.i_th (2).anchor_from))
 			assert_integers_equal ("and offset", 5, l_user.favorites.i_th (2).anchor_offset (l_user.favorites.i_th (2).anchor_from))
 			assert_false ("neither stars a verse", l_user.favorites.first.covers (43003016) or l_user.favorites.i_th (2).covers (43003016))
+			create l_quote.make_quotation ("bible:43.3.16", "so loved the world", 43003016, 43003017, "KJV", 0, 0, "John 3:16-17")
+			assert_true ("words of the Bible text star their verses", l_quote.is_verse_quotation and l_quote.covers (43003016) and l_quote.covers (43003017) and not l_quote.covers (43003018))
 			l_user.close
 			clean_user_file
 		end
