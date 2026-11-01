@@ -106,6 +106,29 @@ feature -- The meme tool (research/25, 2026-11-01)
 			assert_true ("the first picture let go", attached l_first as al_first and then not al_first.is_valid)
 		end
 
+	test_a_memes_words_and_passages_are_edited
+			-- Larry: edit the description (type or paste) and the passages as he finds them. The test data
+			-- is put back as it was.
+		local
+			app: BIB_GUI_APP
+			l_title, l_words, l_passages: STRING_32
+		do
+			app := new_window
+			l_title := app.harness_meme_title ("john-3-16")
+			l_words := app.harness_meme_words ("john-3-16")
+			l_passages := app.harness_meme_passages ("john-3-16")
+			assert_true ("saved", app.harness_edit_meme ("john-3-16", "The stadium sign", "Pasted in whole: new words.", "John 3:16; 1 John 4:9-10"))
+			assert_true ("its new words", app.harness_meme_words ("john-3-16").same_string ("Pasted in whole: new words."))
+			assert_true ("its passages as typed: " + app.harness_meme_passages ("john-3-16").to_string_8, app.harness_meme_passages ("john-3-16").same_string ("John 3:16; 1 John 4:9-10"))
+			app.harness_go_to (62, 4, 10)
+			app.harness_meme_scope (2)
+			assert_true ("1 John 4:10 names it now", app.harness_lists_meme ("john-3-16"))
+			assert_false ("a passage that does not read changes nothing", app.harness_edit_meme ("john-3-16", "x", "y", "Hezekiah 4:1"))
+			assert_true ("still as saved", app.harness_meme_words ("john-3-16").same_string ("Pasted in whole: new words."))
+			assert_true ("put back", app.harness_edit_meme ("john-3-16", l_title, l_words, l_passages))
+			assert_true ("as it was", app.harness_meme_words ("john-3-16").same_string (l_words) and app.harness_meme_passages ("john-3-16").same_string (l_passages))
+		end
+
 	test_a_folder_copies_its_references
 			-- Larry: right-click a Favorites folder to copy its references.
 		local

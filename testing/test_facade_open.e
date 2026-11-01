@@ -494,6 +494,17 @@ feature -- Memes (research/25, 2026-11-01)
 			assert_true ("added", l_store.write_error = Void and l_store.memes.count = 2)
 			assert_true ("named from its title", attached l_store.meme_by_slug ("a-second-one"))
 			assert_integers_equal ("Jude 3 names it", 1, l_store.memes_for_verse (l_hub.hub_id (65, 1, 3)).count)
+				-- Larry, 2026-11-01: the words and the passages edited
+			l_passages.wipe_out
+			l_passages.extend ([l_hub.hub_id (65, 1, 20), l_hub.hub_id (65, 1, 21), {STRING_32} "Jude 20-21"])
+			if attached l_store.meme_by_slug ("one") as al_one then
+				l_store.edit_meme (al_one, "One, retitled", "New words, pasted in whole.", l_passages)
+			end
+			assert_true ("edited", l_store.write_error = Void)
+			assert_true ("its new words", attached l_store.meme_by_slug ("one") as al_one and then al_one.description.same_string ("New words, pasted in whole."))
+			assert_integers_equal ("Jude 6 no longer names it", 0, l_store.memes_for_verse (l_hub.hub_id (65, 1, 6)).count)
+			assert_integers_equal ("Jude 21 does", 1, l_store.memes_for_verse (l_hub.hub_id (65, 1, 21)).count)
+			assert_integers_equal ("still two memes", 2, l_store.memes.count)
 			l_store.close
 			fixture.delete_file (Meme_file)
 			fixture.delete_file (Meme_folder + "\one.png")
