@@ -28,6 +28,40 @@ inherit
 			default_create
 		end
 
+feature -- Text that wraps (Larry, 2026-11-01: a long highlight reason ran off the box's edge)
+
+	test_a_long_highlight_reason_wraps_in_its_box
+			-- The reason box was one line: typing on, the words ran out of sight. It wraps now, and
+			-- grows a line at a time.
+		local
+			app: BIB_GUI_APP
+			l_short, l_long: REAL_64
+		do
+			app := new_window
+			app.harness_state.set_study (True)
+			app.harness_go_to (42, 24, 33)
+			app.harness_select_notes_tab (4)
+			l_short := app.harness_highlight_box_height ("Why")
+			l_long := app.harness_highlight_box_height ("The %"two%" are not a part of the eleven. There are other disciples and %"those with them%" in the room, which matters for who saw the risen Lord that night.")
+			assert_true ("a long reason makes the box taller: " + l_short.out + " then " + l_long.out, l_long > l_short + 4.0)
+		end
+
+	test_a_chosen_highlight_reads_in_full
+			-- The list cuts a long reason off at the column's edge; chosen, it reads in full, wrapped,
+			-- under the list.
+		local
+			app: BIB_GUI_APP
+			l_reason: STRING_32
+		do
+			app := new_window
+			app.harness_state.set_study (True)
+			app.harness_go_to (42, 24, 33)
+			l_reason := {STRING_32} "The %"two%" are not a part of the eleven. There are other disciples and %"those with them%" in the room."
+			app.harness_add_highlight (l_reason)
+			app.harness_choose_highlight (1)
+			assert_true ("the whole reason: " + app.harness_highlight_detail.to_string_8, app.harness_highlight_detail.has_substring (l_reason))
+		end
+
 feature -- Quotations and documents (research/24 stage D, 2026-11-01)
 
 	test_a_framework_quotation_is_marked_and_found_again

@@ -94,7 +94,11 @@ feature {NONE} -- Initialization
 			create restore_note_button.make ("Restore", Void)
 			create highlights_heading.make_ui ("")
 			create highlight_reason_label.make_ui ("")
-			create highlight_reason_box.make_single_line ("")
+				-- the reason and the answer wrap as they are typed (Larry, 2026-11-01: a long reason ran
+				-- out of sight in one line), and the lists' long text reads in full under them
+			create highlight_reason_box.make_wrapping_line ("")
+			create highlight_detail.make_body ("")
+			create prayer_answer_detail.make_body ("")
 			create highlight_button.make ("Highlight", Void)
 			create highlights_grid.make (100.0)
 			create navigator_tabs.make
@@ -130,7 +134,7 @@ feature {NONE} -- Initialization
 			create journal_title_box.make_single_line ("")
 			create prayer_title_box.make_single_line ("")
 			create prayer_body_box.make ("")
-			create prayer_answer_box.make_single_line ("")
+			create prayer_answer_box.make_wrapping_line ("")
 			create prayer_add_button.make ("Add", Void)
 			create prayer_answered_button.make ("Answered", Void)
 			create prayer_open_heading.make_ui ("")
@@ -318,6 +322,9 @@ feature {NONE} -- Initialization
 				-- state by agents (research/23 phase 5): Answered follows the open list's choice, and
 				-- the strip's dots follow the facts they show
 			prayer_open_panel.on_choice (agent (a_id: INTEGER_64) do prayer_answered_button.set_enabled (a_id > 0) end)
+				-- the chosen highlight's reason and answered prayer's answer, in full (2026-11-01)
+			highlights_panel.on_choice (agent show_highlight_detail)
+			prayer_answered_panel.on_choice (agent show_answer_detail)
 			notes_listed.subscribe (agent refresh_strip_marks)
 			commentary_found.subscribe (agent refresh_strip_marks)
 			word_opened.subscribe (agent refresh_strip_marks)
@@ -1474,6 +1481,41 @@ feature {BIB_WINDOW_HARNESS_CLIENT} -- The window harness (research/23, 2026-10-
 			Result := framework_starred (framework_rows.i_th (a_index))
 		end
 
+	harness_add_highlight (a_reason: READABLE_STRING_GENERAL)
+			-- Write `a_reason' in the reason box and press Highlight.
+		do
+			highlight_reason_box.set_text (a_reason)
+			add_highlight
+		end
+
+	harness_choose_highlight (a_row: INTEGER)
+			-- Click highlight `a_row' of the list.
+		do
+			highlights_grid.select_model_row (a_row)
+		end
+
+	harness_highlight_detail: STRING_32
+			-- What the line under the highlights says.
+		do
+			Result := highlight_detail.text
+		end
+
+	harness_select_notes_tab (a_index: INTEGER)
+			-- Tab `a_index' of the Notes pane (4: Highlights).
+		do
+			if attached notes_tabs as al_tabs then
+				al_tabs.select_tab (a_index)
+			end
+		end
+
+	harness_highlight_box_height (a_text: READABLE_STRING_GENERAL): REAL_64
+			-- The highlight reason box's height, holding `a_text', in the Study layout's Highlights tab.
+		do
+			highlight_reason_box.set_text (a_text)
+			window.request_render
+			Result := highlight_reason_box.height
+		end
+
 	harness_theme_swapped_by_windows (a_dark: BOOLEAN)
 			-- What following Windows does when its setting flips: the window wears the theme and
 			-- tells `on_theme_changed'.
@@ -1739,13 +1781,16 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			elseif snapshot_tab.same_string ({STRING_32} "addfavorite") then
 				add_to_favorites
 			elseif snapshot_tab.same_string ({STRING_32} "highlights") then
-				highlight_reason_box.set_text ("A sample reason written by the snapshot run")
+				highlight_reason_box.set_text ("A sample reason written by the snapshot run, long enough to wrap in the list's reading line below.")
 				add_highlight
 					-- The next verse read, so the highlighted one shows its own wash, not the selection's.
 				go_to (reading_book, reading_chapter, reading_verse + 1)
 				if attached notes_tabs as al_tabs then
 					al_tabs.select_tab (Highlights_tab)
 				end
+					-- a long reason typed, wrapping in the box; the kept one chosen, read in full below
+				highlight_reason_box.set_text ("A second reason being typed, long enough that it wraps onto another line of the box.")
+				highlights_grid.select_model_row (1)
 			end
 			window.request_render
 				-- The whole frame as drawn (the offscreen picture `render' made).
@@ -4507,6 +4552,7 @@ feature {NONE} -- Notes (T2, P06)
 			l_answered := l_answered.with_gap (6.0)
 			l_answered.put (prayer_answered_heading)
 			l_answered.put (prayer_answered_grid.growing)
+			l_answered.put (prayer_answer_detail)
 			create l_row.make
 			l_row.put (prayer_answered_panel.remove_button)
 			l_row.put (prayer_answered_panel.restore_button)
@@ -5046,6 +5092,37 @@ feature {NONE} -- Notes (T2, P06)
 	Highlights_tab: INTEGER = 4
 			-- P06's Highlights page.
 
+	highlight_detail, prayer_answer_detail: SW_LABEL
+			-- The chosen highlight's reason and the chosen answered prayer's answer, in full and wrapped
+			-- (Larry, 2026-11-01: the lists cut long text off at the column's edge).
+
+	show_highlight_detail (a_id: INTEGER_64)
+			-- The highlight `a_id' (0: none chosen) read in full (`highlights_panel' tells).
+		do
+			highlight_detail.set_text ("Click a highlight to read its reason in full.")
+			across highlights_panel.rows as ic loop
+				if ic.id = a_id then
+					highlight_detail.set_text (item_place (ic) + {STRING_32} ": " + ic.reason)
+				end
+			end
+		end
+
+	show_answer_detail (a_id: INTEGER_64)
+			-- The answered prayer `a_id' (0: none chosen) and its answer in full (`prayer_answered_panel'
+			-- tells).
+		do
+			prayer_answer_detail.set_text ("Click an answered prayer to read its answer in full.")
+			across prayer_answered_panel.rows as ic loop
+				if ic.id = a_id then
+					if ic.answer.is_empty then
+						prayer_answer_detail.set_text (ic.title + {STRING_32} ": no answer written.")
+					else
+						prayer_answer_detail.set_text (ic.title + {STRING_32} ": " + ic.answer)
+					end
+				end
+			end
+		end
+
 	highlights_page: SW_COLUMN
 			-- The Highlights tab: a reason and Highlight for the verse read, then every highlight.
 		local
@@ -5062,6 +5139,7 @@ feature {NONE} -- Notes (T2, P06)
 			Result.put (l_buttons)
 			Result.put (highlights_heading)
 			Result.put (highlights_grid.growing)
+			Result.put (highlight_detail)
 		end
 
 	fill_highlights
@@ -6166,6 +6244,8 @@ feature {NONE} -- The Atlas and the shared selection (Plan 22 phase 3, 2026-10-3
 			window.add_reference_mark (history_scope, "T1.3", "History: This session (every verse touched since the window opened) or Kept (between sessions); the number box sets how many verses the Kept list shows (10 to 1,000; every visit stays stored).", window.Corner_top_left)
 			window.add_reference_mark (history_grid, "T1.4", "History list: newest first, the verse read selected, a favorite starred; click one to read it again.", window.Corner_top_left)
 			window.add_reference_mark (notes_heading, "T2", "P06 Notes, west below T1, in tab order: Verse notes on the chapter read (add on the verse read; double-click to edit, each edit keeps the old version; Delete and Restore); Journal, notes on a subject (New; Save keeps the earlier version; Delete and Restore); Tags (tag the verse read; click a tag for its verses, a verse to read it; Remove and Restore); Highlights (a reason, not a color; washed amber in the Bible and Parallel tabs; click one to read it; Remove and Restore); Prayer (a title and the request; Open and Answered, with how it was answered; Remove and Restore); Memory (learn the verse read; recall today's card, Show the verse, grade Again, Hard, Good or Easy; the next date follows SuperMemo 2).", window.Corner_top_left)
+			window.add_reference_mark (highlight_detail, "T2.1", "Highlight read in full: the chosen highlight's reason, wrapped (the list cuts long reasons off).", window.Corner_top_left)
+			window.add_reference_mark (prayer_answer_detail, "T2.2", "Answer read in full: the chosen answered prayer's answer, wrapped.", window.Corner_top_left)
 			window.add_reference_mark (center_tabs, "T3", "Centre tabs: the Bible text, Parallel (P02), Interlinear (P03, Ctrl+I) and the Timeline (the River of Time).", window.Corner_top_left)
 			window.add_reference_mark (years_from_box, "T8", "The years in view: From and to boxes and Set (or Enter) over the Timeline; the bar under the river walks time and names the first and last years of the data; Home and End reach them.", window.Corner_top_left)
 			window.add_reference_mark (atlas_view, "T7", "The Atlas (Plan 22): empires by year from Cliopatria, places with their doubt (several candidates are dashed rings, each naming who holds it); choosing an event on the Timeline marks its places, choosing a place moves the Timeline; the scale in miles, kilometers and nautical miles; Start measuring, click points, End or Close shape for the area, Delete; an empire's card and a click on it give its area. Window > Atlas.", window.Corner_top_left)

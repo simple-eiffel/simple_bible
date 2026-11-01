@@ -109,6 +109,8 @@ feature {NONE} -- Suites
 			run_test (agent t.test_a_favorite_document_marks_its_title_and_its_row, "test_a_favorite_document_marks_its_title_and_its_row")
 			run_test (agent t.test_a_book_quotation_names_its_block, "test_a_book_quotation_names_its_block")
 			run_test (agent t.test_a_verse_quotation_stars_marks_and_opens, "test_a_verse_quotation_stars_marks_and_opens")
+			run_test (agent t.test_a_long_highlight_reason_wraps_in_its_box, "test_a_long_highlight_reason_wraps_in_its_box")
+			run_test (agent t.test_a_chosen_highlight_reads_in_full, "test_a_chosen_highlight_reads_in_full")
 		end
 
 feature {NONE} -- Runner
