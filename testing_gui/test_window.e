@@ -28,6 +28,105 @@ inherit
 			default_create
 		end
 
+feature -- The meme tool (research/25, 2026-11-01)
+
+	test_memes_answer_the_verse_read
+			-- Larry: the tool responds to the passage read.
+		local
+			app: BIB_GUI_APP
+		do
+			app := new_window
+			assert_true ("meme.db in the test data (90 memes)", app.harness_meme_count = 90)
+			app.harness_go_to (43, 3, 16)
+			app.harness_meme_scope (2)
+			assert_true ("John 3:16's meme listed", app.harness_lists_meme ("john-3-16"))
+			assert_true ("only the verse's memes", app.harness_meme_count < 90)
+			app.harness_meme_scope (1)
+			assert_integers_equal ("all again", 90, app.harness_meme_count)
+		end
+
+	test_the_meme_search_finds_titles_and_words
+		local
+			app: BIB_GUI_APP
+		do
+			app := new_window
+			app.harness_search_memes ("kosmos")
+			assert_true ("found by its words", app.harness_lists_meme ("john-3-16"))
+			app.harness_search_memes ("stadium sign")
+			assert_integers_equal ("found by its title", 1, app.harness_meme_count)
+		end
+
+	test_a_favorite_meme_stays_at_the_top
+			-- Larry: favorite memes live at the top of the list, under any order.
+		local
+			app: BIB_GUI_APP
+		do
+			app := new_window
+			assert_false ("not first to begin with", app.harness_meme_shown_first.same_string ("in-christ"))
+			app.harness_choose_meme ("in-christ")
+			app.harness_toggle_meme_favorite
+			assert_true ("first now: " + app.harness_meme_shown_first.to_string_8, app.harness_meme_shown_first.same_string ("in-christ"))
+			assert_true ("kept in a Memes folder", app.harness_favorite_roots = 1 and then app.harness_favorite_root_label (1).same_string ("Memes"))
+			app.harness_toggle_meme_favorite
+			assert_false ("not first once taken out", app.harness_meme_shown_first.same_string ("in-christ"))
+		end
+
+	test_copy_a_memes_words_and_picture
+			-- Larry: copy the picture to the clipboard, and the description separately. The reader's
+			-- clipboard text is put back afterwards.
+		local
+			app: BIB_GUI_APP
+			l_clip: SW_CLIPBOARD
+			l_saved: STRING_32
+		do
+			create l_clip
+			l_saved := l_clip.text.twin
+			app := new_window
+			app.harness_choose_meme ("john-3-16")
+			app.harness_copy_meme_description
+			assert_true ("the words on the clipboard", l_clip.text.has_substring ("kosmos"))
+			app.harness_copy_meme_picture
+			assert_true ("a picture on the clipboard", l_clip.has_image)
+			assert_integers_equal ("the meme's width", 1080, l_clip.image_width)
+			l_clip.set_text (l_saved)
+		end
+
+	test_a_memes_picture_loads_only_when_hovered
+			-- Larry: load a picture only when its icon is hovered, never them all; one in memory.
+		local
+			app: BIB_GUI_APP
+			l_first: detachable CAIRO_SURFACE
+		do
+			app := new_window
+			assert_true ("no picture loaded at the start", app.harness_card_picture = Void)
+			assert_true ("a card for John 3:16", attached app.harness_meme_card ("john-3-16"))
+			l_first := app.harness_card_picture
+			assert_true ("its picture decoded", attached l_first as al_first and then al_first.width = 1080)
+			assert_true ("a card for another", attached app.harness_meme_card ("in-christ"))
+			assert_true ("the first picture let go", attached l_first as al_first and then not al_first.is_valid)
+		end
+
+	test_a_folder_copies_its_references
+			-- Larry: right-click a Favorites folder to copy its references.
+		local
+			app: BIB_GUI_APP
+			l_clip: SW_CLIPBOARD
+			l_saved: STRING_32
+			l_grace: INTEGER_64
+		do
+			create l_clip
+			l_saved := l_clip.text.twin
+			app := new_window
+			app.harness_go_to (43, 3, 16)
+			l_grace := app.harness_new_folder ("Grace")
+			app.harness_add_favorite (1, 0, "", l_grace)
+			app.harness_go_to (45, 8, 28)
+			app.harness_add_favorite (2, 30, "", l_grace)
+			app.harness_copy_folder_references (l_grace)
+			assert_true ("both references, one a line: " + l_clip.text.to_string_8, l_clip.text.has_substring ("John 3:16") and l_clip.text.has_substring ("Romans 8:28-30") and l_clip.text.has ('%N'))
+			l_clip.set_text (l_saved)
+		end
+
 feature -- Text that wraps (Larry, 2026-11-01: a long highlight reason ran off the box's edge)
 
 	test_a_long_highlight_reason_wraps_in_its_box

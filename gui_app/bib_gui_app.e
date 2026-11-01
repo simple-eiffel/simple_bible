@@ -120,6 +120,28 @@ feature {NONE} -- Initialization
 			favorites_restore_button.set_tooltip ("Restore what Remove took away last.")
 			create favorites_state.make
 			create favorite_nodes.make (32)
+				-- the meme tool (research/25): meme.db beside user.db; its list sorts on a header click and
+				-- keeps the favorite memes first (Larry, 2026-11-01)
+			create meme_store.make ((create {BIB_DATA_LOCATION}).meme_path)
+			create meme_rows.make (0)
+			create memes_grid.make (100.0)
+			create meme_search_box.make_single_line ("")
+			meme_search_box.set_tooltip ("Search the memes: their titles, words, lines, sets and passages.")
+			create meme_scope.make
+			meme_scope.add_segment ("All")
+			meme_scope.add_segment ("Verse read")
+			meme_scope.add_segment ("Chapter read")
+			create meme_heading.make_ui ("")
+			create meme_view.make (300.0)
+			create meme_cut_select.make
+			create meme_copy_picture_button.make ("Copy picture", Void)
+			meme_copy_picture_button.set_tooltip ("Copy picture: the meme's picture (in the cut chosen) on the clipboard, to paste elsewhere.")
+			create meme_copy_text_button.make ("Copy description", Void)
+			meme_copy_text_button.set_tooltip ("Copy description: the meme's words on the clipboard, to paste with it.")
+			create meme_favorite_button.make ("", Void)
+			meme_favorite_button.set_glyph ({SW_PAINTER}.Glyph_star)
+			create meme_add_button.make ("Add meme...", Void)
+			meme_add_button.set_tooltip ("Add meme: a picture, its words and its passages, kept in meme.db.")
 			create history_grid.make (100.0)
 			create history_heading.make_ui ("")
 			create history_rows.make (0)
@@ -384,6 +406,27 @@ feature {NONE} -- Initialization
 			favorites_state.on_change (agent show_stars)
 			favorites_state.on_change (agent mark_quotations)
 			reload_favorites
+				-- the meme tool: the favorite memes pinned first, the list following the place read when
+				-- its scope is the verse or the chapter, the buttons following the chosen meme
+			memes_grid.set_pinned (agent meme_starred)
+			memes_grid.sort_by (2, False)
+			memes_grid.set_hover_card (agent meme_card)
+			memes_grid.set_on_select (agent on_meme_row)
+			meme_search_box.set_on_change (agent fill_memes)
+			meme_scope.set_on_change (agent (a_index: INTEGER) do fill_memes end)
+			meme_cut_select.set_on_change (agent show_meme)
+			meme_copy_picture_button.set_on_click (agent copy_meme_picture)
+			meme_copy_text_button.set_on_click (agent copy_meme_description)
+			meme_favorite_button.set_on_click (agent toggle_meme_favorite)
+			meme_add_button.set_on_click (agent add_meme_sheet)
+			meme_view.set_on_link_click (agent on_commentary_link)
+			meme_choice_changed.subscribe (agent show_meme_buttons)
+			show_meme_buttons
+			open_memes
+			show_meme
+			favorites_state.changed.subscribe (agent fill_memes)
+			favorites_state.changed.subscribe (agent show_meme_buttons)
+			reading.verse_changed.subscribe (agent (a_dummy: detachable ANY) do if meme_scope.selected_index > 1 then fill_memes end end (Void))
 				-- Genesis 1:1 selected, so the commentary has its cross-references from the start (Larry:
 				-- T5 was empty until a verse was clicked).
 			if bible.is_open and then not reading_version.is_empty and then bible.books.has_book (1) then
@@ -668,6 +711,8 @@ feature {NONE} -- Quotations and documents in Favorites (research/24 stage D, 20
 		do
 			if a_item.is_verse_quotation then
 				open_verse_quotation (a_item)
+			elseif a_item.target.starts_with (Meme_prefix) then
+				show_meme_of_favorite (a_item.target)
 			elseif a_item.target.starts_with (Commentary_prefix) then
 				l_hub := a_item.target.substring (Commentary_prefix.count + 1, a_item.target.count)
 				if l_hub.is_integer_64 then
@@ -1009,6 +1054,604 @@ feature {NONE} -- Quotations of verses (research/24 stage D2, 2026-11-01)
 					end
 				end
 			end
+		end
+
+feature {NONE} -- The meme tool (research/25, 2026-11-01)
+
+	meme_store: BIB_MEME_STORE
+			-- Larry's memes (meme.db beside user.db).
+
+	meme_rows: ARRAYED_LIST [BIB_MEME]
+			-- The memes the list shows; the grid sorts them (a header click) and pins the favorites first.
+
+	memes_grid: SW_DATA_GRID [BIB_MEME]
+	meme_search_box: SW_TEXT_BOX
+	meme_cut_select: SW_SELECT
+	meme_scope: SW_SEGMENTED
+	meme_heading: SW_LABEL
+	meme_view: SW_DOCUMENT_VIEW
+	meme_copy_picture_button, meme_copy_text_button, meme_favorite_button, meme_add_button: SW_BUTTON
+			-- T6's Memes tab.
+
+	meme_card_picture: detachable CAIRO_SURFACE
+			-- The one picture in memory: the hovered meme's, decoded for its card and destroyed when the
+			-- next card is made (Larry, 2026-11-01: load lazily, only when hovered, never them all).
+
+	chosen_meme: detachable BIB_MEME
+			-- The meme the list has chosen.
+
+	meme_choice_changed: SW_EVENT [TUPLE]
+			-- Told when the chosen meme changes; the meme's buttons join it (state by agents).
+		attribute
+			create Result.make
+		end
+
+	Memes_tab: INTEGER = 7
+			-- T6's Memes page.
+
+	Memes_folder_name: STRING_32 = "Memes"
+			-- The Favorites folder a starred meme goes into.
+
+	Meme_prefix: STRING_32 = "meme:"
+			-- A meme favorite's target: "meme:<slug>".
+
+	open_memes
+			-- meme.db opened, its memes listed (no file: the tab says so).
+		do
+			if not meme_store.is_open then
+				meme_store.open
+			end
+			fill_memes
+		end
+
+	memes_page: SW_COLUMN
+			-- One row of search, scope and count; under it the list (a header click sorts; a picture icon
+			-- shows the picture when hovered) beside the chosen meme's buttons and words. The south zone
+			-- is short, so nothing stands over the list but that one row.
+		local
+			l_top, l_body, l_buttons: SW_ROW
+			l_right: SW_COLUMN
+		do
+			create l_top.make
+			l_top.put (meme_search_box.growing)
+			l_top.put (meme_scope)
+			l_top.put (meme_heading)
+			create l_buttons.make
+			l_buttons.put (meme_copy_picture_button)
+			l_buttons.put (meme_copy_text_button)
+			l_buttons.put (meme_favorite_button)
+			l_buttons.put (meme_cut_select)
+			l_buttons.put (meme_add_button)
+			create l_right.make
+			l_right := l_right.with_gap (6.0).fitting
+			l_right.put (l_buttons)
+			l_right.put (meme_view.growing)
+			create l_body.make
+			l_body.set_cross_axis ({SW_ROW}.Cross_stretch)
+			l_body.put (memes_grid.growing)
+			l_body.put (l_right.growing)
+			create Result.make
+			Result := Result.with_gap (6.0).fitting
+			Result.put (l_top)
+			Result.put (l_body.growing)
+		end
+
+	is_meme_favorite (a_meme: BIB_MEME): BOOLEAN
+			-- Is `a_meme' among the favorites (in any shown folder)?
+		do
+			Result := across favorites_state.items as ic some
+				ic.is_document and then ic.target.same_string (Meme_prefix + a_meme.slug) and then favorites_state.is_folder_shown (ic.folder_id)
+			end
+		end
+
+	meme_matches (a_meme: BIB_MEME; a_words: STRING_32): BOOLEAN
+			-- Do `a_words' (lowercase) appear in its title, words, lines, set or passages?
+		do
+			Result := a_words.is_empty
+				or else a_meme.title.as_lower.has_substring (a_words) or else a_meme.description.as_lower.has_substring (a_words)
+				or else a_meme.punch.as_lower.has_substring (a_words) or else a_meme.hook.as_lower.has_substring (a_words)
+				or else a_meme.trigger_line.as_lower.has_substring (a_words) or else a_meme.meme_set.as_lower.has_substring (a_words)
+				or else a_meme.references_text.as_lower.has_substring (a_words)
+		end
+
+	fill_memes
+			-- The list: every meme the scope takes (all, the verse read, the chapter read) that the search
+			-- words match; the grid keeps them in the order chosen with the favorites first.
+		local
+			l_words: STRING_32
+			l_pool: ARRAYED_LIST [BIB_MEME]
+			l_place: STRING_32
+		do
+			l_words := meme_search_box.text.as_lower
+			l_words.left_adjust
+			l_words.right_adjust
+			create l_place.make_empty
+			if not meme_store.is_open then
+				create l_pool.make (0)
+			elseif meme_scope.selected_index = 2 and reading.has_verse then
+				l_pool := meme_store.memes_for_verse ((create {BIB_HUB_ID}).hub_id (reading_book, reading_chapter, reading_verse))
+				l_place := place_text (reading_book, reading_chapter, reading_verse)
+			elseif meme_scope.selected_index >= 2 and reading.has_place then
+				l_pool := meme_store.memes_for_chapter (reading_book, reading_chapter)
+				l_place := place_text (reading_book, reading_chapter, 0)
+			else
+				l_pool := meme_store.memes
+			end
+			create meme_rows.make (l_pool.count)
+			across l_pool as ic loop
+				if meme_matches (ic, l_words) then
+					meme_rows.extend (ic)
+				end
+			end
+			memes_grid.set_rows (meme_rows)
+			if attached chosen_meme as al_meme and then not meme_rows.has (al_meme) then
+				choose_meme (Void)
+			end
+			if attached meme_store.last_error as al_error then
+				meme_heading.set_text (al_error)
+			elseif not meme_store.is_open then
+				meme_heading.set_text ("No memes yet: meme.db is not in the data folder. Add meme starts one.")
+			elseif l_place.is_empty then
+				meme_heading.set_text (meme_rows.count.out.to_string_32 + {STRING_32} " of " + meme_store.memes.count.out + {STRING_32} " memes; the favorites first.")
+			else
+				meme_heading.set_text (meme_rows.count.out.to_string_32 + {STRING_32} " memes name " + l_place + {STRING_32} "; the favorites first.")
+			end
+		end
+
+	meme_card (a_meme: BIB_MEME; a_column: INTEGER): detachable SW_HOVER_CARD
+			-- Over the picture icon (the first column): the meme's picture in a card, read from meme.db
+			-- now and decoded; the picture before it destroyed. Nowhere else: no card.
+		local
+			l_image: SW_IMAGE
+		do
+			if a_column = 1 and then attached meme_store.picture (a_meme, {BIB_MEME_SCHEMA}.Feed_variant) as al_png then
+				if attached meme_card_picture as al_old then
+					al_old.destroy
+					meme_card_picture := Void
+				end
+				meme_card_picture := create {CAIRO_SURFACE}.make_from_png_data (al_png)
+				if attached meme_card_picture as al_picture and then al_picture.is_valid then
+					create l_image.make_from_surface (al_picture)
+					create Result.make (l_image, Meme_card_width)
+				end
+			end
+		end
+
+	Meme_card_width: REAL_64 = 380.0
+			-- How wide a meme's picture card opens.
+
+	meme_picture_glyph (a_meme: BIB_MEME): INTEGER
+			-- The list's first column: a picture to hover.
+		do
+			Result := {SW_PAINTER}.Glyph_picture
+		end
+
+	meme_no_text (a_meme: BIB_MEME): STRING_32
+		do
+			create Result.make_empty
+		end
+
+	meme_words (a_meme: BIB_MEME): STRING_32
+			-- The start of its words, one line, for the Words column.
+		do
+			Result := a_meme.description.twin
+			Result.replace_substring_all ({STRING_32} "%N", {STRING_32} " ")
+			if Result.count > 140 then
+				Result := Result.substring (1, 139) + {STRING_32} "%/8230/"
+			end
+		end
+
+	meme_title (a_meme: BIB_MEME): STRING_32
+		do
+			Result := a_meme.title
+		end
+
+	meme_set_name (a_meme: BIB_MEME): STRING_32
+		do
+			Result := a_meme.meme_set
+		end
+
+	meme_passages_text (a_meme: BIB_MEME): STRING_32
+		do
+			Result := a_meme.references_text
+		end
+
+	on_meme_row (a_row: INTEGER)
+			-- Meme `a_row' of the list chosen.
+		do
+			if a_row >= 1 and a_row <= meme_rows.count then
+				choose_meme (meme_rows.i_th (a_row))
+			end
+		end
+
+	choose_meme (a_meme: detachable BIB_MEME)
+			-- The one door to `chosen_meme': its picture and words shown, its cuts offered;
+			-- `meme_choice_changed' is told.
+		local
+			i: INTEGER
+		do
+			if a_meme /= chosen_meme then
+				chosen_meme := a_meme
+				meme_cut_select.clear_options
+				if attached a_meme as al_meme then
+					across al_meme.variants as ic loop
+						meme_cut_select.add_option (cut_name (ic.cut))
+					end
+					if not al_meme.variants.is_empty then
+						meme_cut_select.select_index (1)
+					end
+					from i := 1 until i > meme_rows.count loop
+						if meme_rows.i_th (i) = al_meme then
+							reselect (memes_grid, i)
+						end
+						i := i + 1
+					end
+				end
+				show_meme
+				meme_choice_changed.call (Void)
+			end
+		end
+
+	cut_name (a_cut: READABLE_STRING_GENERAL): STRING_32
+			-- How a picture's cut reads in the select.
+		do
+			if a_cut.same_string ("feed") then
+				Result := {STRING_32} "Feed picture"
+			elseif a_cut.same_string ("typographic") then
+				Result := {STRING_32} "Typographic card"
+			elseif a_cut.same_string ("square") then
+				Result := {STRING_32} "Square"
+			elseif a_cut.same_string ("wide") then
+				Result := {STRING_32} "Wide (16:9)"
+			else
+				Result := a_cut.to_string_32
+			end
+		end
+
+	chosen_cut: STRING_8
+			-- The cut the select names for the chosen meme (its feed picture when none).
+		do
+			Result := {BIB_MEME_SCHEMA}.Feed_variant
+			if attached chosen_meme as al_meme and then meme_cut_select.selected_index >= 1 and then meme_cut_select.selected_index <= al_meme.variants.count then
+				Result := al_meme.variants.i_th (meme_cut_select.selected_index).cut
+			end
+		end
+
+	show_meme
+			-- The chosen meme's words: title, description, punch, passages (each a link to its place),
+			-- credit. Its picture shows only when its icon is hovered (`meme_card').
+		local
+			l_page: STRING_32
+			l_first: BOOLEAN
+		do
+			if attached chosen_meme as al_meme then
+				create l_page.make (al_meme.description.count + 200)
+				l_page.append ({STRING_32} "## " + al_meme.title + {STRING_32} "%N%N")
+				l_page.append (al_meme.description)
+				l_page.append ({STRING_32} "%N%N")
+				if not al_meme.punch.is_empty then
+					l_page.append ({STRING_32} "**" + al_meme.punch + {STRING_32} "**%N%N")
+				end
+				if not al_meme.passages.is_empty then
+					l_page.append ({STRING_32} "Passages: ")
+					l_first := True
+					across al_meme.passages as ic loop
+						if not l_first then
+							l_page.append ({STRING_32} " %/183/ ")
+						end
+						l_first := False
+						l_page.append (passage_link (ic.hub_from, ic.hub_to, ic.wording))
+					end
+					l_page.append ({STRING_32} "%N%N")
+				end
+				l_page.append ({STRING_32} "*" + al_meme.credit)
+				if not al_meme.license.is_empty then
+					l_page.append ({STRING_32} "; " + al_meme.license)
+				end
+				l_page.append ({STRING_32} "*")
+				meme_view.set_document (commentary_reader.read (l_page))
+			else
+				meme_view.set_document (commentary_reader.read ("Choose a meme: its words and its passages show here. Hover its picture icon to see it. Copy picture and Copy description put either on the clipboard."))
+			end
+			window.request_render
+		end
+
+	passage_link (a_from, a_to: INTEGER_64; a_wording: READABLE_STRING_GENERAL): STRING_32
+			-- "[John 3:16](bible:43.3.16)": a passage the reader can click.
+		local
+			l_hub: BIB_HUB_ID
+		do
+			create l_hub
+			Result := {STRING_32} "[" + a_wording.to_string_32 + {STRING_32} "]("
+				+ (create {BIB_BIBLE_LINK}).range_target_text (l_hub.book_of (a_from), l_hub.chapter_of (a_from), l_hub.verse_of (a_from), l_hub.chapter_of (a_to), l_hub.verse_of (a_to))
+				+ {STRING_32} ")"
+		end
+
+	show_meme_buttons
+			-- Copy and Favorite need a chosen meme; Add meme, meme.db (`meme_choice_changed' tells).
+		do
+			meme_copy_picture_button.set_enabled (chosen_meme /= Void)
+			meme_copy_text_button.set_enabled (chosen_meme /= Void)
+			meme_favorite_button.set_enabled (chosen_meme /= Void and user_store.is_open)
+			if attached chosen_meme as al_meme and then is_meme_favorite (al_meme) then
+				meme_favorite_button.set_tooltip ("A favorite: it stays at the top of the list. Press to take it out of Favorites.")
+			else
+				meme_favorite_button.set_tooltip ("Favorite: keep this meme at the top of the list (it goes into the Memes folder of Favorites).")
+			end
+		end
+
+	copy_meme_picture
+			-- Copy picture: the chosen meme's picture, in the cut chosen, on the clipboard (Larry: to paste
+			-- it elsewhere).
+		local
+			l_surface: CAIRO_SURFACE
+			l_clipboard: SW_CLIPBOARD
+		do
+			if attached chosen_meme as al_meme and then attached meme_store.picture (al_meme, chosen_cut) as al_png then
+				create l_surface.make_from_png_data (al_png)
+				if l_surface.is_valid then
+					l_surface.flush.do_nothing
+					create l_clipboard
+					l_clipboard.set_image (l_surface.data, l_surface.width, l_surface.height, l_surface.stride)
+					window.toast ({STRING_32} "Copied the picture of " + al_meme.title + {STRING_32} ".", 1)
+				else
+					say ("That picture does not decode.")
+				end
+				l_surface.destroy
+			end
+		end
+
+	copy_meme_description
+			-- Copy description: the chosen meme's words on the clipboard.
+		do
+			if attached chosen_meme as al_meme then
+				(create {SW_CLIPBOARD}).set_text (al_meme.description)
+				window.toast ({STRING_32} "Copied the words of " + al_meme.title + {STRING_32} ".", 1)
+			end
+		end
+
+	toggle_meme_favorite
+			-- Favorite: the chosen meme into the Memes folder of Favorites (made when missing), or out of
+			-- Favorites; the favorites stay at the top of the list (Larry, 2026-11-01).
+		local
+			l_folder_id: INTEGER_64
+			l_folder: BIB_FAVORITE_FOLDER
+			l_removed: BOOLEAN
+		do
+			if attached chosen_meme as al_meme and user_store.is_open then
+				across favorites_state.items as ic loop
+					if ic.is_document and then ic.target.same_string (Meme_prefix + al_meme.slug) then
+						user_store.set_favorite_removed (ic, True)
+						l_removed := True
+					end
+				end
+				if not l_removed then
+					across favorites_state.folders as ic loop
+						if ic.parent_id = 0 and ic.name.same_string (Memes_folder_name) then
+							l_folder_id := ic.id
+						end
+					end
+					if l_folder_id = 0 then
+						create l_folder.make (0, Memes_folder_name)
+						user_store.add_favorite_folder (l_folder)
+						l_folder_id := l_folder.id
+					end
+					keep_favorite (create {BIB_FAVORITE}.make_document (Meme_prefix + al_meme.slug, al_meme.title), "", l_folder_id)
+				else
+					reload_favorites
+				end
+				if attached user_store.write_error as al_error then
+					say (al_error.message)
+				end
+			end
+		end
+
+	show_meme_of_favorite (a_target: READABLE_STRING_32)
+			-- A meme favorite chosen in Favorites: the Memes tab, its meme chosen.
+		local
+			l_slug: STRING_32
+		do
+			l_slug := a_target.substring (Meme_prefix.count + 1, a_target.count)
+			bring_into_view (results_panel, results_tabs, Memes_tab)
+			open_memes
+			if meme_scope.selected_index /= 1 then
+				meme_scope.select_segment (1)
+			end
+			meme_search_box.set_text ("")
+			fill_memes
+			choose_meme (meme_store.meme_by_slug (l_slug))
+		end
+
+	add_meme_sheet
+			-- Add meme: a title, its words, its passages and its picture (a PNG), kept in meme.db (Larry:
+			-- "I will add as I go").
+		local
+			l_column: SW_COLUMN
+			l_row: SW_ROW
+			l_title, l_words, l_passages, l_file: SW_TEXT_BOX
+			l_pick, l_add, l_cancel: SW_BUTTON
+		do
+			create l_title.make_single_line ("")
+			create l_words.make ("")
+			l_words := l_words.with_min_size (0.0, 120.0)
+			create l_passages.make_wrapping_line ("")
+			create l_file.make_single_line ("")
+			create l_pick.make ("Choose...", agent pick_meme_png (l_file))
+			create l_add.make ("Add", agent confirm_add_meme (l_title, l_words, l_passages, l_file))
+			create l_cancel.make ("Cancel", agent window.close_sheet)
+			create l_column.make
+			l_column := l_column.with_padding (16.0).with_gap (8.0)
+			l_column.put (create {SW_LABEL}.make_ui ("Add a meme"))
+			l_column.put (create {SW_LABEL}.make_ui ("Title"))
+			l_column.put (l_title)
+			l_column.put (create {SW_LABEL}.make_ui ("Its words (what to paste with it)"))
+			l_column.put (l_words)
+			l_column.put (create {SW_LABEL}.make_ui ("Passages, separated by semicolons (John 3:16; Romans 8:1)"))
+			l_column.put (l_passages)
+			l_column.put (create {SW_LABEL}.make_ui ("Picture (a PNG file)"))
+			create l_row.make
+			l_row.put (l_file.growing)
+			l_row.put (l_pick)
+			l_column.put (l_row)
+			create l_row.make
+			l_row.put (l_add)
+			l_row.put (l_cancel)
+			l_column.put (l_row)
+			last_meme_sheet := l_column
+			window.show_sheet (l_column, 560.0)
+			window.give_focus (l_title)
+		end
+
+	pick_meme_png (a_file: SW_TEXT_BOX)
+			-- Choose...: a PNG file for the Add meme sheet (the sheet comes back with it).
+		local
+			l_dialog: SW_FILE_DIALOG
+		do
+			window.close_sheet
+			create l_dialog.make_open (documents_folder)
+			l_dialog.set_extension_filter ("*.png")
+			l_dialog.set_on_accept (agent (a_path: STRING_32; a_box: SW_TEXT_BOX) do a_box.set_text (a_path); window.close_sheet; reopen_meme_sheet end (?, a_file))
+			l_dialog.set_on_cancel (agent do window.close_sheet; reopen_meme_sheet end)
+			window.show_sheet (l_dialog, 680.0)
+		end
+
+	reopen_meme_sheet
+			-- The Add meme sheet back after the file dialog (its boxes keep what was typed).
+		do
+			if attached last_meme_sheet as al_sheet then
+				window.show_sheet (al_sheet, 560.0)
+			end
+		end
+
+	last_meme_sheet: detachable SW_COLUMN
+			-- The Add meme sheet last shown.
+
+	confirm_add_meme (a_title, a_words, a_passages, a_file: SW_TEXT_BOX)
+			-- Add pressed: the picture read and checked, the passages read; kept, or told what is wrong.
+		local
+			l_title: STRING_32
+			l_read: TUPLE [read: ARRAYED_LIST [TUPLE [hub_from, hub_to: INTEGER_64; wording: STRING_32]]; unread: ARRAYED_LIST [STRING_32]]
+			l_file: RAW_FILE
+			l_png: MANAGED_POINTER
+		do
+			l_title := a_title.text.twin
+			l_title.left_adjust
+			l_title.right_adjust
+			l_read := (create {BIB_PASSAGE_TEXT}.make (bible.books)).ranges (a_passages.text)
+			if l_title.is_empty then
+				say ("Give the meme a title.")
+			elseif not l_read.unread.is_empty then
+				say ({STRING_32} "This does not read as a passage: " + l_read.unread.first)
+			elseif a_file.text.is_empty or else not (create {SIMPLE_FILE}.make (a_file.text)).is_file then
+				say ("Choose the meme's picture (a PNG file).")
+			else
+				create l_file.make_open_read (a_file.text)
+				create l_png.make (l_file.count.max (1))
+				l_file.read_to_managed_pointer (l_png, 0, l_file.count)
+				l_file.close
+				if not meme_store.schema.is_png (l_png) then
+					say ("That file is not a PNG picture.")
+				else
+					keep_meme (l_title, a_words.text, l_png, l_read.read)
+				end
+			end
+		end
+
+	keep_meme (a_title, a_words: READABLE_STRING_GENERAL; a_png: MANAGED_POINTER;
+			a_passages: ARRAYED_LIST [TUPLE [hub_from, hub_to: INTEGER_64; wording: STRING_32]])
+			-- A new meme kept in meme.db (made from the schema when there is none yet), listed and chosen.
+		require
+			a_png_picture: meme_store.schema.is_png (a_png)
+		do
+			if not meme_store.is_open then
+				start_meme_file
+			end
+			if meme_store.is_open then
+				meme_store.add_meme (a_title, a_words, a_png, a_passages)
+				if attached meme_store.write_error as al_error then
+					say (al_error)
+				else
+					window.close_sheet
+					fill_memes
+					choose_meme (meme_store.memes.last)
+					window.toast ({STRING_32} "Added the meme " + a_title.to_string_32 + {STRING_32} ".", 1)
+				end
+			end
+		end
+
+	start_meme_file
+			-- A first meme.db, empty, from the schema (no memes were installed).
+		local
+			l_db: SIMPLE_SQL_DATABASE
+		do
+			if not (create {SIMPLE_FILE}.make (meme_store.path)).exists then
+				create l_db.make (meme_store.path)
+				across meme_store.schema.schema_statements as ic loop
+					l_db.execute (ic)
+				end
+				l_db.execute_with_args ("INSERT INTO meta VALUES ('pack_kind', ?), ('title', ?), ('author', ?), ('builder', 'Simple Bible')",
+					<<meme_store.schema.Pack_kind, meme_store.schema.Pack_title, meme_store.schema.Pack_author>>)
+				l_db.close
+			end
+			meme_store.open
+		end
+
+	copy_folder_references (a_folder: BIB_FAVORITE_FOLDER)
+			-- A folder's right-click "Copy references": every passage and verse quotation in it and its
+			-- folders, in the tree's order, one a line, on the clipboard (Larry, 2026-11-01).
+		local
+			l_lines: STRING_32
+		do
+			create l_lines.make (256)
+			append_folder_references (a_folder.id, l_lines)
+			if l_lines.is_empty then
+				say ({STRING_32} "No passages in " + a_folder.name + {STRING_32} ".")
+			else
+				(create {SW_CLIPBOARD}).set_text (l_lines)
+				window.toast ({STRING_32} "Copied the references in " + a_folder.name + {STRING_32} ".", 1)
+			end
+		end
+
+	append_folder_references (a_folder_id: INTEGER_64; a_lines: STRING_32)
+			-- The references of folder `a_folder_id''s favorites, then of its folders, appended to `a_lines'.
+		do
+			across favorites_state.child_items (a_folder_id) as ic loop
+				if ic.is_passage or ic.is_verse_quotation then
+					if not a_lines.is_empty then
+						a_lines.append ({STRING_32} "%N")
+					end
+					a_lines.append (passage_text (ic.hub_id, ic.end_hub_id, ic.is_whole_chapter))
+				end
+			end
+			across favorites_state.child_folders (a_folder_id) as ic loop
+				append_folder_references (ic.id, a_lines)
+			end
+		end
+
+	passage_text (a_from, a_to: INTEGER_64; a_whole_chapter: BOOLEAN): STRING_32
+			-- "John 3:16", "Romans 8:28-30", "John 3:16-4:2", or "John 3" for a whole chapter.
+		local
+			l_hub: BIB_HUB_ID
+		do
+			create l_hub
+			if a_whole_chapter then
+				Result := place_text (l_hub.book_of (a_from), l_hub.chapter_of (a_from), 0)
+			else
+				Result := place_text (l_hub.book_of (a_from), l_hub.chapter_of (a_from), l_hub.verse_of (a_from))
+				if a_to > a_from then
+					if l_hub.chapter_of (a_to) = l_hub.chapter_of (a_from) then
+						Result.append ({STRING_32} "-" + l_hub.verse_of (a_to).out)
+					else
+						Result.append ({STRING_32} "-" + l_hub.chapter_of (a_to).out + {STRING_32} ":" + l_hub.verse_of (a_to).out)
+					end
+				end
+			end
+		end
+
+	meme_starred (a_meme: BIB_MEME): BOOLEAN
+			-- The memes list: a favorite meme wears the star.
+		do
+			Result := is_meme_favorite (a_meme)
 		end
 
 feature {BIB_WINDOW_HARNESS_CLIENT} -- The window harness (research/23, 2026-10-31: GUI risks shown failing before their fixes)
@@ -1423,6 +2066,79 @@ feature {BIB_WINDOW_HARNESS_CLIENT} -- The window harness (research/23, 2026-10-
 			Result := reading_view
 		end
 
+	harness_meme_card (a_slug: READABLE_STRING_GENERAL): detachable SW_HOVER_CARD
+			-- The card hovering that meme's picture icon would open.
+		do
+			if attached meme_store.meme_by_slug (a_slug) as al_meme then
+				Result := meme_card (al_meme, 1)
+			end
+		end
+
+	harness_card_picture: detachable CAIRO_SURFACE
+			-- The one picture in memory.
+		do
+			Result := meme_card_picture
+		end
+
+	harness_meme_count: INTEGER
+			-- Memes the list shows.
+		do
+			Result := meme_rows.count
+		end
+
+	harness_meme_scope (a_index: INTEGER)
+			-- All (1), Verse read (2), Chapter read (3).
+		do
+			meme_scope.select_segment (a_index)
+		end
+
+	harness_search_memes (a_words: READABLE_STRING_GENERAL)
+		do
+			meme_search_box.set_text (a_words)
+			fill_memes
+		end
+
+	harness_choose_meme (a_slug: READABLE_STRING_GENERAL)
+		do
+			choose_meme (meme_store.meme_by_slug (a_slug))
+		end
+
+	harness_meme_shown_first: STRING_32
+			-- The slug of the meme the list shows first.
+		do
+			create Result.make_empty
+			if not memes_grid.view.is_empty then
+				Result := memes_grid.rows.i_th (memes_grid.view.first).slug
+			end
+		end
+
+	harness_lists_meme (a_slug: READABLE_STRING_GENERAL): BOOLEAN
+		do
+			Result := across meme_rows as ic some ic.slug.same_string_general (a_slug) end
+		end
+
+	harness_toggle_meme_favorite
+		do
+			toggle_meme_favorite
+		end
+
+	harness_copy_meme_picture
+		do
+			copy_meme_picture
+		end
+
+	harness_copy_meme_description
+		do
+			copy_meme_description
+		end
+
+	harness_copy_folder_references (a_folder_id: INTEGER_64)
+		do
+			if attached favorites_state.folder (a_folder_id) as al_folder then
+				copy_folder_references (al_folder)
+			end
+		end
+
 	harness_framework_count: INTEGER
 		do
 			Result := framework_rows.count
@@ -1732,6 +2448,11 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 				end
 			elseif snapshot_tab.same_string ({STRING_32} "fwcard") then
 				snapshot_framework_card
+			elseif snapshot_tab.same_string ({STRING_32} "memes") then
+				bring_into_view (results_panel, results_tabs, Memes_tab)
+				dock.maximize_panel (results_panel)
+				fill_memes
+				choose_meme (meme_store.meme_by_slug ("john-3-16"))
 			elseif snapshot_tab.same_string ({STRING_32} "versequote") then
 				snapshot_verse_quotation
 			elseif snapshot_tab.same_string ({STRING_32} "quotation") or snapshot_tab.same_string ({STRING_32} "quotemenu") then
@@ -2144,6 +2865,11 @@ feature {NONE} -- Window
 			highlights_grid.add_column (create {SW_GRID_COLUMN [BIB_HIGHLIGHT]}.make ("Verse", 120.0, agent item_place ({BIB_HIGHLIGHT} ?)))
 			history_grid.add_column ((create {SW_GRID_COLUMN [BIB_VISIT]}.make ("Place", 120.0, agent item_place ({BIB_VISIT} ?))).growing.with_star (agent visit_starred))
 			history_grid.add_column (create {SW_GRID_COLUMN [BIB_VISIT]}.make ("When", 120.0, agent visit_when))
+			memes_grid.add_column ((create {SW_GRID_COLUMN [BIB_MEME]}.make ("", 40.0, agent meme_no_text)).with_glyph (agent meme_picture_glyph))
+			memes_grid.add_column ((create {SW_GRID_COLUMN [BIB_MEME]}.make ("Meme", 190.0, agent meme_title)).with_star (agent meme_starred))
+			memes_grid.add_column ((create {SW_GRID_COLUMN [BIB_MEME]}.make ("Words", 220.0, agent meme_words)).growing)
+			memes_grid.add_column (create {SW_GRID_COLUMN [BIB_MEME]}.make ("Passages", 150.0, agent meme_passages_text))
+			memes_grid.add_column (create {SW_GRID_COLUMN [BIB_MEME]}.make ("Set", 110.0, agent meme_set_name))
 			history_grid.set_on_select (agent on_history_row)
 			tag_names_grid.add_column ((create {SW_GRID_COLUMN [TUPLE [tag: STRING_32; verses: INTEGER]]}.make ("Tag", 160.0, agent tag_name_text)).growing)
 			tag_names_grid.add_column (create {SW_GRID_COLUMN [TUPLE [tag: STRING_32; verses: INTEGER]]}.make ("Verses", 70.0, agent tag_verses_text))
@@ -3289,6 +4015,7 @@ feature {NONE} -- Two layouts (C7)
 			results_tabs.add_page ("Author Library", library_holder)
 			results_tabs.add_page ("Writings", writings_page)
 			results_tabs.add_page ("Scholar Guides", guides_holder)
+			results_tabs.add_page ("Memes", memes_page)
 			results_tabs.set_on_change (agent on_results_tab)
 			results_tabs.add_page ("Study Ledger v1.5", create {SW_EMPTY_STATE}.make ("Study ledger is version 1.5", "Planned for version 1.5."))
 
@@ -3609,6 +4336,9 @@ feature {NONE} -- Two layouts (C7)
 					then
 						a_menu.add_item ({STRING_32} "Open in " + al_version.name, "", True, agent open_favorite_in_its_version (al_item))
 					end
+				end
+				if attached al_node.folder as al_folder then
+					a_menu.add_item ("Copy references", "", True, agent copy_folder_references (al_folder))
 				end
 				a_menu.add_item ("Rename...", "", True, agent open_rename_sheet (al_node))
 				a_menu.add_item ("Move to...", "", True, agent open_move_sheet (al_node))
@@ -6255,6 +6985,8 @@ feature {NONE} -- The Atlas and the shared selection (Plan 22 phase 3, 2026-10-3
 			window.add_reference_mark (commentary_title, "T5", "P04 Commentary, east: Commentaries (Larry's commentary packs, verse by verse, every claim labelled SOURCED or DEDUCED), Cross-refs with OpenBible votes.", window.Corner_top_left)
 			window.add_reference_mark (results_tabs, "T6", "South results zone: Search Results (word choices, then the verses holding the words; click one to read it); Author Library (Larry's books); Writings (the search box with My writings as its scope); Guides, Census and Ledger come later.", window.Corner_top_left)
 			window.add_reference_mark (writings_grid, "T6.5", "Writings: what the search box found in your commentary, frameworks and books (scope My writings; My writings (fuzzy) forgives a misspelt word). Click one to open it.", window.Corner_top_right)
+			window.add_reference_mark (memes_grid, "T6.6", "Memes list: all, or those naming the verse or chapter read; search box above; click a heading to sort (title, words, passages, set); your favorite memes stay at the top (the star); hover the picture icon to see the meme.", window.Corner_top_left)
+			window.add_reference_mark (meme_view, "T6.7", "The chosen meme: Copy picture and Copy description put either on the clipboard; the star makes it a favorite; its passages open the Bible text; Add meme keeps a new one.", window.Corner_top_left)
 		end
 
 feature {NONE} -- Right-click menus and panes (Larry, 2026-10-28)

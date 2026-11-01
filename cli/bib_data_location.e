@@ -93,6 +93,15 @@ feature -- Access
 			not_empty: not Result.is_empty
 		end
 
+	meme_path: STRING
+			-- Larry's memes (meme.db, research/25), in %LOCALAPPDATA%\simple_bible beside user.db: the
+			-- meme tool adds to it, so it is never a pack in the packs folder (those attach read-only).
+		do
+			Result := local_data ("meme.db")
+		ensure
+			not_empty: not Result.is_empty
+		end
+
 feature {NONE} -- Implementation
 
 	installed_data (a_name: STRING): STRING
