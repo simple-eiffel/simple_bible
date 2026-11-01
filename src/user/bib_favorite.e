@@ -19,7 +19,9 @@ inherit
 	BIB_USER_ITEM
 
 create
-	make_passage
+	make_passage,
+	make_document,
+	make_quotation
 
 feature {NONE} -- Initialization
 
@@ -42,6 +44,50 @@ feature {NONE} -- Initialization
 			version_kept: version.same_string (a_version)
 		end
 
+	make_document (a_target, a_label: READABLE_STRING_GENERAL)
+			-- A whole document: the book, chapter, essay or framework link `a_target' opens, named
+			-- `a_label' (research/24 stage D).
+		require
+			has_target: not a_target.is_empty
+		do
+			favorite_kind := Document
+			target := a_target.to_string_32
+			label := a_label.to_string_32
+			create version.make_empty
+			create quote.make_empty
+		ensure
+			document: is_document
+			target_kept: target.same_string_general (a_target)
+		end
+
+	make_quotation (a_target, a_quote: READABLE_STRING_GENERAL; a_hub, a_end_hub: INTEGER_64; a_version: READABLE_STRING_8;
+			a_from, a_to: INTEGER_64; a_label: READABLE_STRING_GENERAL)
+			-- The text `a_quote' selected in the document `a_target' opens (Larry: a part of a
+			-- framework, a commentary, a book), from position `a_from' to `a_to' of it (item * 1,000,000
+			-- + offset, as `Anchor_scale' says: a hint, the quote itself is what is found again);
+			-- verses `a_hub' to `a_end_hub' and `a_version' when it is taken from the Bible text, the
+			-- verse of a commentary (`a_end_hub' the same), else 0 and empty.
+		require
+			has_target: not a_target.is_empty
+			has_quote: not a_quote.is_empty
+			hub_non_negative: a_hub >= 0
+			hubs_ordered: a_end_hub >= a_hub
+			anchors_ordered: 0 <= a_from and a_from <= a_to
+		do
+			favorite_kind := Quotation
+			target := a_target.to_string_32
+			quote := a_quote.to_string_32
+			hub_id := a_hub
+			end_hub_id := a_end_hub
+			version := a_version.to_string_8
+			anchor_from := a_from
+			anchor_to := a_to
+			label := a_label.to_string_32
+		ensure
+			quotation: is_quotation
+			kept: target.same_string_general (a_target) and quote.same_string_general (a_quote) and anchor_from = a_from and anchor_to = a_to
+		end
+
 feature -- Access
 
 	favorite_kind: INTEGER
@@ -62,8 +108,23 @@ feature -- Access
 	quote: STRING_32
 			-- A quotation's text (stage D); empty otherwise.
 
-	anchor_from, anchor_to: INTEGER
-			-- The characters a quotation spans in its source (stage D).
+	anchor_from, anchor_to: INTEGER_64
+			-- Where a quotation starts and ends in its source: item * `Anchor_scale' + offset.
+
+	Anchor_scale: INTEGER_64 = 1_000_000
+			-- An anchor's item and offset in one number.
+
+	anchor_item (a_anchor: INTEGER_64): INTEGER
+			-- The item of anchor `a_anchor'.
+		do
+			Result := (a_anchor // Anchor_scale).to_integer_32
+		end
+
+	anchor_offset (a_anchor: INTEGER_64): INTEGER
+			-- The offset of anchor `a_anchor'.
+		do
+			Result := (a_anchor \\ Anchor_scale).to_integer_32
+		end
 
 	folder_id: INTEGER_64
 			-- The folder it is in (0: the root).
@@ -80,15 +141,31 @@ feature -- Status
 			Result := favorite_kind = Passage
 		end
 
+	is_document: BOOLEAN
+		do
+			Result := favorite_kind = Document
+		end
+
+	is_quotation: BOOLEAN
+		do
+			Result := favorite_kind = Quotation
+		end
+
+	is_verse_quotation: BOOLEAN
+			-- Is it words taken from the Bible text (Larry: an optional way to keep a passage)?
+		do
+			Result := is_quotation and then hub_id > 0 and then target.starts_with ({STRING_32} "bible:")
+		end
+
 	is_single_verse: BOOLEAN
 		do
 			Result := is_passage and end_hub_id = hub_id
 		end
 
 	covers (a_hub: INTEGER_64): BOOLEAN
-			-- Does this passage take in verse `a_hub'?
+			-- Does this passage, or these words of the Bible text, take in verse `a_hub'?
 		do
-			Result := is_passage and hub_id <= a_hub and a_hub <= end_hub_id
+			Result := (is_passage or is_verse_quotation) and hub_id <= a_hub and a_hub <= end_hub_id
 		end
 
 	is_whole_chapter: BOOLEAN
@@ -126,6 +203,8 @@ feature {BIB_USER_STORE} -- Store bookkeeping
 invariant
 	known_kind: favorite_kind >= Passage and favorite_kind <= Quotation
 	passage_in_order: is_passage implies (hub_id > 0 and end_hub_id >= hub_id)
+	document_has_target: is_document implies not target.is_empty
+	quotation_has_its_text: is_quotation implies (not target.is_empty and not quote.is_empty)
 	folder_non_negative: folder_id >= 0
 
 end

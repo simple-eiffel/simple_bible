@@ -1,6 +1,6 @@
 # 24 - History and Favorites
 
-Status: **asked for by Larry 2026-11-01; plan, nothing built.** Follows research/23 phase 3 (the reading place), which it builds on.
+Status: **asked for by Larry 2026-11-01. Built: A (0.7.50, the reading place), B (0.7.51, History), C (0.7.52, Favorites, stars), D1 (0.7.53, quotations and documents from the framework, book and commentary views, marked inside them), D2 (0.7.54, quotations of verses in the Bible text and Parallel). Next: D3, carrying a selection to Favorites (section 5).** Follows research/23 phase 3 (the reading place), which it builds on.
 
 ## 1. What Larry asked for
 
