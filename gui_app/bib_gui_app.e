@@ -103,6 +103,13 @@ feature {NONE} -- Initialization
 			create history_grid.make (100.0)
 			create history_heading.make_ui ("")
 			create history_rows.make (0)
+			create session_visits.make (40)
+			create history_scope.make
+			history_scope.add_segment ("This session")
+			history_scope.add_segment ("Kept")
+			create history_keep_box.make (Default_history_limit, Min_history_limit, Max_history_limit, Void)
+			history_keep_box.set_step (10)
+			history_keep_box.set_tooltip ("How many verses the Kept list shows (10 to 1,000). Every visit stays in user.db; this only lists fewer or more.")
 			create tag_label.make_ui ("")
 			create journal_title_box.make_single_line ("")
 			create prayer_title_box.make_single_line ("")
@@ -326,6 +333,12 @@ feature {NONE} -- Initialization
 			reading.on_verse (agent show_verse)
 			reading.on_history (agent show_trail_buttons)
 			show_verse_tools
+				-- History (research/24 stage B): every verse touched joins this session's list and
+				-- user.db; the Kept list shows as many as the reader chose
+			history_keep_box.set_value (history_limit)
+			history_keep_box.set_on_change (agent set_history_limit)
+			history_scope.set_on_change (agent (a_index: INTEGER) do fill_history end)
+			reading.on_verse (agent note_visit)
 				-- Genesis 1:1 selected, so the commentary has its cross-references from the start (Larry:
 				-- T5 was empty until a verse was clicked).
 			if bible.is_open and then not reading_version.is_empty and then bible.books.has_book (1) then
@@ -611,6 +624,36 @@ feature {BIB_WINDOW_HARNESS_CLIENT} -- The window harness (research/23, 2026-10-
 			Result := reading_book = a_book and reading_chapter = a_chapter and reading_verse = a_verse
 		end
 
+	harness_history_scope (a_index: INTEGER)
+			-- This session (1) or Kept (2).
+		do
+			history_scope.select_segment (a_index)
+		end
+
+	harness_history_count: INTEGER
+			-- Rows the History tab lists.
+		do
+			Result := history_rows.count
+		end
+
+	harness_history_is (a_row, a_book, a_chapter, a_verse: INTEGER): BOOLEAN
+			-- Is row `a_row' of the History tab that verse?
+		do
+			Result := a_row >= 1 and a_row <= history_rows.count and then history_rows.i_th (a_row).hub_id = (create {BIB_HUB_ID}).hub_id (a_book, a_chapter, a_verse)
+		end
+
+	harness_set_history_limit (a_limit: INTEGER)
+			-- Set the Kept list's length.
+		do
+			set_history_limit (a_limit)
+		end
+
+	harness_history_keep_value: INTEGER
+			-- What the Kept list's length box shows.
+		do
+			Result := history_keep_box.value
+		end
+
 	harness_theme_swapped_by_windows (a_dark: BOOLEAN)
 			-- What following Windows does when its setting flips: the window wears the theme and
 			-- tells `on_theme_changed'.
@@ -861,6 +904,11 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 				go_to (43, 3, 16)
 				go_to (65, 1, 6)
 				navigator_tabs.select_tab (History_tab)
+			elseif snapshot_tab.same_string ({STRING_32} "historykept") then
+				go_to (43, 3, 16)
+				go_to (65, 1, 6)
+				navigator_tabs.select_tab (History_tab)
+				history_scope.select_segment (2)
 			elseif snapshot_tab.same_string ({STRING_32} "bookmarks") then
 				bookmark_verse
 				navigator_tabs.select_tab (Bookmarks_tab)
@@ -1785,7 +1833,6 @@ feature {NONE} -- Reading (S1, P01)
 				if l_released then
 					show_cross_refs
 				end
-				record_place (a_book, a_chapter, a_verse)
 			end
 		end
 
@@ -1867,7 +1914,6 @@ feature {NONE} -- Reading (S1, P01)
 					fill_interlinear
 				end
 				fill_notes
-				fill_history
 			end
 		end
 
@@ -2391,7 +2437,7 @@ feature {NONE} -- Two layouts (C7)
 		local
 			l_roots: ARRAYED_LIST [BIB_NAV_NODE]
 			l_books, l_marks, l_history: SW_COLUMN
-			l_buttons: SW_ROW
+			l_buttons, l_keep: SW_ROW
 		do
 			create l_roots.make (2)
 			l_roots.extend (create {BIB_NAV_NODE}.make_testament ("Old Testament", {BIB_CANON}.First_book, {BIB_CANON}.Last_old_testament_book))
@@ -2414,7 +2460,12 @@ feature {NONE} -- Two layouts (C7)
 			navigator_tabs.add_page ("Books", l_books)
 			navigator_tabs.add_page ("Bookmarks", l_marks)
 			create l_history.make
+				-- the Kept list's length beside the switch: a row of its own did not fit a short Navigator
 			l_history := l_history.with_gap (6.0)
+			create l_keep.make
+			l_keep.put (history_scope)
+			l_keep.put (history_keep_box)
+			l_history.put (l_keep)
 			l_history.put (history_heading)
 			l_history.put (history_grid.growing)
 			navigator_tabs.add_page ("History", l_history)
@@ -2489,68 +2540,134 @@ feature {NONE} -- Two layouts (C7)
 	History_tab: INTEGER = 3
 			-- T1's History page.
 
-	History_length: INTEGER = 50
-			-- How many chapters History lists.
+	Default_history_limit: INTEGER = 200
+			-- The Kept list's length unless the reader sets another (Larry, 2026-11-01).
+
+	Min_history_limit: INTEGER = 10
+	Max_history_limit: INTEGER = 1000
+			-- The lengths the reader may choose (the longest is the store's `Max_recent_places').
+
+	History_limit_key: STRING_8 = "history_limit"
+			-- The user.db setting that keeps the reader's choice.
+
+	history_limit: INTEGER
+			-- How many verses the Kept list shows.
+		do
+			Result := Default_history_limit
+			if user_store.has_setting (History_limit_key) and then user_store.setting (History_limit_key).is_integer then
+				Result := user_store.setting (History_limit_key).to_integer.max (Min_history_limit).min (Max_history_limit)
+			end
+		ensure
+			in_range: Result >= Min_history_limit and Result <= Max_history_limit
+		end
+
+	set_history_limit (a_limit: INTEGER)
+			-- The Kept list shows `a_limit' verses (kept to the lengths allowed), from now on.
+		do
+			user_store.set_setting (History_limit_key, a_limit.max (Min_history_limit).min (Max_history_limit).out)
+			history_keep_box.set_value (history_limit)
+			fill_history
+		ensure
+			kept_in_range: history_limit = a_limit.max (Min_history_limit).min (Max_history_limit)
+		end
 
 	history_heading: SW_LABEL
 	history_grid: SW_DATA_GRID [BIB_VISIT]
-			-- T1's History tab (2026-10-27): the chapters read, newest first, kept in user.db.
 
 	history_rows: ARRAYED_LIST [BIB_VISIT]
 			-- The rows of `history_grid'.
 
-	last_recorded_hub: INTEGER_64
-			-- The place History recorded last this run (0: none yet).
+	history_scope: SW_SEGMENTED
+			-- This session's verses, or the kept ones.
 
-	record_place (a_book, a_chapter, a_verse: INTEGER)
-			-- `go_to' adds the place to History when its chapter is not the one recorded last (a verse
-			-- clicked in the same chapter is no new visit). Scan 46: Back and Forward no longer
-			-- reorder History, and a failed write is told once, not retried silently at each open.
-		require
-			book_positive: a_book > 0
-			chapter_positive: a_chapter > 0
-			verse_not_negative: a_verse >= 0
+	history_keep_box: SW_NUMBER_BOX
+			-- How many verses the Kept list shows.
+
+	session_visits: ARRAYED_LIST [BIB_VISIT]
+			-- Every verse touched since the window opened, newest first, each once.
+
+	last_recorded_hub: INTEGER_64
+			-- The place `note_visit' recorded last.
+
+	is_history_write_failed: BOOLEAN
+			-- Did a visit fail to save? Told once, then not tried again this run (scan 46).
+
+	is_session_history: BOOLEAN
+			-- Does the History tab list this session's verses (else the kept ones)?
+		do
+			Result := history_scope.selected_index = 1
+		end
+
+	note_visit
+			-- The verse read (the chapter, when no verse is) joins this session's list and user.db
+			-- (`reading' tells; Larry, 2026-11-01: every verse touched, not one visit per chapter).
 		local
 			l_hub: INTEGER_64
+			l_visit: BIB_VISIT
+			i: INTEGER
 		do
-			if user_store.is_open then
-				l_hub := (create {BIB_HUB_ID}).hub_id (a_book, a_chapter, a_verse.max (1))
-				if l_hub // {BIB_HUB_ID}.Chapter_unit /= last_recorded_hub // {BIB_HUB_ID}.Chapter_unit then
-					last_recorded_hub := l_hub
-					user_store.record_visit (create {BIB_VISIT}.make (l_hub, "reading"))
+			l_hub := (create {BIB_HUB_ID}).hub_id (reading_book, reading_chapter, reading_verse.max (1))
+			if l_hub /= last_recorded_hub then
+				last_recorded_hub := l_hub
+				create l_visit.make (l_hub, "reading")
+				if user_store.is_open and not is_history_write_failed then
+					user_store.record_visit (l_visit)
 					if attached user_store.write_error as al_error then
+						is_history_write_failed := True
 						say ({STRING_32} "History was not saved: " + al_error.message)
 					end
 				end
+				from i := session_visits.count until i < 1 loop
+					if session_visits.i_th (i).hub_id = l_hub then
+						session_visits.go_i_th (i)
+						session_visits.remove
+					end
+					i := i - 1
+				end
+				session_visits.put_front (l_visit)
+				fill_history
 			end
+		ensure
+			newest_first: reading.has_place implies session_visits.first.hub_id = (create {BIB_HUB_ID}).hub_id (reading_book, reading_chapter, reading_verse.max (1))
 		end
 
 	fill_history
-			-- The chapters read, newest first; the chapter read stays selected.
+			-- This session's verses or the kept ones, newest first; the verse read stays selected.
 		local
 			i, l_index: INTEGER
-			l_hub: BIB_HUB_ID
-			l_place: INTEGER_64
+			l_hub: INTEGER_64
 		do
-			if user_store.is_open then
-				history_rows := user_store.recent_places (History_length)
+			if is_session_history then
+				create history_rows.make_from_array (session_visits.to_array)
+			elseif user_store.is_open then
+				history_rows := user_store.recent_visits (history_limit)
 			else
 				create history_rows.make (0)
 			end
 			history_grid.set_rows (history_rows)
-			create l_hub
+			if reading.has_place then
+				l_hub := (create {BIB_HUB_ID}).hub_id (reading_book, reading_chapter, reading_verse.max (1))
+			end
 			from i := 1 until i > history_rows.count or l_index > 0 loop
-				l_place := history_rows.i_th (i).hub_id
-				if l_hub.is_valid_hub (l_place) and then l_hub.book_of (l_place) = reading_book and then l_hub.chapter_of (l_place) = reading_chapter then
+				if history_rows.i_th (i).hub_id = l_hub then
 					l_index := i
 				end
 				i := i + 1
 			end
 			reselect (history_grid, l_index)
-			if history_rows.is_empty then
-				history_heading.set_text ("No history yet: the chapters you read are listed here.")
+			history_keep_box.set_enabled (not is_session_history and user_store.is_open)
+			if is_session_history then
+				if history_rows.is_empty then
+					history_heading.set_text ("Nothing read yet in this session.")
+				else
+					history_heading.set_text (history_rows.count.out.to_string_32 + {STRING_32} " verses this session, newest first.")
+				end
+			elseif not user_store.is_open then
+				history_heading.set_text ("History is not kept: user.db is not open.")
+			elseif history_rows.is_empty then
+				history_heading.set_text ("No history yet: the verses you read are kept here.")
 			else
-				history_heading.set_text ({STRING_32} "The last " + History_length.out + {STRING_32} " chapters you read, newest first; click one to read it again.")
+				history_heading.set_text ({STRING_32} "Kept: the last " + history_rows.count.out + {STRING_32} " verses read.")
 			end
 		end
 

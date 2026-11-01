@@ -136,6 +136,28 @@ feature -- Access
 			one_per_chapter: across Result as ic all across Result as jc all ic.hub_id // {BIB_HUB_ID}.Chapter_unit = jc.hub_id // {BIB_HUB_ID}.Chapter_unit implies ic.id = jc.id end end
 		end
 
+	recent_visits (a_limit: INTEGER): ARRAYED_LIST [BIB_VISIT]
+			-- History (Larry, 2026-11-01): the newest visit of each verse, newest first, at most
+			-- `a_limit'. Every visit stays stored (DR-024: user data is never lost); the limit is how
+			-- many the reader keeps listed.
+		require
+			open: is_open
+			limit_positive: a_limit > 0
+			limit_capped: a_limit <= Max_recent_places
+		local
+			l_visit: BIB_VISIT
+		do
+			create Result.make (a_limit.min (64))
+			across connection.query_with_args ("SELECT item_id, hub_id, label, created_at FROM user_item WHERE item_id IN (SELECT max(item_id) FROM user_item WHERE kind = ? AND " + Live_item_filter + " GROUP BY hub_id) ORDER BY item_id DESC LIMIT ?", <<Kind_visit, a_limit>>).rows as ic loop
+				create l_visit.make (ic.integer_64_value ("hub_id"), ic.string_value ("label"))
+				l_visit.mark_stored (ic.integer_64_value ("item_id"), time_of (ic.string_value ("created_at")))
+				Result.extend (l_visit)
+			end
+		ensure
+			at_most_the_limit: Result.count <= a_limit
+			one_per_verse: across Result as ic all across Result as jc all ic.hub_id = jc.hub_id implies ic.id = jc.id end end
+		end
+
 	tag_counts: ARRAYED_LIST [TUPLE [tag: STRING_32; verses: INTEGER]]
 			-- Every live tag and how many verses carry it, by tag (E05).
 		require

@@ -287,6 +287,33 @@ feature -- Tests
 			clean_user_file
 		end
 
+	test_recent_visits_one_per_verse
+			-- History (Larry, 2026-11-01): the newest visit of each verse, newest first; every visit
+			-- stays stored, and the limit only lists fewer.
+		local
+			l_user: BIB_USER_STORE
+			l_hub: BIB_HUB_ID
+			l_visits: ARRAYED_LIST [BIB_VISIT]
+		do
+			clean_user_file
+			create l_user.make (User_file)
+			l_user.open
+			create l_hub
+			l_user.record_visit (create {BIB_VISIT}.make (l_hub.hub_id (43, 3, 16), "reading"))
+			l_user.record_visit (create {BIB_VISIT}.make (l_hub.hub_id (43, 3, 17), "reading"))
+			l_user.record_visit (create {BIB_VISIT}.make (l_hub.hub_id (43, 3, 16), "reading"))
+			l_user.record_visit (create {BIB_VISIT}.make (l_hub.hub_id (65, 1, 6), "reading"))
+			l_visits := l_user.recent_visits (10)
+			assert_integers_equal ("one per verse", 3, l_visits.count)
+			assert_true ("Jude 1:6 newest", l_visits.first.hub_id = l_hub.hub_id (65, 1, 6))
+			assert_true ("John 3:16 next, read again", l_visits.i_th (2).hub_id = l_hub.hub_id (43, 3, 16))
+			assert_true ("John 3:17 oldest", l_visits.i_th (3).hub_id = l_hub.hub_id (43, 3, 17))
+			assert_integers_equal ("the limit lists fewer", 2, l_user.recent_visits (2).count)
+			assert_integers_equal ("both visits of John 3:16 kept", 2, l_user.item_count ({BIB_USER_STORE}.Kind_visit, l_hub.hub_id (43, 3, 16)))
+			l_user.close
+			clean_user_file
+		end
+
 	test_schema_1_is_upgraded_with_a_backup
 			-- user.db schema 2 (prayer, memory cards): a version-1 file is backed up, then upgraded by
 			-- adding tables only; every note version and setting survives. Before: version 1 was this
