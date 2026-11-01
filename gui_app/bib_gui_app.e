@@ -2436,10 +2436,17 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 					go_to (al_place.book, al_place.chapter, al_place.verse)
 				end
 			end
-			if not is_study then
+			if snapshot_tab.starts_with ({STRING_32} "simple") then
+					-- the Simple layout, its pills shown or not, for the User Manual (2026-11-01)
+				layout_state.set_study (False)
+				window.set_reference_marks_shown (snapshot_tab.same_string ({STRING_32} "simplepills"))
+			elseif not is_study then
 				layout_state.set_study (True)
 			end
-			if snapshot_tab.same_string ({STRING_32} "interlinear") then
+			if snapshot_tab.same_string ({STRING_32} "pills") then
+					-- the design pills shown, for the User Manual (2026-11-01)
+				window.set_reference_marks_shown (True)
+			elseif snapshot_tab.same_string ({STRING_32} "interlinear") then
 				show_interlinear
 			elseif snapshot_tab.same_string ({STRING_32} "timeline") then
 				show_timeline
