@@ -1,6 +1,6 @@
 # 23 - State by agents (audit, plan, phases)
 
-Status: **audit done (2026-10-31); phase 0 shipped in 0.7.44; phase 1 shipped in 0.7.45; phase 2 shipped in 0.7.46; the window harness in 0.7.47; phase 4 shipped test-first in 0.7.48 (taken before phase 3: phase 3 fixes no observable bug); phase 5 built test-first for 0.7.49; phase 3 and 6 onward next.** The library design (section 5) waits for a design session with Larry.
+Status: **audit done (2026-10-31); phase 0 shipped in 0.7.44; phase 1 shipped in 0.7.45; phase 2 shipped in 0.7.46; the window harness in 0.7.47; phase 4 shipped test-first in 0.7.48 (taken before phase 3: phase 3 fixes no observable bug); phase 5 built test-first for 0.7.49; phase 3 built test-first for 0.7.50 (BIB_READING_STATE; it also starts research/24, History and Favorites); phase 6 onward next.** The library design (section 5) waits for a design session with Larry.
 
 ## 1. The rule
 
