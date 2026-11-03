@@ -28,6 +28,107 @@ inherit
 			default_create
 		end
 
+feature -- Undo and Redo for Favorites (Larry, 2026-11-03)
+
+	test_ctrl_z_undoes_an_added_favorite_and_ctrl_y_redoes_it
+		local
+			app: BIB_GUI_APP
+		do
+			app := new_window
+			app.harness_go_to (43, 3, 16)
+			app.harness_add_favorite (1, 16, "John 3:16", 0)
+			assert_integers_equal ("kept", 1, app.harness_folder_item_count (0))
+			assert_strings_equal ("Undo names it", "Add John 3:16", app.harness_undo_name)
+			app.harness_key (0x5A, True, False)
+			assert_integers_equal ("Ctrl+Z took it back", 0, app.harness_folder_item_count (0))
+			assert_false ("and its star", app.harness_verse_starred (16))
+			app.harness_key (0x59, True, False)
+			assert_integers_equal ("Ctrl+Y put it back", 1, app.harness_folder_item_count (0))
+			app.harness_key (0x5A, True, False)
+			app.harness_key (0x5A, True, True)
+			assert_integers_equal ("Ctrl+Shift+Z redoes too", 1, app.harness_folder_item_count (0))
+		end
+
+	test_ctrl_z_in_a_text_box_stays_the_boxs_own
+		local
+			app: BIB_GUI_APP
+		do
+			app := new_window
+			app.harness_go_to (43, 3, 16)
+			app.harness_add_favorite (1, 16, "John 3:16", 0)
+			app.harness_give_focus_to_filter
+			app.harness_key (0x5A, True, False)
+			assert_integers_equal ("typing's Undo, not Favorites'", 1, app.harness_folder_item_count (0))
+		end
+
+	test_a_notices_undo_puts_a_move_back
+		local
+			app: BIB_GUI_APP
+			t: SW_TREE [BIB_FAVORITE_NODE]
+			l_folder: INTEGER_64
+			k: INTEGER
+		do
+			app := new_window
+			app.harness_go_to (43, 3, 16)
+			app.harness_add_favorite (1, 16, "John 3:16", 0)
+			l_folder := app.harness_new_folder ("Gospel")
+			app.harness_show_favorites
+			app.harness_render
+			t := app.harness_favorites_tree
+			k := row_of (t, "John 3:16")
+			app.harness_dispatch (2, row_x (t), row_y (t, k))
+			app.harness_dispatch (9, row_x (t), row_y (t, k) + 10)
+			app.harness_dispatch (9, row_x (t), row_y (t, row_of (t, "Gospel")))
+			app.harness_dispatch (10, row_x (t), row_y (t, row_of (t, "Gospel")))
+			assert_integers_equal ("moved", 1, app.harness_folder_item_count (l_folder))
+			app.harness_notice_undo
+			assert_integers_equal ("the notice's Undo put it back", 1, app.harness_folder_item_count (0))
+			assert_integers_equal ("out of Gospel", 0, app.harness_folder_item_count (l_folder))
+		end
+
+	test_a_drop_into_a_new_folder_undoes_as_one_change
+		local
+			app: BIB_GUI_APP
+			v: SW_DOCUMENT_VIEW
+			t: SW_TREE [BIB_FAVORITE_NODE]
+			l_folder: INTEGER_64
+			cx: INTEGER
+		do
+			app := new_window
+			l_folder := app.harness_new_folder ("Sermons")
+			app.harness_show_framework (1)
+			app.harness_show_favorites
+			app.harness_render
+			v := app.harness_document_view (1)
+			t := app.harness_favorites_tree
+			v.select_range (2, 0, 2, v.text_of (2).count.min (24))
+			app.harness_pick_up (1)
+			app.harness_dispatch (13, row_x (t), row_y (t, row_of (t, "Sermons")))
+			cx := (t.new_folder_chip_left + 20.0).truncated_to_integer
+			app.harness_dispatch (13, cx, row_y (t, row_of (t, "Sermons")))
+			app.harness_dispatch (2, cx, row_y (t, row_of (t, "Sermons")))
+			app.harness_close_sheet
+			assert_integers_equal ("a folder made", 1, app.harness_folder_ids_in (l_folder).count)
+			assert_true ("one change, to a new folder", app.harness_undo_name.has_substring ("to a new folder"))
+			app.harness_key (0x5A, True, False)
+			assert_integers_equal ("one Ctrl+Z: no folder", 0, app.harness_folder_ids_in (l_folder).count)
+			assert_strings_equal ("and Sermons' own name is next", "Rename Untitled", app.harness_undo_name)
+		end
+
+	test_ctrl_z_puts_an_old_name_back
+		local
+			app: BIB_GUI_APP
+			l_folder: INTEGER_64
+		do
+			app := new_window
+			l_folder := app.harness_new_folder ("Sermons")
+			assert_strings_equal ("named", "Sermons", app.harness_favorite_root_label (1))
+			app.harness_key (0x5A, True, False)
+			assert_strings_equal ("Ctrl+Z: the old name", "Untitled", app.harness_favorite_root_label (1))
+			app.harness_key (0x5A, True, False)
+			assert_integers_equal ("Ctrl+Z again: no folder", 0, app.harness_favorite_roots)
+		end
+
 feature -- Carrying a selection to Favorites (research/24 stage D3, 2026-11-03)
 
 	test_a_framework_selection_dragged_onto_a_folder_is_kept_there
