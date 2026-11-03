@@ -13,7 +13,8 @@ note
 
 		THE CHECKS, before a byte is written: ids lowercase letters and digits and
 		unique; a title; a known status; at least one chapter, each of a known kind
-		with its file present; aliases unique across the pack and never a
+		with its file present, a known status of its own (or the book's) and a
+		published date written 2026-06-14 or none; aliases unique across the pack and never a
 		framework's spelling. A manifest that breaks one refuses the build, and
 		`last_error' names the manifest and the rule.
 	]"
@@ -135,7 +136,7 @@ feature -- Commands
 feature {NONE} -- Reading and checking
 
 	records: ARRAYED_LIST [TUPLE [file, id, title, subtitle, author, status, edition: STRING_32; year: INTEGER; description, root, source: STRING_32;
-			aliases, skip_headings: ARRAYED_LIST [STRING_32]; chapters: ARRAYED_LIST [TUPLE [title, file, kind: STRING_32; aliases: ARRAYED_LIST [STRING_32]]]]]
+			aliases, skip_headings: ARRAYED_LIST [STRING_32]; chapters: ARRAYED_LIST [TUPLE [title, file, kind, status, published: STRING_32; aliases: ARRAYED_LIST [STRING_32]]]]]
 			-- The manifests read, in the order given.
 
 	framework_spellings: ARRAYED_LIST [TUPLE [spelling, id: STRING_32; needs_mark: BOOLEAN]]
@@ -166,7 +167,7 @@ feature {NONE} -- Reading and checking
 		local
 			l_json: SIMPLE_JSON
 			l_object: SIMPLE_JSON_OBJECT
-			l_chapters: ARRAYED_LIST [TUPLE [title, file, kind: STRING_32; aliases: ARRAYED_LIST [STRING_32]]]
+			l_chapters: ARRAYED_LIST [TUPLE [title, file, kind, status, published: STRING_32; aliases: ARRAYED_LIST [STRING_32]]]
 			l_root, l_folder: STRING_32
 			l_year: INTEGER
 			i: INTEGER
@@ -184,8 +185,11 @@ feature {NONE} -- Reading and checking
 				if attached l_object.array_item ({STRING_32} "chapters") as al_chapters then
 					from i := 1 until i > al_chapters.count loop
 						if al_chapters [i].is_object then
+								-- 0.7.61: a chapter's own status (an essay's; else the book's) and the day it was published
 							l_chapters.extend ([text_of (al_chapters [i].as_object, "title"), text_of (al_chapters [i].as_object, "file"),
-								text_of (al_chapters [i].as_object, "kind"), strings_of (al_chapters [i].as_object, "aliases")])
+								text_of (al_chapters [i].as_object, "kind"),
+								non_empty_or (text_of (al_chapters [i].as_object, "status"), text_of (l_object, "status")),
+								text_of (al_chapters [i].as_object, "published"), strings_of (al_chapters [i].as_object, "aliases")])
 						end
 						i := i + 1
 					end
@@ -197,6 +201,8 @@ feature {NONE} -- Reading and checking
 				across l_chapters as ic loop
 					fail_unless (schema.is_one_of (ic.kind, schema.Chapter_kinds), a_file, {STRING_32} "the chapter " + ic.title + {STRING_32} " is not front, chapter or back")
 					fail_unless (not ic.title.is_empty, a_file, {STRING_32} "a chapter has no title: " + ic.file)
+					fail_unless (schema.is_one_of (ic.status, schema.Statuses), a_file, {STRING_32} "the chapter " + ic.title + {STRING_32} "'s status is not published, manuscript or draft")
+					fail_unless (schema.is_publication_date (ic.published), a_file, {STRING_32} "the chapter " + ic.title + {STRING_32} "'s published date is not written 2026-06-14")
 					fail_unless ((create {SIMPLE_FILE}.make (chapter_path (l_root, ic.file))).is_file, a_file, {STRING_32} "no chapter file at " + chapter_path (l_root, ic.file))
 				end
 				fail_unless (not across records as al_r some al_r.id.same_string (text_of (l_object, "id")) end, a_file,
@@ -226,8 +232,8 @@ feature {NONE} -- Reading and checking
 
 feature {NONE} -- Names
 
-	is_name_taken (a_name: STRING_32; a_chapters: ARRAYED_LIST [TUPLE [title, file, kind: STRING_32; aliases: ARRAYED_LIST [STRING_32]]];
-			a_own: TUPLE [title, file, kind: STRING_32; aliases: ARRAYED_LIST [STRING_32]]): BOOLEAN
+	is_name_taken (a_name: STRING_32; a_chapters: ARRAYED_LIST [TUPLE [title, file, kind, status, published: STRING_32; aliases: ARRAYED_LIST [STRING_32]]];
+			a_own: TUPLE [title, file, kind, status, published: STRING_32; aliases: ARRAYED_LIST [STRING_32]]): BOOLEAN
 			-- Does `a_name' already name a book, a chapter of a book read before, or another chapter of
 			-- this one (`a_chapters', `a_own' being the one naming it)?
 		do
@@ -269,8 +275,9 @@ feature {NONE} -- Writing
 			end
 			fail_unless (a_record.chapters.count <= schema.Max_part, a_record.file, {STRING_32} "more chapters than a link can name")
 			from l_chapter := 1 until l_chapter > a_record.chapters.count or last_error /= Void loop
-				a_db.execute_with_args ("INSERT INTO book_chapter VALUES (?, ?, ?, ?, 'author', 1)",
-					<<a_record.id, l_chapter, a_record.chapters.i_th (l_chapter).title, a_record.chapters.i_th (l_chapter).kind>>)
+				a_db.execute_with_args ("INSERT INTO book_chapter VALUES (?, ?, ?, ?, ?, ?, 'author', 1)",
+					<<a_record.id, l_chapter, a_record.chapters.i_th (l_chapter).title, a_record.chapters.i_th (l_chapter).kind,
+					a_record.chapters.i_th (l_chapter).status, a_record.chapters.i_th (l_chapter).published>>)
 				check_db (a_db, {STRING_32} "A chapter of " + a_record.id + {STRING_32} " could not be written.")
 				chapter_count := chapter_count + 1
 				l_blocks.split ((create {SIMPLE_FILE}.make (chapter_path (a_record.root, a_record.chapters.i_th (l_chapter).file))).read_text_utf_8)

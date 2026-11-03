@@ -462,6 +462,29 @@ feature -- Quotations and documents (research/24 stage D, 2026-11-01)
 			assert_integers_equal ("and marked", 1, v.standing_ranges.count)
 		end
 
+	test_the_library_shows_status_and_days
+			-- 0.7.61: the series list's Status column reads "N of M published" while a series is part
+			-- posted, with a Latest day beside it; the essays list has a Published column whose header
+			-- orders it oldest first, then newest first, then as written.
+		local
+			app: BIB_GUI_APP
+			g: SW_DATA_GRID [TUPLE [chapter: INTEGER; title, kind, status, published_on: STRING_32]]
+		do
+			app := new_window
+			assert_true ("the test data has books", app.harness_book_count >= 1)
+			assert_strings_equal ("a Status column", "Status", app.harness_books_grid.columns.i_th (3).title)
+			assert_strings_equal ("a Latest column", "Latest", app.harness_books_grid.columns.i_th (4).title)
+			app.harness_show_first_book (1)
+			g := app.harness_chapters_grid
+			assert_strings_equal ("a Published column", "Published", g.columns.i_th (2).title)
+			g.sort_by (2, False)
+			assert_integers_equal ("ordered by day", 2, g.sort_column)
+			g.sort_by (2, True)
+			assert_true ("newest first", g.is_descending)
+			g.sort_by (0, False)
+			assert_integers_equal ("as written again", 0, g.sort_column)
+		end
+
 	test_a_book_quotation_names_its_block
 			-- A quotation from a book chapter is kept with a link to its block ("book:x/2#n"), and
 			-- chosen in Favorites it opens the chapter with the words selected.

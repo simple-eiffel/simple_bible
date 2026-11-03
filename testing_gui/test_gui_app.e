@@ -107,6 +107,7 @@ feature {NONE} -- Suites
 			run_test (agent t.test_the_filter_finds_favorites_in_folders, "test_the_filter_finds_favorites_in_folders")
 			run_test (agent t.test_a_framework_quotation_is_marked_and_found_again, "test_a_framework_quotation_is_marked_and_found_again")
 			run_test (agent t.test_a_favorite_document_marks_its_title_and_its_row, "test_a_favorite_document_marks_its_title_and_its_row")
+			run_test (agent t.test_the_library_shows_status_and_days, "test_the_library_shows_status_and_days")
 			run_test (agent t.test_a_book_quotation_names_its_block, "test_a_book_quotation_names_its_block")
 			run_test (agent t.test_a_verse_quotation_stars_marks_and_opens, "test_a_verse_quotation_stars_marks_and_opens")
 			run_test (agent t.test_a_long_highlight_reason_wraps_in_its_box, "test_a_long_highlight_reason_wraps_in_its_box")

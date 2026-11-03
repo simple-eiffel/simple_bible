@@ -474,6 +474,7 @@ feature {NONE} -- Suites
 			run_test (agent t.test_memes_built_from_a_seed_and_added_to, "test_memes_built_from_a_seed_and_added_to")
 			run_test (agent t.test_writings_search_finds_plain_and_fuzzy, "test_writings_search_finds_plain_and_fuzzy")
 			run_test (agent t.test_essays_pack_builds_attaches_and_answers, "test_essays_pack_builds_attaches_and_answers")
+			run_test (agent t.test_essays_carry_their_status_and_day, "test_essays_carry_their_status_and_day")
 			run_test (agent t.test_markdown_blocks_edge_cases, "test_markdown_blocks_edge_cases")
 			run_test (agent t.test_ask_checks_follow_the_rules, "test_ask_checks_follow_the_rules")
 			run_test (agent t.test_ingest_kit_writes_and_notes_import, "test_ingest_kit_writes_and_notes_import")

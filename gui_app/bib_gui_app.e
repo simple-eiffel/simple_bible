@@ -1147,7 +1147,7 @@ feature {NONE} -- Quotations and documents in Favorites (research/24 stage D, 20
 			end
 		end
 
-	chapter_starred (a_row: TUPLE [chapter: INTEGER; title, kind: STRING_32]): BOOLEAN
+	chapter_starred (a_row: TUPLE [chapter: INTEGER; title, kind, status, published_on: STRING_32]): BOOLEAN
 			-- The chapters of the book listed: is the chapter, or something in it, among the favorites?
 		do
 			if attached (create {BIB_TEXT_PACKS}).schema_of_kind (listed_kind) as al_schema and then al_schema.is_book_id (listed_book)
@@ -2498,6 +2498,24 @@ feature {BIB_WINDOW_HARNESS_CLIENT} -- The window harness (research/23, 2026-10-
 			Result := book_rows.count
 		end
 
+	harness_books_grid: SW_DATA_GRID [BIB_AUTHOR_BOOK]
+			-- The Author Library's books (or series).
+		do
+			Result := books_grid
+		end
+
+	harness_chapters_grid: SW_DATA_GRID [TUPLE [chapter: INTEGER; title, kind, status, published_on: STRING_32]]
+			-- The chosen book's chapters (a series' essays).
+		do
+			Result := chapters_grid
+		end
+
+	harness_show_book (a_kind, a_book: READABLE_STRING_GENERAL)
+			-- Book (or series) `a_book' of the `a_kind' pack listed, its first chapter read.
+		do
+			show_book_place (a_kind, a_book, 1, 0)
+		end
+
 	harness_favorite_target (a_index: INTEGER): STRING_32
 			-- The target of the favorite at line `a_index' at the top of the tree.
 		do
@@ -3420,8 +3438,13 @@ feature {NONE} -- Window
 			frameworks_grid.add_column ((create {SW_GRID_COLUMN [BIB_FRAMEWORK]}.make ("Framework", 120.0, agent {BIB_FRAMEWORK}.display_name)).growing.with_star (agent framework_starred))
 			books_grid.add_column ((create {SW_GRID_COLUMN [BIB_AUTHOR_BOOK]}.make ("Book", 160.0, agent {BIB_AUTHOR_BOOK}.full_title)).growing.with_star (agent book_starred))
 			books_grid.add_column (create {SW_GRID_COLUMN [BIB_AUTHOR_BOOK]}.make ("Kind", 70.0, agent library_kind_name))
-			books_grid.add_column (create {SW_GRID_COLUMN [BIB_AUTHOR_BOOK]}.make ("Status", 90.0, agent {BIB_AUTHOR_BOOK}.status))
-			chapters_grid.add_column ((create {SW_GRID_COLUMN [TUPLE [chapter: INTEGER; title, kind: STRING_32]]}.make ("Chapter", 200.0, agent chapter_row_title)).growing.with_star (agent chapter_starred))
+				-- 0.7.61: "3 of 8 published" while a series is part posted; the latest day one was (Larry, 2026-11-03)
+			books_grid.add_column (create {SW_GRID_COLUMN [BIB_AUTHOR_BOOK]}.make ("Status", 120.0, agent {BIB_AUTHOR_BOOK}.status_text))
+			books_grid.add_column (create {SW_GRID_COLUMN [BIB_AUTHOR_BOOK]}.make ("Latest", 84.0, agent {BIB_AUTHOR_BOOK}.last_published))
+			chapters_grid.add_column ((create {SW_GRID_COLUMN [TUPLE [chapter: INTEGER; title, kind, status, published_on: STRING_32]]}.make ("Chapter", 200.0, agent chapter_row_title)).growing.with_star (agent chapter_starred))
+				-- 0.7.61: each essay's day or "draft"; its header orders the list oldest first, then
+				-- newest first, then as written again
+			chapters_grid.add_column (create {SW_GRID_COLUMN [TUPLE [chapter: INTEGER; title, kind, status, published_on: STRING_32]]}.make ("Published", 84.0, agent chapter_row_published))
 			in_books_grid.add_column (create {SW_GRID_COLUMN [BIB_BOOK_BLOCK]}.make ("Book", 120.0, agent {BIB_BOOK_BLOCK}.book_title))
 			in_books_grid.add_column (create {SW_GRID_COLUMN [BIB_BOOK_BLOCK]}.make ("Chapter", 140.0, agent {BIB_BOOK_BLOCK}.chapter_title))
 			in_books_grid.add_column ((create {SW_GRID_COLUMN [BIB_BOOK_BLOCK]}.make ("Text", 300.0, agent block_snippet)).growing)
@@ -8368,8 +8391,8 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 
 	books_grid: SW_DATA_GRID [BIB_AUTHOR_BOOK]
 	book_rows: ARRAYED_LIST [BIB_AUTHOR_BOOK]
-	chapters_grid: SW_DATA_GRID [TUPLE [chapter: INTEGER; title, kind: STRING_32]]
-	chapter_rows: ARRAYED_LIST [TUPLE [chapter: INTEGER; title, kind: STRING_32]]
+	chapters_grid: SW_DATA_GRID [TUPLE [chapter: INTEGER; title, kind, status, published_on: STRING_32]]
+	chapter_rows: ARRAYED_LIST [TUPLE [chapter: INTEGER; title, kind, status, published_on: STRING_32]]
 	book_view: SW_DOCUMENT_VIEW
 			-- T6's Author Library: the books, the chosen book's chapters, the chapter read.
 
@@ -8600,10 +8623,23 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 			end
 		end
 
-	chapter_row_title (a_row: TUPLE [chapter: INTEGER; title, kind: STRING_32]): STRING_32
+	chapter_row_title (a_row: TUPLE [chapter: INTEGER; title, kind, status, published_on: STRING_32]): STRING_32
 			-- A chapter's title as listed.
 		do
 			Result := a_row.title
+		end
+
+	chapter_row_published (a_row: TUPLE [chapter: INTEGER; title, kind, status, published_on: STRING_32]): STRING_32
+			-- The day a chapter (an essay) was published, "2026-06-14"; else its status when it is not
+			-- published ("draft"); else nothing (a book's chapters, an essay posted on a day not known).
+		do
+			if not a_row.published_on.is_empty then
+				Result := a_row.published_on
+			elseif not a_row.status.same_string ("published") then
+				Result := a_row.status
+			else
+				create Result.make_empty
+			end
 		end
 
 	block_snippet (a_block: BIB_BOOK_BLOCK): STRING_32
