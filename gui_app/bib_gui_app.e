@@ -389,6 +389,16 @@ feature {NONE} -- Initialization
 			favorites_tree.set_children (agent favorite_children)
 			favorites_tree.set_icon (agent favorite_icon)
 			favorites_tree.set_on_select (agent on_favorite)
+				-- research/24 stage D3: a selection carried to Favorites (dragged, picked up or
+				-- middle-clicked); the tree takes it, and its own lines move by a drag
+			favorites_tree.set_folder_test (agent {BIB_FAVORITE_NODE}.is_folder)
+			favorites_tree.set_drop_handler (agent favorite_drop_welcome, agent drop_into_favorites)
+			favorites_tree.set_row_offer (agent favorite_row_offer)
+			framework_view.set_selection_offer (agent document_selection_offer (framework_view))
+			book_view.set_selection_offer (agent document_selection_offer (book_view))
+			commentary_view.set_selection_offer (agent document_selection_offer (commentary_view))
+			reading_view.set_selection_offer (agent verse_selection_offer (reading_view))
+			parallel_view.set_selection_offer (agent verse_selection_offer (parallel_view))
 			favorites_new_folder_button.set_on_click (agent new_favorite_folder)
 			favorites_rename_button.set_on_click (agent rename_chosen_favorite)
 			favorites_remove_button.set_on_click (agent remove_chosen_favorite)
@@ -547,6 +557,7 @@ feature {NONE} -- Quotations and documents in Favorites (research/24 stage D, 20
 		do
 			if document_target (a_view) /= Void then
 				a_menu.add_item ("Add to Favorites as a quotation...", "", user_store.is_open and a_view.has_selection, agent add_quotation_of (a_view))
+				a_menu.add_item ("Pick up the quotation", "", user_store.is_open and a_view.has_selection, agent pick_up_quotation (a_view))
 				a_menu.add_item ({STRING_32} "Add " + document_title (a_view) + {STRING_32} " to Favorites...", "", user_store.is_open, agent add_document_of (a_view))
 				a_menu.add_separator
 			end
@@ -592,6 +603,144 @@ feature {NONE} -- Quotations and documents in Favorites (research/24 stage D, 20
 		do
 			if attached quotation_of (a_view) as al_quote then
 				open_favorite_sheet (al_quote, "Add to Favorites as a quotation")
+			end
+		end
+
+	pick_up_quotation (a_view: SW_DOCUMENT_VIEW)
+			-- Right-click, "Pick up the quotation": the selection follows the pointer (no button held)
+			-- until a click on a Favorites folder keeps it there (research/24 stage D3).
+		do
+			if attached document_selection_offer (a_view) as al_offer then
+				window.start_pick (al_offer.pebble, al_offer.card, window.last_pointer_x, window.last_pointer_y)
+			end
+		end
+
+	pick_up_verse_quotation (a_view: SW_PARALLEL_TEXT)
+			-- The verse menu's "Pick up the quotation".
+		do
+			if attached verse_selection_offer (a_view) as al_offer then
+				window.start_pick (al_offer.pebble, al_offer.card, window.last_pointer_x, window.last_pointer_y)
+			end
+		end
+
+	document_selection_offer (a_view: SW_DOCUMENT_VIEW): detachable TUPLE [pebble: ANY; card: STRING_32]
+			-- A document's selection as a quotation not yet kept, and its name for the card beside
+			-- the pointer; Void when nothing can be kept.
+		do
+			if user_store.is_open and then document_target (a_view) /= Void and then attached quotation_of (a_view) as al_quote then
+				Result := [al_quote, al_quote.label]
+			end
+		end
+
+	verse_selection_offer (a_view: SW_PARALLEL_TEXT): detachable TUPLE [pebble: ANY; card: STRING_32]
+			-- The selected part of a verse as a quotation not yet kept.
+		do
+			if user_store.is_open and then attached verse_quotation_of (a_view) as al_quote then
+				Result := [al_quote, al_quote.label]
+			end
+		end
+
+	favorite_row_offer (a_node: BIB_FAVORITE_NODE): detachable TUPLE [pebble: ANY; card: STRING_32]
+			-- A line of the Favorites tree, carried to another folder.
+		do
+			if user_store.is_open then
+				Result := [a_node, a_node.label]
+			end
+		end
+
+	favorite_drop_welcome (a_pebble: ANY; a_folder: detachable BIB_FAVORITE_NODE): BOOLEAN
+			-- A favorite not yet kept, or a line of the tree, into folder `a_folder' (Void: the top
+			-- level); a folder never into itself or below itself.
+		do
+			if user_store.is_open then
+				if attached {BIB_FAVORITE} a_pebble as al_new then
+					Result := not al_new.is_stored
+				elseif attached {BIB_FAVORITE_NODE} a_pebble as al_line then
+					if attached al_line.folder as al_moved and then attached a_folder as al_into
+						and then attached al_into.folder as al_into_folder
+					then
+						Result := not favorites_state.is_inside (al_into_folder.id, al_moved.id)
+					else
+						Result := True
+					end
+				end
+			end
+		end
+
+	drop_into_favorites (a_pebble: ANY; a_folder: detachable BIB_FAVORITE_NODE; a_new_folder: BOOLEAN)
+			-- Carried into Favorites: a quotation kept, a line moved, in folder `a_folder' (Void: the
+			-- top level); on a New folder target, in an "Untitled" folder made there, its name opened
+			-- for editing at once (one drop, not two). The source is never changed.
+		local
+			l_target: INTEGER_64
+			l_made: detachable BIB_FAVORITE_FOLDER
+			l_node: BIB_FAVORITE_NODE
+			l_failed: BOOLEAN
+		do
+			if user_store.is_open then
+				if attached a_folder as al_node and then attached al_node.folder as al_into then
+					l_target := al_into.id
+				end
+				if a_new_folder then
+					create l_made.make (l_target, "Untitled")
+					user_store.add_favorite_folder (l_made)
+					if attached user_store.write_error as al_error then
+						say (al_error.message)
+						l_failed := True
+					else
+						l_target := l_made.id
+					end
+				end
+				if not l_failed then
+					if attached {BIB_FAVORITE} a_pebble as al_new then
+						keep_favorite (al_new, al_new.label, l_target)
+					elseif attached {BIB_FAVORITE_NODE} a_pebble as al_line then
+						move_favorite_node (al_line, l_target)
+						if user_store.write_error = Void then
+							window.toast ({STRING_32} "Moved " + al_line.label + {STRING_32} " to " + favorites_place (l_target) + {STRING_32} ".", 1)
+						end
+					end
+					reload_favorites
+					if l_target /= 0 and then attached favorites_state.folder (l_target) as al_landed then
+						open_favorite_path (al_landed)
+					end
+					if attached l_made as al_made then
+						l_node := folder_node (al_made)
+						choose_favorite (l_node)
+						open_rename_sheet (l_node)
+					end
+				end
+			end
+		end
+
+	open_favorite_path (a_folder: BIB_FAVORITE_FOLDER)
+			-- `a_folder' and every folder above it open in the tree, so the line that landed shows.
+		local
+			l_id: INTEGER_64
+			n: INTEGER
+		do
+			from
+				l_id := a_folder.id
+			until
+				l_id = 0 or n > 64
+			loop
+				if attached favorites_state.folder (l_id) as al_folder then
+					favorites_tree.expand_node (folder_node (al_folder))
+					l_id := al_folder.parent_id
+				else
+					l_id := 0
+				end
+				n := n + 1
+			end
+		end
+
+	favorites_place (a_folder_id: INTEGER_64): STRING_32
+			-- "Favorites" for the top level, else the folder's path.
+		do
+			if a_folder_id = 0 then
+				Result := {STRING_32} "Favorites"
+			else
+				Result := favorites_state.folder_path (a_folder_id)
 			end
 		end
 
@@ -699,7 +848,7 @@ feature {NONE} -- Quotations and documents in Favorites (research/24 stage D, 20
 				else
 					last_favorite_folder := a_folder_id
 					reload_favorites
-					window.toast ({STRING_32} "Added " + a_favorite.label + {STRING_32} " to Favorites.", 1)
+					window.toast ({STRING_32} "Added " + a_favorite.label + {STRING_32} " to " + favorites_place (a_folder_id) + {STRING_32} ".", 1)
 				end
 			end
 		end
@@ -2064,6 +2213,66 @@ feature {BIB_WINDOW_HARNESS_CLIENT} -- The window harness (research/23, 2026-10-
 			if attached favorites_tree.selected_node as al_node and then attached al_node.folder as al_folder then
 				rename_favorite_node (al_node, a_name)
 				Result := al_folder.id
+			end
+		end
+
+	harness_dispatch (a_type, a_x, a_y: INTEGER)
+			-- A pointer or key event, as the native queue delivers it (press 2, release 10, drag 9,
+			-- move 13, heartbeat 7, middle-click 17, key 3).
+		do
+			window.dispatch (a_type, a_x, a_y)
+		end
+
+	harness_favorites_tree: SW_TREE [BIB_FAVORITE_NODE]
+		do
+			Result := favorites_tree
+		end
+
+	harness_show_favorites
+			-- The Navigator's Favorites tab.
+		do
+			navigator_tabs.select_tab (Favorites_tab)
+			window.request_render
+		end
+
+	harness_sheet_open: BOOLEAN
+			-- Is a sheet up (the rename sheet a new folder opens)?
+		do
+			Result := window.has_sheet
+		end
+
+	harness_is_picking: BOOLEAN
+		do
+			Result := window.is_picking
+		end
+
+	harness_pick_card: STRING_32
+		do
+			Result := window.pick_card
+		end
+
+	harness_pick_up (a_which: INTEGER)
+			-- "Pick up the quotation" from a menu: 1 to 3 that document view, 4 the Bible text.
+		do
+			if a_which = 4 then
+				pick_up_verse_quotation (reading_view)
+			else
+				pick_up_quotation (harness_document_view (a_which))
+			end
+		end
+
+	harness_folder_item_count (a_folder_id: INTEGER_64): INTEGER
+			-- Favorites kept directly in folder `a_folder_id' (0: the top level).
+		do
+			Result := favorites_state.child_items (a_folder_id).count
+		end
+
+	harness_folder_ids_in (a_folder_id: INTEGER_64): ARRAYED_LIST [INTEGER_64]
+			-- The folders directly in folder `a_folder_id'.
+		do
+			create Result.make (4)
+			across favorites_state.child_folders (a_folder_id) as ic loop
+				Result.extend (ic.id)
 			end
 		end
 
@@ -7181,6 +7390,7 @@ feature {NONE} -- Right-click menus and panes (Larry, 2026-10-28)
 				a_menu.add_separator
 				a_menu.add_item ("Add to Favorites...", "Ctrl+D", user_store.is_open, agent on_verse_do (l_verse, agent add_to_favorites))
 				a_menu.add_item ("Add to Favorites as a quotation...", "", user_store.is_open and a_view.has_selection, agent add_verse_quotation_of (a_view))
+				a_menu.add_item ("Pick up the quotation", "", user_store.is_open and a_view.has_selection, agent pick_up_verse_quotation (a_view))
 				a_menu.add_item ("Highlight...", "", user_store.is_open, agent on_verse_do (l_verse, agent start_in_notes (Highlights_tab, highlight_reason_box)))
 				a_menu.add_item ("Add a note...", "", user_store.is_open, agent on_verse_do (l_verse, agent start_in_notes (Verse_notes_tab, new_note_box)))
 				a_menu.add_item ("Tag...", "", user_store.is_open, agent on_verse_do (l_verse, agent start_in_notes (Tags_tab, tag_box)))
