@@ -65,3 +65,22 @@ One pebble, three ways to lift it, one drop hole.
 - T1.2 Favorites tree.
 - T1.3 History: This session or Kept, and the Kept list's length.
 - T1.4 History list.
+
+## 7. Stage D3 build plan (Larry's go, 2026-11-03)
+
+What simple_widgets 0.54.0 already has (surveyed 2026-11-03): an in-window pick in `SW_WINDOW` (middle-click starts it through `pebble_at`, a press on a welcoming widget drops it, Escape or right-click cancels, the trajectory line and a ring on the widget under the pointer). What it lacks: a pick that a widget or a menu item can start (`begin_pick` is private), a drop on release (drags and releases are ignored during a pick), the drop point (`accepts_pebble` and `receive_pebble` take none), hover during a pick, a card, a drag distance, and anything in `SW_TREE` for drops.
+
+**W. simple_widgets 0.55.0 (one release, every part tested headless):**
+
+1. `SW_WIDGET`: `request_pick (pebble, card)` (the pending-request handshake, like `pending_menu`), and point-aware holes `accepts_pebble_at` and `receive_pebble_at` whose defaults call the existing pointless ones (no client changes). `pick_hover (pebble, x, y)`, `pick_tick` and `pick_left` with empty defaults, for targets that light a row, spring a folder or scroll.
+2. `SW_WINDOW`: public `start_pick (pebble, card, x, y)` (a click drops), `is_picking` and `cancel_pick`; a pick begun by a drag drops on release; moves and drags update the pointer and call `pick_hover` on the welcoming widget under it (walking up the parents); the heartbeat calls `pick_tick`; the wheel scrolls the widget under the pointer during a pick; the card (opening words and source) is drawn beside the pointer; `simulate_pointer` for the tests.
+3. `SW_DOC_UNITS` (document views and the Bible text): a press inside the selection no longer starts a new one; moving past the drag distance asks for a pick with `selection_pebble` (a client agent); a release without moving clears the selection as before. `pebble_at` inside the selection offers the same pebble, so middle-click works.
+4. `SW_TABS`: hovering a tab during a pick for about half a second selects it (the Favorites tab springs open).
+5. `SW_TREE`: `set_drop_handler` (accepts, receives with the target node and a new-folder flag) and `set_folder_test`; the target row is lit; a folder hovered for about 0.7 seconds springs open, and folders sprung open close after the drop except the path to where the item landed; a "New folder" row at the end of the folder under the pointer; the tree scrolls near its top and bottom edges; its own rows can be dragged (a move).
+
+**B. simple_bible 0.7.59:**
+
+1. The pebble is an unsaved `BIB_FAVORITE` (a quotation, a verse, a chapter, a document), made by the code that already makes them for "Add to Favorites".
+2. Lifting: drag a selection in the framework, book, commentary and Bible views; "Pick up" in the document and verse menus; middle-click on a selection.
+3. The Favorites tree is the hole: a drop on a folder keeps the favorite there; on a favorite, in its folder; on "New folder", in a new "Untitled" folder whose name opens for editing; a drag inside the tree moves (`move_favorite_node`). A notice names the folder and offers Undo.
+4. GUI tests for each way of lifting and each kind of drop, seen failing first; pills for the new parts; the User Manual's Favorites section gets the gestures.

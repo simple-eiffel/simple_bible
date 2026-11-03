@@ -2204,6 +2204,17 @@ feature {BIB_WINDOW_HARNESS_CLIENT} -- The window harness (research/23, 2026-10-
 			end
 		end
 
+	harness_pill_tip (a_code: READABLE_STRING_GENERAL): STRING_32
+			-- The tip of the design pill `a_code' on the board shown, or empty.
+		do
+			create Result.make_empty
+			across window.reference_marks as ic loop
+				if ic.code.same_string_general (a_code) then
+					Result := ic.tip
+				end
+			end
+		end
+
 	harness_meme_count: INTEGER
 			-- Memes the list shows.
 		do
@@ -7102,7 +7113,7 @@ feature {NONE} -- The Atlas and the shared selection (Plan 22 phase 3, 2026-10-3
 			-- The Study board's codes: the chrome as on the Simple board, C10, and T1 to T6.
 		do
 			add_chrome_pills
-			window.add_reference_mark (tools_strip, "C10", "Study tools strip: Parallel and Interlinear work; Guide, Word Study, Count and Ledger come later.", window.Corner_top_left)
+			window.add_reference_mark (tools_strip, "C10", "Study tools strip: Parallel, Interlinear, Timeline and Atlas work; Guide, Word Study, Count and Ledger come later.", window.Corner_top_left)
 			window.add_reference_mark (mode_switch, "C7", "Mode switch, on Study: only the docking changes. Ctrl+M.", window.Corner_top_left)
 			window.add_reference_mark (navigator_tabs, "T1", "P11 Navigator, west: Books (chapter by chapter; a favorite chapter wears the star), Favorites (folders of your own; Ctrl+D adds the verse read; New folder, Rename, Remove, Restore; right-click to move or sort) and History (this session's verses, or the kept ones; the box sets how many).", window.Corner_top_left)
 			window.add_reference_mark (favorites_filter_box, "T1.1", "Favorites tools: the filter box (favorites and folders whose names hold its words), New folder (named at once), Rename, Remove (a folder hides everything in it) and Restore.", window.Corner_top_left)
@@ -7120,7 +7131,7 @@ feature {NONE} -- The Atlas and the shared selection (Plan 22 phase 3, 2026-10-3
 			window.add_reference_mark (lexicon_heading, "T4", "P05 Lexicon, east: follows the clicked word. Its Frameworks tab (P05.8) explains each FRAMEWORK(TM) for the common reader; a framework named anywhere is a link: rest on it for a summary, click it to open it here.", window.Corner_top_left)
 			window.add_reference_mark (commentary_title, "T5", "P04 Commentary, east: Commentaries (Larry's commentary packs, verse by verse, every claim labelled SOURCED or DEDUCED), Cross-refs with OpenBible votes.", window.Corner_top_left)
 			window.add_reference_mark (results_tabs, "T6", "South results zone: Search Results (word choices, then the verses holding the words; click one to read it); Author Library (Larry's books); Writings (the search box with My writings as its scope); Guides, Census and Ledger come later.", window.Corner_top_left)
-			window.add_reference_mark (writings_grid, "T6.5", "Writings: what the search box found in your commentary, frameworks and books (scope My writings; My writings (fuzzy) forgives a misspelt word). Click one to open it.", window.Corner_top_right)
+			window.add_reference_mark (writings_grid, "T6.5", "Writings: what the search box found in your commentary, frameworks and books (scope My writings; My writings (fuzzy) forgives a misspelled word). Click one to open it.", window.Corner_top_right)
 			window.add_reference_mark (memes_grid, "T6.6", "Memes list: all, or those naming the verse or chapter read; search box above; click a heading to sort (title, words, passages, set); your favorite memes stay at the top (the star); hover the picture icon to see the meme.", window.Corner_top_left)
 			window.add_reference_mark (meme_view, "T6.7", "The chosen meme: Copy picture and Copy description put either on the clipboard; Edit changes its title, words and passages; the star makes it a favorite; its passages open the Bible text; Add meme keeps a new one.", window.Corner_top_left)
 		end
@@ -9108,7 +9119,7 @@ feature {NONE} -- Searching Larry's writings (T6 Writings; research/20, 2026-10-
 	Scope_writings_name: STRING_32 = "My writings"
 	Scope_writings_fuzzy_name: STRING_32 = "My writings (fuzzy)"
 			-- `scope_select''s last two choices: Larry's commentary, frameworks and books, the second
-			-- forgiving a misspelt word.
+			-- forgiving a misspelled word.
 
 	Writings_scope_index: INTEGER
 			-- `scope_select''s index of `Scope_writings_name'; the fuzzy choice follows it.

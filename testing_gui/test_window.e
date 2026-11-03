@@ -28,6 +28,26 @@ inherit
 			default_create
 		end
 
+feature -- The design pills tell the truth (Larry, 2026-11-03)
+
+	test_the_study_pills_tell_the_truth
+			-- C10 named only Parallel and Interlinear as working, though Timeline
+			-- and Atlas work too; T6.5 said "misspelt" (US English: "misspelled").
+		local
+			app: BIB_GUI_APP
+			l_tip: STRING_32
+		do
+			app := new_window
+			app.harness_state.set_study (True)
+			l_tip := app.harness_pill_tip ("C10")
+			assert_true ("C10 names Timeline", l_tip.has_substring ({STRING_32} "Timeline"))
+			assert_true ("C10 names Atlas", l_tip.has_substring ({STRING_32} "Atlas"))
+			l_tip := app.harness_pill_tip ("T6.5")
+			assert_true ("T6.5 found", not l_tip.is_empty)
+			assert_true ("T6.5 in US English", l_tip.has_substring ({STRING_32} "misspelled"))
+			assert_false ("T6.5 not British", l_tip.has_substring ({STRING_32} "misspelt"))
+		end
+
 feature -- The meme tool (research/25, 2026-11-01)
 
 	test_memes_answer_the_verse_read
