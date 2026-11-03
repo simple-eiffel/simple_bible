@@ -676,11 +676,16 @@ feature {NONE} -- Quotations and documents in Favorites (research/24 stage D, 20
 			l_made: detachable BIB_FAVORITE_FOLDER
 			l_node: BIB_FAVORITE_NODE
 			l_failed: BOOLEAN
+			l_steps: INTEGER
+			l_told: detachable STRING_32
+			l_named: STRING_32
 		do
+			create l_named.make_empty
 			if user_store.is_open then
 				if attached a_folder as al_node and then attached al_node.folder as al_into then
 					l_target := al_into.id
 				end
+				l_steps := favorites_history.position
 				if a_new_folder then
 					create l_made.make (l_target, "Untitled")
 					user_store.add_favorite_folder (l_made)
@@ -688,16 +693,30 @@ feature {NONE} -- Quotations and documents in Favorites (research/24 stage D, 20
 						say (al_error.message)
 						l_failed := True
 					else
+						favorites_history.record ("New folder", agent set_folder_removed (l_made, True), agent set_folder_removed (l_made, False))
 						l_target := l_made.id
 					end
 				end
 				if not l_failed then
 					if attached {BIB_FAVORITE} a_pebble as al_new then
+						is_quiet_keep := True
 						keep_favorite (al_new, al_new.label, l_target)
+						is_quiet_keep := False
+						l_told := {STRING_32} "Added " + al_new.label + {STRING_32} " to "
+						l_named := {STRING_32} "Add " + al_new.label
 					elseif attached {BIB_FAVORITE_NODE} a_pebble as al_line then
 						move_favorite_node (al_line, l_target)
-						if user_store.write_error = Void then
-							window.toast ({STRING_32} "Moved " + al_line.label + {STRING_32} " to " + favorites_place (l_target) + {STRING_32} ".", 1)
+						l_told := {STRING_32} "Moved " + al_line.label + {STRING_32} " to "
+						l_named := {STRING_32} "Move " + al_line.label
+					end
+					if favorites_history.position - l_steps >= 2 then
+						favorites_history.join_last (favorites_history.position - l_steps, l_named + {STRING_32} " to a new folder")
+					end
+					if favorites_history.position > l_steps and then attached l_told as al_told then
+						if attached l_made then
+							notice_with_undo (al_told + {STRING_32} "a new folder.")
+						else
+							notice_with_undo (al_told + favorites_place (l_target) + {STRING_32} ".")
 						end
 					end
 					reload_favorites
@@ -711,6 +730,109 @@ feature {NONE} -- Quotations and documents in Favorites (research/24 stage D, 20
 					end
 				end
 			end
+		end
+
+	undo_favorites
+			-- Ctrl+Z, Edit > Undo: the last change to Favorites put back.
+		local
+			l_name: STRING_32
+		do
+			if favorites_history.can_undo then
+				l_name := favorites_history.undo_name
+				favorites_history.undo
+				window.toast ({STRING_32} "Undone: " + l_name + {STRING_32} ".", 1)
+			end
+		end
+
+	redo_favorites
+			-- Ctrl+Y (or Ctrl+Shift+Z), Edit > Redo: the change undone last done again.
+		local
+			l_name: STRING_32
+		do
+			if favorites_history.can_redo then
+				l_name := favorites_history.redo_name
+				favorites_history.redo
+				window.toast ({STRING_32} "Redone: " + l_name + {STRING_32} ".", 1)
+			end
+		end
+
+	notice_with_undo (a_text: READABLE_STRING_GENERAL)
+			-- A notice of the change just recorded, with an Undo for it.
+		do
+			window.toast_with_action (a_text, 1, "Undo", agent undo_if_unchanged (favorites_history.changes))
+		end
+
+	undo_if_unchanged (a_changes: INTEGER)
+			-- A notice's Undo: the change it told of, if nothing changed in Favorites since.
+		do
+			if favorites_history.changes = a_changes and then favorites_history.can_undo then
+				undo_favorites
+			else
+				window.toast ("Favorites changed after that notice. Ctrl+Z undoes the latest change.", 3)
+			end
+		end
+
+	set_item_removed (a_item: BIB_FAVORITE; a_removed: BOOLEAN)
+			-- A step: a favorite hidden (removed softly) or shown again.
+		do
+			if user_store.is_open then
+				user_store.set_favorite_removed (a_item, a_removed)
+				after_favorite_step
+			end
+		end
+
+	set_folder_removed (a_folder: BIB_FAVORITE_FOLDER; a_removed: BOOLEAN)
+			-- A step: a folder hidden with everything in it, or shown again.
+		do
+			if user_store.is_open then
+				user_store.set_favorite_folder_removed (a_folder, a_removed)
+				after_favorite_step
+			end
+		end
+
+	move_item_to (a_item: BIB_FAVORITE; a_folder_id: INTEGER_64)
+			-- A step: a favorite into folder `a_folder_id' (0: the top level).
+		do
+			if user_store.is_open then
+				user_store.move_favorite (a_item, a_folder_id)
+				after_favorite_step
+			end
+		end
+
+	move_folder_to (a_folder: BIB_FAVORITE_FOLDER; a_parent_id: INTEGER_64)
+			-- A step: a folder into folder `a_parent_id' (0: the top level).
+		do
+			if user_store.is_open then
+				user_store.move_favorite_folder (a_folder, a_parent_id)
+				after_favorite_step
+			end
+		end
+
+	rename_item (a_item: BIB_FAVORITE; a_name: STRING_32)
+			-- A step: a favorite's name.
+		do
+			if user_store.is_open then
+				user_store.rename_favorite (a_item, a_name)
+				after_favorite_step
+			end
+		end
+
+	rename_folder (a_folder: BIB_FAVORITE_FOLDER; a_name: STRING_32)
+			-- A step: a folder's name.
+		do
+			if user_store.is_open then
+				user_store.rename_favorite_folder (a_folder, a_name)
+				after_favorite_step
+			end
+		end
+
+	after_favorite_step
+			-- A step written: say a failure, show the tree as it is now.
+		do
+			if attached user_store.write_error as al_error then
+				say (al_error.message)
+			end
+			reload_favorites
 		end
 
 	open_favorite_path (a_folder: BIB_FAVORITE_FOLDER)
@@ -848,7 +970,11 @@ feature {NONE} -- Quotations and documents in Favorites (research/24 stage D, 20
 				else
 					last_favorite_folder := a_folder_id
 					reload_favorites
-					window.toast ({STRING_32} "Added " + a_favorite.label + {STRING_32} " to " + favorites_place (a_folder_id) + {STRING_32} ".", 1)
+					favorites_history.record ({STRING_32} "Add " + a_favorite.label,
+						agent set_item_removed (a_favorite, True), agent set_item_removed (a_favorite, False))
+					if not is_quiet_keep then
+						notice_with_undo ({STRING_32} "Added " + a_favorite.label + {STRING_32} " to " + favorites_place (a_folder_id) + {STRING_32} ".")
+					end
 				end
 			end
 		end
@@ -2241,6 +2367,42 @@ feature {BIB_WINDOW_HARNESS_CLIENT} -- The window harness (research/23, 2026-10-
 			Result := window.has_sheet
 		end
 
+	harness_undo_name: STRING_32
+			-- What Undo would put back; empty for nothing.
+		do
+			create Result.make_empty
+			if favorites_history.can_undo then
+				Result := favorites_history.undo_name
+			end
+		end
+
+	harness_key (a_vk: INTEGER; a_ctrl, a_shift: BOOLEAN)
+			-- A key with its modifiers, as the keyboard would send it.
+		do
+			window.simulate_key_down (a_vk, a_ctrl, False, a_shift)
+		end
+
+	harness_notice_undo
+			-- A click on the newest notice's Undo.
+		do
+			window.request_render
+			if not window.toast_action_spots.is_empty and then attached window.toast_action_spots.first.toast.act as al_act then
+				al_act.call
+			end
+		end
+
+	harness_close_sheet
+			-- The open sheet closed, as its Cancel would.
+		do
+			window.close_sheet
+		end
+
+	harness_give_focus_to_filter
+			-- The keyboard to the Favorites filter box (a text box).
+		do
+			window.give_focus (favorites_filter_box)
+		end
+
 	harness_is_picking: BOOLEAN
 		do
 			Result := window.is_picking
@@ -3293,6 +3455,10 @@ feature {NONE} -- Menus and keys (C2)
 			-- Keys that work wherever the focus is.
 		do
 			window.register_accelerator (Key_p, True, False, True, agent toggle_pills)
+				-- Undo and Redo for Favorites; inside a text box the keys stay the box's own
+			window.register_accelerator_yielding (Key_z, True, False, False, agent undo_favorites)
+			window.register_accelerator_yielding (Key_y, True, False, False, agent redo_favorites)
+			window.register_accelerator_yielding (Key_z, True, False, True, agent redo_favorites)
 			window.register_accelerator (Key_left, False, True, False, agent move_in_history (-1))
 			window.register_accelerator (Key_right, False, True, False, agent move_in_history (1))
 			window.register_accelerator (Key_l, True, False, False, agent focus_reference)
@@ -3322,6 +3488,17 @@ feature {NONE} -- Menus and keys (C2)
 	edit_menu: SW_MENU
 		do
 			create Result.make
+			if favorites_history.can_undo then
+				Result.add_item ({STRING_32} "Undo " + favorites_history.undo_name, "Ctrl+Z", True, agent undo_favorites)
+			else
+				Result.add_item ("Undo", "Ctrl+Z", False, Void)
+			end
+			if favorites_history.can_redo then
+				Result.add_item ({STRING_32} "Redo " + favorites_history.redo_name, "Ctrl+Y", True, agent redo_favorites)
+			else
+				Result.add_item ("Redo", "Ctrl+Y", False, Void)
+			end
+			Result.add_separator
 			Result.add_item ("Copy verse", "", reading.has_verse, agent copy_verse)
 			Result.add_item ("Find in chapter...", "", False, Void)
 		end
@@ -4433,6 +4610,16 @@ feature {NONE} -- Two layouts (C7)
 		end
 
 	navigator_tabs: SW_TABS
+
+	favorites_history: BIB_UNDO_HISTORY
+			-- Undo and Redo for Favorites (Larry, 2026-11-03): Ctrl+Z, Ctrl+Y, the Edit menu and a
+			-- notice's Undo.
+		attribute
+			create Result.make (100)
+		end
+
+	is_quiet_keep: BOOLEAN
+			-- Is `keep_favorite' keeping as one part of a larger change (no notice of its own)?
 	favorites_heading: SW_LABEL
 	favorites_tree: SW_TREE [BIB_FAVORITE_NODE]
 	favorites_filter_box: SW_TEXT_BOX
@@ -4886,11 +5073,9 @@ feature {NONE} -- Two layouts (C7)
 				else
 					last_favorite_folder := a_folder_id
 					reload_favorites
-					if a_folder_id = 0 then
-						window.toast ({STRING_32} "Added " + l_name + {STRING_32} " to Favorites.", 1)
-					else
-						window.toast ({STRING_32} "Added " + l_name + {STRING_32} " to " + favorites_state.folder_path (a_folder_id) + {STRING_32} ".", 1)
-					end
+					favorites_history.record ({STRING_32} "Add " + l_name,
+						agent set_item_removed (l_favorite, True), agent set_item_removed (l_favorite, False))
+					notice_with_undo ({STRING_32} "Added " + l_name + {STRING_32} " to " + favorites_place (a_folder_id) + {STRING_32} ".")
 				end
 			end
 		end
@@ -4910,6 +5095,7 @@ feature {NONE} -- Two layouts (C7)
 				if attached user_store.write_error as al_error then
 					say (al_error.message)
 				else
+					favorites_history.record ("New folder", agent set_folder_removed (l_folder, True), agent set_folder_removed (l_folder, False))
 					reload_favorites
 					if l_parent /= 0 and then attached favorites_state.folder (l_parent) as al_parent then
 						favorites_tree.expand_node (folder_node (al_parent))
@@ -4972,16 +5158,26 @@ feature {NONE} -- Two layouts (C7)
 	rename_favorite_node (a_node: BIB_FAVORITE_NODE; a_name: READABLE_STRING_GENERAL)
 			-- `a_node''s row named `a_name' (nothing when it is blank).
 		local
-			l_name: STRING_32
+			l_name, l_old: STRING_32
 		do
 			l_name := a_name.to_string_32
 			l_name.left_adjust
 			l_name.right_adjust
 			if not l_name.is_empty and user_store.is_open then
 				if attached a_node.folder as al_folder then
+					l_old := al_folder.name.twin
 					user_store.rename_favorite_folder (al_folder, l_name)
+					if user_store.write_error = Void and then not l_old.same_string (l_name) then
+						favorites_history.record ({STRING_32} "Rename " + l_old,
+							agent rename_folder (al_folder, l_old), agent rename_folder (al_folder, l_name))
+					end
 				elseif attached a_node.item as al_item then
+					l_old := al_item.label.twin
 					user_store.rename_favorite (al_item, l_name)
+					if user_store.write_error = Void and then not l_old.same_string (l_name) then
+						favorites_history.record ({STRING_32} "Rename " + l_old,
+							agent rename_item (al_item, l_old), agent rename_item (al_item, l_name))
+					end
 				end
 				if attached user_store.write_error as al_error then
 					say (al_error.message)
@@ -5039,14 +5235,28 @@ feature {NONE} -- Two layouts (C7)
 	move_favorite_node (a_node: BIB_FAVORITE_NODE; a_target: INTEGER_64)
 			-- `a_node''s row into folder `a_target' (0: the top level); a folder never into itself or
 			-- below itself.
+		local
+			l_from: INTEGER_64
 		do
 			if user_store.is_open then
 				if attached a_node.folder as al_folder then
-					if not favorites_state.is_inside (a_target, al_folder.id) or a_target = 0 then
+					l_from := al_folder.parent_id
+					if (not favorites_state.is_inside (a_target, al_folder.id) or a_target = 0) and a_target /= l_from then
 						user_store.move_favorite_folder (al_folder, a_target)
+						if user_store.write_error = Void then
+							favorites_history.record ({STRING_32} "Move " + a_node.label,
+								agent move_folder_to (al_folder, l_from), agent move_folder_to (al_folder, a_target))
+						end
 					end
 				elseif attached a_node.item as al_item then
-					user_store.move_favorite (al_item, a_target)
+					l_from := al_item.folder_id
+					if a_target /= l_from then
+						user_store.move_favorite (al_item, a_target)
+						if user_store.write_error = Void then
+							favorites_history.record ({STRING_32} "Move " + a_node.label,
+								agent move_item_to (al_item, l_from), agent move_item_to (al_item, a_target))
+						end
+					end
 				end
 				if attached user_store.write_error as al_error then
 					say (al_error.message)
@@ -5080,7 +5290,14 @@ feature {NONE} -- Two layouts (C7)
 						choose_favorite (Void)
 					end
 					reload_favorites
-					window.toast ({STRING_32} "Removed " + a_node.label + {STRING_32} ". Restore brings it back.", 1)
+					if attached a_node.folder as al_gone then
+						favorites_history.record ({STRING_32} "Remove " + a_node.label,
+							agent set_folder_removed (al_gone, False), agent set_folder_removed (al_gone, True))
+					elseif attached a_node.item as al_gone_item then
+						favorites_history.record ({STRING_32} "Remove " + a_node.label,
+							agent set_item_removed (al_gone_item, False), agent set_item_removed (al_gone_item, True))
+					end
+					notice_with_undo ({STRING_32} "Removed " + a_node.label + {STRING_32} ".")
 				end
 			end
 		end
@@ -5097,6 +5314,13 @@ feature {NONE} -- Two layouts (C7)
 				if attached user_store.write_error as al_error then
 					say (al_error.message)
 				else
+					if attached al_node.folder as al_back then
+						favorites_history.record ({STRING_32} "Restore " + al_node.label,
+							agent set_folder_removed (al_back, True), agent set_folder_removed (al_back, False))
+					elseif attached al_node.item as al_back_item then
+						favorites_history.record ({STRING_32} "Restore " + al_node.label,
+							agent set_item_removed (al_back_item, True), agent set_item_removed (al_back_item, False))
+					end
 					set_last_removed_favorite (Void)
 					reload_favorites
 				end
@@ -10419,6 +10643,10 @@ feature {NONE} -- Columns
 feature {NONE} -- Constants
 
 	Key_p: INTEGER = 0x50
+
+	Key_y: INTEGER = 0x59
+
+	Key_z: INTEGER = 0x5A
 	Key_l: INTEGER = 0x4C
 	Key_f: INTEGER = 0x46
 			-- Ctrl+F search, Ctrl+Shift+F Focus reading.
