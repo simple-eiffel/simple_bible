@@ -28,6 +28,133 @@ inherit
 			default_create
 		end
 
+feature -- Carrying a selection to Favorites (research/24 stage D3, 2026-11-03)
+
+	test_a_framework_selection_dragged_onto_a_folder_is_kept_there
+			-- Larry: drag a selection into Favorites. Pressed on the selection and moved, it lifts;
+			-- released on a folder, it is kept there; the framework is not changed.
+		local
+			app: BIB_GUI_APP
+			v: SW_DOCUMENT_VIEW
+			t: SW_TREE [BIB_FAVORITE_NODE]
+			l_folder: INTEGER_64
+			b: TUPLE [x, y, width, height: REAL_64]
+			px, py: INTEGER
+		do
+			app := new_window
+			l_folder := app.harness_new_folder ("Sermons")
+			app.harness_show_framework (1)
+			app.harness_show_favorites
+			app.harness_render
+			v := app.harness_document_view (1)
+			t := app.harness_favorites_tree
+			assert_true ("the framework and the tree both shown", v.width > 0 and t.width > 0 and t.height > 0)
+			v.select_range (2, 0, 2, v.text_of (2).count.min (24))
+			b := v.text_boxes (2, 3, 4).first
+			px := (b.x + b.width / 2.0).truncated_to_integer
+			py := (b.y + b.height / 2.0).truncated_to_integer
+			app.harness_dispatch (2, px, py)
+			app.harness_dispatch (9, px + 30, py)
+			assert_true ("lifted", app.harness_is_picking)
+			assert_true ("its card names it", not app.harness_pick_card.is_empty)
+			app.harness_dispatch (9, row_x (t), row_y (t, row_of (t, "Sermons")))
+			app.harness_dispatch (10, row_x (t), row_y (t, row_of (t, "Sermons")))
+			assert_false ("dropped", app.harness_is_picking)
+			assert_integers_equal ("kept in Sermons", 1, app.harness_folder_item_count (l_folder))
+			assert_integers_equal ("not at the top level", 0, app.harness_folder_item_count (0))
+			assert_true ("the framework's selection stands", v.has_selection)
+		end
+
+	test_pick_up_a_verse_quotation_and_click_a_folder
+			-- The verse menu's Pick up: the words follow the pointer with no button held; a click on a
+			-- folder keeps them there.
+		local
+			app: BIB_GUI_APP
+			v: SW_PARALLEL_TEXT
+			t: SW_TREE [BIB_FAVORITE_NODE]
+			l_folder: INTEGER_64
+			u: INTEGER
+		do
+			app := new_window
+			l_folder := app.harness_new_folder ("Verses")
+			app.harness_go_to (43, 3, 16)
+			app.harness_show_favorites
+			app.harness_render
+			v := app.harness_bible_view
+			t := app.harness_favorites_tree
+			from u := 1 until u > v.unit_count or else v.unit_block (u) = 16 loop
+				u := u + 1
+			end
+			assert_true ("verse 16 laid out", u <= v.unit_count)
+			v.select_range (u, 4, u, 26)
+			app.harness_pick_up (4)
+			assert_true ("picked up", app.harness_is_picking)
+			app.harness_dispatch (13, row_x (t), row_y (t, row_of (t, "Verses")))
+			app.harness_dispatch (10, row_x (t), row_y (t, row_of (t, "Verses")))
+			assert_true ("a stray release does not drop it", app.harness_is_picking)
+			app.harness_dispatch (2, row_x (t), row_y (t, row_of (t, "Verses")))
+			assert_false ("the click drops it", app.harness_is_picking)
+			assert_integers_equal ("kept in Verses", 1, app.harness_folder_item_count (l_folder))
+			assert_true ("verse 16 starred", app.harness_verse_starred (16))
+		end
+
+	test_a_favorite_dragged_onto_a_folder_moves_into_it
+		local
+			app: BIB_GUI_APP
+			t: SW_TREE [BIB_FAVORITE_NODE]
+			l_folder: INTEGER_64
+			k: INTEGER
+		do
+			app := new_window
+			app.harness_go_to (43, 3, 16)
+			app.harness_add_favorite (1, 16, "John 3:16", 0)
+			l_folder := app.harness_new_folder ("Gospel")
+			app.harness_show_favorites
+			app.harness_render
+			t := app.harness_favorites_tree
+			assert_integers_equal ("one at the top level", 1, app.harness_folder_item_count (0))
+			k := row_of (t, "John 3:16")
+			assert_true ("the favorite shown", k > 0)
+			app.harness_dispatch (2, row_x (t), row_y (t, k))
+			app.harness_dispatch (9, row_x (t), row_y (t, k) + 10)
+			assert_true ("the line lifts", app.harness_is_picking)
+			app.harness_dispatch (9, row_x (t), row_y (t, row_of (t, "Gospel")))
+			app.harness_dispatch (10, row_x (t), row_y (t, row_of (t, "Gospel")))
+			assert_integers_equal ("moved into Gospel", 1, app.harness_folder_item_count (l_folder))
+			assert_integers_equal ("none left at the top level", 0, app.harness_folder_item_count (0))
+		end
+
+	test_a_folders_new_folder_button_keeps_it_in_an_untitled_folder
+			-- One drop, not two: an "Untitled" folder made inside the folder, the quotation kept in
+			-- it, its name open for editing.
+		local
+			app: BIB_GUI_APP
+			v: SW_DOCUMENT_VIEW
+			t: SW_TREE [BIB_FAVORITE_NODE]
+			l_folder: INTEGER_64
+			l_made: ARRAYED_LIST [INTEGER_64]
+			cx: INTEGER
+		do
+			app := new_window
+			l_folder := app.harness_new_folder ("Sermons")
+			app.harness_show_framework (1)
+			app.harness_show_favorites
+			app.harness_render
+			v := app.harness_document_view (1)
+			t := app.harness_favorites_tree
+			v.select_range (2, 0, 2, v.text_of (2).count.min (24))
+			app.harness_pick_up (1)
+			app.harness_dispatch (13, row_x (t), row_y (t, row_of (t, "Sermons")))
+			cx := (t.new_folder_chip_left + 20.0).truncated_to_integer
+			app.harness_dispatch (13, cx, row_y (t, row_of (t, "Sermons")))
+			assert_true ("on the New folder button", t.is_on_new_folder_row)
+			app.harness_dispatch (2, cx, row_y (t, row_of (t, "Sermons")))
+			l_made := app.harness_folder_ids_in (l_folder)
+			assert_integers_equal ("a folder made inside Sermons", 1, l_made.count)
+			assert_integers_equal ("the quotation in it", 1, app.harness_folder_item_count (l_made.first))
+			assert_true ("its name open for editing", app.harness_sheet_open)
+		end
+
 feature -- The design pills tell the truth (Larry, 2026-11-03)
 
 	test_the_study_pills_tell_the_truth
@@ -711,5 +838,32 @@ feature {NONE} -- The window
 
 	last_window: detachable BIB_GUI_APP
 			-- The window the last test built.
+
+feature {NONE} -- Carrying helpers
+
+	row_of (a_tree: SW_TREE [BIB_FAVORITE_NODE]; a_label: READABLE_STRING_GENERAL): INTEGER
+			-- The visible row showing `a_label'; 0 = none.
+		local
+			i: INTEGER
+		do
+			from i := 1 until i > a_tree.visible.count or Result > 0 loop
+				if a_tree.label_of (a_tree.visible.i_th (i).node).starts_with_general (a_label) then
+					Result := i
+				end
+				i := i + 1
+			end
+		end
+
+	row_x (a_tree: SW_TREE [BIB_FAVORITE_NODE]): INTEGER
+			-- Over a row's label, past any arrow.
+		do
+			Result := (a_tree.x + 60.0).truncated_to_integer
+		end
+
+	row_y (a_tree: SW_TREE [BIB_FAVORITE_NODE]; a_row: INTEGER): INTEGER
+			-- The middle of row `a_row' (scrolled).
+		do
+			Result := (a_tree.y + (a_row - 0.5) * a_tree.Row_h - a_tree.scroll_y).truncated_to_integer
+		end
 
 end
