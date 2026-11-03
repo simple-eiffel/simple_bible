@@ -17,6 +17,9 @@ note
 		reading order, every chapter as BLOCKS (heading, paragraph, quote, list
 		item, code) - the unit a link points at, "book:<id>/<chapter>#<block>" or
 		"essay:<series>/<essay>#<block>" -
+		and each chapter's own status and the day it was published ("2026-06-14",
+		empty when unknown; 0.7.61: an essay is published once posted, Larry
+		2026-11-03; a book's chapters take the book's status),
 		and the passages a block's text only alludes to, each with its reason
 		(`block_suggestion', 0.7.32: kept apart from what it cites), and two
 		indexes the build works out: the Bible passages each block cites
@@ -85,6 +88,29 @@ feature -- Constants
 			-- A book's status: in print, finished but unpublished, or still being written.
 		once
 			Result := <<"published", "manuscript", "draft">>
+		end
+
+	is_publication_date (a_text: READABLE_STRING_GENERAL): BOOLEAN
+			-- Is `a_text' empty (not known) or a day written "2026-06-14" (0.7.61)?
+		local
+			l_text: STRING_32
+			i, l_month, l_day: INTEGER
+		do
+			l_text := a_text.to_string_32
+			if l_text.is_empty then
+				Result := True
+			elseif l_text.count = 10 and then l_text [5] = '-' and then l_text [8] = '-' then
+				Result := True
+				from i := 1 until i > 10 or not Result loop
+					Result := i = 5 or i = 8 or else l_text [i].is_digit
+					i := i + 1
+				end
+				if Result then
+					l_month := l_text.substring (6, 7).to_integer
+					l_day := l_text.substring (9, 10).to_integer
+					Result := l_month >= 1 and l_month <= 12 and l_day >= 1 and l_day <= 31
+				end
+			end
 		end
 
 	Chapter_kinds: ARRAY [STRING_8]
@@ -183,7 +209,7 @@ feature -- Constants
 				"CREATE TABLE book(book_id TEXT PRIMARY KEY, ordinal INTEGER NOT NULL, title TEXT NOT NULL, subtitle TEXT NOT NULL, author TEXT NOT NULL, status TEXT NOT NULL CHECK (status IN ('published', 'manuscript', 'draft')), edition TEXT NOT NULL, year INTEGER NOT NULL, description TEXT NOT NULL, source TEXT NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key))",
 				"CREATE TABLE book_alias(alias TEXT PRIMARY KEY, book_id TEXT NOT NULL REFERENCES book(book_id), voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key))",
 				"CREATE TABLE chapter_alias(alias TEXT PRIMARY KEY, book_id TEXT NOT NULL REFERENCES book(book_id), chapter INTEGER NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key))",
-				"CREATE TABLE book_chapter(book_id TEXT NOT NULL REFERENCES book(book_id), chapter INTEGER NOT NULL, title TEXT NOT NULL, kind TEXT NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key), PRIMARY KEY (book_id, chapter))",
+				"CREATE TABLE book_chapter(book_id TEXT NOT NULL REFERENCES book(book_id), chapter INTEGER NOT NULL, title TEXT NOT NULL, kind TEXT NOT NULL, status TEXT NOT NULL CHECK (status IN ('published', 'manuscript', 'draft')), published_on TEXT NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key), PRIMARY KEY (book_id, chapter))",
 				"CREATE TABLE book_block(book_id TEXT NOT NULL, chapter INTEGER NOT NULL, block INTEGER NOT NULL, kind TEXT NOT NULL, level INTEGER NOT NULL, body_markdown TEXT NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key), PRIMARY KEY (book_id, chapter, block))",
 				"CREATE TABLE book_passage(book_id TEXT NOT NULL, chapter INTEGER NOT NULL, block INTEGER NOT NULL, ordinal INTEGER NOT NULL, start_book INTEGER NOT NULL, start_chapter INTEGER NOT NULL, start_verse INTEGER NOT NULL, end_chapter INTEGER NOT NULL, end_verse INTEGER NOT NULL, start_hub INTEGER NOT NULL, end_hub INTEGER NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key), PRIMARY KEY (book_id, chapter, block, ordinal))",
 				"CREATE INDEX ix_book_passage_hub ON book_passage(start_hub, end_hub)",

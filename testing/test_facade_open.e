@@ -810,6 +810,96 @@ feature -- Books pack (2026-10-28)
 			remove_test_files
 		end
 
+	test_essays_carry_their_status_and_day
+			-- 0.7.61 (Larry, 2026-11-03: an essay is published once posted, a series once all its essays
+			-- are; the days "help with sorting and knowing what's what"): each essay keeps its own status
+			-- and the day it was published; a series counts them ("1 of 2 published") and knows its latest
+			-- day; a day not written 2026-06-14 is refused, by name; a pack built before 0.7.61 still reads,
+			-- its essays taking the series' status with no day.
+		local
+			l_essays: BIB_BOOK_BUILDER
+			l_bible: SIMPLE_BIBLE
+			l_db: SIMPLE_SQL_DATABASE
+			l_ok: BOOLEAN
+		do
+			close_leftovers
+			fixture.build_content (Content_file, {CONC_FIXTURE}.Content_version, False)
+			make_folder
+			make_book_folder
+			l_ok := (create {SIMPLE_FILE}.make (Book_folder + "\e1.md")).write_text_utf_8 ("# The Song%N%NFirst.%N")
+			l_ok := (create {SIMPLE_FILE}.make (Book_folder + "\e2.md")).write_text_utf_8 ("# The Second Song%N%NSecond.%N")
+			l_ok := (create {SIMPLE_FILE}.make (Essay_manifest_file)).write_text_utf_8 (Dated_manifest_text ("2026-06-14"))
+			l_bible := bible ("", "")
+			l_bible.open
+			create l_essays.make_essays (l_bible.books)
+			l_essays.build (l_essays.sidecars_in (Essay_manifest_file), Folder_essays_file, "")
+			l_bible.close
+			assert_true ("built", l_essays.last_error = Void)
+			l_bible := bible ("", Folder)
+			l_bible.open
+			if attached l_bible.essay_packs.first as al_pack then
+				assert_true ("counted", al_pack.books.item (1).is_counted)
+				assert_strings_equal ("one of two posted", "1 of 2 published", al_pack.books.item (1).status_text)
+				assert_strings_equal ("its latest day", "2026-06-14", al_pack.books.item (1).last_published)
+				if attached al_pack.book ("sr") as al_book and then al_book.count = 1 then
+					assert_strings_equal ("the first essay's day", "2026-06-14", al_book.item (1).chapters.i_th (1).published_on)
+					assert_strings_equal ("published", "published", al_book.item (1).chapters.i_th (1).status)
+					assert_strings_equal ("the second still a draft", "draft", al_book.item (1).chapters.i_th (2).status)
+					assert_true ("with no day", al_book.item (1).chapters.i_th (2).published_on.is_empty)
+				else
+					assert_true ("the series read", False)
+				end
+			end
+			l_bible.close
+				-- an older pack: book_chapter without the two columns
+			create l_db.make (Folder_essays_file)
+				-- (its table as 0.7.60 wrote it)
+			l_db.execute ("CREATE TABLE old_chapter(book_id TEXT NOT NULL REFERENCES book(book_id), chapter INTEGER NOT NULL, title TEXT NOT NULL, kind TEXT NOT NULL, voice TEXT NOT NULL, provenance_key INTEGER NOT NULL REFERENCES source_provenance(provenance_key), PRIMARY KEY (book_id, chapter))")
+			l_db.execute ("INSERT INTO old_chapter SELECT book_id, chapter, title, kind, voice, provenance_key FROM book_chapter")
+			l_db.execute ("DROP TABLE book_chapter")
+			l_db.execute ("ALTER TABLE old_chapter RENAME TO book_chapter")
+			assert_false ("made old", l_db.has_error)
+			l_db.close
+			l_bible := bible ("", Folder)
+			l_bible.open
+			assert_true ("the old pack still opens", l_bible.is_open and l_bible.pack_errors.is_empty)
+			if attached l_bible.essay_packs.first as al_pack then
+				assert_false ("not counted", al_pack.books.item (1).is_counted)
+				assert_strings_equal ("the series' own status", "draft", al_pack.books.item (1).status_text)
+				if attached al_pack.book ("sr") as al_book and then al_book.count = 1 then
+					assert_strings_equal ("each essay takes it", "draft", al_book.item (1).chapters.i_th (1).status)
+					assert_true ("no day known", al_book.item (1).chapters.i_th (1).published_on.is_empty)
+				else
+					assert_true ("the old series read", False)
+				end
+			end
+			l_bible.close
+				-- a day not written 2026-06-14 is refused
+			l_ok := (create {SIMPLE_FILE}.make (Essay_manifest_file)).write_text_utf_8 (Dated_manifest_text ("June 14"))
+			l_bible := bible ("", "")
+			l_bible.open
+			create l_essays.make_essays (l_bible.books)
+			l_essays.build (l_essays.sidecars_in (Essay_manifest_file), Folder_essays_file, "")
+			l_bible.close
+			assert_true ("a bad day refused, by name", attached l_essays.last_error as al_e and then al_e.has_substring ("published date"))
+			assert_true ("a day in February", (create {BIB_ESSAY_SCHEMA}).is_publication_date ("2026-02-28"))
+			assert_false ("month 13 is not", (create {BIB_ESSAY_SCHEMA}).is_publication_date ("2026-13-01"))
+			assert_true ("none is allowed", (create {BIB_ESSAY_SCHEMA}).is_publication_date (""))
+			fixture.delete_file (Book_folder + "\e1.md")
+			fixture.delete_file (Book_folder + "\e2.md")
+			fixture.delete_file (Essay_manifest_file)
+			remove_book_folder
+			remove_test_files
+		end
+
+	Dated_manifest_text (a_day: STRING): STRING
+			-- A draft series of two essays, the first published on `a_day'.
+		do
+			Result := "{%"id%":%"sr%",%"title%":%"SONG%",%"subtitle%":%"%",%"author%":%"Larry Rix%",%"status%":%"draft%",%"aliases%":[],%"description%":%"A test series.%","
+				+ "%"root%":%"facade_test_book%",%"chapters%":[{%"title%":%"The Song%",%"file%":%"e1.md%",%"kind%":%"chapter%",%"status%":%"published%",%"published%":%"" + a_day + "%"},"
+				+ "{%"title%":%"The Second Song%",%"file%":%"e2.md%",%"kind%":%"chapter%",%"status%":%"draft%"}],%"skip_headings%":[],%"source%":%"test%"}"
+		end
+
 	test_markdown_blocks_edge_cases
 			-- 0.7.31 (design scan 59 finding 8, scan 62 finding 6): a heading ending in a hash keeps it;
 			-- a comment inside a code block is the code's; an unclosed comment keeps the text after it

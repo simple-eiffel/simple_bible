@@ -39,21 +39,36 @@ feature {NONE} -- Initialization
 feature -- Access
 
 	books: BIB_LIST_RESULT [BIB_AUTHOR_BOOK]
-			-- Every book, without its chapters, in the pack's order.
+			-- Every book, without its chapters, in the pack's order; each counted by its chapters'
+			-- status (0.7.61) unless the pack was built before chapters had one.
 		require
 			available: is_available
 		local
 			l_sql: STRING_8
 			l_list: ARRAYED_LIST [BIB_AUTHOR_BOOK]
 			l_provenance: BIB_PROVENANCE
+			l_has_dates: BOOLEAN
 		do
 			l_provenance := pack_provenance
-			l_sql := "SELECT book_id, title, subtitle, status, edition, year, description FROM " + pack_alias + ".book ORDER BY ordinal"
+			l_has_dates := has_publication
+			if l_has_dates then
+					-- 0.7.61: how many of its chapters are published, and the latest day one was
+				l_sql := "SELECT b.book_id AS book_id, b.title AS title, b.subtitle AS subtitle, b.status AS status, b.edition AS edition, b.year AS year, b.description AS description, "
+					+ "(SELECT count(*) FROM " + pack_alias + ".book_chapter c WHERE c.book_id = b.book_id) AS chapter_count, "
+					+ "(SELECT count(*) FROM " + pack_alias + ".book_chapter c WHERE c.book_id = b.book_id AND c.status = 'published') AS published_count, "
+					+ "(SELECT coalesce(max(c.published_on), '') FROM " + pack_alias + ".book_chapter c WHERE c.book_id = b.book_id) AS last_published FROM "
+					+ pack_alias + ".book b ORDER BY b.ordinal"
+			else
+				l_sql := "SELECT book_id, title, subtitle, status, edition, year, description FROM " + pack_alias + ".book ORDER BY ordinal"
+			end
 			run_query (l_sql, {ARRAY [detachable ANY]} <<>>)
 			if attached last_rows as al_rows then
 				create l_list.make (al_rows.rows.count)
 				across al_rows.rows as ic loop
 					if attached book_of_row (ic, l_provenance) as al_book then
+						if l_has_dates and then ic.integer_value ("published_count") >= 0 and then ic.integer_value ("published_count") <= ic.integer_value ("chapter_count") then
+							al_book.set_publication (ic.integer_value ("published_count"), ic.integer_value ("chapter_count"), ic.string_value ("last_published"))
+						end
 						l_list.extend (al_book)
 					end
 				end
@@ -82,11 +97,18 @@ feature -- Access
 					l_book := book_of_row (ic, l_provenance)
 				end
 				if attached l_book as al_book then
-					run_query ("SELECT chapter, title, kind FROM " + pack_alias + ".book_chapter WHERE book_id = ? ORDER BY chapter", {ARRAY [detachable ANY]} <<al_book.id>>)
+					if has_publication then
+						run_query ("SELECT chapter, title, kind, status, published_on FROM " + pack_alias + ".book_chapter WHERE book_id = ? ORDER BY chapter", {ARRAY [detachable ANY]} <<al_book.id>>)
+					else
+							-- a pack built before 0.7.61: each chapter takes the book's status, no day known
+						run_query ("SELECT chapter, title, kind, ? AS status, '' AS published_on FROM " + pack_alias + ".book_chapter WHERE book_id = ? ORDER BY chapter",
+							{ARRAY [detachable ANY]} <<al_book.status, al_book.id>>)
+					end
 					if attached last_rows as al_chapters then
 						across al_chapters.rows as ic loop
-							al_book.chapters.extend ([ic.integer_value ("chapter"), ic.string_value ("title"), ic.string_value ("kind")])
+							al_book.chapters.extend ([ic.integer_value ("chapter"), ic.string_value ("title"), ic.string_value ("kind"), ic.string_value ("status"), ic.string_value ("published_on")])
 						end
+						al_book.set_publication (count_published (al_book.chapters), al_book.chapters.count, latest_published (al_book.chapters))
 						l_list.extend (al_book)
 					end
 				end
@@ -214,6 +236,36 @@ feature -- Access
 		end
 
 feature {NONE} -- Implementation
+
+	has_publication: BOOLEAN
+			-- Does the pack's `book_chapter' hold each chapter's status and day (built by 0.7.61 or later)?
+		do
+			run_query ("SELECT count(*) AS n FROM " + pack_alias + ".sqlite_master WHERE type = 'table' AND name = 'book_chapter' AND sql LIKE '%%published_on%%'", {ARRAY [detachable ANY]} <<>>)
+			Result := attached last_rows as al_rows and then not al_rows.rows.is_empty and then al_rows.rows.first.integer_value ("n") > 0
+		end
+
+	count_published (a_chapters: like {BIB_AUTHOR_BOOK}.chapters): INTEGER
+			-- How many of `a_chapters' are published.
+		do
+			across a_chapters as ic loop
+				if ic.status.same_string ("published") then
+					Result := Result + 1
+				end
+			end
+		ensure
+			in_range: Result >= 0 and Result <= a_chapters.count
+		end
+
+	latest_published (a_chapters: like {BIB_AUTHOR_BOOK}.chapters): STRING_32
+			-- The latest day one of `a_chapters' was published; empty when none is known.
+		do
+			create Result.make_empty
+			across a_chapters as ic loop
+				if ic.published_on > Result then
+					Result := ic.published_on
+				end
+			end
+		end
 
 	has_table (a_name: STRING_8): BOOLEAN
 			-- Does the pack hold table `a_name'?
