@@ -647,7 +647,7 @@ feature -- Books pack (2026-10-28)
 	test_writings_search_finds_plain_and_fuzzy
 			-- Research/20: the frameworks and books packs carry a search table their builders fill and
 			-- the attach rule lets pass; one query grammar finds words, prefixes, phrases, AND and NOT,
-			-- within a pack kind or an address; fuzzy search finds a misspelt word from the pack's own
+			-- within a pack kind or an address; fuzzy search finds a misspelled word from the pack's own
 			-- vocabulary; a NOT with nothing beside it is told.
 		local
 			l_frameworks: BIB_FRAMEWORK_BUILDER
@@ -705,9 +705,9 @@ feature -- Books pack (2026-10-28)
 			l_search.search ("contested AND allegiance", False, "", "")
 			assert_integers_equal ("AND: no one row holds both", 0, l_search.hits.count)
 			l_search.search ("remmeber", False, "", "")
-			assert_integers_equal ("misspelt, plain: nothing", 0, l_search.hits.count)
+			assert_integers_equal ("misspelled, plain: nothing", 0, l_search.hits.count)
 			l_search.search ("remmeber", True, "", "")
-			assert_integers_equal ("misspelt, fuzzy: the paragraph and ZAKAR's %"remembers%" (two edits)", 2, l_search.hits.count)
+			assert_integers_equal ("misspelled, fuzzy: the paragraph and ZAKAR's %"remembers%" (two edits)", 2, l_search.hits.count)
 			assert_strings_equal ("ZAKAR first, then the paragraph", "book:zk/1#2", l_search.hits.last.address)
 			assert_true ("widened from the pack's words", l_search.last_expression.has_substring ("%"remember%""))
 			l_search.search ("NOT cosmos", False, "", "")

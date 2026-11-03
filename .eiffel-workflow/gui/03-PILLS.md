@@ -21,7 +21,7 @@ A part can carry a different code on each board.
 | C7 | Study | `mode_switch` | Mode switch, on Study: only the docking changes. Ctrl+M. |
 | C8 | Both | `smaller_button` | Text size: all the window's text,  |
 | C9 | Both | `dark_switch` | Dark / Light: your choice; until you switch, Windows decides. |
-| C10 | Study | `tools_strip` | Study tools strip: Parallel and Interlinear work; Guide, Word Study, Count and Ledger come later. |
+| C10 | Study | `tools_strip` | Study tools strip: Parallel, Interlinear, Timeline and Atlas work; Guide, Word Study, Count and Ledger come later. |
 | C11 | Both | `status_bar` | Status: the reference and version read. |
 | C12 | Both | `link_label` | Link set: always A for now. |
 | C13 | Both | `numbering_label` | Versification: which numbering the version uses. |
@@ -52,7 +52,7 @@ A part can carry a different code on each board.
 | T4 | Study | `lexicon_heading` | P05 Lexicon, east: follows the clicked word. Its Frameworks tab (P05.8) explains each FRAMEWORK(TM) for the common reader; a framework named anywhere is a link: rest on it for a summary, click it to open it here. |
 | T5 | Study | `commentary_title` | P04 Commentary, east: Commentaries (Larry's commentary packs, verse by verse, every claim labelled SOURCED or DEDUCED), Cross-refs with OpenBible votes. |
 | T6 | Study | `results_tabs` | South results zone: Search Results (word choices, then the verses holding the words; click one to read it); Author Library (Larry's books); Writings (the search box with My writings as its scope); Guides, Census and Ledger come later. |
-| T6.5 | Study | `writings_grid` | Writings: what the search box found in your commentary, frameworks and books (scope My writings; My writings (fuzzy) forgives a misspelt word). Click one to open it. |
+| T6.5 | Study | `writings_grid` | Writings: what the search box found in your commentary, frameworks and books (scope My writings; My writings (fuzzy) forgives a misspelled word). Click one to open it. |
 | T6.6 | Study | `memes_grid` | Memes list: all, or those naming the verse or chapter read; search box above; click a heading to sort (title, words, passages, set); your favorite memes stay at the top (the star); hover the picture icon to see the meme. |
 | T6.7 | Study | `meme_view` | The chosen meme: Copy picture and Copy description put either on the clipboard; Edit changes its title, words and passages; the star makes it a favorite; its passages open the Bible text; Add meme keeps a new one. |
 | T7 | Study | `atlas_view` | The Atlas (Plan 22): empires by year from Cliopatria, places with their doubt (several candidates are dashed rings, each naming who holds it); choosing an event on the Timeline marks its places, choosing a place moves the Timeline; the scale in miles, kilometers and nautical miles; Start measuring, click points, End or Close shape for the area, Delete; an empire's card and a click on it give its area. Window > Atlas. |

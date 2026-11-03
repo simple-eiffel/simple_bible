@@ -111,6 +111,7 @@ feature {NONE} -- Suites
 			run_test (agent t.test_a_verse_quotation_stars_marks_and_opens, "test_a_verse_quotation_stars_marks_and_opens")
 			run_test (agent t.test_a_long_highlight_reason_wraps_in_its_box, "test_a_long_highlight_reason_wraps_in_its_box")
 			run_test (agent t.test_a_chosen_highlight_reads_in_full, "test_a_chosen_highlight_reads_in_full")
+			run_test (agent t.test_the_study_pills_tell_the_truth, "test_the_study_pills_tell_the_truth")
 			run_test (agent t.test_memes_answer_the_verse_read, "test_memes_answer_the_verse_read")
 			run_test (agent t.test_the_meme_search_finds_titles_and_words, "test_the_meme_search_finds_titles_and_words")
 			run_test (agent t.test_a_favorite_meme_stays_at_the_top, "test_a_favorite_meme_stays_at_the_top")
