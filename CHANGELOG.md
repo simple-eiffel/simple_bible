@@ -19,6 +19,52 @@ All notable changes to simple_bible are documented here. The format follows [Kee
 - D-022: Ask stays NEEDLE steering, with no chat model, local or GPU.
 - The memes test takes its count from the data, so adding a meme no longer fails it.
 
+### Added (2026-11-01: 0.7.51 to 0.7.57)
+
+- **History** (0.7.51): the History tab lists every verse touched, not one visit per chapter. This session shows them newest first, each once. Kept shows the newest visit of each verse from `user.db`, and a number box sets how many, 200 at first, from 10 to 1,000. Every visit stays stored.
+- **Favorites** (0.7.52): folders in place of Bookmarks, with each favorite's version recorded and a gold star wherever a favorite verse appears. `user.db` schema 3 copies the bookmarks into a Bookmarks folder and keeps them where they were.
+- **Quotations and documents in Favorites** (0.7.53, 0.7.54): a selected part of a framework, commentary or book is kept as a quotation, and a whole document can be kept. Part of a verse can be kept too, with the version of the column it came from. Chosen in Favorites, a quotation opens its source with the words selected, and quoted verse words are washed gold in the Bible text and Parallel.
+- **The meme tool** (0.7.56): `meme.db` holds each meme's pictures, words and passages. The list is sortable and searchable with favorites at the top, answers the passage read, and copies the picture and the words separately. A picture loads only when hovered. `bible_build --memes` builds it. A Favorites folder copies its references.
+- **Editing a meme** (0.7.57): the title, the words and the passages change together in one transaction. A blank title or a passage that does not read changes nothing.
+
+### Changed (2026-11-01: 0.7.55)
+
+- Long text wraps: the highlight reason and the prayer answer wrap and grow as they are typed. Under the Highlights list and the answered prayers, a wrapped line reads the chosen row in full.
+
+### Changed (2026-10-31: 0.7.45 to 0.7.50, state by agents)
+
+- Research 23: each fact has one door, tells only on a real change, and joining tells the present. The Timeline and Atlas selection (0.7.45), the layout and the look (0.7.46), search results (0.7.48), notes, prayers and strip dots (0.7.49) and the reading place (0.7.50) all follow it.
+- Fixed along the way: Study panes filled on entering Study; size buttons right from the start; the dark switch follows Windows' theme swaps; each workspace keeps its own east width; Close works in Study; a closed results panel stays closed; the Notes dot stays right after a first note or a last deletion; Answered follows the open prayers' choice; a click on another verse of the chapter no longer rebuilds the chapter.
+- The window harness ships (0.7.47), and `make` is split into build and run.
+
+### Added (2026-10-30 to 2026-10-31: 0.7.41 to 0.7.45, Timeline and Atlas)
+
+- **The River of Time** (0.7.41): `timeline.db` holds lanes, events, claims and citations, and `bible_build --timeline` builds it. The Timeline tab draws it, with a disputed event shown as its positions and the lean marked "shown first".
+- **The Atlas** (0.7.42): places, event places and routes, with polity borders by year in a new empires pack (`bible_build --empires`). Choosing an event marks its places, and choosing a place moves the needle.
+- **Measuring** (0.7.43, 0.7.44): a scale in miles, kilometers and nautical miles, a point-to-point measuring tool, and the area of a shape on the map. The buttons follow the tool's state.
+- **The Timeline's years by hand** (0.7.45): a bar across time with its data limits, and From and To boxes with Set.
+
+### Changed (2026-10-30: 0.7.37 to 0.7.40, credit and licenses)
+
+- **Help > About** (0.7.37, 0.7.38) is a window giving the version and credit to everyone owed it: the data's sources as recorded, EiffelStudio and Eiffel Software, the Simple Eiffel libraries, and the other tools and fonts. It grows with its sheet.
+- **Licenses come from the record** (0.7.39): each Bible version's license, attribution and ship class come from `source_provenance`. An attribution corpus is shared with its credit. Larry's own writings are his to share. A restricted source reads "not to be shared".
+- **The New World Translation is gone** (0.7.40): `bible_build` leaves out personal-only versions, so both editions stay out of `content.db`, its search index and the installer.
+
+### Added (2026-10-30: 0.7.33 to 0.7.36, ingest)
+
+- **Reference lists keep their book** (0.7.33): "Genesis 1:26; 3:5, 22; 6:1-4; 10-11" links every part, and "Romans 8:28, 30 people" leaves the 30. From 0.7.34, a book named inside another work's title, such as "4 Ezra 7:113", is left alone.
+- **File > Import prepared folder** (0.7.33): every prepared file in a folder is checked and kept, with the notes pack built once. A note kept already and unchanged is passed over, and a changed one replaces it.
+- **Notes rebuild on start** (0.7.34): a stale notes pack is built again the next time the window opens.
+- **File > Make ingest kits for a folder** (0.7.34): a kit beside every source, passing over kits that are up to date.
+- **More kinds of source** (0.7.35): HTML, Word, LibreOffice text, EPUB and PDF. A PDF with no text is refused, saying a scan needs OCR.
+- **Scholar Guides** (0.7.36): a prepared file with `kind: guide` is kept apart from Larry's writings, in `guides.db`, with its own results tab and a verse's Study guides list.
+
+### Fixed (2026-10-30: 0.7.33.1, 0.7.35.1, 0.7.36.1)
+
+- A notes pack never put in place is built again, and an earlier note that cannot be moved aside is never written over.
+- Empty headings mark nothing, PDF headings are judged by both neighbours, and untidy markup is read.
+- A built pack's folder stays marked until the pack is in place.
+
 ### Added (2026-10-29: the ingest kit; personal installer 0.7.32)
 
 - **File > Make ingest kit...** (research/21-INGEST-KIT.md): pick a source (TXT or MD) and Simple Bible writes one self-contained `<source>.kit.md` beside it (its path on the clipboard): instructions written for that source (plain text or Markdown, short or long), the prepared-file format with an example, everything Simple Bible can link to (the 66 books and their short forms, the link forms, every name of the books, essays, frameworks and notes with its link: `BIB_NAME_LIST`, shared with `bible names`), then the source. Give it to an AI chat.
