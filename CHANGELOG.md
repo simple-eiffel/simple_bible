@@ -4,6 +4,21 @@ All notable changes to simple_bible are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added (2026-11-03: 0.7.59 to 0.7.61)
+
+- **Carrying a selection to Favorites** (0.7.59): a selection in the framework, book and commentary views, the Bible text and Parallel is carried as a quotation. Press on it and drag, right-click "Pick up the quotation", or middle-click it. The Favorites tree takes it: a closed folder springs open after a rest, and a folder's New folder button keeps it in a new "Untitled" folder. A line of the tree dragged to another folder moves there.
+- **Undo and Redo for Favorites** (0.7.60): Ctrl+Z undoes; Ctrl+Y and Ctrl+Shift+Z redo, except while a text box takes typing. The Edit menu names the change, and the Added, Moved and Removed notices carry an Undo button. 100 steps are kept.
+- **Each essay's status and the day it was published** (0.7.61): the Author Library's Status column reads "3 of 8 published" while only some are, a Latest column gives a series' latest day, and the essays list has a Published column whose header sorts it. A pack built before 0.7.61 still reads.
+
+### Fixed (2026-11-03: 0.7.58)
+
+- The C10 and T6.5 design pills tell the truth: C10 names Timeline and Atlas as working too, and T6.5 says "misspelled".
+
+### Changed (2026-11-03)
+
+- D-022: Ask stays NEEDLE steering, with no chat model, local or GPU.
+- The memes test takes its count from the data, so adding a meme no longer fails it.
+
 ### Added (2026-10-29: the ingest kit; personal installer 0.7.32)
 
 - **File > Make ingest kit...** (research/21-INGEST-KIT.md): pick a source (TXT or MD) and Simple Bible writes one self-contained `<source>.kit.md` beside it (its path on the clipboard): instructions written for that source (plain text or Markdown, short or long), the prepared-file format with an example, everything Simple Bible can link to (the 66 books and their short forms, the link forms, every name of the books, essays, frameworks and notes with its link: `BIB_NAME_LIST`, shared with `bible names`), then the source. Give it to an AI chat.

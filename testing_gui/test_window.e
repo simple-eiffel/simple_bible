@@ -280,17 +280,20 @@ feature -- The meme tool (research/25, 2026-11-01)
 
 	test_memes_answer_the_verse_read
 			-- Larry: the tool responds to the passage read.
+			-- The count comes from the data: memes keep being added.
 		local
 			app: BIB_GUI_APP
+			l_all: INTEGER
 		do
 			app := new_window
-			assert_true ("meme.db in the test data (90 memes)", app.harness_meme_count = 90)
+			l_all := app.harness_meme_count
+			assert_true ("meme.db in the test data", l_all > 0)
 			app.harness_go_to (43, 3, 16)
 			app.harness_meme_scope (2)
 			assert_true ("John 3:16's meme listed", app.harness_lists_meme ("john-3-16"))
-			assert_true ("only the verse's memes", app.harness_meme_count < 90)
+			assert_true ("only the verse's memes", app.harness_meme_count < l_all)
 			app.harness_meme_scope (1)
-			assert_integers_equal ("all again", 90, app.harness_meme_count)
+			assert_integers_equal ("all again", l_all, app.harness_meme_count)
 		end
 
 	test_the_meme_search_finds_titles_and_words
