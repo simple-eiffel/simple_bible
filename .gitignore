@@ -1,5 +1,6 @@
 # Eiffel build artifacts
 EIFGENs/
+*_tests.rc
 Documentation/
 
 # Compiled files
