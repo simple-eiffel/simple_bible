@@ -1,5 +1,5 @@
 # Phase 4, Task 8: timing on the real conc.db (pack v1)
-# Date: 2026-10-26. Machine: JACKJACK, Windows 11 Pro 10.0.26300, EiffelStudio 25.02, SQLite 3.53.4 (eiffel_sqlite_2025).
+# Date: 2026-10-26. Machine: the reference PC, Windows 11 Pro 10.0.26300, EiffelStudio 25.02, SQLite 3.53.4 (eiffel_sqlite_2025).
 # Binary: ec.sh release, lean (no contracts): EIFGENs/simple_bible_tests/F_code/simple_bible_lean.exe
 # Pack: the personal conc.db named by SIMPLE_BIBLE_CONC (not in this repository); content.db: the v1 fixture.
 # "first" = first call in the process; the operating system may already hold the file in memory.
