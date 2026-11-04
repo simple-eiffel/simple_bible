@@ -185,3 +185,20 @@
 - **Concordance rules (Larry, 2026-10-18 to 10-22; research/14 §1):** keyed by headword (`lemma_id`), never by Strong's; "candidates," never "best"; every original-language word shows a transliteration; Hebrew lines up left in tables; never print Larry's name; at most one callout per entry.
 **Open technical forks** (settled by spikes and a budgeted /eiffel.debate, not by Larry): conc.db as its own file, a build stage or a pack; which BIB_ classes carry the word, English and reference lookups; reuse of BIB_CONCORDANCE and the search classes; precomputed `token.translit`.
 **Reversible:** YES.
+
+
+### D-022: Ask stays NEEDLE steering; no chat model (LARRY, DECIDED 2026-11-03)
+**Question:** Can Swift 1.5 (Qwen 3.8 27B on llama.cpp, the "GPU" session) or a small CPU chat model improve Ask? The options were NEEDLE steering only, a chat model (an "explain" button or a big-model router), or no AI at all.
+**Evidence (measured 2026-11-03 on the reference PC, CPU only, prompt / generation tokens per second):**
+- Swift 1.5 27B: 63 / 3.1. That is about 24 s before the first word of a 1,500-token grounded answer, and the 11.3 GB file cannot load on the D-003 8 GB machine.
+- Small models: RixQwen 3B 412 / 24; Qwen3.5-4B 309 / 14.5; Qwen3.5-2B 766 / 31; gemma-4-E2B 454 / 33.
+- Small models slip on details: the October gemma probe dropped the Hebrew vowel points it was asked for.
+- Full numbers: vault `_TECH/_HANDOFF - Swift 1.5 Local LLM (2026-11-03).md`.
+**Decision (Larry, 2026-11-03):** "NEEDLE steering. the others seem too risky."
+**Meaning:**
+- Ask stays the libneedle run 7 router behind `needle_helper.exe`, with BIB_ASK_CHECK as the gate.
+- No chat or explain model, local or GPU, is planned for Ask.
+- This supersedes the optional chat model in D-013 and the v3 roadmap line in intent-v2 ("the optional local chat model behind a labeled explain button").
+- BIB_AI_ADAPTER stays bound to BIB_NULL_AI_ADAPTER.
+- Improving Ask means improving NEEDLE: its training data, the checker, and the known weak spots (search syntax, "X against Y", version codes).
+**Reversible:** YES, by Larry.
