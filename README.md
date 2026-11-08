@@ -7,6 +7,7 @@
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
 ![Eiffel 25.02](https://img.shields.io/badge/Eiffel-25.02-purple.svg)
 ![DBC: Contracts](https://img.shields.io/badge/DBC-Contracts-green.svg)
+![Windows only](https://img.shields.io/badge/platform-Windows%20only-0078D6?logo=windows&logoColor=white)
 
 A free Bible-study workbench for Windows: an Eiffel engine over SQLite that looks up, counts and compares the biblical text in Hebrew, Greek and English. **Every fact it shows carries its source and license.**
 
