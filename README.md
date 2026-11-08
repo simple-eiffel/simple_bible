@@ -12,6 +12,8 @@ A free Bible-study workbench for Windows: an Eiffel engine over SQLite that look
 
 Part of the [Simple Eiffel](https://github.com/simple-eiffel) ecosystem.
 
+> **Windows only.** It is built on Windows APIs and ships as a Windows installer. There is no macOS or Linux version, and none is planned.
+
 ## Status
 
 🚧 **A working personal edition; no public release yet.**
