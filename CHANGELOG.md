@@ -4,6 +4,11 @@ All notable changes to simple_bible are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added (2026-11-11: 0.7.62)
+
+- **Incipit: the Old Testament in the New.** A new Incipit tab beside Cross-refs follows the verse. On a New Testament verse it lists the Old Testament places the verse draws on; on an Old Testament verse, the New Testament places that take it up. Each row gives the kind (incipit, quotation, allusion), how loud it is against chance, and who heard it (UBS, Hühn 1899, or the measure). Click a row to read the place. The links are keyed in the Septuagint and shown in English numbering ("Psalm 22:1 (LXX 21:2)"); books only the Septuagint has show as "Wisdom 2:18 (LXX only)".
+- **The incipit pack (incipit.db)** and `bible_build --incipit <incipit.links.json> --out <incipit.db>`: 4,219 links into 735 source chapters, from the UBS Parallel Passages (CC BY-SA 4.0), Hühn's 1899 index (public domain) and a volume measure checked against a chance control. Every row carries its voice and source; Help > About credits them.
+
 ### Added (2026-11-03: 0.7.59 to 0.7.61)
 
 - **Carrying a selection to Favorites** (0.7.59): a selection in the framework, book and commentary views, the Bible text and Parallel is carried as a quotation. Press on it and drag, right-click "Pick up the quotation", or middle-click it. The Favorites tree takes it: a closed folder springs open after a rest, and a folder's New folder button keeps it in a new "Untitled" folder. A line of the tree dragged to another folder moves there.

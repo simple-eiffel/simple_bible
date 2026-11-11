@@ -220,6 +220,15 @@ feature -- Status
 			end
 		end
 
+	incipit_packs: ARRAYED_LIST [BIB_INCIPIT_PACK]
+			-- The attached packs whose kind is "incipit" (BIB_INCIPIT_SCHEMA, research 27, 2026-11-11).
+		do
+			create Result.make (1)
+			across packs_of_kind ({BIB_INCIPIT_SCHEMA}.Pack_kind) as ic loop
+				Result.extend (create {BIB_INCIPIT_PACK}.make (sources, ic.alias_name, ic.pack_title))
+			end
+		end
+
 	writings_search: BIB_WRITINGS_SEARCH
 			-- Search across the attached commentary, frameworks, books and essays packs, in that order
 			-- (research/20, 2026-10-28).

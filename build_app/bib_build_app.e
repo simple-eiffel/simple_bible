@@ -10,6 +10,7 @@ note
 			bible_build --essays <folder of *.essay.json, or one> --out <essays.db> [--content <content.db>] [--frameworks-pack <frameworks.db>]
 			bible_build --timeline <folder of *.timeline.json, or one> --out <timeline.db>
 			bible_build --empires <Cliopatria GeoJSON> --out <empires.db>
+			bible_build --incipit <incipit.links.json> --out <incipit.db>
 			bible_build --memes <memes.seed.json> --out <meme.db>
 		Exit code 0 on success, 1 on failure (the reason is printed).
 	]"
@@ -56,6 +57,7 @@ feature {NONE} -- Initialization
 			l_frameworks: BIB_FRAMEWORK_BUILDER
 			l_timeline: BIB_TIMELINE_BUILDER
 			l_empires: BIB_EMPIRES_BUILDER
+			l_incipit: BIB_INCIPIT_BUILDER
 			l_memes: BIB_MEME_BUILDER
 			l_books: BIB_BOOK_BUILDER
 			l_reader: SIMPLE_BIBLE
@@ -68,6 +70,7 @@ feature {NONE} -- Initialization
 			l_cli.add_option_with_default ("c|commentary", "The Commentaries folder (every book's _build sidecar) or one sidecar JSON: write the commentary pack instead", "path", "")
 			l_cli.add_option_with_default ("f|frameworks", "A folder of *.framework.json sidecars, or one: write the frameworks pack instead", "path", "")
 			l_cli.add_option_with_default ("r|timeline", "A folder of *.timeline.json sidecars, or one: write the River of Time pack instead", "path", "")
+			l_cli.add_option_with_default ("i|incipit", "The links manifest (incipit.links.json): write the incipit pack (the Old Testament in the New) instead", "path", "")
 			l_cli.add_option_with_default ("m|empires", "Cliopatria's GeoJSON: write the empires pack (polity outlines by year, CC BY 4.0) instead", "path", "")
 			l_cli.add_option_with_default ("y|memes", "The meme seed (memes.seed.json, pictures beside it): write meme.db instead", "path", "")
 			l_cli.add_option_with_default ("u|uses", "With --frameworks: the commentary pack whose Frameworks at work lists give each framework's uses (empty: none)", "path", "")
@@ -175,6 +178,21 @@ feature {NONE} -- Initialization
 						print ("bible_build: wrote " + al_meme_pack + " (" + l_memes.meme_count.out + " memes, " + l_memes.picture_count.out + " pictures, "
 							+ l_memes.passage_count.out + " passages)%N")
 					end
+				end
+			elseif attached l_cli.value_of ("incipit") as al_manifest and then not al_manifest.is_empty
+				and then attached l_cli.value_of ("out") as al_incipit_pack and then not al_incipit_pack.is_empty
+			then
+					-- the Old Testament in the New (research 27, 2026-11-11)
+				create l_incipit.make
+				l_incipit.build (al_manifest, al_incipit_pack)
+				if attached l_incipit.last_error as al_error then
+					print ("bible_build failed: ")
+					print (al_error)
+					print ("%N")
+					l_failed := True
+				else
+					print ("bible_build: wrote " + al_incipit_pack + " (" + l_incipit.link_count.out + " links into " + l_incipit.unit_count.out + " source units, "
+						+ l_incipit.witness_count.out + " witnesses, " + l_incipit.feature_count.out + " measured features)%N")
 				end
 			elseif attached l_cli.value_of ("empires") as al_geojson and then not al_geojson.is_empty
 				and then attached l_cli.value_of ("out") as al_empires_pack and then not al_empires_pack.is_empty

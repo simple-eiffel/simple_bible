@@ -255,6 +255,10 @@ feature {NONE} -- Initialization
 			create commentary_view.make (200.0)
 			create commentary_reader.make
 			create cross_refs_grid.make (60.0)
+			create incipit_grid.make (60.0)
+			create incipit_rows.make (0)
+			create incipit_note.make_ui ("")
+			incipit_note := incipit_note.with_wrap
 			create books_grid.make (60.0)
 			create book_rows.make (0)
 			create chapters_grid.make (60.0)
@@ -2869,6 +2873,8 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 				show_parallel
 			elseif snapshot_tab.same_string ({STRING_32} "commentary") then
 				commentary_tabs.select_tab (1)
+			elseif snapshot_tab.same_string ({STRING_32} "incipit") then
+				commentary_tabs.select_tab (Incipit_tab)
 			elseif snapshot_tab.same_string ({STRING_32} "notes") then
 				new_note_box.set_text ("A sample note written by the snapshot run.")
 				add_note
@@ -3143,6 +3149,7 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			restore_note_button.set_on_click (agent restore_note)
 			highlight_button.set_on_click (agent add_highlight)
 			cross_refs_grid.set_on_select (agent on_cross_ref)
+			incipit_grid.set_on_select (agent on_incipit_row)
 			search_word_button.set_on_click (agent show_every_place)
 			results_grid.set_on_select (agent on_choice)
 			verses_grid.set_on_select (agent on_verse_hit)
@@ -3312,6 +3319,7 @@ feature {NONE} -- Window
 			commentary_tabs.add_page ("Cross-refs", cross_refs_grid)
 			commentary_tabs.add_page ("Books & essays", in_books_grid)
 			commentary_tabs.add_page ("Study guides", study_guides_grid)
+			commentary_tabs.add_page ("Incipit", incipit_page)
 			commentary_tabs.add_page ("Related", create {SW_EMPTY_STATE}.make ("Related passages come later",
 				"AI-made related passages are planned for a later release, always marked as AI-made."))
 				-- Larry's commentary first when a pack holds one (2026-10-27), else the cross-references.
@@ -3428,6 +3436,10 @@ feature {NONE} -- Window
 			analysis_grid.add_column ((create {SW_GRID_COLUMN [BIB_INTERLINEAR_WORD]}.make ("Morphology", 260.0, agent {BIB_INTERLINEAR_WORD}.morphology)).growing)
 			analysis_grid.add_column (create {SW_GRID_COLUMN [BIB_INTERLINEAR_WORD]}.make ("Uses", 70.0, agent analysis_uses_text))
 			cross_refs_grid.add_column (create {SW_GRID_COLUMN [BIB_READING_CROSS_REF]}.make ("Votes", 70.0, agent votes_text))
+			incipit_grid.add_column ((create {SW_GRID_COLUMN [like incipit_row_type]}.make ("Place", 220.0, agent incipit_place)).growing)
+			incipit_grid.add_column (create {SW_GRID_COLUMN [like incipit_row_type]}.make ("Kind", 90.0, agent incipit_kind))
+			incipit_grid.add_column (create {SW_GRID_COLUMN [like incipit_row_type]}.make ("Loudness", 80.0, agent incipit_loudness))
+			incipit_grid.add_column (create {SW_GRID_COLUMN [like incipit_row_type]}.make ("Heard by", 170.0, agent incipit_heard_by))
 			renderings_grid.add_column (create {SW_GRID_COLUMN [BIB_ENGLISH_GLANCE_ROW]}.make ("Rendering", 150.0, agent {BIB_ENGLISH_GLANCE_ROW}.english))
 			renderings_grid.add_column ((create {SW_GRID_COLUMN [BIB_ENGLISH_GLANCE_ROW]}.make ("Version", 200.0, agent version_name)).growing)
 			renderings_grid.add_column (create {SW_GRID_COLUMN [BIB_ENGLISH_GLANCE_ROW]}.make ("Count", 70.0, agent count_text))
@@ -7585,7 +7597,7 @@ feature {NONE} -- The Atlas and the shared selection (Plan 22 phase 3, 2026-10-3
 			window.add_reference_mark (analysis_title, "P03.2", "Verse analysis: the verse read, a row per word with its lemma, Strong's number, morphology, gloss, and how often its headword occurs in this testament. Click a row and T4 follows it.", window.Corner_top_left)
 			window.add_reference_mark (interlinear_note, "P03", "Interlinear: word by word in the original, right to left for Hebrew. A click makes the word's verse the place read and opens its headword in T4.", window.Corner_top_left)
 			window.add_reference_mark (lexicon_heading, "T4", "P05 Lexicon, east: follows the clicked word. Its Frameworks tab (P05.8) explains each FRAMEWORK(TM) for the common reader; a framework named anywhere is a link: rest on it for a summary, click it to open it here.", window.Corner_top_left)
-			window.add_reference_mark (commentary_title, "T5", "P04 Commentary, east: Commentaries (Larry's commentary packs, verse by verse, every claim labelled SOURCED or DEDUCED), Cross-refs with OpenBible votes.", window.Corner_top_left)
+			window.add_reference_mark (commentary_title, "T5", "P04 Commentary, east: Commentaries (Larry's commentary packs, verse by verse, every claim labelled SOURCED or DEDUCED), Cross-refs with OpenBible votes, Incipit (where the New Testament draws on the Old, LXX-keyed, loudest first)." , window.Corner_top_left)
 			window.add_reference_mark (results_tabs, "T6", "South results zone: Search Results (word choices, then the verses holding the words; click one to read it); Author Library (Larry's books); Writings (the search box with My writings as its scope); Guides, Census and Ledger come later.", window.Corner_top_left)
 			window.add_reference_mark (writings_grid, "T6.5", "Writings: what the search box found in your commentary, frameworks and books (scope My writings; My writings (fuzzy) forgives a misspelled word). Click one to open it.", window.Corner_top_right)
 			window.add_reference_mark (memes_grid, "T6.6", "Memes list: all, or those naming the verse or chapter read; search box above; click a heading to sort (title, words, passages, set); your favorite memes stay at the top (the star); hover the picture icon to see the meme.", window.Corner_top_left)
@@ -8442,6 +8454,9 @@ feature {NONE} -- Larry's books (T6 Author Library, T5 In the books; Larry, 2026
 
 	Study_guides_tab: INTEGER = 4
 			-- T5's Study guides page (2026-10-30).
+
+	Incipit_tab: INTEGER = 5
+			-- S2's Incipit page: the Old Testament in the New (research 26, 2026-11-11).
 
 	Author_library_tab: INTEGER = 4
 			-- T6's Author Library page.
@@ -9988,6 +10003,7 @@ feature {NONE} -- Commentary (S2, P04)
 				end
 				cross_refs_grid.set_rows (cross_refs)
 				fill_in_books
+				fill_incipit
 				show_commentary
 			end
 		end
@@ -10087,6 +10103,174 @@ feature {NONE} -- Commentary (S2, P04)
 			if a_model >= 1 and a_model <= cross_refs.count then
 				go_to (cross_refs.i_th (a_model).to_book, cross_refs.i_th (a_model).to_chapter, cross_refs.i_th (a_model).verse_start)
 			end
+		end
+
+feature {NONE} -- Incipit (S2, research 26: the Old Testament in the New)
+
+	incipit_grid: SW_DATA_GRID [like incipit_row_type]
+			-- The links of the verse read, loudest first.
+
+	incipit_rows: ARRAYED_LIST [like incipit_row_type]
+
+	incipit_note: SW_LABEL
+			-- What the grid shows, or what to do.
+
+	incipit_row_type: TUPLE [place, kind, loudness, heard_by: STRING_32; book, chapter, verse: INTEGER]
+			-- One row: the place at the other end (`book' 0 when the reader cannot go there), its kind,
+			-- loudness and witnesses.
+		do
+			Result := [{STRING_32} "", {STRING_32} "", {STRING_32} "", {STRING_32} "", 0, 0, 0]
+		end
+
+	incipit_schema: BIB_INCIPIT_SCHEMA
+		once
+			create Result
+		end
+
+	First_new_testament_book: INTEGER = 40
+			-- Matthew's book number.
+
+	incipit_page: SW_COLUMN
+			-- The Incipit tab: a note above the grid.
+		do
+			create Result.make
+			Result := Result.with_gap (6.0)
+			Result.put (incipit_note.as_muted)
+			Result.put (incipit_grid.growing)
+		end
+
+	fill_incipit
+			-- The Incipit tab follows the verse: a New Testament verse's links into the Old Testament
+			-- (keyed in the LXX), or the New Testament places that take up an Old Testament verse.
+		local
+			l_packs: ARRAYED_LIST [BIB_INCIPIT_PACK]
+			l_place: STRING_32
+		do
+			create incipit_rows.make (4)
+			l_packs := bible.incipit_packs
+			if l_packs.is_empty or else not l_packs.first.is_available then
+				incipit_note.set_text ({STRING_32} "No incipit pack is installed. It brings the places where the New Testament draws on the Old.")
+			elseif commentary_verse = 0 then
+				incipit_note.set_text ({STRING_32} "Click a verse: a New Testament verse shows the Old Testament it draws on; an Old Testament verse shows where the New takes it up.")
+			else
+				l_place := place_text (commentary_book, commentary_chapter, commentary_verse)
+				if commentary_book >= First_new_testament_book and commentary_book <= incipit_schema.Book_codes.count then
+					across l_packs.first.links_from (incipit_schema.Book_codes [commentary_book], commentary_chapter, commentary_verse) as ic loop
+						incipit_rows.extend ([source_place_text (ic), kind_text (ic.kind), ic.loudness, heard_by_text (ic.witnesses), ic.en_book_id, ic.en_ch, ic.en_v])
+					end
+					if incipit_rows.is_empty then
+						incipit_note.set_text (l_place + {STRING_32} ": no link into the Old Testament is known.")
+					else
+						incipit_note.set_text (l_place + {STRING_32} " draws on the Old Testament (LXX) in " + count_words (incipit_rows.count)
+							+ {STRING_32} ", loudest first. Loud and clear stand above chance; a theme is named by a scholar's list but shares few words.")
+					end
+				elseif commentary_book >= 1 then
+					across l_packs.first.links_into_english (commentary_book, commentary_chapter, commentary_verse) as ic loop
+						incipit_rows.extend ([place_text (book_number_of (ic.nt_book), ic.nt_ch, ic.nt_v), kind_text (ic.kind), ic.loudness,
+							heard_by_text (ic.witnesses), book_number_of (ic.nt_book), ic.nt_ch, ic.nt_v])
+					end
+					if incipit_rows.is_empty then
+						incipit_note.set_text (l_place + {STRING_32} ": no New Testament use of this verse is known.")
+					else
+						incipit_note.set_text ({STRING_32} "The New Testament takes up " + l_place + {STRING_32} " in " + count_words (incipit_rows.count)
+							+ {STRING_32} ", loudest first. Loud and clear stand above chance; a theme is named by a scholar's list but shares few words.")
+					end
+				end
+			end
+			incipit_grid.set_rows (incipit_rows)
+		end
+
+	on_incipit_row (a_model: INTEGER)
+			-- An Incipit row clicked: read its place, when the reader has it.
+		do
+			if a_model >= 1 and a_model <= incipit_rows.count and then incipit_rows.i_th (a_model).book > 0 then
+				go_to (incipit_rows.i_th (a_model).book, incipit_rows.i_th (a_model).chapter, incipit_rows.i_th (a_model).verse)
+			end
+		end
+
+	source_place_text (a_link: like {BIB_INCIPIT_PACK}.link_type): STRING_32
+			-- "Psalm 22:1 (LXX 21:2)"; a book only the LXX has, by its LXX place: "Wisdom 2:18 (LXX only)".
+		do
+			if a_link.en_book_id > 0 then
+				Result := place_text (a_link.en_book_id, a_link.en_ch, a_link.en_v) + {STRING_32} " (LXX " + a_link.lxx_ch.out.to_string_32
+					+ {STRING_32} ":" + a_link.lxx_v.out.to_string_32 + {STRING_32} ")"
+			else
+				Result := a_link.unit_title + {STRING_32} ":" + a_link.lxx_v.out.to_string_32 + {STRING_32} " (LXX only)"
+			end
+		end
+
+	kind_text (a_kind: STRING_32): STRING_32
+			-- "word link" for "word_link".
+		do
+			Result := a_kind.twin
+			Result.replace_substring_all ({STRING_32} "_", {STRING_32} " ")
+		end
+
+	heard_by_text (a_witnesses: STRING_32): STRING_32
+			-- "UBS, H%/252/hn (quoted)" for "ubs huhn*".
+		local
+			l_word: STRING_32
+		do
+			create Result.make (32)
+			across a_witnesses.split (' ') as ic loop
+				if ic.same_string ({STRING_32} "ubs") then
+					l_word := {STRING_32} "UBS"
+				elseif ic.same_string ({STRING_32} "huhn**") then
+					l_word := {STRING_32} "H%/252/hn (quoted, formula)"
+				elseif ic.same_string ({STRING_32} "huhn*") then
+					l_word := {STRING_32} "H%/252/hn (quoted)"
+				elseif ic.same_string ({STRING_32} "huhn") then
+					l_word := {STRING_32} "H%/252/hn"
+				elseif ic.same_string ({STRING_32} "measure") then
+					l_word := {STRING_32} "measured"
+				else
+					l_word := ic
+				end
+				if not l_word.is_empty then
+					if not Result.is_empty then
+						Result.append ({STRING_32} ", ")
+					end
+					Result.append (l_word)
+				end
+			end
+		end
+
+	book_number_of (a_code: STRING_32): INTEGER
+			-- The book number of code `a_code' ("MAT" = 40), 0 when unknown.
+		do
+			across incipit_schema.Book_codes as ic until Result > 0 loop
+				if ic.same_string_general (a_code) then
+					Result := @ic.cursor_index
+				end
+			end
+		ensure
+			a_book_or_none: Result >= 0 and Result <= 66
+		end
+
+	incipit_place (a_row: like incipit_row_type): STRING_32
+		do
+			Result := a_row.place
+		end
+
+	incipit_kind (a_row: like incipit_row_type): STRING_32
+		do
+			Result := a_row.kind
+		end
+
+	incipit_loudness (a_row: like incipit_row_type): STRING_32
+		do
+			Result := a_row.loudness
+		end
+
+	incipit_heard_by (a_row: like incipit_row_type): STRING_32
+		do
+			Result := a_row.heard_by
+		end
+
+	count_words (a_count: INTEGER): STRING_32
+			-- "1 place", "3 places".
+		do
+			Result := a_count.out.to_string_32 + (if a_count = 1 then {STRING_32} " place" else {STRING_32} " places" end)
 		end
 
 feature {NONE} -- Dictionary and lexicon (S3, P05)
@@ -10637,7 +10821,7 @@ feature {NONE} -- Design pills
 			window.add_reference_mark (dock, "C16", "Dock host: centre plus west, east, south; an empty zone collapses (P07 here).", window.Corner_top_right)
 			window.add_reference_mark (reading_caption, "S1", "P01 Bible Text, centre: verse per line. Previous and Next step chapters.", window.Corner_top_left)
 			window.add_reference_mark (reading_view, "S4", "Selected verse and word: click a word (English, Hebrew or Greek) and S3 follows it; S2 follows the verse.", window.Corner_top_right)
-			window.add_reference_mark (commentary_title, "S2", "P04 Commentary, east: follows the verse. Commentaries from the commentary packs (every claim labelled SOURCED or DEDUCED); Cross-refs (OpenBible votes).", window.Corner_top_left)
+			window.add_reference_mark (commentary_title, "S2", "P04 Commentary, east: follows the verse. Commentaries from the commentary packs (every claim labelled SOURCED or DEDUCED); Cross-refs (OpenBible votes); Incipit (the Old Testament in the New, both ways).", window.Corner_top_left)
 			window.add_reference_mark (lexicon_heading, "S3", "P05 Lexicon, south: follows the word. Renderings first, then lexicon entries.", window.Corner_top_left)
 			window.add_reference_mark (renderings_grid, "P05.4", "Range before ruling: every rendering with its count, before any lexicon's verdict.", window.Corner_top_left)
 			window.add_reference_mark (entries_list, "P05.5", "Lexicon entries: each source in its own words (Abbott-Smith, BDB, LSJ, UBS, TBESH).", window.Corner_top_left)

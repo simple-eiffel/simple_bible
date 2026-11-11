@@ -41,6 +41,7 @@ feature {NONE} -- Initialization
 			run_concordance_tests
 			run_facade_open_tests
 			run_timeline_tests
+			run_incipit_tests
 			run_content_builder_tests
 			run_cli_command_tests
 			run_reading_tests
@@ -433,6 +434,20 @@ feature {NONE} -- Suites
 			else
 				run_skeletal (agent t.test_pdf_reads_as_prose, "test_pdf_reads_as_prose", "set SIMPLE_BIBLE_PDF")
 			end
+		end
+
+	run_incipit_tests
+			-- The incipit pack (research 26 and 27, 2026-11-11).
+		local
+			t: TEST_INCIPIT
+		do
+			print ("TEST_INCIPIT%N")
+			create t
+			run_test (agent t.test_incipit_schema_makes_every_table, "test_incipit_schema_makes_every_table")
+			run_test (agent t.test_incipit_schema_refuses_a_word_off_its_lists, "test_incipit_schema_refuses_a_word_off_its_lists")
+			run_test (agent t.test_incipit_schema_vocabulary, "test_incipit_schema_vocabulary")
+			run_test (agent t.test_incipit_pack_builds_attaches_and_reads, "test_incipit_pack_builds_attaches_and_reads")
+			run_test (agent t.test_incipit_builder_refuses_a_broken_manifest, "test_incipit_builder_refuses_a_broken_manifest")
 		end
 
 	run_timeline_tests
