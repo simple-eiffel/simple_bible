@@ -4487,9 +4487,9 @@ feature {NONE} -- Two layouts (C7)
 				results_page.put (results_column)
 				results_holder.put (results_tabs)
 				tools_holder.put (tools_strip)
-				dock.move_panel (lexicon_panel, dock.Zone_east)
-				dock.move_panel (commentary_panel, dock.Zone_east)
-				dock.move_panel (results_panel, dock.Zone_south)
+				dock_panel_into (lexicon_panel, dock.Zone_east)
+				dock_panel_into (commentary_panel, dock.Zone_east)
+				dock_panel_into (results_panel, dock.Zone_south)
 				dock.show_panel (navigator_panel)
 				dock.show_panel (notes_panel)
 				dock.show_panel (results_panel)
@@ -4505,9 +4505,9 @@ feature {NONE} -- Two layouts (C7)
 			else
 				center_holder.put (reading_column)
 				results_holder.put (results_column)
-				dock.move_panel (lexicon_panel, dock.Zone_south)
-				dock.move_panel (commentary_panel, dock.Zone_east)
-				dock.move_panel (results_panel, dock.Zone_west)
+				dock_panel_into (lexicon_panel, dock.Zone_south)
+				dock_panel_into (commentary_panel, dock.Zone_east)
+				dock_panel_into (results_panel, dock.Zone_west)
 				dock.hide_panel (navigator_panel)
 				dock.hide_panel (notes_panel)
 				dock.hide_panel (atlas_panel)
@@ -10245,6 +10245,19 @@ feature {NONE} -- Incipit (S2, research 26: the Old Testament in the New)
 			end
 		ensure
 			a_book_or_none: Result >= 0 and Result <= 66
+		end
+
+	dock_panel_into (a_panel, a_zone: INTEGER)
+			-- Put `a_panel' in `a_zone' unless it is there already. SW_DOCK_HOST.move_panel promises
+			-- the panel then ends its zone (simple_widgets 1r-b, c430fea), but leaves a panel already
+			-- in the zone where it stands, so asking twice broke that promise (the GUI suite's first
+			-- test, 2026-11-11). Skipping the second ask keeps the layout the lean build gave.
+		do
+			if not dock.all_panels_in (a_zone).has (a_panel) then
+				dock.move_panel (a_panel, a_zone)
+			end
+		ensure
+			in_the_zone: dock.all_panels_in (a_zone).has (a_panel)
 		end
 
 	incipit_place (a_row: like incipit_row_type): STRING_32
