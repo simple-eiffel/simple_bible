@@ -69,6 +69,9 @@ feature -- Undo and Redo for Favorites (Larry, 2026-11-03)
 			k: INTEGER
 		do
 			app := new_window
+				-- Study shows the Navigator and its Favorites tree; the window must not depend on what a
+				-- data folder's settings.txt holds (port-coordination issue 58, 2026-11-11).
+			app.harness_state.set_study (True)
 			app.harness_go_to (43, 3, 16)
 			app.harness_add_favorite (1, 16, "John 3:16", 0)
 			l_folder := app.harness_new_folder ("Gospel")
@@ -177,6 +180,9 @@ feature -- Carrying a selection to Favorites (research/24 stage D3, 2026-11-03)
 			u: INTEGER
 		do
 			app := new_window
+				-- Study shows the Navigator and its Favorites tree; the window must not depend on what a
+				-- data folder's settings.txt holds (port-coordination issue 58, 2026-11-11).
+			app.harness_state.set_study (True)
 			l_folder := app.harness_new_folder ("Verses")
 			app.harness_go_to (43, 3, 16)
 			app.harness_show_favorites
@@ -207,6 +213,9 @@ feature -- Carrying a selection to Favorites (research/24 stage D3, 2026-11-03)
 			k: INTEGER
 		do
 			app := new_window
+				-- Study shows the Navigator and its Favorites tree; the window must not depend on what a
+				-- data folder's settings.txt holds (port-coordination issue 58, 2026-11-11).
+			app.harness_state.set_study (True)
 			app.harness_go_to (43, 3, 16)
 			app.harness_add_favorite (1, 16, "John 3:16", 0)
 			l_folder := app.harness_new_folder ("Gospel")
