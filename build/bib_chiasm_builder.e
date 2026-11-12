@@ -185,28 +185,10 @@ feature {NONE} -- Reading and checking
 			end
 		end
 
-	place_of (a_o: SIMPLE_JSON_OBJECT; a_key: READABLE_STRING_GENERAL): TUPLE [ch, v: INTEGER]
-			-- [chapter, verse] under `a_key'; [0, 0] when absent.
-		do
-			Result := [0, 0]
-			if attached a_o.array_item (a_key.to_string_32) as al_a and then al_a.count = 2 then
-				Result := [al_a.integer_item (1).to_integer_32, al_a.integer_item (2).to_integer_32]
-			end
-		end
-
 	ordinal (a_place: TUPLE [ch, v: INTEGER]): INTEGER
 			-- `a_place' as one number that orders places within a book.
 		do
 			Result := a_place.ch * 1000 + a_place.v
-		end
-
-	number_of (a_o: SIMPLE_JSON_OBJECT; a_key: READABLE_STRING_GENERAL): REAL_64
-			-- The number under `a_key'; -1 when absent or not a number.
-		do
-			Result := -1
-			if attached a_o.item (a_key.to_string_32) as al_v and then al_v.is_number then
-				Result := al_v.as_real
-			end
 		end
 
 	optional_number (a_o: SIMPLE_JSON_OBJECT; a_key: READABLE_STRING_GENERAL): detachable REAL_64_REF

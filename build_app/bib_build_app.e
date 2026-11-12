@@ -210,7 +210,8 @@ feature {NONE} -- Initialization
 					l_failed := True
 				else
 					print ("bible_build: wrote " + al_incipit_pack + " (" + l_incipit.link_count.out + " links into " + l_incipit.unit_count.out + " source units, "
-						+ l_incipit.witness_count.out + " witnesses, " + l_incipit.feature_count.out + " measured features)%N")
+						+ l_incipit.witness_count.out + " witnesses, " + l_incipit.feature_count.out + " measured features, "
+						+ l_incipit.story_count.out + " stories in " + l_incipit.section_count.out + " sections over " + l_incipit.scene_count.out + " scenes)%N")
 				end
 			elseif attached l_cli.value_of ("empires") as al_geojson and then not al_geojson.is_empty
 				and then attached l_cli.value_of ("out") as al_empires_pack and then not al_empires_pack.is_empty

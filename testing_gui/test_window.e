@@ -956,6 +956,30 @@ feature -- Phase 2
 			app.shut_down
 		end
 
+	test_a_verse_shows_its_incipit_stories
+			-- Larry, 2026-11-11: reading Matthew putting Psalm 22:1 in Jesus' mouth, "simple_bible tells you
+			-- the story of Psalm 22 in plain simple terms"; reading the psalm, where the New Testament takes it up.
+		local
+			app: BIB_GUI_APP
+		do
+			app := new_window
+			app.harness_state.set_study (True)
+			app.harness_go_to (40, 27, 46)
+			app.harness_show_incipit
+			assert_integers_equal ("Matthew 27:46: the psalm's story and the scene's", 2, app.harness_incipit_story_count)
+			app.harness_go_to (19, 22, 1)
+			assert_integers_equal ("Psalm 22:1: the psalm's story and its forward story", 2, app.harness_incipit_story_count)
+			app.harness_go_to (45, 3, 14)
+			assert_integers_equal ("Romans 3:14: none written yet", 0, app.harness_incipit_story_count)
+			app.harness_open_story_window
+			assert ("the stories window opens", app.harness_story_window_open)
+			app.harness_go_to (40, 27, 46)
+			assert ("it stays open as the verse changes", app.harness_story_window_open)
+			app.harness_close_story_window
+			assert ("closed", not app.harness_story_window_open)
+			app.shut_down
+		end
+
 	test_each_workspace_keeps_its_east_width
 		local
 			app: BIB_GUI_APP

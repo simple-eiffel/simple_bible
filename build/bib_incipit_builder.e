@@ -3,8 +3,13 @@ note
 		Writes the incipit pack (BIB_INCIPIT_SCHEMA; research 27, 2026-11-11)
 		from one manifest, `incipit.links.json', which the vault tools write:
 		"kinds" (the declared tests), "units" (whole source passages, LXX
-		numbering), "measure_run" (the measure's version and chance lines) and
-		"links". Every build starts from an empty file; nothing is merged.
+		numbering), "measure_run" (the measure's version and chance lines),
+		"links", and, when the stories have been read from the vault, "scenes"
+		(a New Testament passage that uses a unit) and "stories" (a unit's
+		source story, a scene's story, a unit's forward story; each in
+		sections, each section with its status: Larry's posted, drafted,
+		framework or approved words, or Claude's take on him). Every build
+		starts from an empty file; nothing is merged.
 
 		THE CHECKS, before a byte is written: the manifest says it is
 		incipit.links/1; every kind is one the schema declares, given once, with
@@ -46,7 +51,10 @@ feature {NONE} -- Initialization
 			create unit_ids.make (512)
 			create links.make (4096)
 			create pairs.make (4096)
-			run := [{STRING_32} "", {STRING_32} "", {STRING_32} "", {STRING_32} "", {STRING_32} "", {INTEGER_64} 0, 0.0, 0.0, 0.0]
+			create scenes.make (16)
+			create scene_ids.make (16)
+			create stories.make (16)
+			run :=[{STRING_32} "", {STRING_32} "", {STRING_32} "", {STRING_32} "", {STRING_32} "", {INTEGER_64} 0, 0.0, 0.0, 0.0]
 		ensure
 			nothing_built: link_count = 0
 		end
@@ -56,12 +64,13 @@ feature -- Access
 	schema: BIB_INCIPIT_SCHEMA
 			-- The tables written.
 
-	kind_count, unit_count, link_count, witness_count, feature_count: INTEGER
+	kind_count, unit_count, link_count, witness_count, feature_count, scene_count, story_count, section_count: INTEGER
 			-- What the last build wrote.
 
 	Ubs_key: INTEGER = 1
 	Huehn_key: INTEGER = 2
 	Measure_key: INTEGER = 3
+	Story_key: INTEGER = 4
 			-- The provenance rows.
 
 feature -- Commands
@@ -80,11 +89,17 @@ feature -- Commands
 			link_count := 0
 			witness_count := 0
 			feature_count := 0
+			scene_count := 0
+			story_count := 0
+			section_count := 0
 			kinds.wipe_out
 			units.wipe_out
 			unit_ids.wipe_out
 			links.wipe_out
 			pairs.wipe_out
+			scenes.wipe_out
+			scene_ids.wipe_out
+			stories.wipe_out
 			run := [{STRING_32} "", {STRING_32} "", {STRING_32} "", {STRING_32} "", {STRING_32} "", {INTEGER_64} 0, 0.0, 0.0, 0.0]
 			read_manifest (a_manifest.to_string_32)
 			if last_error = Void then
@@ -95,6 +110,9 @@ feature -- Commands
 					"Read from a scanned page; a reference may be misread.", create {BIB_LICENSE}.make ("public domain", False, False, False, {STRING_32} "Eugen H%/252/hn"))
 				put_pack_provenance (l_db, Measure_key, "simple_bible volume measure", run.measure_version,
 					{STRING_32} "Computed from conc.db (" + run.nt_edition + {STRING_32} ", " + run.lxx_edition + {STRING_32} "): scores, not judgments.",
+					create {BIB_LICENSE}.make ({BIB_PRIVATE_PACK_SCHEMA}.Author_license, False, False, False, {BIB_PRIVATE_PACK_SCHEMA}.Pack_author))
+				put_pack_provenance (l_db, Story_key, "INCIPIT stories", "the story drafts in the vault (Incipit/)",
+					"Larry's posted, drafted and framework words, quoted; Claude's take on Larry, marked as such until Larry approves it.",
 					create {BIB_LICENSE}.make ({BIB_PRIVATE_PACK_SCHEMA}.Author_license, False, False, False, {BIB_PRIVATE_PACK_SCHEMA}.Pack_author))
 				if last_error = Void then
 					write_all (l_db)
@@ -128,6 +146,17 @@ feature {NONE} -- Reading and checking
 
 	pairs: HASH_TABLE [BOOLEAN, STRING_32]
 			-- Every "NT ref|LXX ref" read, to refuse a pair given twice without a quadratic scan.
+
+	scenes: ARRAYED_LIST [TUPLE [unit: INTEGER; nt_book: STRING_32; ch_from, v_from, ch_to, v_to: INTEGER; title: STRING_32]]
+			-- The New Testament scenes the stories tell (Larry, 2026-11-11: "the story of the incipit
+			-- link in its NT context").
+
+	scene_ids: HASH_TABLE [INTEGER, STRING_32]
+			-- A scene's index in `scenes' by its key.
+
+	stories: ARRAYED_LIST [TUPLE [unit, scene: INTEGER; kind, title, vault_path: STRING_32;
+			sections: ARRAYED_LIST [TUPLE [heading, body, status, sources: STRING_32]]]]
+			-- The written stories (`scene' 0 for a source or forward story).
 
 	read_manifest (a_file: STRING_32)
 			-- Read and check the manifest `a_file' into `kinds', `units', `run' and `links'.
@@ -170,6 +199,22 @@ feature {NONE} -- Reading and checking
 					end
 				end
 				fail_unless (not links.is_empty, a_file, "the manifest has no links")
+				if attached l_root.array_item ({STRING_32} "scenes") as al_scenes then
+					from i := 1 until i > al_scenes.count or last_error /= Void loop
+						if attached al_scenes.object_item (i) as al_s then
+							read_scene (a_file, al_s)
+						end
+						i := i + 1
+					end
+				end
+				if attached l_root.array_item ({STRING_32} "stories") as al_stories then
+					from i := 1 until i > al_stories.count or last_error /= Void loop
+						if attached al_stories.object_item (i) as al_s then
+							read_story (a_file, al_s)
+						end
+						i := i + 1
+					end
+				end
 			else
 				last_error := {STRING_32} "Not a JSON object: " + a_file
 			end
@@ -285,6 +330,105 @@ feature {NONE} -- Reading and checking
 			end
 		end
 
+	read_scene (a_file: STRING_32; a_o: SIMPLE_JSON_OBJECT)
+			-- One New Testament scene, checked: a key given once, a known unit, a New Testament book,
+			-- a range that runs forward, a title.
+		local
+			l_key: STRING_32
+			l_unit: INTEGER
+			l_from, l_to: TUPLE [ch, v: INTEGER]
+		do
+			l_key := text_of (a_o, "key")
+			fail_unless (not l_key.is_empty and then not scene_ids.has (l_key), a_file, {STRING_32} "scene " + l_key + {STRING_32} " has no key or is given twice")
+			l_unit := unit_index (text_of (a_o, "unit"))
+			fail_unless (l_unit > 0, a_file, {STRING_32} "scene " + l_key + {STRING_32} " names no unit of the manifest: " + text_of (a_o, "unit"))
+			fail_unless (is_new_testament_book (text_of (a_o, "nt_book")), a_file, {STRING_32} "scene " + l_key + {STRING_32} " names no New Testament book: " + text_of (a_o, "nt_book"))
+			l_from := place_of (a_o, "from")
+			l_to := place_of (a_o, "to")
+			fail_unless (l_from.ch >= 1 and l_from.v >= 1 and (l_to.ch > l_from.ch or (l_to.ch = l_from.ch and l_to.v >= l_from.v)), a_file,
+				{STRING_32} "scene " + l_key + {STRING_32} " does not run forward from a chapter and verse")
+			fail_unless (not text_of (a_o, "title").is_empty, a_file, {STRING_32} "scene " + l_key + {STRING_32} " has no title")
+			if last_error = Void then
+				scenes.extend ([l_unit, text_of (a_o, "nt_book"), l_from.ch, l_from.v, l_to.ch, l_to.v, text_of (a_o, "title")])
+				scene_ids.put (scenes.count, l_key)
+			end
+		end
+
+	read_story (a_file: STRING_32; a_o: SIMPLE_JSON_OBJECT)
+			-- One written story, checked: a known kind and unit; a scene story names a scene read before
+			-- it and no other story does; a title and a vault path; at least one section, each with a
+			-- heading, a body and a known status.
+		local
+			l_kind, l_scene_key, l_title: STRING_32
+			l_unit, l_scene, i: INTEGER
+			l_sections: ARRAYED_LIST [TUPLE [heading, body, status, sources: STRING_32]]
+		do
+			l_kind := text_of (a_o, "kind")
+			l_title := text_of (a_o, "title")
+			l_scene_key := text_of (a_o, "scene")
+			fail_unless (across schema.Story_kinds as al_k some al_k.same_string_general (l_kind) end, a_file, {STRING_32} "story " + l_title + {STRING_32} " has an unknown kind: " + l_kind)
+			l_unit := unit_index (text_of (a_o, "unit"))
+			fail_unless (l_unit > 0, a_file, {STRING_32} "story " + l_title + {STRING_32} " names no unit of the manifest: " + text_of (a_o, "unit"))
+			if l_kind.same_string_general ("scene") then
+				scene_ids.search (l_scene_key)
+				if scene_ids.found then
+					l_scene := scene_ids.found_item
+				end
+				fail_unless (l_scene > 0, a_file, {STRING_32} "scene story " + l_title + {STRING_32} " names no scene read before it: " + l_scene_key)
+			else
+				fail_unless (l_scene_key.is_empty, a_file, {STRING_32} "story " + l_title + {STRING_32} " is not a scene story but names a scene")
+			end
+			fail_unless (not l_title.is_empty and not text_of (a_o, "vault_path").is_empty, a_file, "a story lacks its title or its vault path")
+			create l_sections.make (4)
+			if attached a_o.array_item ({STRING_32} "sections") as al_sections then
+				from i := 1 until i > al_sections.count or last_error /= Void loop
+					if attached al_sections.object_item (i) as al_one then
+						fail_unless (not text_of (al_one, "heading").is_empty and not text_of (al_one, "body").is_empty, a_file,
+							{STRING_32} "a section of story " + l_title + {STRING_32} " lacks its heading or its body")
+						fail_unless (across schema.Section_statuses as al_s some al_s.same_string_general (text_of (al_one, "status")) end, a_file,
+							{STRING_32} "a section of story " + l_title + {STRING_32} " has an unknown status: " + text_of (al_one, "status"))
+						l_sections.extend ([text_of (al_one, "heading"), text_of (al_one, "body"), text_of (al_one, "status"), text_of (al_one, "sources")])
+					end
+					i := i + 1
+				end
+			end
+			fail_unless (not l_sections.is_empty, a_file, {STRING_32} "story " + l_title + {STRING_32} " has no sections")
+			if last_error = Void then
+				stories.extend ([l_unit, l_scene, l_kind, l_title, text_of (a_o, "vault_path"), l_sections])
+			end
+		end
+
+	unit_index (a_key: STRING_32): INTEGER
+			-- The index in `units' of the unit "BOOK CH" `a_key'; 0 when none.
+		do
+			unit_ids.search (a_key)
+			if unit_ids.found then
+				Result := unit_ids.found_item
+			end
+		ensure
+			in_units: Result >= 0 and Result <= units.count
+		end
+
+	is_new_testament_book (a_code: READABLE_STRING_GENERAL): BOOLEAN
+			-- Is `a_code' one of the schema's New Testament book codes (Matthew to Revelation)?
+		do
+			Result := across First_new_testament_book |..| schema.Book_codes.upper as i some schema.Book_codes [i].same_string_general (a_code) end
+		end
+
+	First_new_testament_book: INTEGER = 40
+			-- Matthew's place in `schema.Book_codes'.
+
+	section_voice (a_status: READABLE_STRING_GENERAL): STRING_8
+			-- A section in Larry's own words (posted, drafted, framework, approved) speaks as the author;
+			-- Claude's take on him is held loosely until he approves it.
+		do
+			if a_status.same_string ("claude_take") then
+				Result := schema.Voice_loose
+			else
+				Result := schema.Voice_author
+			end
+		end
+
 	verse_of (a_ref: STRING_32): detachable TUPLE [book: STRING_32; ch, v: INTEGER]
 			-- "BOOK C:V" read, or Void.
 		local
@@ -332,15 +476,6 @@ feature {NONE} -- Reading and checking
 				Result := schema.Voice_trusted
 			else
 				Result := schema.Voice_loose
-			end
-		end
-
-	number_of (a_o: SIMPLE_JSON_OBJECT; a_key: READABLE_STRING_GENERAL): REAL_64
-			-- The number under `a_key'; -1 when absent or not a number.
-		do
-			Result := -1
-			if attached a_o.item (a_key.to_string_32) as al_v and then al_v.is_number then
-				Result := al_v.as_real
 			end
 		end
 
@@ -397,6 +532,39 @@ feature {NONE} -- Writing
 					a_db.execute_with_args ("INSERT INTO link_feature VALUES (?, ?, ?, ?, ?)", <<l_index, al_f.name, al_f.value, schema.Voice_loose, Measure_key>>)
 					check_db (a_db, "A feature could not be written.")
 					feature_count := feature_count + 1
+				end
+			end
+			write_stories (a_db)
+		end
+
+	write_stories (a_db: SIMPLE_SQL_DATABASE)
+			-- The scenes, then the stories and their sections.
+		local
+			l_index, l_seq: INTEGER
+			l_scene: detachable INTEGER_REF
+		do
+			across scenes as ic until last_error /= Void loop
+				l_index := @ic.cursor_index
+				a_db.execute_with_args ("INSERT INTO scene VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+					<<l_index, ic.unit, ic.nt_book, ic.ch_from, ic.v_from, ic.ch_to, ic.v_to, ic.title, schema.Voice_author, Story_key>>)
+				check_db (a_db, "A scene could not be written.")
+				scene_count := scene_count + 1
+			end
+			across stories as ic until last_error /= Void loop
+				l_index := @ic.cursor_index
+				l_scene := english_part (ic.scene)
+					-- NULL for a source or forward story
+				a_db.execute_with_args ("INSERT INTO story VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+					<<l_index, ic.unit, l_scene, ic.kind, ic.title, ic.vault_path, schema.Voice_author, Story_key>>)
+				check_db (a_db, "A story could not be written.")
+				story_count := story_count + 1
+				l_seq := 0
+				across ic.sections as al_s until last_error /= Void loop
+					l_seq := l_seq + 1
+					a_db.execute_with_args ("INSERT INTO story_section VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+						<<l_index, l_seq, al_s.heading, al_s.body, al_s.status, al_s.sources, section_voice (al_s.status), Story_key>>)
+					check_db (a_db, "A story section could not be written.")
+					section_count := section_count + 1
 				end
 			end
 		end

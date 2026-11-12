@@ -253,12 +253,19 @@ feature {NONE} -- Initialization
 			create commentary_title.make ("", {SW_PAINTER}.Role_ui, 13.0, True)
 			create commentary_tabs.make
 			create commentary_view.make (200.0)
+			create incipit_story_view.make (60.0)
+				-- small, as the grids are: the panel's leftover height grows it (at 200 the page
+				-- outgrew the panel and drew over the one below)
 			create commentary_reader.make
 			create cross_refs_grid.make (60.0)
 			create incipit_grid.make (60.0)
 			create incipit_verse_button.make ("This verse", Void)
 			create incipit_all_nt_button.make ("All, by New Testament", Void)
 			create incipit_all_ot_button.make ("All, by Old Testament", Void)
+			create incipit_stories_button.make ("Stories in a window", Void)
+			incipit_stories_button.set_tooltip ("Stories in a window: the verse's stories in a window of their own, to size, move or maximize; it follows the verse you read.")
+			create incipit_story_window_view.make (400.0)
+			create incipit_story_page.make_empty
 			create chiasm_verse_button.make ("This verse", Void)
 			create chiasm_all_button.make ("All structures", Void)
 			create chiasm_graded_button.make ("Strong and moderate", Void)
@@ -2155,6 +2162,30 @@ feature {BIB_WINDOW_HARNESS_CLIENT} -- The window harness (research/23, 2026-10-
 			Result := incipit_rows.count
 		end
 
+	harness_incipit_story_count: INTEGER
+			-- Stories the Incipit tab shows under its list.
+		do
+			Result := incipit_story_count
+		end
+
+	harness_open_story_window
+			-- Stories in a window, as its button would.
+		do
+			open_story_window
+		end
+
+	harness_story_window_open: BOOLEAN
+			-- Is the stories window open?
+		do
+			Result := attached stories_float as al_float and then al_float.is_open
+		end
+
+	harness_close_story_window
+			-- Close the stories window, as its close box would.
+		do
+			close_story_window
+		end
+
 	harness_show_pair (a_index: INTEGER)
 			-- Side by side for Incipit row `a_index', as its right-click item would.
 		require
@@ -2971,6 +3002,12 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			elseif snapshot_tab.same_string ({STRING_32} "incipitall") then
 				commentary_tabs.select_tab (Incipit_tab)
 				set_incipit_mode (Incipit_mode_new)
+			elseif snapshot_tab.same_string ({STRING_32} "incipitstories") then
+				commentary_tabs.select_tab (Incipit_tab)
+				open_story_window
+				if attached stories_float as al_float then
+					al_float.export_frame_png (snapshot_path + {STRING_32} ".stories.png").do_nothing
+				end
 			elseif snapshot_tab.same_string ({STRING_32} "incipitpair") then
 				commentary_tabs.select_tab (Incipit_tab)
 				if not incipit_rows.is_empty then
@@ -3261,6 +3298,7 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			pair_layout_button.set_on_click (agent toggle_pair_layout)
 			incipit_all_nt_button.set_on_click (agent set_incipit_mode (Incipit_mode_new))
 			incipit_all_ot_button.set_on_click (agent set_incipit_mode (Incipit_mode_old))
+			incipit_stories_button.set_on_click (agent open_story_window)
 			chiasm_verse_button.set_on_click (agent set_chiasm_mode (Chiasm_mode_verse))
 			chiasm_all_button.set_on_click (agent set_chiasm_mode (Chiasm_mode_all))
 			chiasm_graded_button.set_on_click (agent set_chiasm_mode (Chiasm_mode_graded))
@@ -7764,6 +7802,8 @@ feature {NONE} -- Right-click menus and panes (Larry, 2026-10-28)
 			notes_list.set_menu_extension (agent notes_menu)
 			cross_refs_grid.set_menu_extension (agent cross_ref_menu)
 			incipit_grid.set_menu_extension (agent incipit_menu)
+			incipit_story_view.set_menu_extension (agent document_menu (incipit_story_view, commentary_panel, ?, ?, ?))
+			incipit_story_window_view.set_menu_extension (agent document_menu (incipit_story_window_view, commentary_panel, ?, ?, ?))
 			pair_view.set_menu_extension (agent pair_menu (pair_view, pair_side_places, ?, ?, ?))
 			pair_stack.set_menu_extension (agent pair_menu (pair_stack, pair_stack_places, ?, ?, ?))
 			results_grid.set_menu_extension (agent choice_menu)
@@ -10298,19 +10338,138 @@ feature {NONE} -- Incipit (S2, research 26: the Old Testament in the New)
 			-- Matthew's book number.
 
 	incipit_page: SW_COLUMN
-			-- The Incipit tab: what to list, a note, the grid.
+			-- The Incipit tab: what to list, a note, the grid over the stories. A fitting column: the
+			-- grid and stories asked more height than the panel has and drew past it (0.7.69 snapshot).
 		local
 			l_buttons: SW_ROW
+			l_split: SW_SPLITTER
+			l_stories: SW_COLUMN
 		do
 			create Result.make
-			Result := Result.with_gap (6.0)
+			Result := Result.with_gap (6.0).fitting
 			create l_buttons.make
 			l_buttons.put (incipit_verse_button)
 			l_buttons.put (incipit_all_nt_button)
 			l_buttons.put (incipit_all_ot_button)
+			l_buttons.put (incipit_stories_button)
 			Result.put (l_buttons)
 			Result.put (incipit_note.as_muted)
-			Result.put (incipit_grid.growing)
+				-- The view inside a column, given the pane's height, as the Library's book view is: put in
+				-- the splitter bare, it drew past its pane over the panel below (0.7.69 snapshot).
+			create l_stories.make
+			l_stories := l_stories.fitting
+			l_stories.put (incipit_story_view.growing)
+			create l_split.make (incipit_grid, l_stories)
+			l_split.set_horizontal (True)
+			l_split.set_ratio (0.4)
+			Result.put (l_split.growing)
+		end
+
+	incipit_story_view: SW_DOCUMENT_VIEW
+			-- Under the links: the stories of the verse read (the source passage's, the scene's, or where
+			-- the New Testament takes it up), each section with whose words it holds.
+
+	show_incipit_stories (a_stories: ARRAYED_LIST [like {BIB_INCIPIT_PACK}.story_type]; a_place: STRING_32)
+			-- Show `a_stories' for `a_place', or say none is written yet.
+		local
+			l_page: STRING_32
+		do
+			incipit_story_count := a_stories.count
+			create l_page.make (4096)
+			if a_stories.is_empty then
+				l_page.append ({STRING_32} "*No story is written yet for " + a_place + {STRING_32} ". Psalm 22's are the first; more follow.*")
+			else
+				across a_stories as ic loop
+					l_page.append ({STRING_32} "## " + ic.title + {STRING_32} "%N%N*" + story_kind_text (ic.kind, ic.unit_title) + {STRING_32} "*%N%N")
+					across ic.sections as al_s loop
+						l_page.append ({STRING_32} "### " + al_s.heading + {STRING_32} "%N%N*" + section_status_text (al_s.status) + {STRING_32} "*%N%N")
+						l_page.append (al_s.body)
+						l_page.append ({STRING_32} "%N%N")
+					end
+				end
+			end
+			show_story_page (l_page)
+		end
+
+	show_story_page (a_page: STRING_32)
+			-- Show the Markdown `a_page' under the Incipit list, and in the stories window when it is open.
+		do
+			incipit_story_page := a_page
+			incipit_story_view.set_document (commentary_reader.read (a_page))
+			if attached stories_float then
+				incipit_story_window_view.set_document (commentary_reader.read (a_page))
+			end
+		ensure
+			kept: incipit_story_page = a_page
+		end
+
+	incipit_story_page: STRING_32
+			-- The stories shown, as Markdown.
+
+	incipit_stories_button: SW_BUTTON
+			-- Opens the stories in a window of their own.
+
+	incipit_story_window_view: SW_DOCUMENT_VIEW
+			-- The stories window's view.
+
+	stories_float: detachable SW_FLOATING_WINDOW
+			-- The stories window, while open (Larry, 2026-11-12, of Side by side: a window "sizable",
+			-- "movable", "expandable to max size"; the stories read long in the Incipit panel).
+
+	open_story_window
+			-- Open the stories window on the stories shown, in place of any open one.
+		local
+			l_float: SW_FLOATING_WINDOW
+		do
+			close_story_window
+			incipit_story_window_view.set_document (commentary_reader.read (incipit_story_page))
+			l_float := window.float_document (incipit_story_window_view, "Incipit stories", 200, 100, 900, 720)
+			if l_float.is_open then
+				l_float.set_on_close_request (agent close_story_window)
+				stories_float := l_float
+			end
+		end
+
+	close_story_window
+			-- Close the stories window, if open.
+		do
+			if attached stories_float as al_float and then window.floating_windows.has (al_float) then
+				window.unfloat (al_float)
+			end
+			stories_float := Void
+		ensure
+			closed: stories_float = Void
+		end
+
+	incipit_story_count: INTEGER
+			-- How many stories the story view shows.
+
+	story_kind_text (a_kind, a_unit: STRING_32): STRING_32
+			-- What a story of `a_kind' about `a_unit' tells.
+		do
+			if a_kind.same_string_general ("source") then
+				Result := {STRING_32} "The story of " + a_unit + {STRING_32} ", plainly told."
+			elseif a_kind.same_string_general ("scene") then
+				Result := {STRING_32} "How this passage uses " + a_unit + {STRING_32} "."
+			else
+				Result := {STRING_32} "Where the New Testament takes up " + a_unit + {STRING_32} "."
+			end
+		end
+
+	section_status_text (a_status: STRING_32): STRING_32
+			-- Whose words a section holds, for the reader.
+		do
+			if a_status.same_string_general ("larry_posted") then
+				Result := {STRING_32} "Larry, as posted."
+			elseif a_status.same_string_general ("larry_draft") then
+				Result := {STRING_32} "Larry, from his drafts."
+			elseif a_status.same_string_general ("larry_framework") then
+				Result := {STRING_32} "Larry's frameworks."
+			elseif a_status.same_string_general ("larry_approved") then
+				Result := {STRING_32} "Larry, approved."
+			else
+				Result := {STRING_32} "Claude's take on Larry, not yet approved."
+			end
 		end
 
 	incipit_verse_button, incipit_all_nt_button, incipit_all_ot_button: SW_BUTTON
@@ -10370,6 +10529,7 @@ feature {NONE} -- Incipit (S2, research 26: the Old Testament in the New)
 						incipit_rows.extend (incipit_row (ic, l_nt + {STRING_32} " %/8592/ " + source_place_text (ic), False))
 					end
 				end
+				show_story_page ({STRING_32} "*A verse's stories show under This verse.*")
 				incipit_note.set_text ({STRING_32} "All " + incipit_rows.count.out.to_string_32 + (if a_by_old_testament then {STRING_32} " links, in Old Testament order" else {STRING_32} " links, in New Testament order" end)
 					+ {STRING_32} ". Click one to read it; the list stays until This verse.")
 			end
@@ -10389,12 +10549,14 @@ feature {NONE} -- Incipit (S2, research 26: the Old Testament in the New)
 				incipit_note.set_text ({STRING_32} "No incipit pack is installed. It brings the places where the New Testament draws on the Old.")
 			elseif commentary_verse = 0 then
 				incipit_note.set_text ({STRING_32} "Click a verse: a New Testament verse shows the Old Testament it draws on; an Old Testament verse shows where the New takes it up.")
+				show_story_page ({STRING_32} "*Click a verse: its stories show here.*")
 			else
 				l_place := place_text (commentary_book, commentary_chapter, commentary_verse)
 				if commentary_book >= First_new_testament_book and commentary_book <= incipit_schema.Book_codes.count then
 					across l_packs.first.links_from (incipit_schema.Book_codes [commentary_book], commentary_chapter, commentary_verse) as ic loop
 						incipit_rows.extend (incipit_row (ic, source_place_text (ic), True))
 					end
+					show_incipit_stories (l_packs.first.stories_at_new_testament (incipit_schema.Book_codes [commentary_book], commentary_chapter, commentary_verse), l_place)
 					if incipit_rows.is_empty then
 						incipit_note.set_text (l_place + {STRING_32} ": no link into the Old Testament is known.")
 					else
@@ -10404,6 +10566,11 @@ feature {NONE} -- Incipit (S2, research 26: the Old Testament in the New)
 				elseif commentary_book >= 1 then
 					across l_packs.first.links_into_english (commentary_book, commentary_chapter, commentary_verse) as ic loop
 						incipit_rows.extend (incipit_row (ic, place_text (book_number_of (ic.nt_book), ic.nt_ch, ic.nt_v), False))
+					end
+					if commentary_book <= 39 then
+						show_incipit_stories (l_packs.first.stories_at_old_testament (commentary_book, commentary_chapter), place_text (commentary_book, commentary_chapter, 0))
+					else
+						show_incipit_stories (create {ARRAYED_LIST [like {BIB_INCIPIT_PACK}.story_type]}.make (0), l_place)
 					end
 					if incipit_rows.is_empty then
 						incipit_note.set_text (l_place + {STRING_32} ": no New Testament use of this verse is known.")

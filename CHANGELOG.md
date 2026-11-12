@@ -4,6 +4,12 @@ All notable changes to simple_bible are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added (2026-11-12: 0.7.69)
+
+- **The Incipit tab tells the stories** (Larry, 2026-11-11: reading Matthew putting Psalm 22:1 in Jesus' mouth, "simple_bible tells you the story of Psalm 22 in plain simple terms"; "the story of the incipit link in its NT context. The other side will be OT links when reading the OT"). Under the list of links, past a divider, the stories of the verse read: a New Testament verse inside a scene shows the source passage's story, then how the scene uses it; an Old Testament chapter shows its story, then where the New Testament takes it up. Each section says whose words it holds: Larry as posted, from his drafts, his frameworks, approved, or Claude's take on Larry, not yet approved. The first stories are Psalm 22's: the source story, six scenes (Matthew 27, Mark 15, Luke 23, John 19, Hebrews 2:12 and 5:7) and the forward story, 21 sections read from the vault drafts (`Incipit/Psalm 22`) by the new `make_stories.py`. The working sections (gaps for Larry, the witness pointer, the forward story's table of uses) stay in the vault. **Stories in a window** opens them in a window of their own (sized, moved, maximized like Side by side), following the verse read; the Incipit panel is short on most screens.
+- The incipit pack carries scenes, stories and their sections (tables `scene`, `story`, `story_section`, declared since 0.7.62 and now filled), with their own provenance row; the builder refuses a scene that does not run forward, a scene story naming no scene, another story naming one, a section with an unknown status.
+- `number_of` and `place_of`, copied in both pack builders, live once in BIB_PACK_WRITING.
+
 ### Fixed (2026-11-12: 0.7.68)
 
 - **PATH no longer carries the program's DLLs.** "Add bible to my PATH" put the whole program folder on the user PATH, so any program on the machine that loads cairo.dll could pick up Simple Bible's copy (a simple_widgets test did, and its hold on the files failed the 0.7.66 and 0.7.67 silent installs on their first try): the DLL mix Larry's one-version-per-DLL rule forbids. PATH now holds only the program folder's `bin`, with one file, `bible.cmd`, which runs `bible.exe` and passes back its exit code; `bible` works from any console as before. An upgrade takes the old entry off PATH; an uninstall takes off both. The PATH removal also now finds an entry that comes first in PATH.

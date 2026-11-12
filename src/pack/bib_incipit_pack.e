@@ -77,6 +77,48 @@ feature -- Access
 			every_link: Result.count = link_count
 		end
 
+	stories_at_new_testament (a_nt_book: READABLE_STRING_GENERAL; a_ch, a_v: INTEGER): ARRAYED_LIST [like story_type]
+			-- The stories for New Testament verse `a_nt_book' `a_ch':`a_v': for each source passage a scene
+			-- holding the verse uses, that passage's story, then the scene's (Larry, 2026-11-11: "one might
+			-- read Matthew putting Psalm 22:1 in the mouth of Jesus, and simple_bible tells you the story of
+			-- Psalm 22 in plain simple terms").
+		require
+			available: is_available
+			book_named: not a_nt_book.is_empty
+			counted_from_one: a_ch >= 1 and a_v >= 1
+		local
+			l_place: INTEGER
+			l_scenes: STRING_8
+		do
+			l_place := a_ch * 1000 + a_v
+			l_scenes := "SELECT c.scene_id FROM " + pack_alias + ".scene c WHERE c.nt_book = ? AND c.nt_ch_from * 1000 + c.nt_v_from <= ? AND ? <= c.nt_ch_to * 1000 + c.nt_v_to"
+			Result := stories_where ("(s.story_kind = 'scene' AND s.scene_id IN (" + l_scenes + ")) OR (s.story_kind = 'source' AND s.unit_id IN (SELECT t.unit_id FROM "
+				+ pack_alias + ".story t WHERE t.scene_id IN (" + l_scenes + ")))",
+				<<a_nt_book.to_string_32, l_place, l_place, a_nt_book.to_string_32, l_place, l_place>>)
+		ensure
+			no_forward_story: across Result as al_s all not al_s.kind.same_string_general ("forward") end
+		end
+
+	stories_at_old_testament (a_book_id, a_ch: INTEGER): ARRAYED_LIST [like story_type]
+			-- The stories for Old Testament chapter `a_book_id' `a_ch' (English numbering): for each source
+			-- passage the links put there, its story, then where the New Testament takes it up.
+		require
+			available: is_available
+			old_testament: a_book_id >= 1 and a_book_id <= 39
+			counted_from_one: a_ch >= 1
+		do
+			Result := stories_where ("s.story_kind IN ('source', 'forward') AND s.unit_id IN (SELECT l.unit_id FROM " + pack_alias
+				+ ".incipit_link l WHERE l.en_book_id = ? AND l.en_ch = ?)", <<a_book_id, a_ch>>)
+		ensure
+			no_scene_story: across Result as al_s all not al_s.kind.same_string_general ("scene") end
+		end
+
+	story_type: TUPLE [story_id, unit_id: INTEGER; kind, title, unit_title: STRING_32; sections: ARRAYED_LIST [TUPLE [heading, body, status, sources: STRING_32]]]
+			-- The shape of one story read: its sections in order, each with its status (whose words).
+		do
+			Result := [0, 0, {STRING_32} "", {STRING_32} "", {STRING_32} "", create {ARRAYED_LIST [TUPLE [heading, body, status, sources: STRING_32]]}.make (0)]
+		end
+
 	link_count: INTEGER
 			-- How many links the pack holds.
 		require
@@ -120,6 +162,34 @@ feature {NONE} -- Implementation
 						ic.string_value ("lxx_book"), ic.integer_value ("lxx_ch"), ic.integer_value ("lxx_v_from"), ic.string_value ("kind"),
 						ic.string_value ("loudness"), ic.real_value ("volume"), ic.string_value ("title"), ic.string_value ("book_class"),
 						ic.string_value ("witnesses"), ic.integer_value ("en_book_id"), ic.integer_value ("en_ch"), ic.integer_value ("en_v")])
+				end
+			end
+		end
+
+	stories_where (a_condition: STRING_8; a_args: ARRAY [detachable ANY]): ARRAYED_LIST [like story_type]
+			-- The stories meeting `a_condition' with `a_args', by unit, the source story first, then the
+			-- scenes', then the forward story; each with its sections in order.
+		local
+			l_sections: ARRAYED_LIST [TUPLE [heading, body, status, sources: STRING_32]]
+		do
+			create Result.make (4)
+			run_query ("SELECT s.story_id, s.unit_id, s.story_kind, s.title, u.title AS unit_title FROM " + pack_alias + ".story s JOIN "
+				+ pack_alias + ".source_unit u ON u.unit_id = s.unit_id WHERE " + a_condition
+				+ " ORDER BY s.unit_id, CASE s.story_kind WHEN 'source' THEN 1 WHEN 'scene' THEN 2 ELSE 3 END, s.story_id", a_args)
+			if attached last_rows as al_rows then
+				across al_rows.rows as ic loop
+					create l_sections.make (4)
+					Result.extend ([ic.integer_value ("story_id"), ic.integer_value ("unit_id"), ic.string_value ("story_kind"), ic.string_value ("title"),
+						ic.string_value ("unit_title"), l_sections])
+				end
+			end
+				-- The sections, once the stories' rows are read (each query replaces `last_rows').
+			across Result as ic loop
+				run_query ("SELECT heading, body, status, sources FROM " + pack_alias + ".story_section WHERE story_id = ? ORDER BY seq", <<ic.story_id>>)
+				if attached last_rows as al_rows then
+					across al_rows.rows as al_r loop
+						ic.sections.extend ([al_r.string_value ("heading"), al_r.string_value ("body"), al_r.string_value ("status"), al_r.string_value ("sources")])
+					end
 				end
 			end
 		end

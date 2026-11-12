@@ -100,6 +100,9 @@ feature -- The builder and the reader
 			assert_integers_equal ("one unit", 1, l_builder.unit_count)
 			assert_integers_equal ("four witnesses", 4, l_builder.witness_count)
 			assert_integers_equal ("two kinds", 2, l_builder.kind_count)
+			assert_integers_equal ("one scene", 1, l_builder.scene_count)
+			assert_integers_equal ("three stories", 3, l_builder.story_count)
+			assert_integers_equal ("four sections", 4, l_builder.section_count)
 			l_bible := bible
 			l_bible.open
 			assert_true ("open with the pack", l_bible.is_open and l_bible.pack_errors.is_empty)
@@ -125,6 +128,18 @@ feature -- The builder and the reader
 				assert_strings_equal ("New Testament order: Mark last", "MRK", al_pack.all_links (False).last.nt_book)
 				assert_integers_equal ("Old Testament order: Psalm 22:1 first", 1, al_pack.all_links (True).first.en_v)
 				assert_integers_equal ("Old Testament order: no English place last", 0, al_pack.all_links (True).last.en_book_id)
+					-- The stories (Larry, 2026-11-11): reading Matthew 27:46, the psalm's story, then the scene's
+				assert_integers_equal ("Matthew 27:46: the source story and the scene's", 2, al_pack.stories_at_new_testament ("MAT", 27, 46).count)
+				assert_strings_equal ("the source story first", "source", al_pack.stories_at_new_testament ("MAT", 27, 46).first.kind)
+				assert_strings_equal ("then the scene's", "scene", al_pack.stories_at_new_testament ("MAT", 27, 46).last.kind)
+				assert_strings_equal ("named for its unit", "Psalm 22", al_pack.stories_at_new_testament ("MAT", 27, 46).first.unit_title)
+				assert_integers_equal ("the scene's two sections", 2, al_pack.stories_at_new_testament ("MAT", 27, 46).last.sections.count)
+				assert_strings_equal ("in order, with their status", "larry_posted", al_pack.stories_at_new_testament ("MAT", 27, 46).last.sections.first.status)
+				assert_true ("Matthew 27:34 is before the scene", al_pack.stories_at_new_testament ("MAT", 27, 34).is_empty)
+				assert_true ("Mark 15:24 has no scene", al_pack.stories_at_new_testament ("MRK", 15, 24).is_empty)
+				assert_integers_equal ("Psalm 22 (English): the source story and the forward story", 2, al_pack.stories_at_old_testament (19, 22).count)
+				assert_strings_equal ("the forward story last", "forward", al_pack.stories_at_old_testament (19, 22).last.kind)
+				assert_true ("Psalm 23 has none", al_pack.stories_at_old_testament (19, 23).is_empty)
 			end
 			l_bible.close
 			assert_true ("credited to UBS, CC BY-SA 4.0", provenance_has ({BIB_INCIPIT_SCHEMA}.Ubs_source_name, "CC BY-SA 4.0"))
@@ -142,6 +157,10 @@ feature -- The builder and the reader
 			refuses ("%"chance_99%": 37.3", "%"chance_99%": 30.0", "do not run upward")
 			refuses ("%"book_id%": 19, %"ch%": 22, %"v%": 18", "%"book_id%": 70, %"ch%": 22, %"v%": 18", "not a book 1 to 66")
 			refuses ("%"nt%": %"MAT 27:43%", %"lxx%": %"PSA 21:9%"", "%"nt%": %"MAT 27:46%", %"lxx%": %"PSA 21:2%"", "given twice")
+			refuses ("%"scene%": %"MAT 27:35-54%", %"kind%"", "%"scene%": %"MAT 28:1-2%", %"kind%"", "names no scene read before it")
+			refuses ("%"status%": %"larry_posted%"", "%"status%": %"larry_guess%"", "unknown status")
+			refuses ("%"to%": [27, 54]", "%"to%": [27, 30]", "does not run forward")
+			refuses ("%"scene%": null, %"kind%": %"forward%"", "%"scene%": %"MAT 27:35-54%", %"kind%": %"forward%"", "not a scene story but names a scene")
 		end
 
 feature {NONE} -- Helpers
@@ -238,7 +257,17 @@ feature {NONE} -- Helpers
   {"nt": "MRK 15:24", "lxx": "PSA 21:19", "kind": "allusion", "loudness": "loud", "volume": 58.64, "follows": "unknown", "book_class": "hebrew_canon", "english": {"book_id": 19, "ch": 22, "v": 18},
    "witnesses": [{"witness": "huhn", "detail": ""}], "features": {"align": 22.0}},
   {"nt": "MAT 27:43", "lxx": "PSA 21:9", "kind": "allusion", "loudness": "quiet", "volume": 32.25, "follows": "unknown", "book_class": "hebrew_canon",
-   "witnesses": [{"witness": "measure", "detail": ""}], "features": {}}]}
+   "witnesses": [{"witness": "measure", "detail": ""}], "features": {}}],
+ "scenes": [
+  {"key": "MAT 27:35-54", "unit": "PSA 21", "nt_book": "MAT", "from": [27, 35], "to": [27, 54], "title": "Matthew 27"}],
+ "stories": [
+  {"unit": "PSA 21", "scene": null, "kind": "source", "title": "Psalm 22: the source story", "vault_path": "Incipit/Psalm 22/00.md",
+   "sections": [{"heading": "The story in beats", "body": "Forsaken, then answered.", "status": "claude_take", "sources": ""}]},
+  {"unit": "PSA 21", "scene": "MAT 27:35-54", "kind": "scene", "title": "Matthew 27", "vault_path": "Incipit/Psalm 22/01.md",
+   "sections": [{"heading": "The cry", "body": "The psalm's first line.", "status": "larry_posted", "sources": "Larry (posted)"},
+    {"heading": "The framing", "body": "The whole scene.", "status": "claude_take", "sources": ""}]},
+  {"unit": "PSA 21", "scene": null, "kind": "forward", "title": "Forward story", "vault_path": "Incipit/Psalm 22/06.md",
+   "sections": [{"heading": "The story", "body": "Forward.", "status": "claude_take", "sources": ""}]}]}
 ]"
 
 	Schema_file: STRING = "incipit_schema_test.db"
