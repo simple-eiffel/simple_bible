@@ -84,6 +84,7 @@ feature {NONE} -- Suites
 			run_test (agent t.test_entering_study_fills_the_study_panes, "test_entering_study_fills_the_study_panes")
 			run_test (agent t.test_size_buttons_follow_the_size, "test_size_buttons_follow_the_size")
 			run_test (agent t.test_dark_switch_follows_windows, "test_dark_switch_follows_windows")
+			run_test (agent t.test_an_incipit_link_shows_side_by_side, "test_an_incipit_link_shows_side_by_side")
 			run_test (agent t.test_each_workspace_keeps_its_east_width, "test_each_workspace_keeps_its_east_width")
 			run_test (agent t.test_focus_button_says_what_it_will_do, "test_focus_button_says_what_it_will_do")
 			run_test (agent t.test_verse_search_listed_in_the_window_menu, "test_verse_search_listed_in_the_window_menu")

@@ -4,6 +4,10 @@ All notable changes to simple_bible are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added (2026-11-12: 0.7.67)
+
+- **Both ends of an Incipit link, and the two side by side** (Larry: "how can I get to the NT ref, and can I see them side by side?" and "a popover window that allows me to see the two verses or the passages side by side"). Right-click any row in the Incipit tab: Read the New Testament place, Read the Old Testament place, or Side by side. Side by side opens a window of its own: the Old Testament passage on the left, the New on the right, three verses either side, the two linked verses on one row and marked, in the version read. Right-click a verse there to read it in its chapter in the main window. Choosing another link replaces the window; its close box closes it. A book only the LXX has says so in place of text. The window sizes by its edges and corners, moves by its title bar, and has minimize and maximize boxes (Larry: "expandable to max size ... sizable ... movable"); its button switches between side by side and over and under (the Old Testament passage above the New, each under its place), saying which it will switch to.
+
 ### Fixed (2026-11-12: 0.7.66)
 
 - **The incipit pack keeps only links the words verify.** Larry found "Deuteronomy 31:30 -> Acts 11:22, allusion, clear, measured": the two verses share only the stock phrase "into the ears" (35 LXX verses), and "allusion" claimed more than a word count can. An audit of all 4,219 links kept 1,328: UBS's 498, and Hühn's 830 where the shared words confirm him. Out of the app: every link only the program found (1,100: stock phrases, name lists such as genealogies, and coincidences like "rolled the stone" or "ninety-nine", which a word count cannot tell from a real echo), and Hühn's 1,791 that no shared word supports (an allusion by idea, or a misread verse number in the 1899 scan). Both go to review lists in the vault (Incipit/_Review), each row with its KJV text; rows Larry approves come back as his.

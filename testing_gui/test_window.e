@@ -927,6 +927,35 @@ feature -- Phase 2
 			app.shut_down
 		end
 
+	test_an_incipit_link_shows_side_by_side
+			-- Larry, 2026-11-12: "how can I get to the NT ref, and can I see them side by side?"
+		local
+			app: BIB_GUI_APP
+		do
+			app := new_window
+			app.harness_state.set_study (True)
+			app.harness_go_to (40, 27, 46)
+			app.harness_show_incipit
+			assert ("Matthew 27:46 draws on the Old Testament", app.harness_incipit_count > 0)
+			app.harness_show_pair (1)
+			assert ("the Side by side window opens", app.harness_pair_open)
+			assert_integers_equal ("a note, then three verses either side of the pair", 8, app.harness_pair_rows)
+			assert ("the Old Testament verse, on the pair's row", app.harness_pair_has_text (5, 1))
+			assert ("Matthew 27:46, on the same row", app.harness_pair_has_text (5, 2))
+			app.harness_toggle_pair_layout
+			assert ("the switch shows over and under", app.harness_pair_over_under)
+			assert_integers_equal ("a note, the Old Testament place and its seven verses, the New's and its seven", 17, app.harness_stack_rows)
+			assert ("the Old Testament verse, under its place", app.harness_stack_has_text (6))
+			assert ("Matthew 27:46, under its place", app.harness_stack_has_text (14))
+			app.harness_toggle_pair_layout
+			assert ("the switch shows side by side again", not app.harness_pair_over_under)
+			app.harness_show_pair (1)
+			assert ("a second Side by side replaces the first", app.harness_pair_open)
+			app.harness_close_pair
+			assert ("closed", not app.harness_pair_open)
+			app.shut_down
+		end
+
 	test_each_workspace_keeps_its_east_width
 		local
 			app: BIB_GUI_APP

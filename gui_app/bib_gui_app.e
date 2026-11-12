@@ -330,6 +330,11 @@ feature {NONE} -- Initialization
 			create center_tabs.make
 			create bible_page.make
 			create parallel_view.make (200.0)
+			create pair_view.make (200.0)
+			create pair_stack.make (200.0)
+			create pair_side_places.make (16)
+			create pair_stack_places.make (16)
+			build_pair_page
 			create interlinear_view.make (200.0)
 			create interlinear_note.make_ui ("")
 			create interlinear_words.make (0)
@@ -2099,6 +2104,80 @@ feature {BIB_WINDOW_HARNESS_CLIENT} -- The window harness (research/23, 2026-10-
 			center_tabs.select_tab (a_index)
 		end
 
+	harness_pair_open: BOOLEAN
+			-- Is the Side by side window open?
+		do
+			Result := attached pair_float as al_float and then al_float.is_open
+		end
+
+	harness_close_pair
+			-- Close the Side by side window, as its close box would.
+		do
+			close_pair
+		end
+
+	harness_toggle_pair_layout
+			-- The window's layout switch, as a click on it would.
+		do
+			toggle_pair_layout
+		end
+
+	harness_pair_over_under: BOOLEAN
+			-- Does the window show the passages over and under?
+		do
+			Result := pair_over_under
+		end
+
+	harness_stack_rows: INTEGER
+			-- Rows in the over-and-under view, its notes included.
+		do
+			Result := pair_stack.row_count
+		end
+
+	harness_stack_has_text (a_row: INTEGER): BOOLEAN
+			-- Does the over-and-under view's row `a_row' hold text?
+		require
+			valid_row: a_row >= 1 and a_row <= harness_stack_rows
+		do
+			Result := pair_stack.cell_marks (a_row, 1).text_count > 0
+		end
+
+	harness_show_incipit
+			-- The Incipit tab, listing the verse read's links.
+		do
+			commentary_tabs.select_tab (Incipit_tab)
+			set_incipit_mode (Incipit_mode_verse)
+		end
+
+	harness_incipit_count: INTEGER
+			-- Rows the Incipit tab lists.
+		do
+			Result := incipit_rows.count
+		end
+
+	harness_show_pair (a_index: INTEGER)
+			-- Side by side for Incipit row `a_index', as its right-click item would.
+		require
+			valid: a_index >= 1 and a_index <= harness_incipit_count
+		do
+			show_pair (incipit_rows.i_th (a_index))
+		end
+
+	harness_pair_rows: INTEGER
+			-- Rows in Side by side, its note included.
+		do
+			Result := pair_view.row_count
+		end
+
+	harness_pair_has_text (a_row, a_column: INTEGER): BOOLEAN
+			-- Does Side by side's cell `a_row', `a_column' hold text?
+		require
+			valid_row: a_row >= 1 and a_row <= harness_pair_rows
+			valid_column: a_column = 1 or a_column = 2
+		do
+			Result := pair_view.cell_marks (a_row, a_column).text_count > 0
+		end
+
 	harness_east_fraction: REAL_64
 			-- The east zone's width as a share of the window.
 		do
@@ -2892,6 +2971,14 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			elseif snapshot_tab.same_string ({STRING_32} "incipitall") then
 				commentary_tabs.select_tab (Incipit_tab)
 				set_incipit_mode (Incipit_mode_new)
+			elseif snapshot_tab.same_string ({STRING_32} "incipitpair") then
+				commentary_tabs.select_tab (Incipit_tab)
+				if not incipit_rows.is_empty then
+					show_pair (incipit_rows.first)
+					if attached pair_float as al_float then
+						al_float.export_frame_png (snapshot_path + {STRING_32} ".pair.png").do_nothing
+					end
+				end
 			elseif snapshot_tab.same_string ({STRING_32} "chiasmall") then
 				commentary_tabs.select_tab (Chiasm_tab)
 				set_chiasm_mode (Chiasm_mode_graded)
@@ -3171,6 +3258,7 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			cross_refs_grid.set_on_select (agent on_cross_ref)
 			incipit_grid.set_on_select (agent on_incipit_row)
 			incipit_verse_button.set_on_click (agent set_incipit_mode (Incipit_mode_verse))
+			pair_layout_button.set_on_click (agent toggle_pair_layout)
 			incipit_all_nt_button.set_on_click (agent set_incipit_mode (Incipit_mode_new))
 			incipit_all_ot_button.set_on_click (agent set_incipit_mode (Incipit_mode_old))
 			chiasm_verse_button.set_on_click (agent set_chiasm_mode (Chiasm_mode_verse))
@@ -4623,6 +4711,9 @@ feature {NONE} -- Two layouts (C7)
 			center_tabs.add_page ("Interlinear", l_interlinear_page)
 			center_tabs.add_page ("Timeline", timeline_pane)
 			center_tabs.set_on_change (agent on_center_tab)
+			pair_view.add_column ("Old Testament").do_nothing
+			pair_view.add_column ("New Testament").do_nothing
+			pair_stack.add_column ("Old Testament, then New Testament").do_nothing
 			parallel_view.add_column ("").do_nothing
 			parallel_view.add_column ("").do_nothing
 			parallel_view.add_column ("").do_nothing
@@ -7672,6 +7763,9 @@ feature {NONE} -- Right-click menus and panes (Larry, 2026-10-28)
 			entries_list.set_menu_extension (agent pane_menu (lexicon_panel, ?, ?, ?))
 			notes_list.set_menu_extension (agent notes_menu)
 			cross_refs_grid.set_menu_extension (agent cross_ref_menu)
+			incipit_grid.set_menu_extension (agent incipit_menu)
+			pair_view.set_menu_extension (agent pair_menu (pair_view, pair_side_places, ?, ?, ?))
+			pair_stack.set_menu_extension (agent pair_menu (pair_stack, pair_stack_places, ?, ?, ?))
 			results_grid.set_menu_extension (agent choice_menu)
 			verses_grid.set_menu_extension (agent verse_hit_menu)
 			places_grid.set_menu_extension (agent place_menu)
@@ -10170,11 +10264,29 @@ feature {NONE} -- Incipit (S2, research 26: the Old Testament in the New)
 	incipit_note: SW_LABEL
 			-- What the grid shows, or what to do.
 
-	incipit_row_type: TUPLE [place, kind, loudness, heard_by: STRING_32; book, chapter, verse: INTEGER]
-			-- One row: the place at the other end (`book' 0 when the reader cannot go there), its kind,
-			-- loudness and witnesses.
+	incipit_row_type: TUPLE [place, kind, loudness, heard_by: STRING_32; book, chapter, verse: INTEGER;
+			nt_place, ot_place: STRING_32; nt_book, nt_ch, nt_v, ot_book, ot_ch, ot_v: INTEGER]
+			-- One row: the place shown, its kind, loudness and witnesses; where a click goes (`book' 0 when the
+			-- reader cannot go there); and both ends of the link (`ot_book' 0 for a book only the LXX has).
 		do
-			Result := [{STRING_32} "", {STRING_32} "", {STRING_32} "", {STRING_32} "", 0, 0, 0]
+			Result := [{STRING_32} "", {STRING_32} "", {STRING_32} "", {STRING_32} "", 0, 0, 0, {STRING_32} "", {STRING_32} "", 0, 0, 0, 0, 0, 0]
+		end
+
+	incipit_row (a_link: like {BIB_INCIPIT_PACK}.link_type; a_place: STRING_32; a_to_old: BOOLEAN): like incipit_row_type
+			-- A row showing `a_place' and carrying both ends of `a_link'; a click reads the Old Testament end
+			-- when `a_to_old' and the reader has it, else the New Testament end.
+		local
+			l_nt: INTEGER
+		do
+			l_nt := book_number_of (a_link.nt_book)
+			Result := [a_place, kind_text (a_link.kind), a_link.loudness, heard_by_text (a_link.witnesses), l_nt, a_link.nt_ch, a_link.nt_v,
+				place_text (l_nt, a_link.nt_ch, a_link.nt_v), source_place_text (a_link), l_nt, a_link.nt_ch, a_link.nt_v,
+				a_link.en_book_id, a_link.en_ch, a_link.en_v]
+			if a_to_old and a_link.en_book_id > 0 then
+				Result.book := a_link.en_book_id
+				Result.chapter := a_link.en_ch
+				Result.verse := a_link.en_v
+			end
 		end
 
 	incipit_schema: BIB_INCIPIT_SCHEMA
@@ -10253,13 +10365,9 @@ feature {NONE} -- Incipit (S2, research 26: the Old Testament in the New)
 					l_book := book_number_of (ic.nt_book)
 					l_nt := place_text (l_book, ic.nt_ch, ic.nt_v)
 					if a_by_old_testament then
-						if ic.en_book_id > 0 then
-							incipit_rows.extend ([source_place_text (ic) + {STRING_32} " %/8594/ " + l_nt, kind_text (ic.kind), ic.loudness, heard_by_text (ic.witnesses), ic.en_book_id, ic.en_ch, ic.en_v])
-						else
-							incipit_rows.extend ([source_place_text (ic) + {STRING_32} " %/8594/ " + l_nt, kind_text (ic.kind), ic.loudness, heard_by_text (ic.witnesses), l_book, ic.nt_ch, ic.nt_v])
-						end
+						incipit_rows.extend (incipit_row (ic, source_place_text (ic) + {STRING_32} " %/8594/ " + l_nt, True))
 					else
-						incipit_rows.extend ([l_nt + {STRING_32} " %/8592/ " + source_place_text (ic), kind_text (ic.kind), ic.loudness, heard_by_text (ic.witnesses), l_book, ic.nt_ch, ic.nt_v])
+						incipit_rows.extend (incipit_row (ic, l_nt + {STRING_32} " %/8592/ " + source_place_text (ic), False))
 					end
 				end
 				incipit_note.set_text ({STRING_32} "All " + incipit_rows.count.out.to_string_32 + (if a_by_old_testament then {STRING_32} " links, in Old Testament order" else {STRING_32} " links, in New Testament order" end)
@@ -10285,7 +10393,7 @@ feature {NONE} -- Incipit (S2, research 26: the Old Testament in the New)
 				l_place := place_text (commentary_book, commentary_chapter, commentary_verse)
 				if commentary_book >= First_new_testament_book and commentary_book <= incipit_schema.Book_codes.count then
 					across l_packs.first.links_from (incipit_schema.Book_codes [commentary_book], commentary_chapter, commentary_verse) as ic loop
-						incipit_rows.extend ([source_place_text (ic), kind_text (ic.kind), ic.loudness, heard_by_text (ic.witnesses), ic.en_book_id, ic.en_ch, ic.en_v])
+						incipit_rows.extend (incipit_row (ic, source_place_text (ic), True))
 					end
 					if incipit_rows.is_empty then
 						incipit_note.set_text (l_place + {STRING_32} ": no link into the Old Testament is known.")
@@ -10295,8 +10403,7 @@ feature {NONE} -- Incipit (S2, research 26: the Old Testament in the New)
 					end
 				elseif commentary_book >= 1 then
 					across l_packs.first.links_into_english (commentary_book, commentary_chapter, commentary_verse) as ic loop
-						incipit_rows.extend ([place_text (book_number_of (ic.nt_book), ic.nt_ch, ic.nt_v), kind_text (ic.kind), ic.loudness,
-							heard_by_text (ic.witnesses), book_number_of (ic.nt_book), ic.nt_ch, ic.nt_v])
+						incipit_rows.extend (incipit_row (ic, place_text (book_number_of (ic.nt_book), ic.nt_ch, ic.nt_v), False))
 					end
 					if incipit_rows.is_empty then
 						incipit_note.set_text (l_place + {STRING_32} ": no New Testament use of this verse is known.")
@@ -10314,6 +10421,239 @@ feature {NONE} -- Incipit (S2, research 26: the Old Testament in the New)
 		do
 			if a_model >= 1 and a_model <= incipit_rows.count and then incipit_rows.i_th (a_model).book > 0 then
 				go_to (incipit_rows.i_th (a_model).book, incipit_rows.i_th (a_model).chapter, incipit_rows.i_th (a_model).verse)
+			end
+		end
+
+	incipit_menu (a_menu: SW_MENU; a_px, a_py: REAL_64)
+			-- An Incipit row: read either end, or both side by side (Larry, 2026-11-12: "how can I get to the
+			-- NT ref, and can I see them side by side?").
+		do
+			if attached incipit_grid.context_object as al_row then
+				a_menu.add_item ({STRING_32} "Read " + al_row.nt_place, "", al_row.nt_book > 0, agent go_to (al_row.nt_book.max (1), al_row.nt_ch.max (1), al_row.nt_v.max (0)))
+				a_menu.add_item ({STRING_32} "Read " + al_row.ot_place, "", al_row.ot_book > 0, agent go_to (al_row.ot_book.max (1), al_row.ot_ch.max (1), al_row.ot_v.max (0)))
+				a_menu.add_item ({STRING_32} "Side by side", "", True, agent show_pair (al_row))
+			end
+			pane_menu (commentary_panel, a_menu, a_px, a_py)
+		end
+
+	pair_view: SW_PARALLEL_TEXT
+			-- Side by side: an Incipit link's Old Testament passage (left) beside its New Testament one (right).
+
+	pair_stack: SW_PARALLEL_TEXT
+			-- Over and under: the Old Testament passage above the New Testament one.
+
+	pair_page: SW_COLUMN
+			-- The Side by side window's content: its bar, then `pair_view' or `pair_stack'.
+
+	pair_layout_button: SW_BUTTON
+			-- Switches the window between side by side and over and under; says what it will do.
+
+	pair_side_places, pair_stack_places: HASH_TABLE [TUPLE [book, chapter, verse: INTEGER], INTEGER]
+			-- The verse in each cell of `pair_view' and `pair_stack', keyed by row * 10 + column.
+
+	pair_over_under: BOOLEAN
+			-- Does the window show the passages over and under (else side by side)?
+
+	pair_link: detachable like incipit_row_type
+			-- The link the window shows (Void: none chosen yet).
+
+	pair_float: detachable SW_FLOATING_WINDOW
+			-- The Side by side window, while open (Larry, 2026-11-12: "a popover window that allows me to
+			-- see the two verses or the passages side by side"; then: a switch to over and under, and a
+			-- window he can size by its corners, move, and maximize).
+
+	Pair_context: INTEGER = 3
+			-- Verses shown before and after each linked verse.
+
+	build_pair_page
+			-- The window's content, built once: the layout switch, then the side-by-side view.
+		local
+			l_bar: SW_ROW
+		do
+			create pair_page.make
+			pair_page := pair_page.with_gap (6.0)
+			create pair_layout_button.make ("Over and under", Void)
+			pair_layout_button.set_tooltip ("Over and under: the Old Testament passage above the New. Click again for side by side.")
+			create l_bar.make
+			l_bar.put (pair_layout_button)
+			pair_page.put (l_bar)
+			pair_page.put (pair_view.growing)
+		end
+
+	show_pair (a_row: like incipit_row_type)
+			-- Open the Side by side window on `a_row''s two ends, in place of any open one: a window of
+			-- its own, sized by its edges and corners, moved by its title bar, with a maximize box.
+		local
+			l_float: SW_FLOATING_WINDOW
+		do
+			close_pair
+			pair_link := a_row
+			fill_pair
+			l_float := window.float_document (pair_page, {STRING_32} "Side by side: " + a_row.ot_place + {STRING_32} " and " + a_row.nt_place, 160, 120, 1100, 600)
+			if l_float.is_open then
+				l_float.set_on_close_request (agent close_pair)
+				pair_float := l_float
+			end
+		ensure
+			chosen: pair_link = a_row
+		end
+
+	close_pair
+			-- Close the Side by side window, if open.
+		do
+			if attached pair_float as al_float and then window.floating_windows.has (al_float) then
+				window.unfloat (al_float)
+			end
+			pair_float := Void
+		ensure
+			closed: pair_float = Void
+		end
+
+	toggle_pair_layout
+			-- The layout switch: side by side to over and under, or back.
+		do
+			set_pair_over_under (not pair_over_under)
+		ensure
+			switched: pair_over_under = not old pair_over_under
+		end
+
+	set_pair_over_under (a_over_under: BOOLEAN)
+			-- Show the passages over and under when `a_over_under', else side by side.
+		do
+			pair_over_under := a_over_under
+			if pair_page.children.has (pair_view) then
+				pair_page.remove (pair_view)
+			end
+			if pair_page.children.has (pair_stack) then
+				pair_page.remove (pair_stack)
+			end
+			if a_over_under then
+				pair_page.put (pair_stack.growing)
+				pair_layout_button.set_label ("Side by side")
+				pair_layout_button.set_tooltip ("Side by side: the Old Testament passage on the left, the New on the right. Click again for over and under.")
+			else
+				pair_page.put (pair_view.growing)
+				pair_layout_button.set_label ("Over and under")
+				pair_layout_button.set_tooltip ("Over and under: the Old Testament passage above the New. Click again for side by side.")
+			end
+			window.request_render
+		ensure
+			set: pair_over_under = a_over_under
+			one_view: pair_page.children.has (pair_stack) = a_over_under and pair_page.children.has (pair_view) = not a_over_under
+		end
+
+	fill_pair
+			-- Both layouts of the link chosen, in the version read, `Pair_context' verses around each end,
+			-- the two linked verses marked: side by side on one row; over and under, each under its place.
+		local
+			l_ot, l_nt: HASH_TABLE [STRING_32, INTEGER]
+			k, l_row: INTEGER
+			l_name, l_note: STRING_32
+		do
+			pair_view.wipe_out
+			pair_stack.wipe_out
+			pair_side_places.wipe_out
+			pair_stack_places.wipe_out
+			if attached pair_link as al_link then
+				l_name := reading_version.to_string_32
+				if attached bible.text_reader.version (reading_version) as al_version then
+					l_name := al_version.name
+				end
+				l_note := al_link.kind + {STRING_32} ", " + al_link.loudness + {STRING_32} "; heard by " + al_link.heard_by
+					+ {STRING_32} ". " + l_name + {STRING_32} ". Right-click a verse to read it in its chapter."
+				l_ot := chapter_texts (al_link.ot_book, al_link.ot_ch)
+				l_nt := chapter_texts (al_link.nt_book, al_link.nt_ch)
+					-- Side by side
+				pair_view.set_column_title (1, al_link.ot_place)
+				pair_view.set_column_title (2, al_link.nt_place)
+				pair_view.add_note (l_note).do_nothing
+				from k := - Pair_context until k > Pair_context loop
+					l_row := pair_view.add_row ("")
+					put_pair_verse (pair_view, pair_side_places, l_row, 1, al_link.ot_book, al_link.ot_ch, al_link.ot_v, k, l_ot)
+					put_pair_verse (pair_view, pair_side_places, l_row, 2, al_link.nt_book, al_link.nt_ch, al_link.nt_v, k, l_nt)
+					k := k + 1
+				end
+					-- Over and under
+				pair_stack.set_column_title (1, al_link.ot_place + {STRING_32} ", then " + al_link.nt_place)
+				pair_stack.add_note (l_note).do_nothing
+				pair_stack.add_note (al_link.ot_place).do_nothing
+				from k := - Pair_context until k > Pair_context loop
+					l_row := pair_stack.add_row ("")
+					put_pair_verse (pair_stack, pair_stack_places, l_row, 1, al_link.ot_book, al_link.ot_ch, al_link.ot_v, k, l_ot)
+					k := k + 1
+				end
+				pair_stack.add_note (al_link.nt_place).do_nothing
+				from k := - Pair_context until k > Pair_context loop
+					l_row := pair_stack.add_row ("")
+					put_pair_verse (pair_stack, pair_stack_places, l_row, 1, al_link.nt_book, al_link.nt_ch, al_link.nt_v, k, l_nt)
+					k := k + 1
+				end
+			else
+				pair_view.set_column_title (1, "Old Testament")
+				pair_view.set_column_title (2, "New Testament")
+				pair_view.add_note ({STRING_32} "Right-click a link in the Incipit tab and choose Side by side.").do_nothing
+				pair_stack.set_column_title (1, "Old Testament, then New Testament")
+				pair_stack.add_note ({STRING_32} "Right-click a link in the Incipit tab and choose Side by side.").do_nothing
+			end
+		end
+
+	put_pair_verse (a_view: SW_PARALLEL_TEXT; a_places: like pair_side_places; a_row, a_column, a_book, a_chapter, a_verse, a_offset: INTEGER;
+			a_texts: HASH_TABLE [STRING_32, INTEGER])
+			-- Put verse `a_verse' + `a_offset' of `a_texts' in `a_view''s cell `a_row', `a_column' and remember
+			-- its place; the linked verse (`a_offset' 0) marked; a book only the LXX has says so.
+		require
+			valid_row: a_row >= 1 and a_row <= a_view.row_count
+			verse_row: not a_view.is_note_row (a_row)
+			valid_column: a_column >= 1 and a_column <= a_view.column_count
+		local
+			l_verse: INTEGER
+		do
+			l_verse := a_verse + a_offset
+			if attached a_texts.item (l_verse) as al_text then
+				a_view.set_cell (a_row, a_column, verse_label (a_chapter, l_verse) + al_text)
+				a_places.force ([a_book, a_chapter, l_verse], a_row * 10 + a_column)
+				if a_offset = 0 then
+					mark_selected_verse (a_view, a_row, a_column)
+				end
+			elseif a_offset = 0 and a_book = 0 then
+				a_view.set_cell (a_row, a_column, {STRING_32} "A book only the LXX has; this Bible does not carry it.")
+			end
+		end
+
+	verse_label (a_chapter, a_verse: INTEGER): STRING_32
+			-- "27:46  ", leading a verse's text in the Side by side window.
+		do
+			Result := a_chapter.out.to_string_32
+			Result.append_character (':')
+			Result.append (a_verse.out.to_string_32)
+			Result.append ({STRING_32} "  ")
+		end
+
+	chapter_texts (a_book, a_chapter: INTEGER): HASH_TABLE [STRING_32, INTEGER]
+			-- `a_book' `a_chapter''s verses in the version read, by verse number (empty for book 0).
+		local
+			l_chapter: BIB_LIST_RESULT [BIB_READING_VERSE]
+			i: INTEGER
+		do
+			create Result.make (40)
+			if a_book > 0 and a_chapter > 0 and bible.is_open then
+				l_chapter := bible.text_reader.chapter (reading_version, a_book, a_chapter)
+				from i := 1 until i > l_chapter.count loop
+					Result.force (l_chapter.item (i).display_text, l_chapter.item (i).verse)
+					i := i + 1
+				end
+			end
+		end
+
+	pair_menu (a_view: SW_PARALLEL_TEXT; a_places: like pair_side_places; a_menu: SW_MENU; a_px, a_py: REAL_64)
+			-- The Side by side window: read the verse under the pointer, in its own chapter.
+		local
+			l_cell: TUPLE [row, column: INTEGER]
+		do
+			l_cell := a_view.cell_at (a_px, a_py)
+			if attached a_places.item (l_cell.row * 10 + l_cell.column) as al_place then
+				a_menu.add_item ({STRING_32} "Read " + place_text (al_place.book, al_place.chapter, al_place.verse), "", True,
+					agent go_to (al_place.book, al_place.chapter, al_place.verse))
 			end
 		end
 
