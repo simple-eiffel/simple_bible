@@ -4,6 +4,10 @@ All notable changes to simple_bible are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Fixed (2026-11-12: 0.7.68)
+
+- **PATH no longer carries the program's DLLs.** "Add bible to my PATH" put the whole program folder on the user PATH, so any program on the machine that loads cairo.dll could pick up Simple Bible's copy (a simple_widgets test did, and its hold on the files failed the 0.7.66 and 0.7.67 silent installs on their first try): the DLL mix Larry's one-version-per-DLL rule forbids. PATH now holds only the program folder's `bin`, with one file, `bible.cmd`, which runs `bible.exe` and passes back its exit code; `bible` works from any console as before. An upgrade takes the old entry off PATH; an uninstall takes off both. The PATH removal also now finds an entry that comes first in PATH.
+
 ### Added (2026-11-12: 0.7.67)
 
 - **Both ends of an Incipit link, and the two side by side** (Larry: "how can I get to the NT ref, and can I see them side by side?" and "a popover window that allows me to see the two verses or the passages side by side"). Right-click any row in the Incipit tab: Read the New Testament place, Read the Old Testament place, or Side by side. Side by side opens a window of its own: the Old Testament passage on the left, the New on the right, three verses either side, the two linked verses on one row and marked, in the version read. Right-click a verse there to read it in its chapter in the main window. Choosing another link replaces the window; its close box closes it. A book only the LXX has says so in place of text. The window sizes by its edges and corners, moves by its title bar, and has minimize and maximize boxes (Larry: "expandable to max size ... sizable ... movable"); its button switches between side by side and over and under (the Old Testament passage above the New, each under its place), saying which it will switch to.
