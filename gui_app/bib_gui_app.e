@@ -2162,6 +2162,14 @@ feature {BIB_WINDOW_HARNESS_CLIENT} -- The window harness (research/23, 2026-10-
 			Result := incipit_rows.count
 		end
 
+	harness_incipit_follows (a_index: INTEGER): STRING_32
+			-- The Follows column of Incipit row `a_index'.
+		require
+			valid: a_index >= 1 and a_index <= harness_incipit_count
+		do
+			Result := incipit_rows.i_th (a_index).follows
+		end
+
 	harness_incipit_story_count: INTEGER
 			-- Stories the Incipit tab shows under its list.
 		do
@@ -3594,6 +3602,7 @@ feature {NONE} -- Window
 			incipit_grid.add_column ((create {SW_GRID_COLUMN [like incipit_row_type]}.make ("Place", 220.0, agent incipit_place)).growing)
 			incipit_grid.add_column (create {SW_GRID_COLUMN [like incipit_row_type]}.make ("Kind", 90.0, agent incipit_kind))
 			incipit_grid.add_column (create {SW_GRID_COLUMN [like incipit_row_type]}.make ("Loudness", 80.0, agent incipit_loudness))
+			incipit_grid.add_column (create {SW_GRID_COLUMN [like incipit_row_type]}.make ("Follows", 70.0, agent incipit_follows))
 			incipit_grid.add_column (create {SW_GRID_COLUMN [like incipit_row_type]}.make ("Heard by", 170.0, agent incipit_heard_by))
 			chiasm_structures_grid.add_column ((create {SW_GRID_COLUMN [like chiasm_structure_row_type]}.make ("Structure", 220.0, agent chiasm_structure_title)).growing)
 			chiasm_structures_grid.add_column (create {SW_GRID_COLUMN [like chiasm_structure_row_type]}.make ("Verses", 150.0, agent chiasm_structure_range))
@@ -10305,11 +10314,27 @@ feature {NONE} -- Incipit (S2, research 26: the Old Testament in the New)
 			-- What the grid shows, or what to do.
 
 	incipit_row_type: TUPLE [place, kind, loudness, heard_by: STRING_32; book, chapter, verse: INTEGER;
-			nt_place, ot_place: STRING_32; nt_book, nt_ch, nt_v, ot_book, ot_ch, ot_v: INTEGER]
+			nt_place, ot_place: STRING_32; nt_book, nt_ch, nt_v, ot_book, ot_ch, ot_v: INTEGER; follows: STRING_32]
 			-- One row: the place shown, its kind, loudness and witnesses; where a click goes (`book' 0 when the
-			-- reader cannot go there); and both ends of the link (`ot_book' 0 for a book only the LXX has).
+			-- reader cannot go there); both ends of the link (`ot_book' 0 for a book only the LXX has); and the
+			-- text a quotation's wording follows, for the reader ("LXX", "Hebrew", "both", or empty).
 		do
-			Result := [{STRING_32} "", {STRING_32} "", {STRING_32} "", {STRING_32} "", 0, 0, 0, {STRING_32} "", {STRING_32} "", 0, 0, 0, 0, 0, 0]
+			Result := [{STRING_32} "", {STRING_32} "", {STRING_32} "", {STRING_32} "", 0, 0, 0, {STRING_32} "", {STRING_32} "", 0, 0, 0, 0, 0, 0, {STRING_32} ""]
+		end
+
+	follows_text (a_follows: STRING_32): STRING_32
+			-- `a_follows' for the reader: the text a quotation's wording matches, found by the Hebrew second
+			-- look; empty when unknown or not a quotation.
+		do
+			if a_follows.same_string_general ("lxx") then
+				Result := {STRING_32} "LXX"
+			elseif a_follows.same_string_general ("hebrew") then
+				Result := {STRING_32} "Hebrew"
+			elseif a_follows.same_string_general ("both") then
+				Result := {STRING_32} "both"
+			else
+				create Result.make_empty
+			end
 		end
 
 	incipit_row (a_link: like {BIB_INCIPIT_PACK}.link_type; a_place: STRING_32; a_to_old: BOOLEAN): like incipit_row_type
@@ -10321,7 +10346,7 @@ feature {NONE} -- Incipit (S2, research 26: the Old Testament in the New)
 			l_nt := book_number_of (a_link.nt_book)
 			Result := [a_place, kind_text (a_link.kind), a_link.loudness, heard_by_text (a_link.witnesses), l_nt, a_link.nt_ch, a_link.nt_v,
 				place_text (l_nt, a_link.nt_ch, a_link.nt_v), source_place_text (a_link), l_nt, a_link.nt_ch, a_link.nt_v,
-				a_link.en_book_id, a_link.en_ch, a_link.en_v]
+				a_link.en_book_id, a_link.en_ch, a_link.en_v, follows_text (a_link.follows)]
 			if a_to_old and a_link.en_book_id > 0 then
 				Result.book := a_link.en_book_id
 				Result.chapter := a_link.en_ch
@@ -10561,7 +10586,7 @@ feature {NONE} -- Incipit (S2, research 26: the Old Testament in the New)
 						incipit_note.set_text (l_place + {STRING_32} ": no link into the Old Testament is known.")
 					else
 						incipit_note.set_text (l_place + {STRING_32} " draws on the Old Testament (LXX) in " + count_words (incipit_rows.count)
-							+ {STRING_32} ", loudest first. Loud and clear stand above chance; a theme is named by a scholar's list but shares few words.")
+							+ {STRING_32} ", loudest first. Loud and clear stand above chance; a theme is named by a scholar's list but shares few words. Follows: the text a quotation's words match, the LXX or the Hebrew.")
 					end
 				elseif commentary_book >= 1 then
 					across l_packs.first.links_into_english (commentary_book, commentary_chapter, commentary_verse) as ic loop
@@ -10576,7 +10601,7 @@ feature {NONE} -- Incipit (S2, research 26: the Old Testament in the New)
 						incipit_note.set_text (l_place + {STRING_32} ": no New Testament use of this verse is known.")
 					else
 						incipit_note.set_text ({STRING_32} "The New Testament takes up " + l_place + {STRING_32} " in " + count_words (incipit_rows.count)
-							+ {STRING_32} ", loudest first. Loud and clear stand above chance; a theme is named by a scholar's list but shares few words.")
+							+ {STRING_32} ", loudest first. Loud and clear stand above chance; a theme is named by a scholar's list but shares few words. Follows: the text a quotation's words match, the LXX or the Hebrew.")
 					end
 				end
 			end
@@ -10726,8 +10751,13 @@ feature {NONE} -- Incipit (S2, research 26: the Old Testament in the New)
 				if attached bible.text_reader.version (reading_version) as al_version then
 					l_name := al_version.name
 				end
-				l_note := al_link.kind + {STRING_32} ", " + al_link.loudness + {STRING_32} "; heard by " + al_link.heard_by
-					+ {STRING_32} ". " + l_name + {STRING_32} ". Right-click a verse to read it in its chapter."
+				l_note := al_link.kind + {STRING_32} ", " + al_link.loudness + {STRING_32} "; heard by " + al_link.heard_by + {STRING_32} ". "
+				if al_link.follows.same_string_general ("Hebrew") then
+					l_note.append ({STRING_32} "Its wording follows the Hebrew, where the LXX reads differently; an English Bible, made from the Hebrew, shows that side. ")
+				elseif al_link.follows.same_string_general ("LXX") then
+					l_note.append ({STRING_32} "Its wording follows the LXX, where the Hebrew reads differently; an English Bible, made from the Hebrew, may not show the words it shares. ")
+				end
+				l_note.append (l_name + {STRING_32} ". Right-click a verse to read it in its chapter.")
 				l_ot := chapter_texts (al_link.ot_book, al_link.ot_ch)
 				l_nt := chapter_texts (al_link.nt_book, al_link.nt_ch)
 					-- Side by side
@@ -11270,6 +11300,12 @@ feature {NONE} -- Chiasm (S2, research 28: structures and chiasms)
 	incipit_kind (a_row: like incipit_row_type): STRING_32
 		do
 			Result := a_row.kind
+		end
+
+	incipit_follows (a_row: like incipit_row_type): STRING_32
+			-- The Follows column: which text the quotation's wording matches.
+		do
+			Result := a_row.follows
 		end
 
 	incipit_loudness (a_row: like incipit_row_type): STRING_32

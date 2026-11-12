@@ -133,11 +133,12 @@ feature -- Access
 		end
 
 	link_type: TUPLE [link_id: INTEGER; nt_book: STRING_32; nt_ch, nt_v: INTEGER; lxx_book: STRING_32; lxx_ch, lxx_v: INTEGER;
-			kind, loudness: STRING_32; volume: REAL_64; unit_title, book_class, witnesses: STRING_32; en_book_id, en_ch, en_v: INTEGER]
+			kind, loudness: STRING_32; volume: REAL_64; unit_title, book_class, witnesses: STRING_32; en_book_id, en_ch, en_v: INTEGER; follows: STRING_32]
 			-- The shape of one link read: `witnesses' lists each witness and its detail ("ubs huhn**");
-			-- `en_book_id' is 0 when the LXX verse has no English place (a book the English Bibles lack).
+			-- `en_book_id' is 0 when the LXX verse has no English place (a book the English Bibles lack); `follows'
+			-- is the text a quotation's wording matches: lxx, hebrew, both or unknown (the Hebrew second look).
 		do
-			Result := [0, {STRING_32} "", 0, 0, {STRING_32} "", 0, 0, {STRING_32} "", {STRING_32} "", 0.0, {STRING_32} "", {STRING_32} "", {STRING_32} "", 0, 0, 0]
+			Result := [0, {STRING_32} "", 0, 0, {STRING_32} "", 0, 0, {STRING_32} "", {STRING_32} "", 0.0, {STRING_32} "", {STRING_32} "", {STRING_32} "", 0, 0, 0, {STRING_32} ""]
 		end
 
 feature {NONE} -- Implementation
@@ -152,7 +153,7 @@ feature {NONE} -- Implementation
 		do
 			create Result.make (4)
 			run_query ("SELECT l.link_id, l.nt_book, l.nt_ch, l.nt_v_from, l.lxx_book, l.lxx_ch, l.lxx_v_from, l.kind, l.loudness, l.volume, "
-				+ "u.title, u.book_class, l.en_book_id, l.en_ch, l.en_v, group_concat(w.witness || w.detail, ' ') AS witnesses FROM "
+				+ "u.title, u.book_class, l.en_book_id, l.en_ch, l.en_v, l.follows, group_concat(w.witness || w.detail, ' ') AS witnesses FROM "
 				+ pack_alias + ".incipit_link l JOIN " + pack_alias + ".source_unit u ON u.unit_id = l.unit_id JOIN "
 				+ pack_alias + ".link_witness w ON w.link_id = l.link_id WHERE " + a_condition
 				+ " GROUP BY l.link_id " + a_order, a_args)
@@ -161,7 +162,8 @@ feature {NONE} -- Implementation
 					Result.extend ([ic.integer_value ("link_id"), ic.string_value ("nt_book"), ic.integer_value ("nt_ch"), ic.integer_value ("nt_v_from"),
 						ic.string_value ("lxx_book"), ic.integer_value ("lxx_ch"), ic.integer_value ("lxx_v_from"), ic.string_value ("kind"),
 						ic.string_value ("loudness"), ic.real_value ("volume"), ic.string_value ("title"), ic.string_value ("book_class"),
-						ic.string_value ("witnesses"), ic.integer_value ("en_book_id"), ic.integer_value ("en_ch"), ic.integer_value ("en_v")])
+						ic.string_value ("witnesses"), ic.integer_value ("en_book_id"), ic.integer_value ("en_ch"), ic.integer_value ("en_v"),
+						ic.string_value ("follows")])
 				end
 			end
 		end

@@ -163,6 +163,15 @@ Borrowed discipline ("A shape tests a DEFINITION, not an idea"): each link kind 
 
 Code: simple_bible `src/shape/` (BIB_SHAPE_ENGINE, _RUN, _FINDING, _TIER, _REGISTRY, _LINT). incipit is the real second implementor of "declared definition, run, findings with tiers"; recommendation: incipit.db stays its own file (pairs, not instances) but shares definitions, verdict/tier vocabulary and run bookkeeping through one ancestor.
 
+### 5e. The Hebrew second look, built (2026-11-12, 0.7.70)
+
+`hebrew_look.py` (scratchpad tools). For a link's LXX verse it finds the Hebrew verse(s) (`unit_map` MT->LXX) and reads them through the LXX translators' own habits: each Hebrew lemma -> the Greek lemmas `link` (translation:MT->LXX, 369,468 token pairs) gives it at 15% or more of its alignments, at most 3. The decision rests only on **departures in this verse**, from the verse's own token alignment:
+- a word counts for the **Hebrew** when the NT has a usual rendering of a Hebrew word the LXX rendered unusually here (or left out);
+- a word counts for the **LXX** when the NT has an LXX word that is not a usual rendering of the Hebrew word it stands for here, or stands for none (an LXX plus).
+Content words only (noun, verb, adjective, idf >= 2.5). Decisive: two words of idf >= 4.5, or one of idf >= 8.0. Verdict hebrew / lxx when one side decides and the other has nothing; both when the shared words decide and neither side has a departure; else unknown. Run on quotations and incipits named by UBS or Hühn only (which text a passage follows is a quotation's question).
+
+How it got there: run 1 counted function words ("I", "into") and missed Matthew 2:15, Hebrews 10:5 and Matthew 27:46 (4 of 7); content words only, 7 of 7. Run 2 on every scholar-named link: 118 "hebrew", mostly one common verb ("eat") whose headword differs between the LXX (CATSS) and NT taggings: the departure test cut it to 51; the rarity rule and quotations only to 12. The 7 agreed cases (Matthew 2:15, John 19:37, Matthew 8:17 Hebrew; Hebrews 10:5, Acts 15:17, Matthew 21:16 LXX; Matthew 27:46 both) were used to tune, so they are not an independent test; the 12 Hebrew verdicts are all cases scholarship names (John 12:15, 13:18, 19:37; Matthew 2:15, 5:21, 5:27 (the Hebrew order of the commandments), 8:17, 26:31, 27:10; Mark 14:27; Revelation 1:7; Romans 11:35). A 14-row sample of the LXX verdicts read right but for 1 Timothy 5:18, where the Hebrew says the same ("both" would be fairer). Result over 505 quotations: hebrew 12, lxx 176, both 159, unknown 158. Shown as the Incipit list's Follows column and in Side by side's note.
+
 ## 6. Open questions for Larry
 
 - **Q1.** Name: an incipit is strictly the opening words. Most links are mid-passage (Mark 15:24 to Psalm 22:18). Keep `incipit.db` as the name for the idea (the fragment points to the whole), with "incipit" as one *kind* among the others?

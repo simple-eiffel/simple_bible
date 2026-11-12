@@ -971,6 +971,10 @@ feature -- Phase 2
 			assert_integers_equal ("Psalm 22:1: the psalm's story and its forward story", 2, app.harness_incipit_story_count)
 			app.harness_go_to (45, 3, 14)
 			assert_integers_equal ("Romans 3:14: none written yet", 0, app.harness_incipit_story_count)
+			app.harness_go_to (40, 2, 15)
+			assert ("Matthew 2:15 draws on Hosea 11:1", app.harness_incipit_count >= 1)
+			assert ("one link follows the Hebrew (my son; the LXX has his children)",
+				across 1 |..| app.harness_incipit_count as i some app.harness_incipit_follows (i).same_string_general ("Hebrew") end)
 			app.harness_open_story_window
 			assert ("the stories window opens", app.harness_story_window_open)
 			app.harness_go_to (40, 27, 46)

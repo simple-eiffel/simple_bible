@@ -112,6 +112,7 @@ feature -- The builder and the reader
 				assert_integers_equal ("Matthew 27:46 makes one link", 1, al_pack.links_from ("MAT", 27, 46).count)
 				if attached al_pack.links_from ("MAT", 27, 46).first as al_link then
 					assert_strings_equal ("an incipit", "incipit", al_link.kind)
+					assert_strings_equal ("its wording in both the LXX and the Hebrew", "both", al_link.follows)
 					assert_strings_equal ("into Psalm 22", "Psalm 22", al_link.unit_title)
 					assert_integers_equal ("LXX verse 2", 2, al_link.lxx_v)
 					assert_true ("named by UBS and Huehn: " + al_link.witnesses.to_string_8, al_link.witnesses.has_substring ("ubs") and al_link.witnesses.has_substring ("huhn*"))
@@ -155,6 +156,7 @@ feature -- The builder and the reader
 			refuses ("%"lxx%": %"PSA 21:19%"", "%"lxx%": %"PSA 21:99%"", "past the end of its unit")
 			refuses ("{%"witness%": %"huhn%", %"detail%": %"%"}", "{%"witness%": %"dittmar%", %"detail%": %"%"}", "no provenance in version 1")
 			refuses ("%"chance_99%": 37.3", "%"chance_99%": 30.0", "do not run upward")
+			refuses ("%"follows%": %"both%"", "%"follows%": %"aramaic%"", "follows an unknown text")
 			refuses ("%"book_id%": 19, %"ch%": 22, %"v%": 18", "%"book_id%": 70, %"ch%": 22, %"v%": 18", "not a book 1 to 66")
 			refuses ("%"nt%": %"MAT 27:43%", %"lxx%": %"PSA 21:9%"", "%"nt%": %"MAT 27:46%", %"lxx%": %"PSA 21:2%"", "given twice")
 			refuses ("%"scene%": %"MAT 27:35-54%", %"kind%"", "%"scene%": %"MAT 28:1-2%", %"kind%"", "names no scene read before it")
@@ -252,7 +254,7 @@ feature {NONE} -- Helpers
  "measure_run": {"measure_version": "v0.3", "run_on": "2026-11-11", "nt_edition": "WH1881", "lxx_edition": "Rahlfs 1935", "candidates": 5977545,
   "chance_95": 33.3, "chance_99": 37.3, "chance_999": 42.2, "method": "test"},
  "links": [
-  {"nt": "MAT 27:46", "lxx": "PSA 21:2", "kind": "incipit", "loudness": "loud", "volume": 43.14, "follows": "unknown", "book_class": "hebrew_canon", "english": {"book_id": 19, "ch": 22, "v": 1},
+  {"nt": "MAT 27:46", "lxx": "PSA 21:2", "kind": "incipit", "loudness": "loud", "volume": 43.14, "follows": "both", "book_class": "hebrew_canon", "english": {"book_id": 19, "ch": 22, "v": 1},
    "witnesses": [{"witness": "ubs", "detail": ""}, {"witness": "huhn", "detail": "*"}], "features": {"align": 14.2, "lex": 20.1}},
   {"nt": "MRK 15:24", "lxx": "PSA 21:19", "kind": "allusion", "loudness": "loud", "volume": 58.64, "follows": "unknown", "book_class": "hebrew_canon", "english": {"book_id": 19, "ch": 22, "v": 18},
    "witnesses": [{"witness": "huhn", "detail": ""}], "features": {"align": 22.0}},
