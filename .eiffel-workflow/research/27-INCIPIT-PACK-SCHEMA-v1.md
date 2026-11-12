@@ -134,6 +134,10 @@ As with timeline.db (vault seed JSON -> `bible_build --timeline`) and the conc.d
 - Real pack written to the session scratchpad only (not installed): 4,219 links, 735 units, 4,295 witnesses, 16,639 features, in 1.1 seconds with bible_build_lean.
 - Known data gaps seen in the Psalm 22 read-back: Matthew 27:46 carries only the UBS witness (Hühn's "*2746" line misread by the OCR as "*92746"); Matthew 19:12 <- Psalm 21:11 ("from the mother's womb") is a stock phrase the top-candidate rule still lets through.
 
+## Audit of every link (2026-11-12, 0.7.66)
+
+Larry caught "Deuteronomy 31:30 -> Acts 11:22, allusion, clear, measured" (shared: the stock phrase "into the ears", 35 LXX verses): "please check ALL of these. that is a pretty misleading error that I cannot allow to be published." `audit_links.py` checked all 4,219: UBS words agree 497 (+1: Mark 15:28, absent from WH); Hühn with shared rare words 830; Hühn with no shared word but a neighboring NT verse sharing words 367 (likely misread verse numbers); Hühn with no shared word anywhere 1,424 (an allusion by idea, or a misread); measured-only stock phrase 244, names only 40, distinctive 816. A strict bar on the measured-only (loud, a shared run of 2+ words in 5 or fewer LXX verses: 273) still read about half coincidences in a 12-row sample ("rolled the stone", "ninety-nine", "oil and wine"). Rule adopted (memory: verified-links-only): the pack keeps only UBS and word-confirmed Hühn rows (1,328 links in 352 units: incipit 9, quotation 496, allusion 823); the 1,100 program-found and 1,791 unverifiable Hühn rows went to vault review lists (`Incipit/_Review/Candidates - found by the program.md`, `Candidates - Huehn 1899 unverified.md`) with KJV text; rows Larry approves return as his. Casualty to note: Luke 23:35 <- LXX Psalm 21:8-9 (the LXX-only "watching / sneered / let him save" find) is now a review row.
+
 ## Open technical points (settled by a spike, not by Larry)
 
 - Kind assignment rules (definition_formal text for each kind) are drafted from the measure's features and tested on UBS and Hühn before they are fixed.

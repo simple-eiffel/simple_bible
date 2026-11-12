@@ -4,6 +4,11 @@ All notable changes to simple_bible are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Fixed (2026-11-12: 0.7.66)
+
+- **The incipit pack keeps only links the words verify.** Larry found "Deuteronomy 31:30 -> Acts 11:22, allusion, clear, measured": the two verses share only the stock phrase "into the ears" (35 LXX verses), and "allusion" claimed more than a word count can. An audit of all 4,219 links kept 1,328: UBS's 498, and Hühn's 830 where the shared words confirm him. Out of the app: every link only the program found (1,100: stock phrases, name lists such as genealogies, and coincidences like "rolled the stone" or "ninety-nine", which a word count cannot tell from a real echo), and Hühn's 1,791 that no shared word supports (an allusion by idea, or a misread verse number in the 1899 scan). Both go to review lists in the vault (Incipit/_Review), each row with its KJV text; rows Larry approves come back as his.
+- **The chiasm pack keeps only structures the text supports**, by the same rule. A structure read from a scan stays when at least a quarter of its labeled members share a content word with the KJV text they name: a misread chapter puts a label beside text that does not say it ("Cleansing of the way" read as Psalm 9:10, for Psalm 119:9; "Thy tabernacles" as Psalms 1-3, for Psalm 84). Kept 1,945 of 2,567 (22 strong, 44 moderate), all 47 of Larry's; 622 to the review list (`Incipit/_Review/Chiasm candidates.md`), with Jebb's and Forbes's whose letters were assigned from the author's prose. 106 garbled titles replaced by the book and range.
+
 ### Added (2026-11-12: 0.7.65)
 
 - **See them all in a list** (Larry: "I want the ability to see all of both in a list ... where I can click them and have the bible text go to that entry"). The Incipit tab has buttons This verse, All by New Testament ("Matthew 27:46 <- Psalms 22:1 (LXX 21:2)") and All by Old Testament (the reverse); the Chiasm tab has This verse, All structures, and Strong and moderate, each structure with its full range. A click reads the place (a structure also shows its ladder); a whole list stays while you read until This verse.
