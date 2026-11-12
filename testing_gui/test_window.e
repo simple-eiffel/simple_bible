@@ -984,6 +984,30 @@ feature -- Phase 2
 			app.shut_down
 		end
 
+	test_the_incipit_map_lists_a_books_links
+			-- Research 26 feature 5: "arcs OT book to NT book, thickness by use; click to the links".
+		local
+			app: BIB_GUI_APP
+		do
+			app := new_window
+			app.harness_state.set_study (True)
+			app.harness_show_incipit
+			app.harness_open_map
+			assert ("the map opens", app.harness_map_open)
+			assert ("it joins many pairs of books", app.harness_map_pair_count > 100)
+			app.harness_pick_on_map (True, {STRING_32} "Psalms")
+			assert ("Psalms has links", app.harness_incipit_count > 20)
+			assert ("every row is from the Psalms",
+				across 1 |..| app.harness_incipit_count as i all app.harness_incipit_place (i).starts_with ({STRING_32} "Psalm") end)
+			app.harness_pick_on_map (False, {STRING_32} "Hebrews")
+			assert ("Hebrews has links", app.harness_incipit_count > 10)
+			assert ("every row is in Hebrews",
+				across 1 |..| app.harness_incipit_count as i all app.harness_incipit_place (i).starts_with ({STRING_32} "Hebrews") end)
+			app.harness_close_map
+			assert ("closed", not app.harness_map_open)
+			app.shut_down
+		end
+
 	test_each_workspace_keeps_its_east_width
 		local
 			app: BIB_GUI_APP

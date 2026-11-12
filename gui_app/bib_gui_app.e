@@ -265,6 +265,9 @@ feature {NONE} -- Initialization
 			create incipit_stories_button.make ("Stories in a window", Void)
 			incipit_stories_button.set_tooltip ("Stories in a window: the verse's stories in a window of their own, to size, move or maximize; it follows the verse you read.")
 			create incipit_story_window_view.make (400.0)
+			create incipit_map_button.make ("Map", Void)
+			incipit_map_button.set_tooltip ("Map: every Old Testament book joined to the New Testament books that use it, a thicker line for more links; click a book to list its links.")
+			create incipit_map.make
 			create incipit_story_page.make_empty
 			create chiasm_verse_button.make ("This verse", Void)
 			create chiasm_all_button.make ("All structures", Void)
@@ -2176,6 +2179,44 @@ feature {BIB_WINDOW_HARNESS_CLIENT} -- The window harness (research/23, 2026-10-
 			Result := incipit_story_count
 		end
 
+	harness_open_map
+			-- The map, as its button would open it.
+		do
+			open_incipit_map
+		end
+
+	harness_map_pair_count: INTEGER
+			-- Pairs of books the map joins.
+		do
+			Result := incipit_map.pairs.count
+		end
+
+	harness_map_open: BOOLEAN
+			-- Is the map's window open?
+		do
+			Result := attached map_float as al_float and then al_float.is_open
+		end
+
+	harness_pick_on_map (a_left: BOOLEAN; a_name: STRING_32)
+			-- A book clicked on the map.
+		do
+			on_map_pick (a_left, a_name)
+		end
+
+	harness_close_map
+			-- Close the map's window.
+		do
+			close_incipit_map
+		end
+
+	harness_incipit_place (a_index: INTEGER): STRING_32
+			-- The Place column of Incipit row `a_index'.
+		require
+			valid: a_index >= 1 and a_index <= harness_incipit_count
+		do
+			Result := incipit_rows.i_th (a_index).place
+		end
+
 	harness_open_story_window
 			-- Stories in a window, as its button would.
 		do
@@ -3010,6 +3051,12 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			elseif snapshot_tab.same_string ({STRING_32} "incipitall") then
 				commentary_tabs.select_tab (Incipit_tab)
 				set_incipit_mode (Incipit_mode_new)
+			elseif snapshot_tab.same_string ({STRING_32} "incipitmap") then
+				commentary_tabs.select_tab (Incipit_tab)
+				open_incipit_map
+				if attached map_float as al_float then
+					al_float.export_frame_png (snapshot_path + {STRING_32} ".map.png").do_nothing
+				end
 			elseif snapshot_tab.same_string ({STRING_32} "incipitstories") then
 				commentary_tabs.select_tab (Incipit_tab)
 				open_story_window
@@ -3307,6 +3354,8 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			incipit_all_nt_button.set_on_click (agent set_incipit_mode (Incipit_mode_new))
 			incipit_all_ot_button.set_on_click (agent set_incipit_mode (Incipit_mode_old))
 			incipit_stories_button.set_on_click (agent open_story_window)
+			incipit_map_button.set_on_click (agent open_incipit_map)
+			incipit_map.set_on_pick (agent on_map_pick)
 			chiasm_verse_button.set_on_click (agent set_chiasm_mode (Chiasm_mode_verse))
 			chiasm_all_button.set_on_click (agent set_chiasm_mode (Chiasm_mode_all))
 			chiasm_graded_button.set_on_click (agent set_chiasm_mode (Chiasm_mode_graded))
@@ -10377,6 +10426,7 @@ feature {NONE} -- Incipit (S2, research 26: the Old Testament in the New)
 			l_buttons.put (incipit_all_nt_button)
 			l_buttons.put (incipit_all_ot_button)
 			l_buttons.put (incipit_stories_button)
+			l_buttons.put (incipit_map_button)
 			Result.put (l_buttons)
 			Result.put (incipit_note.as_muted)
 				-- The view inside a column, given the pane's height, as the Library's book view is: put in
@@ -10455,6 +10505,146 @@ feature {NONE} -- Incipit (S2, research 26: the Old Testament in the New)
 			end
 		end
 
+	incipit_map_button: SW_BUTTON
+			-- Opens the map.
+
+	incipit_map: BIB_INCIPIT_MAP
+			-- Old Testament books joined to New Testament books.
+
+	map_float: detachable SW_FLOATING_WINDOW
+			-- The map's window, while open.
+
+	incipit_filter: detachable TUPLE [left: BOOLEAN; name: STRING_32]
+			-- A book picked on the map: the whole list shows only its links (Void: every link).
+
+	open_incipit_map
+			-- Open the map in a window of its own (sized, moved, maximized as Side by side is).
+		local
+			l_float: SW_FLOATING_WINDOW
+		do
+			close_incipit_map
+			fill_incipit_map
+			l_float := window.float_document (incipit_map, "Incipit map", 160, 40, 1000, 860)
+			if l_float.is_open then
+				l_float.set_on_close_request (agent close_incipit_map)
+				map_float := l_float
+			end
+		end
+
+	close_incipit_map
+			-- Close the map's window, if open.
+		do
+			if attached map_float as al_float and then window.floating_windows.has (al_float) then
+				window.unfloat (al_float)
+			end
+			map_float := Void
+		ensure
+			closed: map_float = Void
+		end
+
+	fill_incipit_map
+			-- The map's books and pairs from every link: the Old Testament books in canon order, then
+			-- the books only the LXX has in the order met; the New Testament books in canon order.
+		local
+			l_left, l_right: ARRAYED_LIST [STRING_32]
+			l_extra: ARRAYED_LIST [STRING_32]
+			l_present: HASH_TABLE [BOOLEAN, INTEGER]
+			l_left_index, l_right_index, l_count: HASH_TABLE [INTEGER, STRING_32]
+			l_pairs: ARRAYED_LIST [TUPLE [ot, nt, links: INTEGER]]
+			l_links: ARRAYED_LIST [like {BIB_INCIPIT_PACK}.link_type]
+			l_key, l_name: STRING_32
+			l_bar: INTEGER
+		do
+			create l_left.make (48)
+			create l_right.make (27)
+			create l_extra.make (8)
+			l_extra.compare_objects
+			create l_present.make (100)
+			create l_left_index.make (48)
+			create l_right_index.make (27)
+			create l_count.make (300)
+			create l_pairs.make (300)
+			if not bible.incipit_packs.is_empty and then bible.incipit_packs.first.is_available then
+				l_links := bible.incipit_packs.first.all_links (False)
+				across l_links as ic loop
+					l_present.force (True, ic.en_book_id)
+					l_present.force (True, book_number_of (ic.nt_book))
+					if ic.en_book_id = 0 and then not l_extra.has (map_left_name (ic)) then
+						l_extra.extend (map_left_name (ic))
+					end
+				end
+				across 1 |..| 66 as i loop
+					if l_present.has (i) and bible.books.has_book (i) then
+						if i < First_new_testament_book then
+							l_left.extend (bible.books.book (i).name.twin)
+							l_left_index.force (l_left.count, l_left.last)
+						else
+							l_right.extend (bible.books.book (i).name.twin)
+							l_right_index.force (l_right.count, l_right.last)
+						end
+					end
+				end
+				across l_extra as ic loop
+					l_left.extend (ic)
+					l_left_index.force (l_left.count, ic)
+				end
+				across l_links as ic loop
+					l_name := map_right_name (ic)
+					if l_left_index.has (map_left_name (ic)) and l_right_index.has (l_name) then
+						l_key := map_left_name (ic) + {STRING_32} "|" + l_name
+						l_count.force (l_count.item (l_key) + 1, l_key)
+					end
+				end
+				across l_count as ic loop
+					l_bar := @ic.key.index_of ('|', 1)
+					l_pairs.extend ([l_left_index.item (@ic.key.substring (1, l_bar - 1)), l_right_index.item (@ic.key.substring (l_bar + 1, @ic.key.count)), ic])
+				end
+			end
+			incipit_map.set_data (l_left, l_right, l_pairs)
+		end
+
+	map_left_name (a_link: like {BIB_INCIPIT_PACK}.link_type): STRING_32
+			-- The map's name for `a_link''s Old Testament book: its English name, or for a book only the
+			-- LXX has, its unit's title without the chapter ("Wisdom 2" -> "Wisdom").
+		local
+			l_space: INTEGER
+		do
+			if a_link.en_book_id > 0 and then bible.books.has_book (a_link.en_book_id) then
+				Result := bible.books.book (a_link.en_book_id).name.twin
+			else
+				Result := a_link.unit_title.twin
+				l_space := Result.last_index_of (' ', Result.count)
+				if l_space > 1 and then Result.substring (l_space + 1, Result.count).is_integer then
+					Result.keep_head (l_space - 1)
+				end
+			end
+		end
+
+	map_right_name (a_link: like {BIB_INCIPIT_PACK}.link_type): STRING_32
+			-- The map's name for `a_link''s New Testament book.
+		do
+			if bible.books.has_book (book_number_of (a_link.nt_book)) then
+				Result := bible.books.book (book_number_of (a_link.nt_book)).name.twin
+			else
+				Result := a_link.nt_book.twin
+			end
+		end
+
+	on_map_pick (a_left: BOOLEAN; a_name: STRING_32)
+			-- A book clicked on the map: the Incipit tab lists its links, in its own Testament's order.
+		do
+			commentary_tabs.select_tab (Incipit_tab)
+			if a_left then
+				incipit_mode := Incipit_mode_old
+			else
+				incipit_mode := Incipit_mode_new
+			end
+			incipit_filter := [a_left, a_name]
+			fill_all_incipit (a_left)
+		ensure
+			filtered: attached incipit_filter as al_f and then al_f.name = a_name
+		end
+
 	close_story_window
 			-- Close the stories window, if open.
 		do
@@ -10515,6 +10705,8 @@ feature {NONE} -- Incipit (S2, research 26: the Old Testament in the New)
 			a_mode: a_mode >= Incipit_mode_verse and a_mode <= Incipit_mode_old
 		do
 			incipit_mode := a_mode
+			incipit_filter := Void
+				-- a button lists every link again; a book picked on the map narrows the list until then
 			if a_mode = Incipit_mode_verse then
 				fill_incipit_verse
 			else
@@ -10546,16 +10738,22 @@ feature {NONE} -- Incipit (S2, research 26: the Old Testament in the New)
 				incipit_note.set_text ({STRING_32} "No incipit pack is installed. It brings the places where the New Testament draws on the Old.")
 			else
 				across l_packs.first.all_links (a_by_old_testament) as ic loop
-					l_book := book_number_of (ic.nt_book)
-					l_nt := place_text (l_book, ic.nt_ch, ic.nt_v)
-					if a_by_old_testament then
-						incipit_rows.extend (incipit_row (ic, source_place_text (ic) + {STRING_32} " %/8594/ " + l_nt, True))
-					else
-						incipit_rows.extend (incipit_row (ic, l_nt + {STRING_32} " %/8592/ " + source_place_text (ic), False))
+					if not attached incipit_filter as al_f
+						or else (al_f.left and then map_left_name (ic).same_string (al_f.name))
+						or else (not al_f.left and then map_right_name (ic).same_string (al_f.name))
+					then
+						l_book := book_number_of (ic.nt_book)
+						l_nt := place_text (l_book, ic.nt_ch, ic.nt_v)
+						if a_by_old_testament then
+							incipit_rows.extend (incipit_row (ic, source_place_text (ic) + {STRING_32} " %/8594/ " + l_nt, True))
+						else
+							incipit_rows.extend (incipit_row (ic, l_nt + {STRING_32} " %/8592/ " + source_place_text (ic), False))
+						end
 					end
 				end
 				show_story_page ({STRING_32} "*A verse's stories show under This verse.*")
-				incipit_note.set_text ({STRING_32} "All " + incipit_rows.count.out.to_string_32 + (if a_by_old_testament then {STRING_32} " links, in Old Testament order" else {STRING_32} " links, in New Testament order" end)
+				incipit_note.set_text ({STRING_32} "All " + incipit_rows.count.out.to_string_32
+					+ (if attached incipit_filter as al_f then {STRING_32} " of " + al_f.name else {STRING_32} "" end) + (if a_by_old_testament then {STRING_32} " links, in Old Testament order" else {STRING_32} " links, in New Testament order" end)
 					+ {STRING_32} ". Click one to read it; the list stays until This verse.")
 			end
 			incipit_grid.set_rows (incipit_rows)

@@ -4,6 +4,12 @@ All notable changes to simple_bible are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added (2026-11-12: 0.7.71)
+
+- **The Incipit map** (research 26 feature 5: "arcs OT book to NT book, thickness by use; click to the links"). The Incipit tab's **Map** button opens a window of its own: the Old Testament books down the left (the books only the LXX has after them), the New Testament books down the right, a curve for every pair of books a verified link joins, thicker for more links. Pointing at a book lights its curves and says how many links it makes with how many books; clicking it lists those links in the Incipit tab, in that Testament's order ("All 120 of Psalms ..."), until This verse or an All button is pressed. The map draws itself (BIB_INCIPIT_MAP, a widget of simple_bible's own).
+- Seven links into the LXX's 2 Esdras 15 and 19 now carry their English place, Nehemiah 5:13, 9:1, 9:6 and 9:26 (through conc.db's Hebrew-to-LXX verse map; content.db has no English renumbering there): the first map put "Ezra-Nehemiah" among the books only the LXX has.
+- The Psalm 22 source story's beats are Larry's, approved ("Story content on the screen shot above is fine."); the section says so.
+
 ### Added (2026-11-12: 0.7.70)
 
 - **The Hebrew second look: which text a quotation follows** (research 26 section 5; Larry, 2026-11-11: the Hebrew "where it works easily"). For each quotation UBS or Hühn names, `hebrew_look.py` reads the Hebrew verse through the LXX translators' own habits (conc.db's word-by-word Hebrew-to-Greek alignment) and asks where, in this verse, the LXX departed from its usual rendering: a New Testament word that keeps the usual rendering where the LXX departed counts for the Hebrew ("son" in Matthew 2:15, where the LXX of Hosea 11:1 has "children"); a New Testament word the LXX has and the Hebrew does not counts for the LXX ("a body you prepared", Hebrews 10:5). Content words only, and one word decides alone only when it is rare. Of 505 quotations: 12 follow the Hebrew (Matthew 2:15, 8:17, 26:31, 27:10, John 13:18, 19:37, Revelation 1:7, Romans 11:35 among them), 176 the LXX, 159 both, 158 unknown; allusions are not judged. Seven agreed cases checked 7 of 7. The Incipit list shows it in a **Follows** column; Side by side says so in its note.

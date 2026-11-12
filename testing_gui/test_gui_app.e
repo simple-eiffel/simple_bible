@@ -86,6 +86,7 @@ feature {NONE} -- Suites
 			run_test (agent t.test_dark_switch_follows_windows, "test_dark_switch_follows_windows")
 			run_test (agent t.test_an_incipit_link_shows_side_by_side, "test_an_incipit_link_shows_side_by_side")
 			run_test (agent t.test_a_verse_shows_its_incipit_stories, "test_a_verse_shows_its_incipit_stories")
+			run_test (agent t.test_the_incipit_map_lists_a_books_links, "test_the_incipit_map_lists_a_books_links")
 			run_test (agent t.test_each_workspace_keeps_its_east_width, "test_each_workspace_keeps_its_east_width")
 			run_test (agent t.test_focus_button_says_what_it_will_do, "test_focus_button_says_what_it_will_do")
 			run_test (agent t.test_verse_search_listed_in_the_window_menu, "test_verse_search_listed_in_the_window_menu")
