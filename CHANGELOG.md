@@ -4,6 +4,11 @@ All notable changes to simple_bible are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added (2026-11-11: 0.7.63)
+
+- **Chiasm: the structures of a passage.** A new Chiasm tab beside Incipit follows the verse: the structures it stands in (E. W. Bullinger's, from *The Companion Bible*), innermost first, each with its pattern (introversion, alternation, extended alternation) and its grade against chance. Choose one to see its ladder: the members indented toward the center, their verses and labels, each pair's share of rare Hebrew or Greek words, the member holding the verse marked. A letter the scan lost and the program inferred is starred. Click a member to read it.
+- **The chiasm pack (chiasm.db)** and `bible_build --chiasm <chiasm.structures.json> --out <chiasm.db>`: 2,450 structures, 11,290 members, 278 graded. A grade lays the same shape at 500 random places in the same book: strong (p < 0.01) and moderate (p < 0.05) pair by shared words above chance; thematic pairs by idea. Bullinger's structures are read from a scanned page and held loosely; each repaired reference is marked.
+
 ### Added (2026-11-11: 0.7.62)
 
 - **Incipit: the Old Testament in the New.** A new Incipit tab beside Cross-refs follows the verse. On a New Testament verse it lists the Old Testament places the verse draws on; on an Old Testament verse, the New Testament places that take it up. Each row gives the kind (incipit, quotation, allusion), how loud it is against chance, and who heard it (UBS, Hühn 1899, or the measure). Click a row to read the place. The links are keyed in the Septuagint and shown in English numbering ("Psalm 22:1 (LXX 21:2)"); books only the Septuagint has show as "Wisdom 2:18 (LXX only)".

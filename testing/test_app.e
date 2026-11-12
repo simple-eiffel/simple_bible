@@ -42,6 +42,7 @@ feature {NONE} -- Initialization
 			run_facade_open_tests
 			run_timeline_tests
 			run_incipit_tests
+			run_chiasm_tests
 			run_content_builder_tests
 			run_cli_command_tests
 			run_reading_tests
@@ -434,6 +435,18 @@ feature {NONE} -- Suites
 			else
 				run_skeletal (agent t.test_pdf_reads_as_prose, "test_pdf_reads_as_prose", "set SIMPLE_BIBLE_PDF")
 			end
+		end
+
+	run_chiasm_tests
+			-- The chiasm pack (research 28, 2026-11-11).
+		local
+			t: TEST_CHIASM
+		do
+			print ("TEST_CHIASM%N")
+			create t
+			run_test (agent t.test_chiasm_schema_makes_every_table, "test_chiasm_schema_makes_every_table")
+			run_test (agent t.test_chiasm_pack_builds_attaches_and_reads, "test_chiasm_pack_builds_attaches_and_reads")
+			run_test (agent t.test_chiasm_builder_refuses_a_broken_manifest, "test_chiasm_builder_refuses_a_broken_manifest")
 		end
 
 	run_incipit_tests

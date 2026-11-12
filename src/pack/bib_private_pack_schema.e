@@ -99,4 +99,31 @@ feature -- Constants
 		deferred
 		end
 
+feature {NONE} -- Closed lists (the incipit and chiasm schemas, 2026-11-11)
+
+	has_word (a_words: ARRAY [STRING_8]; a_word: READABLE_STRING_GENERAL): BOOLEAN
+			-- Is `a_word' one of `a_words'?
+		do
+			Result := across a_words as al_w some al_w.same_string_general (a_word) end
+		end
+
+	in_list (a_column: STRING_8; a_words: ARRAY [STRING_8]): STRING_8
+			-- "(`a_column' IN ('w1', 'w2', ...))" for a CHECK constraint.
+		require
+			words_given: not a_words.is_empty
+			plain_words: across a_words as al_w all not al_w.has ('%'') end
+		do
+			create Result.make (64)
+			Result.append ("(" + a_column + " IN (")
+			across a_words as al_w loop
+				if Result.item (Result.count) /= '(' then
+					Result.append (", ")
+				end
+				Result.append ("'" + al_w + "'")
+			end
+			Result.append ("))")
+		ensure
+			names_column: Result.starts_with ("(" + a_column + " IN (")
+		end
+
 end

@@ -11,6 +11,7 @@ note
 			bible_build --timeline <folder of *.timeline.json, or one> --out <timeline.db>
 			bible_build --empires <Cliopatria GeoJSON> --out <empires.db>
 			bible_build --incipit <incipit.links.json> --out <incipit.db>
+			bible_build --chiasm <chiasm.structures.json> --out <chiasm.db>
 			bible_build --memes <memes.seed.json> --out <meme.db>
 		Exit code 0 on success, 1 on failure (the reason is printed).
 	]"
@@ -58,6 +59,7 @@ feature {NONE} -- Initialization
 			l_timeline: BIB_TIMELINE_BUILDER
 			l_empires: BIB_EMPIRES_BUILDER
 			l_incipit: BIB_INCIPIT_BUILDER
+			l_chiasm: BIB_CHIASM_BUILDER
 			l_memes: BIB_MEME_BUILDER
 			l_books: BIB_BOOK_BUILDER
 			l_reader: SIMPLE_BIBLE
@@ -70,6 +72,7 @@ feature {NONE} -- Initialization
 			l_cli.add_option_with_default ("c|commentary", "The Commentaries folder (every book's _build sidecar) or one sidecar JSON: write the commentary pack instead", "path", "")
 			l_cli.add_option_with_default ("f|frameworks", "A folder of *.framework.json sidecars, or one: write the frameworks pack instead", "path", "")
 			l_cli.add_option_with_default ("r|timeline", "A folder of *.timeline.json sidecars, or one: write the River of Time pack instead", "path", "")
+			l_cli.add_option_with_default ("s|chiasm", "The structures manifest (chiasm.structures.json): write the chiasm pack (chiasms and structures, graded) instead", "path", "")
 			l_cli.add_option_with_default ("i|incipit", "The links manifest (incipit.links.json): write the incipit pack (the Old Testament in the New) instead", "path", "")
 			l_cli.add_option_with_default ("m|empires", "Cliopatria's GeoJSON: write the empires pack (polity outlines by year, CC BY 4.0) instead", "path", "")
 			l_cli.add_option_with_default ("y|memes", "The meme seed (memes.seed.json, pictures beside it): write meme.db instead", "path", "")
@@ -178,6 +181,21 @@ feature {NONE} -- Initialization
 						print ("bible_build: wrote " + al_meme_pack + " (" + l_memes.meme_count.out + " memes, " + l_memes.picture_count.out + " pictures, "
 							+ l_memes.passage_count.out + " passages)%N")
 					end
+				end
+			elseif attached l_cli.value_of ("chiasm") as al_structures and then not al_structures.is_empty
+				and then attached l_cli.value_of ("out") as al_chiasm_pack and then not al_chiasm_pack.is_empty
+			then
+					-- chiasms and structures, graded against chance (research 28, 2026-11-11)
+				create l_chiasm.make
+				l_chiasm.build (al_structures, al_chiasm_pack)
+				if attached l_chiasm.last_error as al_error then
+					print ("bible_build failed: ")
+					print (al_error)
+					print ("%N")
+					l_failed := True
+				else
+					print ("bible_build: wrote " + al_chiasm_pack + " (" + l_chiasm.structure_count.out + " structures, " + l_chiasm.member_count.out + " members, "
+						+ l_chiasm.graded_count.out + " graded)%N")
 				end
 			elseif attached l_cli.value_of ("incipit") as al_manifest and then not al_manifest.is_empty
 				and then attached l_cli.value_of ("out") as al_incipit_pack and then not al_incipit_pack.is_empty

@@ -229,6 +229,15 @@ feature -- Status
 			end
 		end
 
+	chiasm_packs: ARRAYED_LIST [BIB_CHIASM_PACK]
+			-- The attached packs whose kind is "chiasm" (BIB_CHIASM_SCHEMA, research 28, 2026-11-11).
+		do
+			create Result.make (1)
+			across packs_of_kind ({BIB_CHIASM_SCHEMA}.Pack_kind) as ic loop
+				Result.extend (create {BIB_CHIASM_PACK}.make (sources, ic.alias_name, ic.pack_title))
+			end
+		end
+
 	writings_search: BIB_WRITINGS_SEARCH
 			-- Search across the attached commentary, frameworks, books and essays packs, in that order
 			-- (research/20, 2026-10-28).

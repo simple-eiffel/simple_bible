@@ -256,6 +256,12 @@ feature {NONE} -- Initialization
 			create commentary_reader.make
 			create cross_refs_grid.make (60.0)
 			create incipit_grid.make (60.0)
+			create chiasm_note.make_ui ("")
+			chiasm_note := chiasm_note.with_wrap
+			create chiasm_structures_grid.make (110.0)
+			create chiasm_structure_rows.make (0)
+			create chiasm_ladder_grid.make (60.0)
+			create chiasm_member_rows.make (0)
 			create incipit_rows.make (0)
 			create incipit_note.make_ui ("")
 			incipit_note := incipit_note.with_wrap
@@ -2875,6 +2881,8 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 				commentary_tabs.select_tab (1)
 			elseif snapshot_tab.same_string ({STRING_32} "incipit") then
 				commentary_tabs.select_tab (Incipit_tab)
+			elseif snapshot_tab.same_string ({STRING_32} "chiasm") then
+				commentary_tabs.select_tab (Chiasm_tab)
 			elseif snapshot_tab.same_string ({STRING_32} "notes") then
 				new_note_box.set_text ("A sample note written by the snapshot run.")
 				add_note
@@ -3150,6 +3158,8 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			highlight_button.set_on_click (agent add_highlight)
 			cross_refs_grid.set_on_select (agent on_cross_ref)
 			incipit_grid.set_on_select (agent on_incipit_row)
+			chiasm_structures_grid.set_on_select (agent on_chiasm_structure_row)
+			chiasm_ladder_grid.set_on_select (agent on_chiasm_member_row)
 			search_word_button.set_on_click (agent show_every_place)
 			results_grid.set_on_select (agent on_choice)
 			verses_grid.set_on_select (agent on_verse_hit)
@@ -3320,6 +3330,7 @@ feature {NONE} -- Window
 			commentary_tabs.add_page ("Books & essays", in_books_grid)
 			commentary_tabs.add_page ("Study guides", study_guides_grid)
 			commentary_tabs.add_page ("Incipit", incipit_page)
+			commentary_tabs.add_page ("Chiasm", chiasm_page)
 			commentary_tabs.add_page ("Related", create {SW_EMPTY_STATE}.make ("Related passages come later",
 				"AI-made related passages are planned for a later release, always marked as AI-made."))
 				-- Larry's commentary first when a pack holds one (2026-10-27), else the cross-references.
@@ -3440,6 +3451,14 @@ feature {NONE} -- Window
 			incipit_grid.add_column (create {SW_GRID_COLUMN [like incipit_row_type]}.make ("Kind", 90.0, agent incipit_kind))
 			incipit_grid.add_column (create {SW_GRID_COLUMN [like incipit_row_type]}.make ("Loudness", 80.0, agent incipit_loudness))
 			incipit_grid.add_column (create {SW_GRID_COLUMN [like incipit_row_type]}.make ("Heard by", 170.0, agent incipit_heard_by))
+			chiasm_structures_grid.add_column ((create {SW_GRID_COLUMN [like chiasm_structure_row_type]}.make ("Structure", 220.0, agent chiasm_structure_title)).growing)
+			chiasm_structures_grid.add_column (create {SW_GRID_COLUMN [like chiasm_structure_row_type]}.make ("Verses", 90.0, agent chiasm_structure_range))
+			chiasm_structures_grid.add_column (create {SW_GRID_COLUMN [like chiasm_structure_row_type]}.make ("Pattern", 140.0, agent chiasm_structure_pattern))
+			chiasm_structures_grid.add_column (create {SW_GRID_COLUMN [like chiasm_structure_row_type]}.make ("Grade", 130.0, agent chiasm_structure_grade))
+			chiasm_ladder_grid.add_column (create {SW_GRID_COLUMN [like chiasm_member_row_type]}.make ("Member", 110.0, agent chiasm_member_letter))
+			chiasm_ladder_grid.add_column (create {SW_GRID_COLUMN [like chiasm_member_row_type]}.make ("Verses", 90.0, agent chiasm_member_verses))
+			chiasm_ladder_grid.add_column ((create {SW_GRID_COLUMN [like chiasm_member_row_type]}.make ("What it holds", 220.0, agent chiasm_member_label)).growing)
+			chiasm_ladder_grid.add_column (create {SW_GRID_COLUMN [like chiasm_member_row_type]}.make ("Pair", 110.0, agent chiasm_member_pair))
 			renderings_grid.add_column (create {SW_GRID_COLUMN [BIB_ENGLISH_GLANCE_ROW]}.make ("Rendering", 150.0, agent {BIB_ENGLISH_GLANCE_ROW}.english))
 			renderings_grid.add_column ((create {SW_GRID_COLUMN [BIB_ENGLISH_GLANCE_ROW]}.make ("Version", 200.0, agent version_name)).growing)
 			renderings_grid.add_column (create {SW_GRID_COLUMN [BIB_ENGLISH_GLANCE_ROW]}.make ("Count", 70.0, agent count_text))
@@ -10004,6 +10023,7 @@ feature {NONE} -- Commentary (S2, P04)
 				cross_refs_grid.set_rows (cross_refs)
 				fill_in_books
 				fill_incipit
+				fill_chiasm
 				show_commentary
 			end
 		end
@@ -10245,6 +10265,221 @@ feature {NONE} -- Incipit (S2, research 26: the Old Testament in the New)
 			end
 		ensure
 			a_book_or_none: Result >= 0 and Result <= 66
+		end
+
+feature {NONE} -- Chiasm (S2, research 28: structures and chiasms)
+
+	chiasm_note: SW_LABEL
+			-- What the tab shows, or what to do.
+
+	chiasm_structures_grid: SW_DATA_GRID [like chiasm_structure_row_type]
+			-- The structures covering the verse read, innermost first.
+
+	chiasm_structure_rows: ARRAYED_LIST [like chiasm_structure_row_type]
+
+	chiasm_ladder_grid: SW_DATA_GRID [like chiasm_member_row_type]
+			-- The chosen structure's members, indented toward its center.
+
+	chiasm_member_rows: ARRAYED_LIST [like chiasm_member_row_type]
+
+	chiasm_structure_row_type: TUPLE [title, range, pattern, grade: STRING_32; structure_id: INTEGER]
+		do
+			Result := [{STRING_32} "", {STRING_32} "", {STRING_32} "", {STRING_32} "", 0]
+		end
+
+	chiasm_member_row_type: TUPLE [letter, verses, label, pair: STRING_32; ch, v: INTEGER]
+		do
+			Result := [{STRING_32} "", {STRING_32} "", {STRING_32} "", {STRING_32} "", 0, 0]
+		end
+
+	Chiasm_tab: INTEGER = 6
+			-- S2's Chiasm page (research 28, 2026-11-11).
+
+	chiasm_page: SW_COLUMN
+			-- The Chiasm tab: a note, the structures, the ladder of the one chosen.
+		do
+			create Result.make
+			Result := Result.with_gap (6.0)
+			Result.put (chiasm_note.as_muted)
+			Result.put (chiasm_structures_grid)
+			Result.put (chiasm_ladder_grid.growing)
+		end
+
+	fill_chiasm
+			-- The Chiasm tab follows the verse: the structures covering it, innermost first, and the
+			-- ladder of the innermost.
+		local
+			l_packs: ARRAYED_LIST [BIB_CHIASM_PACK]
+		do
+			create chiasm_structure_rows.make (4)
+			create chiasm_member_rows.make (8)
+			l_packs := bible.chiasm_packs
+			if l_packs.is_empty or else not l_packs.first.is_available then
+				chiasm_note.set_text ({STRING_32} "No chiasm pack is installed. It brings Bullinger's structures, each graded against chance.")
+			elseif commentary_verse = 0 or commentary_book < 1 or commentary_book > 66 then
+				chiasm_note.set_text ({STRING_32} "Click a verse to see the structures it stands in.")
+			else
+				across l_packs.first.structures_at (commentary_book, commentary_chapter, commentary_verse) as ic loop
+					chiasm_structure_rows.extend ([ic.title, verses_text (ic.ch_from, ic.v_from, ic.ch_to, ic.v_to),
+						pattern_text (ic.pattern), grade_text (ic.grade, ic.p_shape), ic.structure_id])
+				end
+				if chiasm_structure_rows.is_empty then
+					chiasm_note.set_text (place_text (commentary_book, commentary_chapter, commentary_verse) + {STRING_32} ": no structure is known here.")
+				else
+					chiasm_note.set_text (place_text (commentary_book, commentary_chapter, commentary_verse) + {STRING_32} " stands in " + chiasm_count_words (chiasm_structure_rows.count)
+						+ {STRING_32} " (Bullinger), innermost first. Strong and moderate pair by shared words above chance; thematic pairs by idea.")
+					show_chiasm_ladder (1)
+				end
+			end
+			chiasm_structures_grid.set_rows (chiasm_structure_rows)
+			chiasm_ladder_grid.set_rows (chiasm_member_rows)
+		end
+
+	show_chiasm_ladder (a_row: INTEGER)
+			-- The ladder of structure row `a_row': members indented toward the center; the member
+			-- holding the verse read marked.
+		local
+			l_members: ARRAYED_LIST [like {BIB_CHIASM_PACK}.member_type]
+			l_depth, n: INTEGER
+			l_letter, l_pair: STRING_32
+			l_holds: BOOLEAN
+		do
+			create chiasm_member_rows.make (8)
+			if a_row >= 1 and a_row <= chiasm_structure_rows.count and then not bible.chiasm_packs.is_empty then
+				l_members := bible.chiasm_packs.first.members_of (chiasm_structure_rows.i_th (a_row).structure_id)
+				n := l_members.count
+				across l_members as ic loop
+					if ic.pair_seq > 0 then
+						l_depth := (@ic.cursor_index - 1).min (n - @ic.cursor_index)
+					else
+						l_depth := 0
+					end
+					l_holds := ic.ch_from * 1000 + ic.v_from <= commentary_chapter * 1000 + commentary_verse
+						and commentary_chapter * 1000 + commentary_verse <= ic.ch_to * 1000 + ic.v_to
+					create l_letter.make_filled (' ', 3 * l_depth)
+					if l_holds then
+						l_letter.prepend ({STRING_32} "%/9654/ ")
+					end
+					l_letter.append (ic.letter)
+					if ic.letter_inferred then
+						l_letter.append ({STRING_32} "*")
+					end
+					if ic.pair_seq > 0 then
+						l_pair := {STRING_32} "with " + ic.pair_seq.out.to_string_32 + {STRING_32} ": " + score_text (ic.pair_score)
+					else
+						create l_pair.make_empty
+					end
+					chiasm_member_rows.extend ([l_letter, verses_text (ic.ch_from, ic.v_from, ic.ch_to, ic.v_to), ic.label, l_pair, ic.ch_from, ic.v_from])
+				end
+			end
+			chiasm_ladder_grid.set_rows (chiasm_member_rows)
+		end
+
+	on_chiasm_structure_row (a_model: INTEGER)
+			-- A structure chosen: show its ladder.
+		do
+			show_chiasm_ladder (a_model)
+		end
+
+	on_chiasm_member_row (a_model: INTEGER)
+			-- A member clicked: read where it begins.
+		do
+			if a_model >= 1 and a_model <= chiasm_member_rows.count and then commentary_book >= 1 then
+				go_to (commentary_book, chiasm_member_rows.i_th (a_model).ch, chiasm_member_rows.i_th (a_model).v)
+			end
+		end
+
+	verses_text (a_ch_from, a_v_from, a_ch_to, a_v_to: INTEGER): STRING_32
+			-- "6:9-9:29", "6:14-22" or "8:20".
+		do
+			Result := a_ch_from.out.to_string_32 + {STRING_32} ":" + a_v_from.out.to_string_32
+			if a_ch_to /= a_ch_from then
+				Result.append ({STRING_32} "-" + a_ch_to.out.to_string_32 + {STRING_32} ":" + a_v_to.out.to_string_32)
+			elseif a_v_to /= a_v_from then
+				Result.append ({STRING_32} "-" + a_v_to.out.to_string_32)
+			end
+		end
+
+	pattern_text (a_pattern: STRING_32): STRING_32
+			-- "introversion (a mirror)", "alternation", ...
+		do
+			if a_pattern.same_string ({STRING_32} "introversion") then
+				Result := {STRING_32} "introversion (mirror)"
+			elseif a_pattern.same_string ({STRING_32} "extended_alternation") then
+				Result := {STRING_32} "extended alternation"
+			else
+				Result := a_pattern.twin
+			end
+		end
+
+	grade_text (a_grade: STRING_32; a_p: REAL_64): STRING_32
+			-- "strong (p 0.006)", "thematic", "not graded".
+		do
+			if a_grade.same_string ({STRING_32} "strong") or a_grade.same_string ({STRING_32} "moderate") or a_grade.same_string ({STRING_32} "thematic") then
+				Result := a_grade.twin
+				if a_p > 0 then
+					Result.append ({STRING_32} " (p " + score_text (a_p) + {STRING_32} ")")
+				end
+			elseif a_grade.same_string ({STRING_32} "untestable") then
+				Result := {STRING_32} "untestable"
+			else
+				Result := {STRING_32} "not graded"
+			end
+		end
+
+	score_text (a_value: REAL_64): STRING_32
+			-- `a_value' to three places: "0.447".
+		local
+			l_n: INTEGER
+		do
+			l_n := (a_value * 1000).rounded
+			Result := (l_n // 1000).out.to_string_32 + {STRING_32} "." + (l_n \\ 1000 + 1000).out.to_string_32.substring (2, 4)
+		end
+
+	chiasm_count_words (a_count: INTEGER): STRING_32
+			-- "1 structure", "3 structures".
+		do
+			Result := a_count.out.to_string_32 + (if a_count = 1 then {STRING_32} " structure" else {STRING_32} " structures" end)
+		end
+
+	chiasm_structure_title (a_row: like chiasm_structure_row_type): STRING_32
+		do
+			Result := a_row.title
+		end
+
+	chiasm_structure_range (a_row: like chiasm_structure_row_type): STRING_32
+		do
+			Result := a_row.range
+		end
+
+	chiasm_structure_pattern (a_row: like chiasm_structure_row_type): STRING_32
+		do
+			Result := a_row.pattern
+		end
+
+	chiasm_structure_grade (a_row: like chiasm_structure_row_type): STRING_32
+		do
+			Result := a_row.grade
+		end
+
+	chiasm_member_letter (a_row: like chiasm_member_row_type): STRING_32
+		do
+			Result := a_row.letter
+		end
+
+	chiasm_member_verses (a_row: like chiasm_member_row_type): STRING_32
+		do
+			Result := a_row.verses
+		end
+
+	chiasm_member_label (a_row: like chiasm_member_row_type): STRING_32
+		do
+			Result := a_row.label
+		end
+
+	chiasm_member_pair (a_row: like chiasm_member_row_type): STRING_32
+		do
+			Result := a_row.pair
 		end
 
 	dock_panel_into (a_panel, a_zone: INTEGER)
@@ -10834,7 +11069,7 @@ feature {NONE} -- Design pills
 			window.add_reference_mark (dock, "C16", "Dock host: centre plus west, east, south; an empty zone collapses (P07 here).", window.Corner_top_right)
 			window.add_reference_mark (reading_caption, "S1", "P01 Bible Text, centre: verse per line. Previous and Next step chapters.", window.Corner_top_left)
 			window.add_reference_mark (reading_view, "S4", "Selected verse and word: click a word (English, Hebrew or Greek) and S3 follows it; S2 follows the verse.", window.Corner_top_right)
-			window.add_reference_mark (commentary_title, "S2", "P04 Commentary, east: follows the verse. Commentaries from the commentary packs (every claim labelled SOURCED or DEDUCED); Cross-refs (OpenBible votes); Incipit (the Old Testament in the New, both ways).", window.Corner_top_left)
+			window.add_reference_mark (commentary_title, "S2", "P04 Commentary, east: follows the verse. Commentaries from the commentary packs (every claim labelled SOURCED or DEDUCED); Cross-refs (OpenBible votes); Incipit (the Old Testament in the New, both ways); Chiasm (Bullinger's structures around the verse, graded against chance).", window.Corner_top_left)
 			window.add_reference_mark (lexicon_heading, "S3", "P05 Lexicon, south: follows the word. Renderings first, then lexicon entries.", window.Corner_top_left)
 			window.add_reference_mark (renderings_grid, "P05.4", "Range before ruling: every rendering with its count, before any lexicon's verdict.", window.Corner_top_left)
 			window.add_reference_mark (entries_list, "P05.5", "Lexicon entries: each source in its own words (Abbott-Smith, BDB, LSJ, UBS, TBESH).", window.Corner_top_left)
