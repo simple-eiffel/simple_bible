@@ -1,9 +1,11 @@
 note
 	description: "[
 		A chiasm pack, read (BIB_CHIASM_SCHEMA; research 28, 2026-11-11): the
-		structures covering a verse, innermost first, and a structure's members
-		in reading order with their partners and pair scores. Attached
-		read-only under `pack_alias' by BIB_PRIVATE_SOURCE.
+		structures covering a verse, innermost first; every structure at once
+		in book order (Larry, 2026-11-12: "I want the ability to see all of both
+		in a list"); and a structure's members in reading order with their
+		partners and pair scores. Attached read-only under `pack_alias' by
+		BIB_PRIVATE_SOURCE.
 	]"
 	author: "Larry Rix"
 	date: "$Date$"
@@ -28,22 +30,26 @@ feature -- Access
 			a_book: a_book_id >= 1 and a_book_id <= 66
 			counted_from_one: a_ch >= 1 and a_v >= 1
 		do
-			create Result.make (4)
-			run_query ("SELECT structure_id, parent_id, under_letter, book_id, ch_from, v_from, ch_to, v_to, title, kind_printed, pattern, grade, source, "
-				+ "whole, p_shape, p_pairing, repaired FROM " + pack_alias + ".structure WHERE book_id = ? AND ch_from * 1000 + v_from <= ? AND ? <= ch_to * 1000 + v_to "
-				+ "ORDER BY (ch_to * 1000 + v_to) - (ch_from * 1000 + v_from), structure_id",
-				{ARRAY [detachable ANY]} <<a_book_id, a_ch * 1000 + a_v, a_ch * 1000 + a_v>>)
-			if attached last_rows as al_rows then
-				across al_rows.rows as ic loop
-					Result.extend ([ic.integer_value ("structure_id"), ic.integer_value ("parent_id"), ic.string_value ("under_letter"), ic.integer_value ("book_id"),
-						ic.integer_value ("ch_from"), ic.integer_value ("v_from"), ic.integer_value ("ch_to"), ic.integer_value ("v_to"), ic.string_value ("title"),
-						ic.string_value ("kind_printed"), ic.string_value ("pattern"), ic.string_value ("grade"), ic.string_value ("source"), ic.real_value ("whole"), ic.real_value ("p_shape"),
-						ic.real_value ("p_pairing"), ic.integer_value ("repaired")])
-				end
-			end
+			Result := structures_where ("book_id = ? AND ch_from * 1000 + v_from <= ? AND ? <= ch_to * 1000 + v_to", <<a_book_id, a_ch * 1000 + a_v, a_ch * 1000 + a_v>>,
+				"ORDER BY (ch_to * 1000 + v_to) - (ch_from * 1000 + v_from), structure_id")
 		ensure
 			covers_the_verse: across Result as al_s all al_s.ch_from * 1000 + al_s.v_from <= a_ch * 1000 + a_v and a_ch * 1000 + a_v <= al_s.ch_to * 1000 + al_s.v_to end
 			innermost_first: across 2 |..| Result.count as i all span (Result [i - 1]) <= span (Result [i]) end
+		end
+
+	all_structures (a_graded_only: BOOLEAN): ARRAYED_LIST [like structure_type]
+			-- Every top-level structure, and every nested one graded strong or moderate, in book
+			-- order; only the strong and moderate ones when `a_graded_only'.
+		require
+			available: is_available
+		do
+			if a_graded_only then
+				Result := structures_where ("grade IN ('strong', 'moderate')", {ARRAY [detachable ANY]} <<>>, "ORDER BY book_id, ch_from, v_from, ch_to, v_to, structure_id")
+			else
+				Result := structures_where ("parent_id IS NULL OR grade IN ('strong', 'moderate')", {ARRAY [detachable ANY]} <<>>, "ORDER BY book_id, ch_from, v_from, ch_to, v_to, structure_id")
+			end
+		ensure
+			graded_only: a_graded_only implies across Result as al_s all al_s.grade.same_string ({STRING_32} "strong") or al_s.grade.same_string ({STRING_32} "moderate") end
 		end
 
 	members_of (a_structure_id: INTEGER): ARRAYED_LIST [like member_type]
@@ -98,7 +104,23 @@ feature -- Access
 			Result := (a_structure.ch_to * 1000 + a_structure.v_to) - (a_structure.ch_from * 1000 + a_structure.v_from)
 		end
 
-feature {NONE} -- The heir's part
+feature {NONE} -- Implementation
+
+	structures_where (a_condition: STRING_8; a_args: ARRAY [detachable ANY]; a_order: STRING_8): ARRAYED_LIST [like structure_type]
+			-- The structures meeting `a_condition' with `a_args', in `a_order'.
+		do
+			create Result.make (16)
+			run_query ("SELECT structure_id, parent_id, under_letter, book_id, ch_from, v_from, ch_to, v_to, title, kind_printed, pattern, grade, source, "
+				+ "whole, p_shape, p_pairing, repaired FROM " + pack_alias + ".structure WHERE " + a_condition + " " + a_order, a_args)
+			if attached last_rows as al_rows then
+				across al_rows.rows as ic loop
+					Result.extend ([ic.integer_value ("structure_id"), ic.integer_value ("parent_id"), ic.string_value ("under_letter"), ic.integer_value ("book_id"),
+						ic.integer_value ("ch_from"), ic.integer_value ("v_from"), ic.integer_value ("ch_to"), ic.integer_value ("v_to"), ic.string_value ("title"),
+						ic.string_value ("kind_printed"), ic.string_value ("pattern"), ic.string_value ("grade"), ic.string_value ("source"), ic.real_value ("whole"),
+						ic.real_value ("p_shape"), ic.real_value ("p_pairing"), ic.integer_value ("repaired")])
+				end
+			end
+		end
 
 	query_failed_message: STRING_8 = "A chiasm query failed."
 	not_open_message: STRING_8 = "The chiasm pack is not attached."

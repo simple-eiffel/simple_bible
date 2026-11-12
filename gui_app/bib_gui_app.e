@@ -256,6 +256,12 @@ feature {NONE} -- Initialization
 			create commentary_reader.make
 			create cross_refs_grid.make (60.0)
 			create incipit_grid.make (60.0)
+			create incipit_verse_button.make ("This verse", Void)
+			create incipit_all_nt_button.make ("All, by New Testament", Void)
+			create incipit_all_ot_button.make ("All, by Old Testament", Void)
+			create chiasm_verse_button.make ("This verse", Void)
+			create chiasm_all_button.make ("All structures", Void)
+			create chiasm_graded_button.make ("Strong and moderate", Void)
 			create chiasm_note.make_ui ("")
 			chiasm_note := chiasm_note.with_wrap
 			create chiasm_structures_grid.make (110.0)
@@ -2883,6 +2889,12 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 				commentary_tabs.select_tab (Incipit_tab)
 			elseif snapshot_tab.same_string ({STRING_32} "chiasm") then
 				commentary_tabs.select_tab (Chiasm_tab)
+			elseif snapshot_tab.same_string ({STRING_32} "incipitall") then
+				commentary_tabs.select_tab (Incipit_tab)
+				set_incipit_mode (Incipit_mode_new)
+			elseif snapshot_tab.same_string ({STRING_32} "chiasmall") then
+				commentary_tabs.select_tab (Chiasm_tab)
+				set_chiasm_mode (Chiasm_mode_graded)
 			elseif snapshot_tab.same_string ({STRING_32} "notes") then
 				new_note_box.set_text ("A sample note written by the snapshot run.")
 				add_note
@@ -3158,6 +3170,12 @@ feature {NONE} -- Snapshot (a picture of the window without a screen)
 			highlight_button.set_on_click (agent add_highlight)
 			cross_refs_grid.set_on_select (agent on_cross_ref)
 			incipit_grid.set_on_select (agent on_incipit_row)
+			incipit_verse_button.set_on_click (agent set_incipit_mode (Incipit_mode_verse))
+			incipit_all_nt_button.set_on_click (agent set_incipit_mode (Incipit_mode_new))
+			incipit_all_ot_button.set_on_click (agent set_incipit_mode (Incipit_mode_old))
+			chiasm_verse_button.set_on_click (agent set_chiasm_mode (Chiasm_mode_verse))
+			chiasm_all_button.set_on_click (agent set_chiasm_mode (Chiasm_mode_all))
+			chiasm_graded_button.set_on_click (agent set_chiasm_mode (Chiasm_mode_graded))
 			chiasm_structures_grid.set_on_select (agent on_chiasm_structure_row)
 			chiasm_ladder_grid.set_on_select (agent on_chiasm_member_row)
 			search_word_button.set_on_click (agent show_every_place)
@@ -3452,7 +3470,7 @@ feature {NONE} -- Window
 			incipit_grid.add_column (create {SW_GRID_COLUMN [like incipit_row_type]}.make ("Loudness", 80.0, agent incipit_loudness))
 			incipit_grid.add_column (create {SW_GRID_COLUMN [like incipit_row_type]}.make ("Heard by", 170.0, agent incipit_heard_by))
 			chiasm_structures_grid.add_column ((create {SW_GRID_COLUMN [like chiasm_structure_row_type]}.make ("Structure", 220.0, agent chiasm_structure_title)).growing)
-			chiasm_structures_grid.add_column (create {SW_GRID_COLUMN [like chiasm_structure_row_type]}.make ("Verses", 90.0, agent chiasm_structure_range))
+			chiasm_structures_grid.add_column (create {SW_GRID_COLUMN [like chiasm_structure_row_type]}.make ("Verses", 150.0, agent chiasm_structure_range))
 			chiasm_structures_grid.add_column (create {SW_GRID_COLUMN [like chiasm_structure_row_type]}.make ("Pattern", 140.0, agent chiasm_structure_pattern))
 			chiasm_structures_grid.add_column (create {SW_GRID_COLUMN [like chiasm_structure_row_type]}.make ("Grade", 130.0, agent chiasm_structure_grade))
 			chiasm_structures_grid.add_column (create {SW_GRID_COLUMN [like chiasm_structure_row_type]}.make ("From", 110.0, agent chiasm_structure_source))
@@ -10168,15 +10186,89 @@ feature {NONE} -- Incipit (S2, research 26: the Old Testament in the New)
 			-- Matthew's book number.
 
 	incipit_page: SW_COLUMN
-			-- The Incipit tab: a note above the grid.
+			-- The Incipit tab: what to list, a note, the grid.
+		local
+			l_buttons: SW_ROW
 		do
 			create Result.make
 			Result := Result.with_gap (6.0)
+			create l_buttons.make
+			l_buttons.put (incipit_verse_button)
+			l_buttons.put (incipit_all_nt_button)
+			l_buttons.put (incipit_all_ot_button)
+			Result.put (l_buttons)
 			Result.put (incipit_note.as_muted)
 			Result.put (incipit_grid.growing)
 		end
 
+	incipit_verse_button, incipit_all_nt_button, incipit_all_ot_button: SW_BUTTON
+			-- What the Incipit tab lists.
+
+	incipit_mode: INTEGER
+			-- `Incipit_mode_verse' (the links of the verse read, the default), or every link in
+			-- New Testament or Old Testament order (Larry, 2026-11-12: "I want the ability to see all
+			-- of both in a list ... where I can click them and have the bible text go to that entry").
+
+	Incipit_mode_verse: INTEGER = 0
+	Incipit_mode_new: INTEGER = 1
+	Incipit_mode_old: INTEGER = 2
+
+	set_incipit_mode (a_mode: INTEGER)
+			-- List `a_mode''s links. A whole list stays while the reader reads; This verse follows again.
+		require
+			a_mode: a_mode >= Incipit_mode_verse and a_mode <= Incipit_mode_old
+		do
+			incipit_mode := a_mode
+			if a_mode = Incipit_mode_verse then
+				fill_incipit_verse
+			else
+				fill_all_incipit (a_mode = Incipit_mode_old)
+			end
+		ensure
+			set: incipit_mode = a_mode
+		end
+
 	fill_incipit
+			-- The Incipit tab when the verse changes: the verse's links, unless a whole list is shown.
+		do
+			if incipit_mode = Incipit_mode_verse then
+				fill_incipit_verse
+			end
+		end
+
+	fill_all_incipit (a_by_old_testament: BOOLEAN)
+			-- Every link, in New Testament order ("Matthew 27:46 <- Psalms 22:1 (LXX 21:2)") or Old
+			-- Testament order ("Psalms 22:1 (LXX 21:2) -> Matthew 27:46"); a click reads the first place.
+		local
+			l_packs: ARRAYED_LIST [BIB_INCIPIT_PACK]
+			l_nt: STRING_32
+			l_book: INTEGER
+		do
+			create incipit_rows.make (4096)
+			l_packs := bible.incipit_packs
+			if l_packs.is_empty or else not l_packs.first.is_available then
+				incipit_note.set_text ({STRING_32} "No incipit pack is installed. It brings the places where the New Testament draws on the Old.")
+			else
+				across l_packs.first.all_links (a_by_old_testament) as ic loop
+					l_book := book_number_of (ic.nt_book)
+					l_nt := place_text (l_book, ic.nt_ch, ic.nt_v)
+					if a_by_old_testament then
+						if ic.en_book_id > 0 then
+							incipit_rows.extend ([source_place_text (ic) + {STRING_32} " %/8594/ " + l_nt, kind_text (ic.kind), ic.loudness, heard_by_text (ic.witnesses), ic.en_book_id, ic.en_ch, ic.en_v])
+						else
+							incipit_rows.extend ([source_place_text (ic) + {STRING_32} " %/8594/ " + l_nt, kind_text (ic.kind), ic.loudness, heard_by_text (ic.witnesses), l_book, ic.nt_ch, ic.nt_v])
+						end
+					else
+						incipit_rows.extend ([l_nt + {STRING_32} " %/8592/ " + source_place_text (ic), kind_text (ic.kind), ic.loudness, heard_by_text (ic.witnesses), l_book, ic.nt_ch, ic.nt_v])
+					end
+				end
+				incipit_note.set_text ({STRING_32} "All " + incipit_rows.count.out.to_string_32 + (if a_by_old_testament then {STRING_32} " links, in Old Testament order" else {STRING_32} " links, in New Testament order" end)
+					+ {STRING_32} ". Click one to read it; the list stays until This verse.")
+			end
+			incipit_grid.set_rows (incipit_rows)
+		end
+
+	fill_incipit_verse
 			-- The Incipit tab follows the verse: a New Testament verse's links into the Old Testament
 			-- (keyed in the LXX), or the New Testament places that take up an Old Testament verse.
 		local
@@ -10299,9 +10391,9 @@ feature {NONE} -- Chiasm (S2, research 28: structures and chiasms)
 
 	chiasm_member_rows: ARRAYED_LIST [like chiasm_member_row_type]
 
-	chiasm_structure_row_type: TUPLE [title, range, pattern, grade, source: STRING_32; structure_id: INTEGER]
+	chiasm_structure_row_type: TUPLE [title, range, pattern, grade, source: STRING_32; structure_id, book, ch, v: INTEGER]
 		do
-			Result := [{STRING_32} "", {STRING_32} "", {STRING_32} "", {STRING_32} "", {STRING_32} "", 0]
+			Result := [{STRING_32} "", {STRING_32} "", {STRING_32} "", {STRING_32} "", {STRING_32} "", 0, 0, 0, 0]
 		end
 
 	chiasm_member_row_type: TUPLE [letter, verses, label, pair: STRING_32; ch, v: INTEGER]
@@ -10313,16 +10405,81 @@ feature {NONE} -- Chiasm (S2, research 28: structures and chiasms)
 			-- S2's Chiasm page (research 28, 2026-11-11).
 
 	chiasm_page: SW_COLUMN
-			-- The Chiasm tab: a note, the structures, the ladder of the one chosen.
+			-- The Chiasm tab: what to list, a note, the structures, the ladder of the one chosen.
+		local
+			l_buttons: SW_ROW
 		do
 			create Result.make
 			Result := Result.with_gap (6.0)
+			create l_buttons.make
+			l_buttons.put (chiasm_verse_button)
+			l_buttons.put (chiasm_all_button)
+			l_buttons.put (chiasm_graded_button)
+			Result.put (l_buttons)
 			Result.put (chiasm_note.as_muted)
 			Result.put (chiasm_structures_grid)
 			Result.put (chiasm_ladder_grid.growing)
 		end
 
+	chiasm_verse_button, chiasm_all_button, chiasm_graded_button: SW_BUTTON
+			-- What the Chiasm tab lists.
+
+	chiasm_mode: INTEGER
+			-- `Chiasm_mode_verse' (the structures around the verse read, the default), every
+			-- structure, or the strong and moderate ones, each with its full range (Larry, 2026-11-12).
+
+	Chiasm_mode_verse: INTEGER = 0
+	Chiasm_mode_all: INTEGER = 1
+	Chiasm_mode_graded: INTEGER = 2
+
+	set_chiasm_mode (a_mode: INTEGER)
+			-- List `a_mode''s structures. A whole list stays while the reader reads; This verse follows again.
+		require
+			a_mode: a_mode >= Chiasm_mode_verse and a_mode <= Chiasm_mode_graded
+		do
+			chiasm_mode := a_mode
+			if a_mode = Chiasm_mode_verse then
+				fill_chiasm_verse
+			else
+				fill_all_chiasm (a_mode = Chiasm_mode_graded)
+			end
+		ensure
+			set: chiasm_mode = a_mode
+		end
+
 	fill_chiasm
+			-- The Chiasm tab when the verse changes: the structures around it, unless a whole list is shown.
+		do
+			if chiasm_mode = Chiasm_mode_verse then
+				fill_chiasm_verse
+			end
+		end
+
+	fill_all_chiasm (a_graded_only: BOOLEAN)
+			-- Every structure (or the strong and moderate ones) in book order with its full range; a
+			-- click reads where it begins and shows its ladder.
+		local
+			l_packs: ARRAYED_LIST [BIB_CHIASM_PACK]
+		do
+			create chiasm_structure_rows.make (1024)
+			create chiasm_member_rows.make (8)
+			l_packs := bible.chiasm_packs
+			if l_packs.is_empty or else not l_packs.first.is_available then
+				chiasm_note.set_text ({STRING_32} "No chiasm pack is installed. It brings Bullinger's structures, each graded against chance.")
+			else
+				across l_packs.first.all_structures (a_graded_only) as ic loop
+					chiasm_structure_rows.extend ([ic.title, place_text (ic.book_id, ic.ch_from, ic.v_from) + {STRING_32} "-" + verses_text (ic.ch_to, ic.v_to, ic.ch_to, ic.v_to),
+						pattern_text (ic.pattern), grade_text (ic.grade, ic.p_shape), source_text (ic.source, ic.kind_printed), ic.structure_id, ic.book_id, ic.ch_from, ic.v_from])
+				end
+				chiasm_note.set_text ({STRING_32} "All " + chiasm_structure_rows.count.out.to_string_32
+					+ (if a_graded_only then {STRING_32} " strong and moderate structures" else {STRING_32} " structures" end)
+					+ {STRING_32} ", in book order. Click one to read it and see its ladder; the list stays until This verse.")
+			end
+			chiasm_structures_grid.set_rows (chiasm_structure_rows)
+			chiasm_ladder_grid.set_rows (chiasm_member_rows)
+		end
+
+	fill_chiasm_verse
 			-- The Chiasm tab follows the verse: the structures covering it, innermost first, and the
 			-- ladder of the innermost.
 		local
@@ -10338,7 +10495,7 @@ feature {NONE} -- Chiasm (S2, research 28: structures and chiasms)
 			else
 				across l_packs.first.structures_at (commentary_book, commentary_chapter, commentary_verse) as ic loop
 					chiasm_structure_rows.extend ([ic.title, verses_text (ic.ch_from, ic.v_from, ic.ch_to, ic.v_to),
-						pattern_text (ic.pattern), grade_text (ic.grade, ic.p_shape), source_text (ic.source, ic.kind_printed), ic.structure_id])
+						pattern_text (ic.pattern), grade_text (ic.grade, ic.p_shape), source_text (ic.source, ic.kind_printed), ic.structure_id, commentary_book, ic.ch_from, ic.v_from])
 				end
 				if chiasm_structure_rows.is_empty then
 					chiasm_note.set_text (place_text (commentary_book, commentary_chapter, commentary_verse) + {STRING_32} ": no structure is known here.")
@@ -10393,8 +10550,11 @@ feature {NONE} -- Chiasm (S2, research 28: structures and chiasms)
 		end
 
 	on_chiasm_structure_row (a_model: INTEGER)
-			-- A structure chosen: show its ladder.
+			-- A structure chosen: show its ladder; from a whole list, read where it begins first.
 		do
+			if chiasm_mode /= Chiasm_mode_verse and a_model >= 1 and a_model <= chiasm_structure_rows.count then
+				go_to (chiasm_structure_rows.i_th (a_model).book, chiasm_structure_rows.i_th (a_model).ch, chiasm_structure_rows.i_th (a_model).v)
+			end
 			show_chiasm_ladder (a_model)
 		end
 

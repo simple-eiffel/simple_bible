@@ -2,9 +2,11 @@ note
 	description: "[
 		An incipit pack, read (BIB_INCIPIT_SCHEMA; research 27, 2026-11-11):
 		the links a New Testament verse makes into the Old (LXX numbering), the
-		links an LXX verse receives, and the source unit a link points into.
-		Each link comes with its kind, loudness, volume and witnesses, loudest
-		first. Attached read-only under `pack_alias' by BIB_PRIVATE_SOURCE.
+		links an LXX verse or an English Old Testament verse receives, and every
+		link at once in New Testament or Old Testament order (Larry, 2026-11-12:
+		"I want the ability to see all of both in a list"). Each link comes with
+		its kind, loudness, volume and witnesses. Attached read-only under
+		`pack_alias' by BIB_PRIVATE_SOURCE.
 	]"
 	author: "Larry Rix"
 	date: "$Date$"
@@ -28,7 +30,7 @@ feature -- Access
 			book_named: not a_nt_book.is_empty
 			counted_from_one: a_ch >= 1 and a_v >= 1
 		do
-			Result := links_where ("l.nt_book = ? AND l.nt_ch = ? AND ? BETWEEN l.nt_v_from AND l.nt_v_to", a_nt_book, a_ch, a_v)
+			Result := links_where ("l.nt_book = ? AND l.nt_ch = ? AND ? BETWEEN l.nt_v_from AND l.nt_v_to", <<a_nt_book.to_string_32, a_ch, a_v>>, Loudest_first)
 		ensure
 			loudest_first: across 2 |..| Result.count as i all Result [i - 1].volume >= Result [i].volume end
 		end
@@ -40,7 +42,7 @@ feature -- Access
 			book_named: not a_lxx_book.is_empty
 			counted_from_one: a_ch >= 1 and a_v >= 1
 		do
-			Result := links_where ("l.lxx_book = ? AND l.lxx_ch = ? AND ? BETWEEN l.lxx_v_from AND l.lxx_v_to", a_lxx_book, a_ch, a_v)
+			Result := links_where ("l.lxx_book = ? AND l.lxx_ch = ? AND ? BETWEEN l.lxx_v_from AND l.lxx_v_to", <<a_lxx_book.to_string_32, a_ch, a_v>>, Loudest_first)
 		ensure
 			loudest_first: across 2 |..| Result.count as i all Result [i - 1].volume >= Result [i].volume end
 		end
@@ -53,10 +55,26 @@ feature -- Access
 			old_testament: a_book_id >= 1 and a_book_id <= 39
 			counted_from_one: a_ch >= 1 and a_v >= 1
 		do
-			Result := links_where ("l.en_book_id = ? AND l.en_ch = ? AND l.en_v = ?", a_book_id, a_ch, a_v)
+			Result := links_where ("l.en_book_id = ? AND l.en_ch = ? AND l.en_v = ?", <<a_book_id, a_ch, a_v>>, Loudest_first)
 		ensure
 			loudest_first: across 2 |..| Result.count as i all Result [i - 1].volume >= Result [i].volume end
 			into_that_verse: across Result as al_l all al_l.en_book_id = a_book_id and al_l.en_ch = a_ch and al_l.en_v = a_v end
+		end
+
+	all_links (a_by_old_testament: BOOLEAN): ARRAYED_LIST [like link_type]
+			-- Every link, in New Testament order (book, chapter, verse), or in Old Testament order
+			-- when `a_by_old_testament' (English place first, a book only the LXX has after its
+			-- canon by the LXX place); the loudest first within a verse.
+		require
+			available: is_available
+		do
+			if a_by_old_testament then
+				Result := links_where ("1 = 1", {ARRAY [detachable ANY]} <<>>, "ORDER BY l.en_book_id IS NULL, l.en_book_id, l.en_ch, l.en_v, l.lxx_book, l.lxx_ch, l.lxx_v_from, l.volume DESC, l.link_id")
+			else
+				Result := links_where ("1 = 1", {ARRAY [detachable ANY]} <<>>, "ORDER BY instr('" + Nt_order + "', '|' || l.nt_book || '|'), l.nt_ch, l.nt_v_from, l.volume DESC, l.link_id")
+			end
+		ensure
+			every_link: Result.count = link_count
 		end
 
 	link_count: INTEGER
@@ -82,15 +100,20 @@ feature -- Access
 
 feature {NONE} -- Implementation
 
-	links_where (a_condition: STRING_8; a_book: ANY; a_ch, a_v: INTEGER): ARRAYED_LIST [like link_type]
-			-- The links meeting `a_condition' (three parameters: book, chapter, verse), loudest first.
+	Loudest_first: STRING_8 = "ORDER BY l.volume DESC, l.link_id"
+
+	Nt_order: STRING_8 = "|MAT|MRK|LUK|JHN|ACT|ROM|1CO|2CO|GAL|EPH|PHP|COL|1TH|2TH|1TI|2TI|TIT|PHM|HEB|JAS|1PE|2PE|1JN|2JN|3JN|JUD|REV|"
+			-- The New Testament books in canonical order, for sorting by book code.
+
+	links_where (a_condition: STRING_8; a_args: ARRAY [detachable ANY]; a_order: STRING_8): ARRAYED_LIST [like link_type]
+			-- The links meeting `a_condition' with `a_args', in `a_order'.
 		do
 			create Result.make (4)
 			run_query ("SELECT l.link_id, l.nt_book, l.nt_ch, l.nt_v_from, l.lxx_book, l.lxx_ch, l.lxx_v_from, l.kind, l.loudness, l.volume, "
 				+ "u.title, u.book_class, l.en_book_id, l.en_ch, l.en_v, group_concat(w.witness || w.detail, ' ') AS witnesses FROM "
 				+ pack_alias + ".incipit_link l JOIN " + pack_alias + ".source_unit u ON u.unit_id = l.unit_id JOIN "
 				+ pack_alias + ".link_witness w ON w.link_id = l.link_id WHERE " + a_condition
-				+ " GROUP BY l.link_id ORDER BY l.volume DESC, l.link_id", {ARRAY [detachable ANY]} <<book_argument (a_book), a_ch, a_v>>)
+				+ " GROUP BY l.link_id " + a_order, a_args)
 			if attached last_rows as al_rows then
 				across al_rows.rows as ic loop
 					Result.extend ([ic.integer_value ("link_id"), ic.string_value ("nt_book"), ic.integer_value ("nt_ch"), ic.integer_value ("nt_v_from"),
@@ -98,16 +121,6 @@ feature {NONE} -- Implementation
 						ic.string_value ("loudness"), ic.real_value ("volume"), ic.string_value ("title"), ic.string_value ("book_class"),
 						ic.string_value ("witnesses"), ic.integer_value ("en_book_id"), ic.integer_value ("en_ch"), ic.integer_value ("en_v")])
 				end
-			end
-		end
-
-	book_argument (a_book: ANY): detachable ANY
-			-- A book code as STRING_32, a book number as itself.
-		do
-			if attached {READABLE_STRING_GENERAL} a_book as al_code then
-				Result := al_code.to_string_32
-			else
-				Result := a_book
 			end
 		end
 

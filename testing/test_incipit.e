@@ -120,6 +120,11 @@ feature -- The builder and the reader
 				assert_integers_equal ("English Psalm 22:1 receives the cry", 1, al_pack.links_into_english (19, 22, 1).count)
 				assert_integers_equal ("its English verse kept", 1, al_pack.links_from ("MAT", 27, 46).first.en_v)
 				assert_integers_equal ("Matthew 27:43 has no English place", 0, al_pack.links_from ("MAT", 27, 43).first.en_book_id)
+				assert_integers_equal ("every link listed", 3, al_pack.all_links (False).count)
+				assert_integers_equal ("New Testament order: Matthew 27:43 first", 43, al_pack.all_links (False).first.nt_v)
+				assert_strings_equal ("New Testament order: Mark last", "MRK", al_pack.all_links (False).last.nt_book)
+				assert_integers_equal ("Old Testament order: Psalm 22:1 first", 1, al_pack.all_links (True).first.en_v)
+				assert_integers_equal ("Old Testament order: no English place last", 0, al_pack.all_links (True).last.en_book_id)
 			end
 			l_bible.close
 			assert_true ("credited to UBS, CC BY-SA 4.0", provenance_has ({BIB_INCIPIT_SCHEMA}.Ubs_source_name, "CC BY-SA 4.0"))

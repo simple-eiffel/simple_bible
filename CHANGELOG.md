@@ -4,6 +4,11 @@ All notable changes to simple_bible are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added (2026-11-12: 0.7.65)
+
+- **See them all in a list** (Larry: "I want the ability to see all of both in a list ... where I can click them and have the bible text go to that entry"). The Incipit tab has buttons This verse, All by New Testament ("Matthew 27:46 <- Psalms 22:1 (LXX 21:2)") and All by Old Testament (the reverse); the Chiasm tab has This verse, All structures, and Strong and moderate, each structure with its full range. A click reads the place (a structure also shows its ladder); a whole list stays while you read until This verse.
+- `BIB_INCIPIT_PACK.all_links` and `BIB_CHIASM_PACK.all_structures`; both packs' queries now come from one routine each.
+
 ### Added (2026-11-12: 0.7.64)
 
 - **Chiasm letters in the reading margin.** The verse-number gutter shows each verse's member letter in the innermost mirror: the letter on the member's first verse, a line down its later verses ("6 A", "7 |", "20 D"). View menu: strong and moderate mirrors (the default), every mirror, or off.

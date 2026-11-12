@@ -68,6 +68,9 @@ feature -- Tests
 				assert_integers_equal ("Genesis 9:28 lies in one", 1, al_pack.structures_at (1, 9, 28).count)
 				assert_strings_equal ("graded strong", "strong", al_pack.structures_at (1, 9, 28).first.grade)
 				assert_true ("Genesis 10:1 lies in none", al_pack.structures_at (1, 10, 1).is_empty)
+				assert_integers_equal ("all: the top level (the nested one is not graded)", 1, al_pack.all_structures (False).count)
+				assert_integers_equal ("strong and moderate only: Noah", 1, al_pack.all_structures (True).count)
+				assert_strings_equal ("Noah listed", "strong", al_pack.all_structures (True).first.grade)
 				if attached al_pack.members_of (al_pack.structures_at (1, 9, 28).first.structure_id) as al_m then
 					assert_integers_equal ("ten members", 10, al_m.count)
 					assert_integers_equal ("A pairs with the last A", 10, al_m.first.pair_seq)
