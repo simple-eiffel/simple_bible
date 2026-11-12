@@ -29,7 +29,7 @@ feature -- Access
 			counted_from_one: a_ch >= 1 and a_v >= 1
 		do
 			create Result.make (4)
-			run_query ("SELECT structure_id, parent_id, under_letter, book_id, ch_from, v_from, ch_to, v_to, title, kind_printed, pattern, grade, "
+			run_query ("SELECT structure_id, parent_id, under_letter, book_id, ch_from, v_from, ch_to, v_to, title, kind_printed, pattern, grade, source, "
 				+ "whole, p_shape, p_pairing, repaired FROM " + pack_alias + ".structure WHERE book_id = ? AND ch_from * 1000 + v_from <= ? AND ? <= ch_to * 1000 + v_to "
 				+ "ORDER BY (ch_to * 1000 + v_to) - (ch_from * 1000 + v_from), structure_id",
 				{ARRAY [detachable ANY]} <<a_book_id, a_ch * 1000 + a_v, a_ch * 1000 + a_v>>)
@@ -37,7 +37,7 @@ feature -- Access
 				across al_rows.rows as ic loop
 					Result.extend ([ic.integer_value ("structure_id"), ic.integer_value ("parent_id"), ic.string_value ("under_letter"), ic.integer_value ("book_id"),
 						ic.integer_value ("ch_from"), ic.integer_value ("v_from"), ic.integer_value ("ch_to"), ic.integer_value ("v_to"), ic.string_value ("title"),
-						ic.string_value ("kind_printed"), ic.string_value ("pattern"), ic.string_value ("grade"), ic.real_value ("whole"), ic.real_value ("p_shape"),
+						ic.string_value ("kind_printed"), ic.string_value ("pattern"), ic.string_value ("grade"), ic.string_value ("source"), ic.real_value ("whole"), ic.real_value ("p_shape"),
 						ic.real_value ("p_pairing"), ic.integer_value ("repaired")])
 				end
 			end
@@ -79,10 +79,10 @@ feature -- Access
 		end
 
 	structure_type: TUPLE [structure_id, parent_id: INTEGER; under_letter: STRING_32; book_id, ch_from, v_from, ch_to, v_to: INTEGER;
-			title, kind_printed, pattern, grade: STRING_32; whole, p_shape, p_pairing: REAL_64; repaired: INTEGER]
+			title, kind_printed, pattern, grade, source: STRING_32; whole, p_shape, p_pairing: REAL_64; repaired: INTEGER]
 			-- One structure read: `parent_id' 0 at the top; scores 0 when not graded.
 		do
-			Result := [0, 0, {STRING_32} "", 0, 0, 0, 0, 0, {STRING_32} "", {STRING_32} "", {STRING_32} "", {STRING_32} "", 0.0, 0.0, 0.0, 0]
+			Result := [0, 0, {STRING_32} "", 0, 0, 0, 0, 0, {STRING_32} "", {STRING_32} "", {STRING_32} "", {STRING_32} "", {STRING_32} "", 0.0, 0.0, 0.0, 0]
 		end
 
 	member_type: TUPLE [seq: INTEGER; letter: STRING_32; letter_inferred: BOOLEAN; ch_from, v_from, ch_to, v_to: INTEGER; label: STRING_32;

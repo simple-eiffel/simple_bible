@@ -51,14 +51,17 @@ feature -- Constants
 		end
 
 	Voice_loose: STRING_8 = "hold loosely (datum only)"
+	Voice_author: STRING_8 = "author"
+			-- Larry's own structures.
 			-- Every row: Bullinger's read from a scan, the grades a measure's.
 
 feature -- Vocabulary
 
 	Patterns: ARRAY [STRING_8]
-			-- How a level's members repeat: a mirror, or a repeated sequence.
+			-- How a level's members repeat: a mirror, a repeated sequence, or a frame (inclusio: the
+			-- same words opening and closing a passage).
 		once
-			Result := <<"introversion", "alternation", "extended_alternation", "mixed">>
+			Result := <<"introversion", "alternation", "extended_alternation", "mixed", "inclusio">>
 		end
 
 	Sources: ARRAY [STRING_8]

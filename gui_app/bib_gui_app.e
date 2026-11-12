@@ -3455,6 +3455,7 @@ feature {NONE} -- Window
 			chiasm_structures_grid.add_column (create {SW_GRID_COLUMN [like chiasm_structure_row_type]}.make ("Verses", 90.0, agent chiasm_structure_range))
 			chiasm_structures_grid.add_column (create {SW_GRID_COLUMN [like chiasm_structure_row_type]}.make ("Pattern", 140.0, agent chiasm_structure_pattern))
 			chiasm_structures_grid.add_column (create {SW_GRID_COLUMN [like chiasm_structure_row_type]}.make ("Grade", 130.0, agent chiasm_structure_grade))
+			chiasm_structures_grid.add_column (create {SW_GRID_COLUMN [like chiasm_structure_row_type]}.make ("From", 110.0, agent chiasm_structure_source))
 			chiasm_ladder_grid.add_column (create {SW_GRID_COLUMN [like chiasm_member_row_type]}.make ("Member", 110.0, agent chiasm_member_letter))
 			chiasm_ladder_grid.add_column (create {SW_GRID_COLUMN [like chiasm_member_row_type]}.make ("Verses", 90.0, agent chiasm_member_verses))
 			chiasm_ladder_grid.add_column ((create {SW_GRID_COLUMN [like chiasm_member_row_type]}.make ("What it holds", 220.0, agent chiasm_member_label)).growing)
@@ -3576,6 +3577,16 @@ feature {NONE} -- Menus and keys (C2)
 				Result.add_item ("Light theme", "", True, agent set_dark (False))
 			else
 				Result.add_item ("Dark theme", "", True, agent set_dark (True))
+			end
+			Result.add_separator
+			if chiasm_letters_mode /= Chiasm_letters_graded then
+				Result.add_item ("Chiasm letters: strong and moderate mirrors", "", True, agent set_chiasm_letters_mode (Chiasm_letters_graded))
+			end
+			if chiasm_letters_mode /= Chiasm_letters_all then
+				Result.add_item ("Chiasm letters: every mirror", "", True, agent set_chiasm_letters_mode (Chiasm_letters_all))
+			end
+			if chiasm_letters_mode /= Chiasm_letters_off then
+				Result.add_item ("Chiasm letters: off", "", True, agent set_chiasm_letters_mode (Chiasm_letters_off))
 			end
 			Result.add_separator
 			if window.reference_marks_shown then
@@ -4066,6 +4077,7 @@ feature {NONE} -- Reading (S1, P01)
 			l_row, i: INTEGER
 			l_lookup: BIB_LOOKUP
 			l_reasons: HASH_TABLE [STRING_32, INTEGER]
+			l_letters: HASH_TABLE [STRING_32, INTEGER]
 		do
 			l_chapter := bible.text_reader.chapter (reading_version, reading_book, reading_chapter)
 			create reading_verses.make (l_chapter.count)
@@ -4077,8 +4089,13 @@ feature {NONE} -- Reading (S1, P01)
 			reading_view.wipe_out
 			reading_marked_row := 0
 			l_reasons := chapter_highlight_reasons (reading_book, reading_chapter)
+			l_letters := chiasm_letters (reading_book, reading_chapter)
 			across reading_verses as ic loop
-				l_row := reading_view.add_row (ic.verse.out)
+				if attached l_letters.item (ic.verse) as al_letter then
+					l_row := reading_view.add_row (ic.verse.out.to_string_32 + {STRING_32} " " + al_letter)
+				else
+					l_row := reading_view.add_row (ic.verse.out)
+				end
 				reading_view.set_cell (l_row, 1, ic.display_text)
 				if attached l_reasons.item (ic.verse) as al_reason then
 					mark_highlighted_verse (reading_view, l_row, 1, ic.display_text, al_reason)
@@ -10282,9 +10299,9 @@ feature {NONE} -- Chiasm (S2, research 28: structures and chiasms)
 
 	chiasm_member_rows: ARRAYED_LIST [like chiasm_member_row_type]
 
-	chiasm_structure_row_type: TUPLE [title, range, pattern, grade: STRING_32; structure_id: INTEGER]
+	chiasm_structure_row_type: TUPLE [title, range, pattern, grade, source: STRING_32; structure_id: INTEGER]
 		do
-			Result := [{STRING_32} "", {STRING_32} "", {STRING_32} "", {STRING_32} "", 0]
+			Result := [{STRING_32} "", {STRING_32} "", {STRING_32} "", {STRING_32} "", {STRING_32} "", 0]
 		end
 
 	chiasm_member_row_type: TUPLE [letter, verses, label, pair: STRING_32; ch, v: INTEGER]
@@ -10321,13 +10338,13 @@ feature {NONE} -- Chiasm (S2, research 28: structures and chiasms)
 			else
 				across l_packs.first.structures_at (commentary_book, commentary_chapter, commentary_verse) as ic loop
 					chiasm_structure_rows.extend ([ic.title, verses_text (ic.ch_from, ic.v_from, ic.ch_to, ic.v_to),
-						pattern_text (ic.pattern), grade_text (ic.grade, ic.p_shape), ic.structure_id])
+						pattern_text (ic.pattern), grade_text (ic.grade, ic.p_shape), source_text (ic.source, ic.kind_printed), ic.structure_id])
 				end
 				if chiasm_structure_rows.is_empty then
 					chiasm_note.set_text (place_text (commentary_book, commentary_chapter, commentary_verse) + {STRING_32} ": no structure is known here.")
 				else
 					chiasm_note.set_text (place_text (commentary_book, commentary_chapter, commentary_verse) + {STRING_32} " stands in " + chiasm_count_words (chiasm_structure_rows.count)
-						+ {STRING_32} " (Bullinger), innermost first. Strong and moderate pair by shared words above chance; thematic pairs by idea.")
+						+ {STRING_32} ", innermost first. Strong and moderate pair by shared words above chance; thematic pairs by idea.")
 					show_chiasm_ladder (1)
 				end
 			end
@@ -10405,6 +10422,8 @@ feature {NONE} -- Chiasm (S2, research 28: structures and chiasms)
 		do
 			if a_pattern.same_string ({STRING_32} "introversion") then
 				Result := {STRING_32} "introversion (mirror)"
+			elseif a_pattern.same_string ({STRING_32} "inclusio") then
+				Result := {STRING_32} "inclusio (frame)"
 			elseif a_pattern.same_string ({STRING_32} "extended_alternation") then
 				Result := {STRING_32} "extended alternation"
 			else
@@ -10457,6 +10476,23 @@ feature {NONE} -- Chiasm (S2, research 28: structures and chiasms)
 			Result := a_row.pattern
 		end
 
+	chiasm_structure_source (a_row: like chiasm_structure_row_type): STRING_32
+		do
+			Result := a_row.source
+		end
+
+	source_text (a_source, a_kind: STRING_32): STRING_32
+			-- "Bullinger", "Boys", "Larry (settled)" ...: a Larry structure carries its status in `a_kind'.
+		do
+			if a_source.same_string ({STRING_32} "larry") then
+				Result := a_kind.twin
+			elseif a_source.is_empty then
+				Result := {STRING_32} "Bullinger"
+			else
+				Result := a_source.as_upper.substring (1, 1) + a_source.substring (2, a_source.count)
+			end
+		end
+
 	chiasm_structure_grade (a_row: like chiasm_structure_row_type): STRING_32
 		do
 			Result := a_row.grade
@@ -10480,6 +10516,70 @@ feature {NONE} -- Chiasm (S2, research 28: structures and chiasms)
 	chiasm_member_pair (a_row: like chiasm_member_row_type): STRING_32
 		do
 			Result := a_row.pair
+		end
+
+	chiasm_letters_mode: INTEGER
+			-- Which mirrors put their letters in the reading gutter: `Chiasm_letters_graded' (the
+			-- default: strong and moderate, where shared words carry the mirror), `Chiasm_letters_all'
+			-- or `Chiasm_letters_off'. Not kept between runs yet.
+
+	Chiasm_letters_graded: INTEGER = 0
+	Chiasm_letters_all: INTEGER = 1
+	Chiasm_letters_off: INTEGER = 2
+
+	set_chiasm_letters_mode (a_mode: INTEGER)
+			-- Show the chiasm letters for `a_mode''s mirrors, and redraw the chapter.
+		require
+			a_mode: a_mode >= Chiasm_letters_graded and a_mode <= Chiasm_letters_off
+		do
+			chiasm_letters_mode := a_mode
+			if reading.has_place then
+				show_chapter
+			end
+		ensure
+			set: chiasm_letters_mode = a_mode
+		end
+
+	chiasm_letters (a_book, a_chapter: INTEGER): HASH_TABLE [STRING_32, INTEGER]
+			-- For each verse of the chapter read that stands in a mirror (an introversion) the mode
+			-- shows, the letter of its member in the innermost such mirror: the gutter reads "6 A".
+		local
+			l_members: HASH_TABLE [ARRAYED_LIST [like {BIB_CHIASM_PACK}.member_type], INTEGER]
+			l_place: INTEGER
+			l_found: BOOLEAN
+		do
+			create Result.make (32)
+			if chiasm_letters_mode /= Chiasm_letters_off and a_book >= 1 and a_book <= 66 and then not bible.chiasm_packs.is_empty
+				and then attached bible.chiasm_packs.first as al_pack and then al_pack.is_available
+			then
+				create l_members.make (8)
+				across reading_verses as ic_v loop
+					l_place := a_chapter * 1000 + ic_v.verse
+					l_found := False
+					across al_pack.structures_at (a_book, a_chapter, ic_v.verse) as ic_s until l_found loop
+						if (ic_s.pattern.same_string ({STRING_32} "introversion") or ic_s.pattern.same_string ({STRING_32} "inclusio")) and then (chiasm_letters_mode = Chiasm_letters_all
+							or ic_s.grade.same_string ({STRING_32} "strong") or ic_s.grade.same_string ({STRING_32} "moderate"))
+						then
+							if not l_members.has (ic_s.structure_id) then
+								l_members.put (al_pack.members_of (ic_s.structure_id), ic_s.structure_id)
+							end
+							if attached l_members.item (ic_s.structure_id) as al_list then
+								across al_list as ic_m until l_found loop
+									if ic_m.ch_from * 1000 + ic_m.v_from <= l_place and l_place <= ic_m.ch_to * 1000 + ic_m.v_to then
+										if ic_m.ch_from = a_chapter and ic_m.v_from = ic_v.verse then
+											Result.put (ic_m.letter, ic_v.verse)
+										else
+												-- a member's later verses: a line down the gutter, a bracket's stem
+											Result.put ({STRING_32} "|", ic_v.verse)
+										end
+										l_found := True
+									end
+								end
+							end
+						end
+					end
+				end
+			end
 		end
 
 	dock_panel_into (a_panel, a_zone: INTEGER)

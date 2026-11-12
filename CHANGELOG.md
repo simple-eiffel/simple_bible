@@ -4,6 +4,13 @@ All notable changes to simple_bible are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added (2026-11-12: 0.7.64)
+
+- **Chiasm letters in the reading margin.** The verse-number gutter shows each verse's member letter in the innermost mirror: the letter on the member's first verse, a line down its later verses ("6 A", "7 |", "20 D"). View menu: strong and moderate mirrors (the default), every mirror, or off.
+- **More structures, labeled by source.** Larry's own structures from his writings (47: 40 frames, 5 mirrors, 2 alternations; settled or draft as each says, in the author's voice), and the older lists of Boys (*A Key to the Book of Psalms*, 1825), Jebb (1820) and Forbes (1854): 70 more, mostly psalm couplets set line by line, shown ungraded because the grader measures whole verses. The Chiasm tab gains a From column, and a frame (inclusio) shows as "inclusio (frame)".
+- **Regraded on verse-level ranges**: Bullinger's verse splits ("17-" and "-17") no longer drop a mirror from grading. chiasm.db: 2,567 structures; 24 strong, 48 moderate, 271 thematic.
+- A frame built on the divine name can be real and still grade thematic: the grade counts rare shared words, and the name is common.
+
 ### Added (2026-11-11: 0.7.63)
 
 - **Chiasm: the structures of a passage.** A new Chiasm tab beside Incipit follows the verse: the structures it stands in (E. W. Bullinger's, from *The Companion Bible*), innermost first, each with its pattern (introversion, alternation, extended alternation) and its grade against chance. Choose one to see its ladder: the members indented toward the center, their verses and labels, each pair's share of rare Hebrew or Greek words, the member holding the verse marked. A letter the scan lost and the program inferred is starred. Click a member to read it.

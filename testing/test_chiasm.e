@@ -36,6 +36,8 @@ feature -- Tests
 			l_db.execute ("INSERT INTO source_provenance VALUES (1, 'b', 'v', 'public domain', 0, 0, 0, 'B', '')")
 			l_db.execute ("INSERT INTO structure VALUES (1, NULL, '', 1, 6, 9, 9, 29, 'Noah', 'Introversion', 'chiasm', 'bullinger', 'strong', NULL, NULL, NULL, 0, 'hold loosely (datum only)', 1)")
 			assert_true ("an unknown pattern refused", l_db.has_error)
+			l_db.execute ("INSERT INTO structure VALUES (2, NULL, '', 19, 8, 1, 8, 9, 'Psalm 8', 'Larry (settled)', 'inclusio', 'larry', 'strong', NULL, NULL, NULL, 0, 'author', 1)")
+			assert_false ("a frame (inclusio) from Larry taken in the author's voice", l_db.has_error)
 			l_db.close
 			fixture.delete_file (Schema_file)
 		end

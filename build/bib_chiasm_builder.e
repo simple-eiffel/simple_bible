@@ -48,7 +48,11 @@ feature -- Access
 
 	Bullinger_key: INTEGER = 1
 	Measure_key: INTEGER = 2
-			-- The provenance rows.
+	Larry_key: INTEGER = 3
+	Boys_key: INTEGER = 4
+	Jebb_key: INTEGER = 5
+	Forbes_key: INTEGER = 6
+			-- The provenance rows: one per source, and the grader.
 
 feature -- Commands
 
@@ -74,6 +78,14 @@ feature -- Commands
 				put_pack_provenance (l_db, Measure_key, "simple_bible chiasm grader", "version 3: pairs by shared rare headwords; the shape laid at 500 random places",
 					"Computed from conc.db (WLC Hebrew, WH Greek): scores, not judgments.",
 					create {BIB_LICENSE}.make ({BIB_PRIVATE_PACK_SCHEMA}.Author_license, False, False, False, {BIB_PRIVATE_PACK_SCHEMA}.Pack_author))
+				put_pack_provenance (l_db, Larry_key, "Larry Rix, his writings (Divine Name Pattern, frameworks, dossiers)", "gathered from the vault",
+					"Larry's own structures, settled or draft as each says.", create {BIB_LICENSE}.make ({BIB_PRIVATE_PACK_SCHEMA}.Author_license, False, False, False, {BIB_PRIVATE_PACK_SCHEMA}.Pack_author))
+				put_pack_provenance (l_db, Boys_key, "Boys, A Key to the Book of Psalms (1825) and Tactica Sacra (1824)", "parsed from the archive.org OCR",
+					"Read from a scanned page.", create {BIB_LICENSE}.make ("public domain", False, False, False, "Thomas Boys"))
+				put_pack_provenance (l_db, Jebb_key, "Jebb, Sacred Literature (1820)", "parsed from the archive.org OCR",
+					"Read from a scanned page.", create {BIB_LICENSE}.make ("public domain", False, False, False, "John Jebb"))
+				put_pack_provenance (l_db, Forbes_key, "Forbes, The Symmetrical Structure of Scripture (1854)", "parsed from the archive.org OCR",
+					"Read from a scanned page.", create {BIB_LICENSE}.make ("public domain", False, False, False, "John Forbes"))
 				if last_error = Void then
 					write_all (l_db)
 				end
@@ -222,7 +234,7 @@ feature {NONE} -- Writing
 				end
 				a_db.execute_with_args ("INSERT INTO structure VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 					<<l_index, l_parent, ic.under, ic.book, ic.ch_from, ic.v_from, ic.ch_to, ic.v_to, ic.title, ic.kind, ic.pattern, ic.source, ic.grade,
-					ic.whole, ic.p_shape, ic.p_pairing, ic.repaired, schema.Voice_loose, Bullinger_key>>)
+					ic.whole, ic.p_shape, ic.p_pairing, ic.repaired, voice_of_source (ic.source), key_of_source (ic.source)>>)
 				check_db (a_db, "A structure could not be written.")
 				structure_count := structure_count + 1
 				if not ic.grade.same_string_general ("not_graded") then
@@ -231,10 +243,41 @@ feature {NONE} -- Writing
 				across ic.members as al_m until last_error /= Void loop
 					a_db.execute_with_args ("INSERT INTO member VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 						<<l_index, @al_m.cursor_index, al_m.letter, al_m.inferred.to_integer, al_m.ch_from, al_m.v_from, al_m.ch_to, al_m.v_to, al_m.label,
-						pair_part (al_m.pair), al_m.score, al_m.repair, schema.Voice_loose, Bullinger_key>>)
+						pair_part (al_m.pair), al_m.score, al_m.repair, voice_of_source (ic.source), key_of_source (ic.source)>>)
 					check_db (a_db, "A member could not be written.")
 					member_count := member_count + 1
 				end
+			end
+		end
+
+	key_of_source (a_source: READABLE_STRING_GENERAL): INTEGER
+			-- The provenance row of `a_source'.
+		do
+			if a_source.same_string ("larry") then
+				Result := Larry_key
+			elseif a_source.same_string ("boys") then
+				Result := Boys_key
+			elseif a_source.same_string ("jebb") then
+				Result := Jebb_key
+			elseif a_source.same_string ("forbes") then
+				Result := Forbes_key
+			elseif a_source.same_string ("measure") then
+				Result := Measure_key
+			else
+				Result := Bullinger_key
+			end
+		ensure
+			a_row: Result >= Bullinger_key and Result <= Forbes_key
+		end
+
+	voice_of_source (a_source: READABLE_STRING_GENERAL): STRING_8
+			-- Larry's structures speak in the author's voice; every other source's is held loosely
+			-- (read from a scan, or a measure's).
+		do
+			if a_source.same_string ("larry") then
+				Result := schema.Voice_author
+			else
+				Result := schema.Voice_loose
 			end
 		end
 
