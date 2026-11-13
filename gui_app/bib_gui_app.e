@@ -2120,6 +2120,23 @@ feature {BIB_WINDOW_HARNESS_CLIENT} -- The window harness (research/23, 2026-10-
 			Result := attached pair_float as al_float and then al_float.is_open
 		end
 
+	harness_float_png (a_which: INTEGER; a_path: STRING_32): BOOLEAN
+			-- Write float `a_which' (1 pair, 2 map, 3 stories), freshly
+			-- rendered, to `a_path'. False when it is not open or its frame is released.
+		local
+			l_float: detachable SW_FLOATING_WINDOW
+		do
+			inspect a_which
+			when 1 then l_float := pair_float
+			when 2 then l_float := map_float
+			else l_float := stories_float
+			end
+			if attached l_float as al_f and then al_f.is_open and then not al_f.is_frame_released then
+				al_f.render
+				Result := al_f.export_frame_png (a_path)
+			end
+		end
+
 	harness_close_pair
 			-- Close the Side by side window, as its close box would.
 		do

@@ -956,6 +956,73 @@ feature -- Phase 2
 			app.shut_down
 		end
 
+	test_floats_reopen_and_paint
+			-- Each reused floating window - Side by side,
+			-- the Incipit map, the stories window - opens, closes, opens again on the same view,
+			-- and the reopened window draws its content.
+		local
+			app: BIB_GUI_APP
+		do
+			app := new_window
+			app.harness_state.set_study (True)
+			app.harness_go_to (40, 27, 46)
+			app.harness_show_incipit
+			app.harness_show_pair (1)
+			assert ("pair opens", app.harness_pair_open)
+			assert ("pair paints the first time", painted (app, 1))
+			app.harness_close_pair
+			assert ("pair closed", not app.harness_pair_open)
+			app.harness_show_pair (1)
+			assert ("pair reopens", app.harness_pair_open)
+			assert_integers_equal ("pair rows again", 8, app.harness_pair_rows)
+			assert ("pair paints again", painted (app, 1))
+			app.harness_close_pair
+			app.harness_open_map
+			assert ("map paints the first time", painted (app, 2))
+			app.harness_close_map
+			assert ("map closed", not app.harness_map_open)
+			app.harness_open_map
+			assert ("map reopens", app.harness_map_open and app.harness_map_pair_count > 100)
+			assert ("map paints again", painted (app, 2))
+			app.harness_close_map
+			app.harness_open_story_window
+			assert ("stories paint the first time", painted (app, 3))
+			app.harness_close_story_window
+			assert ("stories closed", not app.harness_story_window_open)
+			app.harness_open_story_window
+			assert ("stories reopen", app.harness_story_window_open)
+			assert ("stories paint again", painted (app, 3))
+			app.harness_close_story_window
+			app.shut_down
+		end
+
+	painted (a_app: BIB_GUI_APP; a_which: INTEGER): BOOLEAN
+			-- Does float `a_which', freshly rendered, show more than a plain fill?
+		local
+			l_path: STRING_32
+			l_image: CAIRO_SURFACE
+			l_differing: INTEGER
+		do
+			l_path := {STRING_32} "probe_float_" + a_which.out + ".png"
+			if a_app.harness_float_png (a_which, l_path) then
+				create l_image.make_from_png (l_path)
+				if l_image.is_valid then
+					l_differing := differing_pixels (l_image.data, l_image.stride, l_image.width, l_image.height)
+					print ("  probe float " + a_which.out + ": " + l_image.width.out + "x" + l_image.height.out + ", " + l_differing.out + " pixels drawn%N")
+					Result := l_differing > 200
+					l_image.destroy
+				end
+			end
+		end
+
+	differing_pixels (a_data: POINTER; a_stride, a_width, a_height: INTEGER): INTEGER
+			-- Pixels unlike the top-left one.
+		external
+			"C inline"
+		alias
+			"{ int l_n = 0, l_x, l_y; unsigned int l_c0 = ((unsigned int *) $a_data)[0]; for (l_y = 0; l_y < $a_height; l_y++) { unsigned int *l_r = (unsigned int *) ((char *) $a_data + l_y * $a_stride); for (l_x = 0; l_x < $a_width; l_x++) if (l_r[l_x] != l_c0) l_n++; } return l_n; }"
+		end
+
 	test_a_verse_shows_its_incipit_stories
 			-- Larry, 2026-11-11: reading Matthew putting Psalm 22:1 in Jesus' mouth, "simple_bible tells you
 			-- the story of Psalm 22 in plain simple terms"; reading the psalm, where the New Testament takes it up.
